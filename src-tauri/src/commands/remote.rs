@@ -1,0 +1,55 @@
+use tauri::State;
+
+use crate::{
+    git::{engine::GitEngine, error::GitError},
+    repo_manager::RepoManager,
+};
+
+#[tauri::command]
+pub async fn fetch_remote(
+    repo_id: String,
+    remote_name: String,
+    repo_manager: State<'_, RepoManager>,
+) -> Result<(), GitError> {
+    let meta = repo_manager
+        .get_meta(&repo_id)
+        .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
+    GitEngine::fetch(&meta.path, &remote_name)
+}
+
+#[tauri::command]
+pub async fn push_branch(
+    repo_id: String,
+    remote_name: String,
+    branch_name: String,
+    repo_manager: State<'_, RepoManager>,
+) -> Result<(), GitError> {
+    let meta = repo_manager
+        .get_meta(&repo_id)
+        .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
+    GitEngine::push(&meta.path, &remote_name, &branch_name)
+}
+
+#[tauri::command]
+pub async fn pull_branch(
+    repo_id: String,
+    remote_name: String,
+    branch_name: String,
+    repo_manager: State<'_, RepoManager>,
+) -> Result<(), GitError> {
+    let meta = repo_manager
+        .get_meta(&repo_id)
+        .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
+    GitEngine::pull(&meta.path, &remote_name, &branch_name)
+}
+
+#[tauri::command]
+pub async fn list_remotes(
+    repo_id: String,
+    repo_manager: State<'_, RepoManager>,
+) -> Result<Vec<String>, GitError> {
+    let meta = repo_manager
+        .get_meta(&repo_id)
+        .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
+    GitEngine::list_remotes(&meta.path)
+}
