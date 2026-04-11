@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import type { FileDiff, DiffLine } from '@/types/git'
 
 const props = defineProps<{
@@ -93,6 +93,65 @@ function onScroll(source: 'left' | 'right') {
     syncSource = null
   })
 }
+
+// ── 变更跳转 ────────────────────────────────────────────────────────
+// 连续 del/add 行组的起始行索引列表；ctx/header 行充当分隔
+const changeStarts = computed<number[]>(() => {
+  const rows = alignedRows.value
+  const starts: number[] = []
+  let inGroup = false
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i]
+    const isChange = r.left.kind === 'del' || r.right.kind === 'add'
+    if (isChange) {
+      if (!inGroup) {
+        starts.push(i)
+        inGroup = true
+      }
+    } else {
+      inGroup = false
+    }
+  }
+  return starts
+})
+
+const currentChangeIdx = ref(-1)
+
+// 当 diff 变化时重置指针
+watch(alignedRows, () => {
+  currentChangeIdx.value = -1
+})
+
+function scrollToRow(rowIndex: number) {
+  const pane = leftPaneRef.value
+  if (!pane) return
+  const el = pane.querySelector(
+    `[data-row="${rowIndex}"]`,
+  ) as HTMLElement | null
+  if (!el) return
+  const targetY =
+    el.offsetTop - pane.clientHeight / 2 + el.offsetHeight / 2
+  pane.scrollTo({ top: Math.max(0, targetY), behavior: 'smooth' })
+}
+
+function goNextChange() {
+  const starts = changeStarts.value
+  if (starts.length === 0) return
+  currentChangeIdx.value = (currentChangeIdx.value + 1) % starts.length
+  scrollToRow(starts[currentChangeIdx.value])
+}
+
+function goPrevChange() {
+  const starts = changeStarts.value
+  if (starts.length === 0) return
+  currentChangeIdx.value =
+    currentChangeIdx.value <= 0
+      ? starts.length - 1
+      : currentChangeIdx.value - 1
+  scrollToRow(starts[currentChangeIdx.value])
+}
+
+defineExpose({ goNextChange, goPrevChange })
 </script>
 
 <template>
@@ -118,6 +177,7 @@ function onScroll(source: 'left' | 'right') {
               :key="'l' + i"
               class="sbs-line"
               :class="'line-' + row.left.kind"
+              :data-row="i"
             >
               <span class="ln">{{ row.left.lineNo ?? '' }}</span>
               <span class="sign">{{ row.left.kind === 'del' ? '-' : row.left.kind === 'ctx' ? ' ' : '' }}</span>
