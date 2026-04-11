@@ -72,7 +72,7 @@ const alignedRows = computed((): AlignedRow[] => {
   return rows
 })
 
-// ── 双 pane：各自独立水平滚动，JS 同步垂直 scrollTop 维持行级对齐 ──
+// ── 双 pane：JS 同步 scrollTop + scrollLeft，左右完全联动 ────────────
 const leftPaneRef = ref<HTMLElement | null>(null)
 const rightPaneRef = ref<HTMLElement | null>(null)
 // 防止 A → B 同步后触发 B 的 scroll 事件再回写 A 造成循环
@@ -83,9 +83,12 @@ function onScroll(source: 'left' | 'right') {
   const src = source === 'left' ? leftPaneRef.value : rightPaneRef.value
   const dst = source === 'left' ? rightPaneRef.value : leftPaneRef.value
   if (!src || !dst) return
-  if (dst.scrollTop === src.scrollTop) return
+  const topDiff = dst.scrollTop !== src.scrollTop
+  const leftDiff = dst.scrollLeft !== src.scrollLeft
+  if (!topDiff && !leftDiff) return
   syncSource = source
-  dst.scrollTop = src.scrollTop
+  if (topDiff) dst.scrollTop = src.scrollTop
+  if (leftDiff) dst.scrollLeft = src.scrollLeft
   requestAnimationFrame(() => {
     syncSource = null
   })
