@@ -313,6 +313,9 @@ async function onContextAction(action: string) {
   flex: 1;
   overflow-y: auto;
   padding-bottom: 8px;
+  /* Sidebar 是 UI chrome，不参与文本选择（也不会被 Ctrl+A 选中） */
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 /* ── Sections ────────────────────────────────────────────────────── */
@@ -463,6 +466,8 @@ async function onContextAction(action: string) {
   border-top: 1px solid var(--border);
   padding-top: 4px;
   flex-shrink: 0;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .repo-item {
