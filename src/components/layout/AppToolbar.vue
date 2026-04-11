@@ -28,6 +28,28 @@ const busy = reactive({
 
 const showReflogDialog = ref(false)
 const searchInputEl = ref<HTMLInputElement | null>(null)
+const searchExpanded = ref(false)
+
+function expandSearch() {
+  searchExpanded.value = true
+  // 等 input 渲染后聚焦
+  setTimeout(() => searchInputEl.value?.focus(), 0)
+}
+
+function onSearchBlur() {
+  // 有内容时保持展开；无内容时收起
+  if (!uiStore.historySearchQuery) {
+    searchExpanded.value = false
+  }
+}
+
+function onSearchKeydown(e: KeyboardEvent) {
+  if (e.key === 'Escape') {
+    uiStore.historySearchQuery = ''
+    searchExpanded.value = false
+    searchInputEl.value?.blur()
+  }
+}
 
 // ── 仓库已打开时按钮才可用 ────────────────────────────────────────
 const hasRepo = computed(() => !!repoStore.activeRepoId)
@@ -373,16 +395,25 @@ async function handleDblClick(e: MouseEvent) {
         </svg>
       </button>
 
-      <div v-if="hasRepo" class="search-box">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="11" cy="11" r="8"/>
-          <line x1="21" y1="21" x2="16.65" y2="16.65"/>
-        </svg>
+      <div
+        v-if="hasRepo"
+        class="search-box"
+        :class="{ 'search-box--expanded': searchExpanded || uiStore.historySearchQuery }"
+      >
+        <button class="search-icon-btn" tabindex="-1" @click="expandSearch">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="11" cy="11" r="8"/>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+        </button>
         <input
+          v-show="searchExpanded || uiStore.historySearchQuery"
           ref="searchInputEl"
           v-model="uiStore.historySearchQuery"
           class="search-input"
-          placeholder="搜索提交..."
+          placeholder="搜索提交"
+          @blur="onSearchBlur"
+          @keydown="onSearchKeydown"
         />
       </div>
 
@@ -462,22 +493,55 @@ async function handleDblClick(e: MouseEvent) {
 .search-box {
   display: flex;
   align-items: center;
-  gap: 5px;
-  background: var(--bg-surface);
-  border: 1px solid var(--border);
   border-radius: 4px;
-  padding: 3px 8px;
+  overflow: hidden;
+  transition: width 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+  /* 收起：只有图标，无边框 */
+  width: 26px;
+  border: 1px solid transparent;
+  background: transparent;
+}
+
+.search-box--expanded {
+  width: 136px;
+  border-color: var(--border);
+  background: var(--bg-surface);
+  padding-right: 6px;
+}
+
+.search-icon-btn {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  background: none;
+  border: none;
+  cursor: pointer;
   color: var(--text-muted);
+  border-radius: 4px;
+  padding: 0;
+  transition: color 0.15s;
+}
+
+.search-icon-btn:hover {
+  color: var(--text-primary);
+}
+
+.search-box--expanded .search-icon-btn {
+  cursor: default;
 }
 
 .search-input {
+  flex: 1;
+  min-width: 0;
   background: none;
   border: none;
   color: var(--text-primary);
   font-size: 11px;
   font-family: inherit;
   outline: none;
-  width: 150px;
 }
 
 .search-input::placeholder {
