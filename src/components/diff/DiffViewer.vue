@@ -93,6 +93,13 @@ onUnmounted(() => {
   overflow: auto;
 }
 
+/* CodeMirror 动态插入的 .cm-* 元素需要可选（盖过全局 *:none）。
+   用 :deep() 穿透 scoped 样式。 */
+.diff-container :deep(*) {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
 .diff-loading,
 .diff-empty {
   flex: 1;

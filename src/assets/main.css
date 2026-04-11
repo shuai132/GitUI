@@ -21,6 +21,18 @@
     box-sizing: border-box;
     /* 禁用所有滚动容器的 rubber-band 回弹效果 */
     overscroll-behavior: none;
+    /* 默认禁用文本选择（UI chrome 全局不可选，Ctrl+A 也跳过）。
+       需要可选的区域（表单控件、diff 内容）通过更高特异性的规则放开。 */
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  /* 表单控件必须可编辑/可选 */
+  input,
+  textarea,
+  [contenteditable="true"] {
+    user-select: text;
+    -webkit-user-select: text;
   }
 
   html, body, #app {
@@ -32,7 +44,6 @@
     color: var(--text-primary);
     font-size: 13px;
     -webkit-font-smoothing: antialiased;
-    user-select: none;
     /* 禁用 WebView 整体的 overscroll / rubber-band 弹性回弹。
        内部可滚动区域依然正常滚动，但达到边界后不会反弹。 */
     overscroll-behavior: none;

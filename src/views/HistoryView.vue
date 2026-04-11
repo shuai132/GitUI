@@ -774,9 +774,6 @@ onUnmounted(() => {
   overflow: hidden;
   min-width: 0;
   min-height: 0;
-  /* 提交列表是 UI chrome，文本不应被选中（Ctrl+A 也跳过） */
-  user-select: none;
-  -webkit-user-select: none;
 }
 
 .info-pane {

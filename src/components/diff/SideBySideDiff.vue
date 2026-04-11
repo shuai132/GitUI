@@ -178,6 +178,14 @@ function onScroll(source: 'left' | 'right') {
   line-height: 18px;
 }
 
+/* Diff 正文允许文本选择（盖过全局 * { user-select: none }）。
+   .ln / .sign 在下面会被更高特异性覆写为 none。 */
+.sbs-body,
+.sbs-body * {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
 /* 每个 pane 是独立滚动容器，水平 + 垂直都可滚；
    垂直由 JS 同步另一侧以保持行级对齐 */
 .sbs-pane {
