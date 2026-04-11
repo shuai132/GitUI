@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import AppSidebar from '@/components/layout/AppSidebar.vue'
 import AppToolbar from '@/components/layout/AppToolbar.vue'
 import AppStatusBar from '@/components/layout/AppStatusBar.vue'
@@ -10,6 +11,7 @@ import { useSubmodulesStore } from '@/stores/submodules'
 import { useStashStore } from '@/stores/stash'
 import { useGitEvents } from '@/composables/useGitEvents'
 
+const router = useRouter()
 const repoStore = useRepoStore()
 const workspaceStore = useWorkspaceStore()
 const historyStore = useHistoryStore()
@@ -60,6 +62,7 @@ watch(
   () => repoStore.activeRepoId,
   async (id) => {
     if (id) {
+      router.push('/history')
       await workspaceStore.refresh(id)
       await historyStore.loadLog()
       await historyStore.loadBranches()

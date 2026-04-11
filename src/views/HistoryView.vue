@@ -31,6 +31,20 @@ const activePane = ref<ActivePane>('commits')
 // ── 详情区（info + diff）显示状态（默认隐藏，点击提交后显示）────────
 const showDetail = ref(false)
 
+// ── Search / filter（需在 virtualRowCount 之前声明，避免 TDZ）────────
+const searchQuery = ref('')
+
+const filteredCommits = computed(() => {
+  const q = searchQuery.value.trim().toLowerCase()
+  if (!q) return historyStore.commits
+  return historyStore.commits.filter(c =>
+    c.summary.toLowerCase().includes(q) ||
+    c.author_name.toLowerCase().includes(q) ||
+    c.short_oid.toLowerCase().startsWith(q) ||
+    c.oid.toLowerCase().startsWith(q)
+  )
+})
+
 // ── 虚拟 WIP 行：工作副本有变更时显示在列表顶部 ────────────────────
 const showWipRow = computed(() => {
   const s = workspaceStore.status
@@ -180,20 +194,6 @@ watch(showWipRow, (has) => {
     selectedWip.value = false
     showDetail.value = false
   }
-})
-
-// ── Search / filter ──────────────────────────────────────────────────
-const searchQuery = ref('')
-
-const filteredCommits = computed(() => {
-  const q = searchQuery.value.trim().toLowerCase()
-  if (!q) return historyStore.commits
-  return historyStore.commits.filter(c =>
-    c.summary.toLowerCase().includes(q) ||
-    c.author_name.toLowerCase().includes(q) ||
-    c.short_oid.toLowerCase().startsWith(q) ||
-    c.oid.toLowerCase().startsWith(q)
-  )
 })
 
 // ── Persisted sizes (layout + pane splits + column widths) ───────────
