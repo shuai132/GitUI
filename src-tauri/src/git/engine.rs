@@ -222,11 +222,65 @@ impl GitEngine {
         Ok(commit_oid.to_string())
     }
 
-    pub fn get_log(path: &str, offset: usize, limit: usize) -> GitResult<LogPage> {
-        let repo = Self::open(path)?;
+    pub fn get_log(
+        path: &str,
+        offset: usize,
+        limit: usize,
+        include_unreachable: bool,
+        include_stashes: bool,
+    ) -> GitResult<LogPage> {
+        use std::collections::HashSet;
+
+        let mut repo = Self::open(path)?;
+
+        // ── Step A: 收集所有 ref 可达的 oid 集合（用于判断 unreachable）
+        let mut reachable: HashSet<git2::Oid> = HashSet::new();
+        {
+            let mut walk = repo.revwalk()?;
+            walk.push_glob("refs/heads/*").ok();
+            walk.push_glob("refs/remotes/*").ok();
+            walk.push_glob("refs/tags/*").ok();
+            walk.push_head().ok();
+            for oid_result in walk {
+                if let Ok(oid) = oid_result {
+                    reachable.insert(oid);
+                }
+            }
+        }
+
+        // ── Step B: 收集所有 stash 的 oid 集合
+        let mut stash_set: HashSet<git2::Oid> = HashSet::new();
+        repo.stash_foreach(|_, _, oid| {
+            stash_set.insert(*oid);
+            true
+        })
+        .ok();
+
+        // ── Step C: 主 revwalk —— 推所有 ref + 可选 stash + 可选 reflog
         let mut revwalk = repo.revwalk()?;
-        revwalk.push_head()?;
         revwalk.set_sorting(git2::Sort::TOPOLOGICAL | git2::Sort::TIME)?;
+        revwalk.push_glob("refs/heads/*").ok();
+        revwalk.push_glob("refs/remotes/*").ok();
+        revwalk.push_glob("refs/tags/*").ok();
+        revwalk.push_head().ok();
+
+        if include_stashes {
+            for oid in &stash_set {
+                revwalk.push(*oid).ok();
+            }
+        }
+
+        if include_unreachable {
+            // 遍历 HEAD reflog，把不在 reachable 也不在 stash 集合里的 oid 推入
+            if let Ok(reflog) = repo.reflog("HEAD") {
+                for entry in reflog.iter() {
+                    let oid = entry.id_new();
+                    if !reachable.contains(&oid) && !stash_set.contains(&oid) {
+                        revwalk.push(oid).ok();
+                    }
+                }
+            }
+        }
 
         let mut commits = Vec::new();
         let mut idx = 0;
@@ -243,10 +297,10 @@ impl GitEngine {
                 break;
             }
             let commit = repo.find_commit(oid)?;
-            let parent_oids = commit
-                .parent_ids()
-                .map(|p| p.to_string())
-                .collect();
+            let parent_oids = commit.parent_ids().map(|p| p.to_string()).collect();
+
+            let is_stash = stash_set.contains(&oid);
+            let is_unreachable = !is_stash && !reachable.contains(&oid);
 
             commits.push(CommitInfo {
                 oid: oid.to_string(),
@@ -257,6 +311,8 @@ impl GitEngine {
                 author_email: commit.author().email().unwrap_or("").to_string(),
                 time: commit.time().seconds(),
                 parent_oids,
+                is_unreachable,
+                is_stash,
             });
             idx += 1;
         }
@@ -285,6 +341,8 @@ impl GitEngine {
             author_email: commit.author().email().unwrap_or("").to_string(),
             time: commit.time().seconds(),
             parent_oids,
+            is_unreachable: false,
+            is_stash: false,
         };
 
         let diff = if commit.parent_count() > 0 {
@@ -320,7 +378,14 @@ impl GitEngine {
             let index = repo.index()?;
             repo.diff_tree_to_index(head_tree.as_ref(), Some(&index), Some(&mut diff_opts))?
         } else {
-            repo.diff_index_to_workdir(None, Some(&mut diff_opts))?
+            // Include untracked file content so newly-added (untracked) files
+            // show a proper line-by-line diff instead of an empty result.
+            diff_opts
+                .include_untracked(true)
+                .include_untracked_content(true)
+                .recurse_untracked_dirs(true);
+            let index = repo.index()?;
+            repo.diff_index_to_workdir(Some(&index), Some(&mut diff_opts))?
         };
 
         let diffs = Self::parse_diff(&diff)?;

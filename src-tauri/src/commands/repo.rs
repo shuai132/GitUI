@@ -36,14 +36,15 @@ pub async fn open_repo(
 
     repo_manager.add_repo(meta.clone());
 
-    // Set up file watcher for .git directory
-    let git_dir = repo.path().to_path_buf();
+    // Set up file watcher for working directory (includes .git/)
+    // Watching only .git/ misses edits to tracked files in the work tree.
+    let watch_dir = workdir.to_path_buf();
     let app_clone = app.clone();
     let repo_id_clone = id.clone();
 
     let _ = watcher.watch(
         id.clone(),
-        git_dir,
+        watch_dir,
         move |_result| {
             let _ = app_clone.emit("repo://status-changed", &repo_id_clone);
         },
