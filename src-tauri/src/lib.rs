@@ -31,6 +31,11 @@ pub fn run() {
             unstage_all,
             // Commit
             create_commit,
+            checkout_commit,
+            cherry_pick_commit,
+            revert_commit,
+            reset_to_commit,
+            create_tag,
             // Log
             get_log,
             get_commit_detail,

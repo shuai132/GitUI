@@ -571,6 +571,139 @@ impl GitEngine {
         Ok(())
     }
 
+    // ── 提交级操作 ──────────────────────────────────────────────────────
+
+    /// 检出指定提交（detached HEAD）
+    pub fn checkout_commit(path: &str, oid: &str) -> GitResult<()> {
+        let repo = Self::open(path)?;
+        let commit_oid = git2::Oid::from_str(oid)
+            .map_err(|e| GitError::OperationFailed(e.message().to_string()))?;
+        let commit = repo.find_commit(commit_oid)?;
+        let obj = commit.as_object();
+        // safe 模式：有本地未提交变更时失败，保护用户工作
+        let mut co = git2::build::CheckoutBuilder::new();
+        co.safe();
+        repo.checkout_tree(obj, Some(&mut co))?;
+        repo.set_head_detached(commit_oid)?;
+        Ok(())
+    }
+
+    /// Cherry-pick 指定提交到当前 HEAD
+    /// - 无冲突：基于 index 创建新提交（作者沿用原提交，committer 是当前用户）
+    /// - 有冲突：保留 CHERRY_PICK_HEAD，返回错误提示用户手动解决
+    pub fn cherry_pick_commit(path: &str, oid: &str) -> GitResult<()> {
+        let repo = Self::open(path)?;
+        let commit_oid = git2::Oid::from_str(oid)
+            .map_err(|e| GitError::OperationFailed(e.message().to_string()))?;
+        let commit = repo.find_commit(commit_oid)?;
+        repo.cherrypick(&commit, None)?;
+
+        let mut index = repo.index()?;
+        if index.has_conflicts() {
+            return Err(GitError::OperationFailed(
+                "Cherry-pick 出现冲突，请在工作区手动解决后提交".to_string(),
+            ));
+        }
+        let tree_oid = index.write_tree()?;
+        let tree = repo.find_tree(tree_oid)?;
+        let head_commit = repo.head()?.peel_to_commit()?;
+        let signature = repo.signature()?;
+        repo.commit(
+            Some("HEAD"),
+            &commit.author(),
+            &signature,
+            commit.message().unwrap_or(""),
+            &tree,
+            &[&head_commit],
+        )?;
+        repo.cleanup_state()?;
+        Ok(())
+    }
+
+    /// Revert 指定提交
+    /// - 无冲突：自动创建 revert commit，message 为 'Revert "<original summary>"'
+    /// - 有冲突：返回错误
+    pub fn revert_commit(path: &str, oid: &str) -> GitResult<()> {
+        let repo = Self::open(path)?;
+        let commit_oid = git2::Oid::from_str(oid)
+            .map_err(|e| GitError::OperationFailed(e.message().to_string()))?;
+        let commit = repo.find_commit(commit_oid)?;
+        repo.revert(&commit, None)?;
+
+        let mut index = repo.index()?;
+        if index.has_conflicts() {
+            return Err(GitError::OperationFailed(
+                "Revert 出现冲突，请在工作区手动解决后提交".to_string(),
+            ));
+        }
+        let tree_oid = index.write_tree()?;
+        let tree = repo.find_tree(tree_oid)?;
+        let head_commit = repo.head()?.peel_to_commit()?;
+        let signature = repo.signature()?;
+        let msg = format!(
+            "Revert \"{}\"\n\nThis reverts commit {}.",
+            commit.summary().unwrap_or(""),
+            commit.id()
+        );
+        repo.commit(
+            Some("HEAD"),
+            &signature,
+            &signature,
+            &msg,
+            &tree,
+            &[&head_commit],
+        )?;
+        repo.cleanup_state()?;
+        Ok(())
+    }
+
+    /// Reset 当前 HEAD 到指定提交
+    /// mode: "soft" | "mixed" | "hard"
+    pub fn reset_to_commit(path: &str, oid: &str, mode: &str) -> GitResult<()> {
+        let repo = Self::open(path)?;
+        let commit_oid = git2::Oid::from_str(oid)
+            .map_err(|e| GitError::OperationFailed(e.message().to_string()))?;
+        let commit = repo.find_commit(commit_oid)?;
+        let reset_type = match mode {
+            "soft" => ResetType::Soft,
+            "mixed" => ResetType::Mixed,
+            "hard" => ResetType::Hard,
+            _ => {
+                return Err(GitError::OperationFailed(format!(
+                    "未知的 reset 模式: {}",
+                    mode
+                )))
+            }
+        };
+        repo.reset(commit.as_object(), reset_type, None)?;
+        Ok(())
+    }
+
+    /// 在指定提交上创建标签
+    /// - message = Some(非空) → 附注标签
+    /// - message = None 或空字符串 → 轻量标签
+    pub fn create_tag(
+        path: &str,
+        name: &str,
+        oid: &str,
+        message: Option<&str>,
+    ) -> GitResult<()> {
+        let repo = Self::open(path)?;
+        let commit_oid = git2::Oid::from_str(oid)
+            .map_err(|e| GitError::OperationFailed(e.message().to_string()))?;
+        let target = repo.find_object(commit_oid, None)?;
+        match message {
+            Some(msg) if !msg.is_empty() => {
+                let signature = repo.signature()?;
+                repo.tag(name, &target, &signature, msg, false)?;
+            }
+            _ => {
+                repo.tag_lightweight(name, &target, false)?;
+            }
+        }
+        Ok(())
+    }
+
     pub fn fetch(path: &str, remote_name: &str) -> GitResult<()> {
         let repo = Self::open(path)?;
         let mut remote = repo.find_remote(remote_name)?;

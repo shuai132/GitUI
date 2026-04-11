@@ -23,3 +23,71 @@ pub async fn create_commit(
 
     GitEngine::create_commit(&meta.path, &message)
 }
+
+#[tauri::command]
+pub async fn checkout_commit(
+    repo_id: String,
+    oid: String,
+    repo_manager: State<'_, RepoManager>,
+) -> Result<(), GitError> {
+    let meta = repo_manager
+        .get_meta(&repo_id)
+        .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
+    GitEngine::checkout_commit(&meta.path, &oid)
+}
+
+#[tauri::command]
+pub async fn cherry_pick_commit(
+    repo_id: String,
+    oid: String,
+    repo_manager: State<'_, RepoManager>,
+) -> Result<(), GitError> {
+    let meta = repo_manager
+        .get_meta(&repo_id)
+        .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
+    GitEngine::cherry_pick_commit(&meta.path, &oid)
+}
+
+#[tauri::command]
+pub async fn revert_commit(
+    repo_id: String,
+    oid: String,
+    repo_manager: State<'_, RepoManager>,
+) -> Result<(), GitError> {
+    let meta = repo_manager
+        .get_meta(&repo_id)
+        .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
+    GitEngine::revert_commit(&meta.path, &oid)
+}
+
+#[tauri::command]
+pub async fn reset_to_commit(
+    repo_id: String,
+    oid: String,
+    mode: String,
+    repo_manager: State<'_, RepoManager>,
+) -> Result<(), GitError> {
+    let meta = repo_manager
+        .get_meta(&repo_id)
+        .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
+    GitEngine::reset_to_commit(&meta.path, &oid, &mode)
+}
+
+#[tauri::command]
+pub async fn create_tag(
+    repo_id: String,
+    name: String,
+    oid: String,
+    message: Option<String>,
+    repo_manager: State<'_, RepoManager>,
+) -> Result<(), GitError> {
+    let meta = repo_manager
+        .get_meta(&repo_id)
+        .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
+    if name.trim().is_empty() {
+        return Err(GitError::OperationFailed(
+            "标签名不能为空".to_string(),
+        ));
+    }
+    GitEngine::create_tag(&meta.path, &name, &oid, message.as_deref())
+}

@@ -43,6 +43,28 @@ export function useGitCommands() {
   const createCommit = (repoId: string, message: string) =>
     invoke<string>('create_commit', { repoId, message })
 
+  const checkoutCommit = (repoId: string, oid: string) =>
+    invoke<void>('checkout_commit', { repoId, oid })
+
+  const cherryPickCommit = (repoId: string, oid: string) =>
+    invoke<void>('cherry_pick_commit', { repoId, oid })
+
+  const revertCommit = (repoId: string, oid: string) =>
+    invoke<void>('revert_commit', { repoId, oid })
+
+  const resetToCommit = (
+    repoId: string,
+    oid: string,
+    mode: 'soft' | 'mixed' | 'hard',
+  ) => invoke<void>('reset_to_commit', { repoId, oid, mode })
+
+  const createTag = (
+    repoId: string,
+    name: string,
+    oid: string,
+    message: string | null,
+  ) => invoke<void>('create_tag', { repoId, name, oid, message })
+
   // ---- Log ----
   const getLog = (repoId: string, offset: number, limit: number) =>
     invoke<LogPage>('get_log', { repoId, offset, limit })
@@ -104,6 +126,11 @@ export function useGitCommands() {
     stageAll,
     unstageAll,
     createCommit,
+    checkoutCommit,
+    cherryPickCommit,
+    revertCommit,
+    resetToCommit,
+    createTag,
     getLog,
     getCommitDetail,
     getFileDiff,
