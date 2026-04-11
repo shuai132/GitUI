@@ -10,17 +10,11 @@ GitUI 的核心使用场景是"同时挂着多个仓库，随时切换"。这份
 
 ## RepoManager
 
-`repo_manager::RepoManager` 持有：
+`repo_manager::RepoManager` 是一个纯"id ↔ path 名册"：
 
 ```rust
 pub struct RepoManager {
-    pub repos: Arc<Mutex<HashMap<String, RepoCacheEntry>>>,
-}
-
-pub struct RepoCacheEntry {
-    pub meta: RepoMeta,           // { id, path, name }
-    pub status: Option<WorkspaceStatus>,  // 目前仅冗余，可选
-    pub dirty: bool,
+    pub repos: Arc<parking_lot::Mutex<HashMap<String, RepoMeta>>>,
 }
 ```
 
@@ -28,6 +22,25 @@ pub struct RepoCacheEntry {
 - 所有命令通过 `State<'_, RepoManager>` 注入，先用 `repo_id` 取出 `path`，再调 `GitEngine`
 - `id` 是后端生成的 `Uuid::new_v4()` —— 每次 `open_repo` 会生成新的 id，即便同一路径重新打开也会换 id
 - 前端根据 path 去重：`repos.ts::openRepo()` 发现同 path 已存在时直接激活，不会重复调 `open_repo`
+
+### 为什么后端不缓存 status / dirty
+
+早期版本里 `RepoCacheEntry` 还带了 `status: Option<WorkspaceStatus>` 和 `dirty: bool` 两个字段，计划让后端做 status 缓存 + watcher 触发增量推送。实际落地时发现：
+
+- 前端 Pinia 已经是"单一事实来源"，活跃渲染状态都在 store 里
+- 后端再存一份只会造成错位风险，且没有消费方真正读取
+- 相关方法（`mark_dirty` / `get_cached_status`）长期挂 `#[allow(dead_code)]`
+
+所以在 2026-04-11 的整理里把这些字段删掉了。`RepoManager` 现在只承担注册 / 查路径的职责。如果以后真的要做后端状态缓存，应该重新设计增量事件协议（`repo://status-delta` 等）而不是复活这份死代码。
+
+### Mutex 选型
+
+用 `parking_lot::Mutex` 而不是 `std::sync::Mutex`。两个理由：
+
+1. 临界区都是 HashMap O(1) 查询，毫秒级以下 —— 但当前所有 Tauri command 是 `async fn`，`std::sync::Mutex::lock()` 会阻塞 tokio worker 线程，原则上是反模式。`parking_lot::Mutex` 非 async、但更快，且没有 `PoisonError` 需要 unwrap
+2. 显式约束："所有临界区必须 O(1)、禁止持锁期间调 git2 或进行任何 IO"。违反这个约束后升级到 `tokio::sync::Mutex` 再说
+
+`WatcherService` 内部的 `HashMap<repo_id, Debouncer>` 也用 `parking_lot::Mutex`，同样的理由。
 
 ## 打开流程
 

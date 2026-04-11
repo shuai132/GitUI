@@ -74,6 +74,21 @@ pub fn stash_list(path) -> GitResult<Vec<StashEntry>> {
 - 标记为 `is_stash = true`，message 用斜体 + 次要色
 - 选中后显示详情和 diff，支持查看 stash 的内容
 
+**DAG 里把 stash 当普通 commit 处理**。git 内部的 stash 对象是一个特殊的 3-parent commit：
+
+- `parent[0]` = HEAD（stash 创建时的基准提交）
+- `parent[1]` = `index on <branch>: ...` 的快照 commit（暂存区内容）
+- `parent[2]` = `untracked files on <branch>` 的快照 commit（仅当 `INCLUDE_UNTRACKED` 时存在）
+
+如果把这三个 parent 原样交给前端 lane 算法，`index on...` 和 `untracked files on...` 会作为两行独立的孤儿 commit 出现在图里，从 stash 斜拉出两条 lane，视觉上和真正的 merge 分叉混在一起。对用户而言这是 git 存储细节的泄漏。
+
+因此 `get_log` 在构造 `CommitInfo` 时对 stash 做两步裁剪：
+
+1. 收集所有 stash 的 `parent[1]` / `parent[2]` 进一个 `stash_aux_set`，主 revwalk 遍历时跳过 `stash_aux_set` 里的 oid（不作为独立行输出）
+2. 对 `is_stash == true` 的 commit，`parent_oids` 只保留 `parent[0]`，即 HEAD
+
+这样 stash 在 DAG 里就是一个挂在 HEAD 上的 1-parent 普通 commit，lane 算法一视同仁。**唯一的区别是渲染图标**：`CommitGraphRow.vue` 在 `isStash` 时把圆点画成"空心 + 分支色描边"，和实心的普通 commit 区分开（见 [05-commit-graph.md](./05-commit-graph.md)）。
+
 ## Reflog
 
 ### 涉及模块

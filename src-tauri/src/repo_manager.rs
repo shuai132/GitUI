@@ -1,16 +1,15 @@
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
-use crate::git::types::{RepoMeta, WorkspaceStatus};
+use parking_lot::Mutex;
 
-#[derive(Debug, Clone)]
-pub struct RepoCacheEntry {
-    pub meta: RepoMeta,
-    pub status: Option<WorkspaceStatus>,
-    pub dirty: bool,
-}
+use crate::git::types::RepoMeta;
 
-pub type RepoStore = Arc<Mutex<HashMap<String, RepoCacheEntry>>>;
+/// 仓库注册表：id ↔ RepoMeta 的 O(1) 查找。
+///
+/// 不存储 WorkspaceStatus / dirty —— 渲染状态由前端 Pinia 承担，单一事实来源。
+/// 如果以后要做后端增量推送，重新设计协议，而不是复活这个缓存。
+pub type RepoStore = Arc<Mutex<HashMap<String, RepoMeta>>>;
 
 #[derive(Clone)]
 pub struct RepoManager {
@@ -25,51 +24,22 @@ impl RepoManager {
     }
 
     pub fn add_repo(&self, meta: RepoMeta) {
-        let mut repos = self.repos.lock().unwrap();
-        repos.insert(
-            meta.id.clone(),
-            RepoCacheEntry {
-                meta,
-                status: None,
-                dirty: true,
-            },
-        );
+        let mut repos = self.repos.lock();
+        repos.insert(meta.id.clone(), meta);
     }
 
     pub fn remove_repo(&self, repo_id: &str) {
-        let mut repos = self.repos.lock().unwrap();
+        let mut repos = self.repos.lock();
         repos.remove(repo_id);
     }
 
     pub fn list_repos(&self) -> Vec<RepoMeta> {
-        let repos = self.repos.lock().unwrap();
-        repos.values().map(|e| e.meta.clone()).collect()
+        let repos = self.repos.lock();
+        repos.values().cloned().collect()
     }
 
     pub fn get_meta(&self, repo_id: &str) -> Option<RepoMeta> {
-        let repos = self.repos.lock().unwrap();
-        repos.get(repo_id).map(|e| e.meta.clone())
-    }
-
-    #[allow(dead_code)]
-    pub fn mark_dirty(&self, repo_id: &str) {
-        let mut repos = self.repos.lock().unwrap();
-        if let Some(entry) = repos.get_mut(repo_id) {
-            entry.dirty = true;
-        }
-    }
-
-    pub fn update_status(&self, repo_id: &str, status: WorkspaceStatus) {
-        let mut repos = self.repos.lock().unwrap();
-        if let Some(entry) = repos.get_mut(repo_id) {
-            entry.status = Some(status);
-            entry.dirty = false;
-        }
-    }
-
-    #[allow(dead_code)]
-    pub fn get_cached_status(&self, repo_id: &str) -> Option<WorkspaceStatus> {
-        let repos = self.repos.lock().unwrap();
-        repos.get(repo_id).and_then(|e| e.status.clone())
+        let repos = self.repos.lock();
+        repos.get(repo_id).cloned()
     }
 }

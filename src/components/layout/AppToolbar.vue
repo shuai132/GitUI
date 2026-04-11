@@ -77,16 +77,58 @@ function showError(msg: string) {
 }
 
 // ── Helpers ────────────────────────────────────────────────────────
-async function pickRemote(): Promise<string | null> {
+// 多 remote 选择菜单：pickRemote 复用同一个 ContextMenu，resolve 回传
+const remoteMenu = reactive({
+  visible: false,
+  x: 0,
+  y: 0,
+  items: [] as ContextMenuItem[],
+  resolve: null as ((remote: string | null) => void) | null,
+})
+
+async function pickRemote(anchorRect?: DOMRect): Promise<string | null> {
   const id = repoStore.activeRepoId
   if (!id) return null
+  let remotes: string[]
   try {
-    const remotes = await git.listRemotes(id)
-    if (remotes.length === 0) return null
-    return remotes.includes('origin') ? 'origin' : remotes[0]
+    remotes = await git.listRemotes(id)
   } catch {
     return null
   }
+  if (remotes.length === 0) return null
+  if (remotes.length === 1) return remotes[0]
+
+  // 多 remote：弹菜单让用户显式选择
+  return new Promise<string | null>((resolve) => {
+    remoteMenu.items = remotes.map((name) => ({ label: name, action: name }))
+    if (anchorRect) {
+      remoteMenu.x = anchorRect.left
+      remoteMenu.y = anchorRect.bottom + 4
+    } else {
+      // 没有 anchor 就用 actions 按钮作为兜底参考
+      const el = actionsBtnRef.value
+      const rect = el?.getBoundingClientRect()
+      remoteMenu.x = rect ? rect.right - 160 : 80
+      remoteMenu.y = rect ? rect.bottom + 4 : 80
+    }
+    remoteMenu.resolve = resolve
+    remoteMenu.visible = true
+  })
+}
+
+function onRemoteMenuSelect(action: string) {
+  remoteMenu.visible = false
+  const fn = remoteMenu.resolve
+  remoteMenu.resolve = null
+  fn?.(action)
+}
+
+function onRemoteMenuClose() {
+  // 点外部关闭视为取消
+  remoteMenu.visible = false
+  const fn = remoteMenu.resolve
+  remoteMenu.resolve = null
+  fn?.(null)
 }
 
 // ── 打开仓库 ────────────────────────────────────────────────────────
@@ -103,13 +145,17 @@ async function openFolder() {
 }
 
 // ── Pull ────────────────────────────────────────────────────────────
-async function onPull() {
+async function onPull(e: MouseEvent) {
   const id = repoStore.activeRepoId
   const branch = currentBranch.value
   if (!id || !branch) return
-  const remote = await pickRemote()
+  const rect = (e.currentTarget as HTMLElement | null)?.getBoundingClientRect()
+  const remote = await pickRemote(rect)
   if (!remote) {
-    showError('当前仓库没有配置 remote')
+    // 区分 "没配 remote" 与 "用户取消选择"：只有 remotes 为空时才显示错误。
+    // 这里简单处理：listRemotes 返回 0 时 showError；取消不提示。
+    const remotes = await git.listRemotes(id).catch(() => [])
+    if (remotes.length === 0) showError('当前仓库没有配置 remote')
     return
   }
   busy.pull = true
@@ -124,13 +170,15 @@ async function onPull() {
 }
 
 // ── Push ────────────────────────────────────────────────────────────
-async function onPush() {
+async function onPush(e: MouseEvent) {
   const id = repoStore.activeRepoId
   const branch = currentBranch.value
   if (!id || !branch) return
-  const remote = await pickRemote()
+  const rect = (e.currentTarget as HTMLElement | null)?.getBoundingClientRect()
+  const remote = await pickRemote(rect)
   if (!remote) {
-    showError('当前仓库没有配置 remote')
+    const remotes = await git.listRemotes(id).catch(() => [])
+    if (remotes.length === 0) showError('当前仓库没有配置 remote')
     return
   }
   busy.push = true
@@ -247,15 +295,19 @@ async function onActionsSelect(action: string) {
   if (!id) return
   switch (action) {
     case 'fetch': {
-      const remote = await pickRemote()
+      const rect = actionsBtnRef.value?.getBoundingClientRect()
+      const remote = await pickRemote(rect)
       if (!remote) {
-        showError('当前仓库没有配置 remote')
+        const remotes = await git.listRemotes(id).catch(() => [])
+        if (remotes.length === 0) showError('当前仓库没有配置 remote')
         return
       }
       busy.fetch = true
       try {
         await git.fetchRemote(id, remote)
-        await historyStore.loadBranches()
+        // fetch 会带来新的远端 commits，log 也要刷新，
+        // 不然用户会以为 fetch 没生效
+        await Promise.all([historyStore.loadLog(), historyStore.loadBranches()])
       } catch (e) {
         showError(`Fetch 失败：${String(e)}`)
       } finally {
@@ -337,7 +389,7 @@ async function handleDblClick(e: MouseEvent) {
         class="btn-tool btn-tool--pull"
         title="Pull (fetch + merge)"
         :disabled="!canRemoteOp || busy.pull"
-        @click="onPull"
+        @click="onPull($event)"
       >
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M12 5v14"/>
@@ -354,7 +406,7 @@ async function handleDblClick(e: MouseEvent) {
         class="btn-tool"
         title="Push 当前分支"
         :disabled="!canRemoteOp || busy.push"
-        @click="onPush"
+        @click="onPush($event)"
       >
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M12 19V5"/>
@@ -479,6 +531,16 @@ async function handleDblClick(e: MouseEvent) {
       :items="actionsMenuItems"
       @close="actionsMenu.visible = false"
       @select="onActionsSelect"
+    />
+
+    <!-- 多 remote 选择菜单：pickRemote 触发 -->
+    <ContextMenu
+      :visible="remoteMenu.visible"
+      :x="remoteMenu.x"
+      :y="remoteMenu.y"
+      :items="remoteMenu.items"
+      @close="onRemoteMenuClose"
+      @select="onRemoteMenuSelect"
     />
   </div>
 </template>

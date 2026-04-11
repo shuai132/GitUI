@@ -17,20 +17,27 @@ Fetch / Push / Pull 是三个独立命令，统一走 git2 的 `RemoteCallbacks`
 |------|------|------|
 | Pull | `git.pullBranch(repoId, remote, branch)` | 成功后 `loadLog() + loadBranches()` |
 | Push | `git.pushBranch(repoId, remote, branch)` | 成功后 `loadBranches()` |
-| Actions → 抓取 | `git.fetchRemote(repoId, remote)` | 成功后 `loadBranches()` |
+| Actions → 抓取 | `git.fetchRemote(repoId, remote)` | 成功后 `loadLog() + loadBranches()` |
+
+> Fetch 曾经只刷 `loadBranches()`——结果：新的远端 commit 不会立刻出现在提交图里，用户以为 fetch 没生效会重复点。现在 fetch 和 pull 一视同仁，都并发刷 log + branches。
 
 每个按钮都有独立 `busy` 标志（`busy.pull / busy.push / busy.fetch`），按钮文本会显示 `Pulling... / Pushing...`。失败时通过 `toastError` 在工具栏下方显示 4 秒自动消失的浮层。
 
 ## 远端选择
 
-目前的策略简单粗暴（`pickRemote` in `AppToolbar.vue`）：
+`pickRemote(anchorRect?)` in `AppToolbar.vue`：
 
 1. `git.listRemotes(repoId)` 取所有 remote
-2. 若有 `origin` → 用 `origin`
-3. 否则用第一个
-4. 一个都没有 → 返回 null，提示 "当前仓库没有配置 remote"
+2. 一个都没有 → 返回 null，调用方显示 "当前仓库没有配置 remote"
+3. 恰好一个 → 直接返回那一个
+4. 多个 → **弹出 ContextMenu 让用户选**，返回 Promise，菜单关闭（点外部）resolve 为 null
 
-没有交互式 "选择 remote" 弹窗。多 remote 场景需要 Pull 下拉菜单（README 里的 TODO）。
+`anchorRect` 用于定位菜单到触发按钮下方：
+
+- Pull / Push 按钮：`(e.currentTarget as HTMLElement).getBoundingClientRect()`
+- Actions 菜单里的 "抓取"：用 `actionsBtnRef` 的 rect 作为 fallback
+
+多 remote 时每次都弹菜单、不记忆——remote 切换在日常工作里是显式决定。如果后续证明太烦，可以再加 per-repo 的偏好记忆。
 
 ## Pull 实现
 

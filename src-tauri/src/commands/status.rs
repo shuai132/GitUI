@@ -15,7 +15,6 @@ pub async fn get_status(
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
 
     let status = GitEngine::get_status(&meta.path)?;
-    repo_manager.update_status(&repo_id, status.clone());
     Ok(status)
 }
 

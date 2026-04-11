@@ -39,19 +39,20 @@ pub struct LogPage {
 `get_log` 的关键逻辑：
 
 1. **Step A**：推所有 refs 到一个临时 revwalk，收集 `reachable: HashSet<Oid>`，用于判断哪些提交是"丢失引用"的
-2. **Step B**：遍历 `stash_foreach` 收集 `stash_set`
+2. **Step B**：遍历 `stash_foreach` 收集 `stash_set`；对每条 stash 读取其 commit 对象，把 `parent[1]`（index 快照）和 `parent[2]`（untracked 快照）收集进 `stash_aux_set`——这些是 git stash 的内部结构，用户视角里不应作为独立提交出现
 3. **Step C**：主 revwalk 推 `refs/heads/*` + `refs/remotes/*` + `refs/tags/*` + HEAD，排序 `TOPOLOGICAL | TIME`
 4. `include_stashes` 时把每条 stash oid 推进 revwalk
 5. `include_unreachable` 时遍历 HEAD reflog，把既不在 reachable 也不在 stash 集合里的 oid 推进 revwalk（即丢失引用的提交）
-6. 按 `offset/limit` 分页，逐条构造 `CommitInfo`
+6. 按 `offset/limit` 分页遍历 revwalk 输出，**跳过 `stash_aux_set` 中的 oid**（index/untracked 辅助 commit 不作为独立行），逐条构造 `CommitInfo`
 7. 每条 commit 打上：
    - `is_stash = stash_set.contains(oid)`
    - `is_unreachable = !is_stash && !reachable.contains(oid)`
+8. 对 `is_stash == true` 的 commit，`parent_oids` 只保留 `parent[0]`（HEAD），丢弃 `parent[1]`/`parent[2]`——让前端 lane 算法把 stash 当成普通 1-parent commit 挂在 HEAD 上，详见 [10-stash-reflog.md](./10-stash-reflog.md#历史图里的-stash)
 
 前端据此渲染：
 
 - `is_unreachable` → 整行变灰 + 斜体
-- `is_stash` → message 颜色淡化 + 斜体
+- `is_stash` → message 颜色淡化 + 斜体；lane 图标使用空心圆 + 分支色描边（[05-commit-graph.md](./05-commit-graph.md)）
 
 ## 过滤与搜索
 

@@ -1,11 +1,12 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::Duration;
 
 use notify::RecommendedWatcher;
-use notify_debouncer_mini::{new_debouncer, DebounceEventResult, Debouncer};
 use notify::RecursiveMode;
+use notify_debouncer_mini::{new_debouncer, DebounceEventResult, Debouncer};
+use parking_lot::Mutex;
 
 pub type WatchHandle = Debouncer<RecommendedWatcher>;
 
@@ -27,13 +28,13 @@ impl WatcherService {
         let mut debouncer = new_debouncer(Duration::from_millis(300), callback)?;
         debouncer.watcher().watch(&git_dir, RecursiveMode::Recursive)?;
 
-        let mut watchers = self.watchers.lock().unwrap();
+        let mut watchers = self.watchers.lock();
         watchers.insert(repo_id, debouncer);
         Ok(())
     }
 
     pub fn unwatch(&self, repo_id: &str) {
-        let mut watchers = self.watchers.lock().unwrap();
+        let mut watchers = self.watchers.lock();
         watchers.remove(repo_id);
     }
 }
