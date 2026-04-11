@@ -19,6 +19,8 @@
 
   * {
     box-sizing: border-box;
+    /* 禁用所有滚动容器的 rubber-band 回弹效果 */
+    overscroll-behavior: none;
   }
 
   html, body, #app {
