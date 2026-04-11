@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import type { CommitDetail } from '@/types/git'
 import { formatAbsoluteTime } from '@/utils/format'
 import { GRAPH_COLORS } from '@/utils/graph'
+import { useUiStore } from '@/stores/ui'
 
 const props = defineProps<{
   commit: CommitDetail | null
@@ -12,6 +13,45 @@ const props = defineProps<{
 const emit = defineEmits<{
   selectFile: [idx: number]
 }>()
+
+const uiStore = useUiStore()
+const sizes = uiStore.historyPaneSizes
+
+// ── 头部区（summary + meta-grid）和变动文件列表之间的可拖拽分隔条 ──
+// commitInfoTopH === 0 时头部自适应内容高度；拖动后变成像素值，持久化到 uiStore
+const panelRoot = ref<HTMLElement | null>(null)
+const topSection = ref<HTMLElement | null>(null)
+
+const topSectionStyle = computed(() => {
+  return sizes.commitInfoTopH > 0 ? { height: sizes.commitInfoTopH + 'px' } : {}
+})
+
+function startTopResize(e: PointerEvent) {
+  e.preventDefault()
+  const topEl = topSection.value
+  const rootEl = panelRoot.value
+  if (!topEl || !rootEl) return
+  const startY = e.clientY
+  const startH = topEl.getBoundingClientRect().height
+  const rootH = rootEl.getBoundingClientRect().height
+  // 上限：留至少 80px 给下方 file-tabs
+  const maxH = Math.max(80, rootH - 80)
+  const onMove = (ev: PointerEvent) => {
+    const next = startH + (ev.clientY - startY)
+    sizes.commitInfoTopH = Math.max(60, Math.min(maxH, next))
+  }
+  const onUp = () => {
+    window.removeEventListener('pointermove', onMove)
+    window.removeEventListener('pointerup', onUp)
+    document.body.style.cursor = ''
+    document.body.style.userSelect = ''
+    uiStore.persistHistoryPaneSizes()
+  }
+  window.addEventListener('pointermove', onMove)
+  window.addEventListener('pointerup', onUp)
+  document.body.style.cursor = 'row-resize'
+  document.body.style.userSelect = 'none'
+}
 
 const initials = computed(() => {
   const name = props.commit?.info.author_name ?? ''
@@ -37,41 +77,51 @@ const bodyText = computed(() => {
 </script>
 
 <template>
-  <div class="commit-info-panel" v-if="commit">
-    <!-- Header: avatar + commit title -->
-    <div class="panel-header">
-      <div class="avatar" :style="{ background: avatarColor }">{{ initials }}</div>
-      <div class="title-block">
-        <div class="commit-summary">{{ commit.info.summary }}</div>
-        <div class="commit-body" v-if="bodyText">{{ bodyText }}</div>
+  <div class="commit-info-panel" v-if="commit" ref="panelRoot">
+    <!-- 上半区：头部 + 元数据（高度由 sizes.commitInfoTopH 控制，可拖拽） -->
+    <div class="top-section" ref="topSection" :style="topSectionStyle">
+      <!-- Header: avatar + commit title -->
+      <div class="panel-header">
+        <div class="avatar" :style="{ background: avatarColor }">{{ initials }}</div>
+        <div class="title-block">
+          <div class="commit-summary">{{ commit.info.summary }}</div>
+          <div class="commit-body" v-if="bodyText">{{ bodyText }}</div>
+        </div>
+      </div>
+
+      <!-- Metadata grid -->
+      <div class="meta-grid">
+        <span class="mk">提交</span>
+        <span class="mv oid">{{ commit.info.oid.slice(0, 16) }}</span>
+
+        <span class="mk">作者</span>
+        <span class="mv">{{ commit.info.author_name }}</span>
+
+        <span class="mk">日期</span>
+        <span class="mv">{{ formatAbsoluteTime(commit.info.time) }}</span>
+
+        <span class="mk">邮箱</span>
+        <span class="mv dim">{{ commit.info.author_email }}</span>
+
+        <template v-if="commit.info.parent_oids.length">
+          <span class="mk">父提交</span>
+          <span class="mv">
+            <span
+              v-for="p in commit.info.parent_oids"
+              :key="p"
+              class="parent-chip"
+            >{{ p.slice(0, 7) }}</span>
+          </span>
+        </template>
       </div>
     </div>
 
-    <!-- Metadata grid -->
-    <div class="meta-grid">
-      <span class="mk">提交</span>
-      <span class="mv oid">{{ commit.info.oid.slice(0, 16) }}</span>
-
-      <span class="mk">作者</span>
-      <span class="mv">{{ commit.info.author_name }}</span>
-
-      <span class="mk">日期</span>
-      <span class="mv">{{ formatAbsoluteTime(commit.info.time) }}</span>
-
-      <span class="mk">邮箱</span>
-      <span class="mv dim">{{ commit.info.author_email }}</span>
-
-      <template v-if="commit.info.parent_oids.length">
-        <span class="mk">父提交</span>
-        <span class="mv">
-          <span
-            v-for="p in commit.info.parent_oids"
-            :key="p"
-            class="parent-chip"
-          >{{ p.slice(0, 7) }}</span>
-        </span>
-      </template>
-    </div>
+    <!-- Resize handle between top-section and file-tabs -->
+    <div
+      v-if="commit.diffs.length"
+      class="top-resize"
+      @pointerdown="startTopResize"
+    />
 
     <!-- Changed files tab strip -->
     <div class="file-tabs" v-if="commit.diffs.length">
@@ -103,6 +153,16 @@ const bodyText = computed(() => {
   border-top: 1px solid var(--border);
   overflow: hidden;
   height: 100%;
+}
+
+/* 头部 + 元数据组合区：默认内容自适应高度，拖拽后变成固定像素高度 */
+.top-section {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  /* 当 height 被显式设定后，内部超出的内容允许滚动 */
+  overflow-y: auto;
+  min-height: 0;
 }
 
 .panel-header {
@@ -187,8 +247,25 @@ const bodyText = computed(() => {
   gap: 2px 8px;
   padding: 6px 12px;
   font-size: 11px;
-  border-bottom: 1px solid var(--border);
   flex-shrink: 0;
+}
+
+/* top-section 与 file-tabs 之间的可拖拽分隔条 */
+.top-resize {
+  flex-shrink: 0;
+  height: 6px;
+  margin-top: -3px;
+  margin-bottom: -3px;
+  border-top: 1px solid var(--border);
+  cursor: row-resize;
+  background: transparent;
+  transition: background 0.15s;
+  position: relative;
+  z-index: 2;
+}
+.top-resize:hover,
+.top-resize:active {
+  background: rgba(138, 173, 244, 0.3);
 }
 
 .mk {

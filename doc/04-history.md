@@ -106,6 +106,8 @@ const filteredCommits = computed(() => {
 
 **文本选择与超长内容**：面板头部（summary + body）和 meta-grid 两块显式设 `user-select: text`，盖过全局 `* { user-select: none }`，支持选中复制 commit 标题、message、oid、作者、邮箱等。超长的单行内容（过长的 summary、完整 oid、长邮箱、多 parent 列表）改为水平滚动（`overflow-x: auto + white-space: nowrap`）而非 `text-overflow: ellipsis` 截断，配一条 4px 细滚动条，避免占垂直空间又能提示"右侧还有内容"。
 
+**头部与变动文件的分隔条可拖拽**：CommitInfoPanel 把 `panel-header + meta-grid` 包进 `.top-section`，和下方 `.file-tabs` 之间放一个 `.top-resize` 水平拖拽条。头部高度由 `uiStore.historyPaneSizes.commitInfoTopH` 持久化（0 = 自适应内容）。拖动时实时改 store，pointerup 调 `persistHistoryPaneSizes()`。上下限：最低 60px，上限为面板总高减 80px，保证至少给 file-tabs 留出空间。当头部被固定高度后 `.top-section` 的 `overflow-y: auto` 负责内容溢出时的滚动。变动文件很多时用户可以把头部拖小，让 file-tabs 占据更多垂直空间。
+
 ### DiffView
 
 见 [06-diff-viewer.md](./06-diff-viewer.md)，支持三种模式切换。
