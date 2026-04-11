@@ -6,7 +6,7 @@ import { useRepoStore } from '@/stores/repos'
 import { formatTime } from '@/utils/format'
 import { LANE_W, ROW_H } from '@/utils/graph'
 import CommitGraphRow from '@/components/history/CommitGraphRow.vue'
-import SideBySideDiff from '@/components/diff/SideBySideDiff.vue'
+import DiffView from '@/components/diff/DiffView.vue'
 import CommitInfoPanel from '@/components/history/CommitInfoPanel.vue'
 import ContextMenu, { type ContextMenuItem } from '@/components/common/ContextMenu.vue'
 import CreateBranchDialog from '@/components/commit/CreateBranchDialog.vue'
@@ -538,17 +538,9 @@ onUnmounted(() => {
         </div>
       </div>
 
-      <!-- Side-by-side diff -->
+      <!-- Diff (三种模式由 DiffView 内部切换) -->
       <div class="diff-area">
-        <!-- File path header -->
-        <div class="diff-file-header" v-if="currentDiff">
-          <span class="diff-file-path">{{ currentDiff.new_path ?? currentDiff.old_path }}</span>
-          <span class="diff-file-stats">
-            <span class="add">+{{ currentDiff.additions }}</span>
-            <span class="del">-{{ currentDiff.deletions }}</span>
-          </span>
-        </div>
-        <SideBySideDiff :diff="currentDiff" />
+        <DiffView :diff="currentDiff" />
       </div>
 
       <!-- Commit info panel -->
@@ -937,32 +929,4 @@ onUnmounted(() => {
   min-width: 0;
   min-height: 0;
 }
-
-.diff-file-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 5px 12px;
-  background: var(--bg-secondary);
-  border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
-  font-size: 11px;
-}
-
-.diff-file-path {
-  color: var(--text-secondary);
-  font-family: 'SF Mono', monospace;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.diff-file-stats {
-  display: flex;
-  gap: 6px;
-  flex-shrink: 0;
-}
-
-.add { color: var(--accent-green); }
-.del { color: var(--accent-red); }
 </style>

@@ -5,7 +5,7 @@ import { useDiffStore } from '@/stores/diff'
 import { useRepoStore } from '@/stores/repos'
 import FileChangeList from '@/components/workspace/FileChangeList.vue'
 import CommitPanel from '@/components/workspace/CommitPanel.vue'
-import DiffViewer from '@/components/diff/DiffViewer.vue'
+import DiffView from '@/components/diff/DiffView.vue'
 import type { FileEntry } from '@/types/git'
 
 const workspaceStore = useWorkspaceStore()
@@ -72,7 +72,7 @@ function onToggleFile(file: FileEntry) {
 
       <!-- Right panel: diff viewer -->
       <div class="panel-right">
-        <DiffViewer
+        <DiffView
           :diff="diffStore.currentDiff"
           :loading="diffStore.loading"
         />
