@@ -1,9 +1,12 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useRepoStore } from '@/stores/repos'
 import { useHistoryStore } from '@/stores/history'
 import { useWorkspaceStore } from '@/stores/workspace'
+import { buildBranchTree } from '@/utils/branchTree'
+import type { BranchInfo } from '@/types/git'
+import BranchTreeNode from './BranchTreeNode.vue'
 
 const repoStore = useRepoStore()
 const historyStore = useHistoryStore()
@@ -21,26 +24,10 @@ const localBranches = computed(() =>
   historyStore.branches.filter((b) => !b.is_remote)
 )
 
-// Remote branches grouped by remote name
-const remoteGroups = computed(() => {
-  const groups: Record<string, typeof historyStore.branches> = {}
-  for (const b of historyStore.branches.filter((b) => b.is_remote)) {
-    const remote = b.name.split('/')[0] ?? 'origin'
-    if (!groups[remote]) groups[remote] = []
-    groups[remote].push(b)
-  }
-  return groups
-})
-
-const expandedRemotes = ref<Set<string>>(new Set(['origin']))
-
-function toggleRemote(name: string) {
-  if (expandedRemotes.value.has(name)) {
-    expandedRemotes.value.delete(name)
-  } else {
-    expandedRemotes.value.add(name)
-  }
-}
+// Remote branch tree（按 / 分层，第一层是 origin / upstream 等 remote 名）
+const remoteTree = computed(() =>
+  buildBranchTree(historyStore.branches.filter((b) => b.is_remote))
+)
 
 async function openRepo() {
   try {
@@ -70,9 +57,8 @@ async function switchBranch(name: string) {
   }
 }
 
-function branchShortName(fullName: string): string {
-  const parts = fullName.split('/')
-  return parts.length > 1 ? parts.slice(1).join('/') : fullName
+function onSelectRemoteBranch(_branch: BranchInfo) {
+  // 远程分支点击暂不切换（需要经过"检出..."弹窗，Step 5 实现）
 }
 </script>
 
@@ -121,34 +107,27 @@ function branchShortName(fullName: string): string {
         >
           <span class="branch-dot" :class="b.is_head ? 'dot-solid' : 'dot-outline'" />
           <span class="branch-label">{{ b.name }}</span>
+          <span
+            v-if="(b.ahead ?? 0) > 0 || (b.behind ?? 0) > 0"
+            class="ahead-behind"
+          >
+            <span v-if="(b.ahead ?? 0) > 0" class="ab-ahead">↑{{ b.ahead }}</span>
+            <span v-if="(b.behind ?? 0) > 0" class="ab-behind">↓{{ b.behind }}</span>
+          </span>
         </div>
       </div>
 
-      <!-- REMOTE sections -->
-      <template v-for="(group, remoteName) in remoteGroups" :key="remoteName">
-        <div class="section" v-if="repoStore.activeRepoId">
-          <div class="section-title collapsible" @click="toggleRemote(remoteName as string)">
-            <span>{{ (remoteName as string).toUpperCase() }}</span>
-            <svg
-              width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
-              class="chevron"
-              :class="{ open: expandedRemotes.has(remoteName as string) }"
-            >
-              <polyline points="9 18 15 12 9 6"/>
-            </svg>
-          </div>
-          <template v-if="expandedRemotes.has(remoteName as string)">
-            <div
-              v-for="b in group"
-              :key="b.name"
-              class="branch-item branch-item--remote"
-            >
-              <span class="branch-dot dot-outline dot-remote" />
-              <span class="branch-label">{{ branchShortName(b.name) }}</span>
-            </div>
-          </template>
-        </div>
-      </template>
+      <!-- REMOTE tree section -->
+      <div class="section" v-if="remoteTree.length > 0 && repoStore.activeRepoId">
+        <div class="section-title">REMOTE</div>
+        <BranchTreeNode
+          v-for="root in remoteTree"
+          :key="root.path"
+          :node="root"
+          :level="0"
+          @select-branch="onSelectRemoteBranch"
+        />
+      </div>
     </div>
 
     <!-- Bottom: additional repos -->
@@ -349,9 +328,32 @@ function branchShortName(fullName: string): string {
 }
 
 .branch-label {
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.ahead-behind {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+  background: var(--bg-overlay);
+  padding: 1px 5px;
+  border-radius: 7px;
+  line-height: 1.4;
+}
+
+.ab-ahead {
+  color: var(--accent-green);
+}
+
+.ab-behind {
+  color: var(--accent-orange);
 }
 
 /* ── Repos footer ────────────────────────────────────────────────── */
