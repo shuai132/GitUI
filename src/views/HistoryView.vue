@@ -80,6 +80,16 @@ const currentDiff = computed(() => {
 
 // ── Search / filter ──────────────────────────────────────────────────
 const searchQuery = ref('')
+
+// ── Layout mode (horizontal = diff 在右; vertical = diff 在下) ────────
+const LAYOUT_KEY = 'gitui.history.layout'
+const layoutMode = ref<'horizontal' | 'vertical'>(
+  (localStorage.getItem(LAYOUT_KEY) as 'horizontal' | 'vertical') || 'vertical'
+)
+function toggleLayout() {
+  layoutMode.value = layoutMode.value === 'horizontal' ? 'vertical' : 'horizontal'
+  localStorage.setItem(LAYOUT_KEY, layoutMode.value)
+}
 </script>
 
 <template>
@@ -102,11 +112,27 @@ const searchQuery = ref('')
         </svg>
         <input v-model="searchQuery" class="search-input" placeholder="搜索提交..." />
       </div>
+
+      <!-- Layout toggle -->
+      <button
+        class="btn-layout"
+        @click="toggleLayout"
+        :title="layoutMode === 'horizontal' ? '切换为上下布局' : '切换为左右布局'"
+      >
+        <svg v-if="layoutMode === 'horizontal'" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+          <rect x="2" y="2" width="12" height="12" rx="1"/>
+          <line x1="8" y1="2" x2="8" y2="14"/>
+        </svg>
+        <svg v-else width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+          <rect x="2" y="2" width="12" height="12" rx="1"/>
+          <line x1="2" y1="8" x2="14" y2="8"/>
+        </svg>
+      </button>
     </div>
 
     <!-- Content area -->
-    <div class="content-area">
-      <!-- LEFT: commit graph + list -->
+    <div class="content-area" :class="'layout-' + layoutMode">
+      <!-- Commit graph + list -->
       <div class="commit-panel">
         <!-- Column headers -->
         <div class="col-header">
@@ -180,22 +206,21 @@ const searchQuery = ref('')
         </div>
       </div>
 
-      <!-- RIGHT: diff + commit info -->
-      <div class="right-panel">
-        <!-- Side-by-side diff -->
-        <div class="diff-area">
-          <!-- File path header -->
-          <div class="diff-file-header" v-if="currentDiff">
-            <span class="diff-file-path">{{ currentDiff.new_path ?? currentDiff.old_path }}</span>
-            <span class="diff-file-stats">
-              <span class="add">+{{ currentDiff.additions }}</span>
-              <span class="del">-{{ currentDiff.deletions }}</span>
-            </span>
-          </div>
-          <SideBySideDiff :diff="currentDiff" />
+      <!-- Side-by-side diff -->
+      <div class="diff-area">
+        <!-- File path header -->
+        <div class="diff-file-header" v-if="currentDiff">
+          <span class="diff-file-path">{{ currentDiff.new_path ?? currentDiff.old_path }}</span>
+          <span class="diff-file-stats">
+            <span class="add">+{{ currentDiff.additions }}</span>
+            <span class="del">-{{ currentDiff.deletions }}</span>
+          </span>
         </div>
+        <SideBySideDiff :diff="currentDiff" />
+      </div>
 
-        <!-- Commit info panel -->
+      <!-- Commit info panel -->
+      <div class="info-pane">
         <CommitInfoPanel
           :commit="historyStore.selectedCommit"
           :selected-file-idx="historyStore.selectedFileDiffIndex"
@@ -280,19 +305,81 @@ const searchQuery = ref('')
   color: var(--text-muted);
 }
 
-/* ── Content area ────────────────────────────────────────────────── */
-.content-area {
-  display: grid;
-  grid-template-columns: minmax(300px, 55%) 1fr;
-  overflow: hidden;
+.btn-layout {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 3px 5px;
+  display: flex;
+  align-items: center;
+  transition: color 0.15s, border-color 0.15s;
 }
 
-/* ── Left: commit panel ──────────────────────────────────────────── */
+.btn-layout:hover {
+  color: var(--text-primary);
+  border-color: var(--text-muted);
+}
+
+/* ── Content area (两种布局模式) ──────────────────────────────────── */
+.content-area {
+  display: grid;
+  overflow: hidden;
+  min-height: 0;
+}
+
+/* 左右布局：commits 占左列满高；右列上 diff 下 info */
+.content-area.layout-horizontal {
+  grid-template-columns: minmax(300px, 55%) 1fr;
+  grid-template-rows: minmax(0, 1fr) 230px;
+  grid-template-areas:
+    "commits diff"
+    "commits info";
+}
+.content-area.layout-horizontal .commit-panel {
+  border-right: 1px solid var(--border);
+}
+
+/* 上下布局：上 commits 占满宽；下 左 info 右 diff */
+.content-area.layout-vertical {
+  grid-template-columns: minmax(280px, 38%) 1fr;
+  grid-template-rows: minmax(0, 55%) minmax(0, 45%);
+  grid-template-areas:
+    "commits commits"
+    "info diff";
+}
+.content-area.layout-vertical .commit-panel {
+  border-bottom: 1px solid var(--border);
+}
+.content-area.layout-vertical .info-pane {
+  border-right: 1px solid var(--border);
+}
+.content-area.layout-vertical .info-pane :deep(.commit-info-panel),
+.content-area.layout-vertical .info-pane :deep(.panel-empty) {
+  border-top: none;
+}
+
+/* Grid 区域映射 */
+.commit-panel { grid-area: commits; }
+.diff-area { grid-area: diff; }
+.info-pane { grid-area: info; }
+
+/* ── Commit panel ────────────────────────────────────────────────── */
 .commit-panel {
   display: flex;
   flex-direction: column;
-  border-right: 1px solid var(--border);
   overflow: hidden;
+  min-width: 0;
+  min-height: 0;
+}
+
+.info-pane {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
+  min-height: 0;
 }
 
 .col-header {
@@ -414,17 +501,13 @@ const searchQuery = ref('')
   opacity: 0.6;
 }
 
-/* ── Right panel ─────────────────────────────────────────────────── */
-.right-panel {
-  display: grid;
-  grid-template-rows: 1fr 230px;
-  overflow: hidden;
-}
-
+/* ── Diff area ───────────────────────────────────────────────────── */
 .diff-area {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  min-width: 0;
+  min-height: 0;
 }
 
 .diff-file-header {
