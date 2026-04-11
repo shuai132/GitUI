@@ -115,3 +115,9 @@ Trash 按钮弹 Modal，列出会影响的三类文件数量。确认后调 `dis
 `WipPanel` 通过 `diffStore.loadFileDiff(path, staged)` 加载当前选中文件的 diff。`HistoryView` 的 `currentDiff` computed 根据 `selectedWip` 决定用 `diffStore.currentDiff`（WIP 时）还是 `historyStore.selectedCommit.diffs[idx]`（查看提交时）。
 
 选择/切换 WIP → 真实 commit 时，`watch(selectedWip)` 会 `diffStore.clear()` 避免残留。
+
+### Diff 的文件监听自动刷新
+
+`diffStore` 记住当前加载的 `currentPath` 和 `currentStaged`（unstaged/staged 哪一侧），并暴露一个 `refresh()`：若 `currentPath` 非空则用保存的 `staged` 重新调 `loadFileDiff` 一次。`App.vue` 的 `onStatusChanged` 监听器在收到 `repo://status-changed` 时，除了刷新 `workspaceStore + submodulesStore` 外还会调 `diffStore.refresh()`，这样用户在外部编辑器修改文件内容、或通过 CLI 暂存/取消暂存文件时，WIP 模式下右侧 diff 面板会跟着工作区实际状态自动刷新，避免 stale diff。
+
+非 WIP 模式（查看某条 commit 的 diff）不受影响——那是 `historyStore.selectedCommit.diffs[idx]`，是提交内部 immutable 的数据。切换出 WIP 时 `diffStore.clear()` 会把 `currentPath` 清掉，`refresh()` 就变成 no-op。

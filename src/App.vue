@@ -9,6 +9,7 @@ import { useWorkspaceStore } from '@/stores/workspace'
 import { useHistoryStore } from '@/stores/history'
 import { useSubmodulesStore } from '@/stores/submodules'
 import { useStashStore } from '@/stores/stash'
+import { useDiffStore } from '@/stores/diff'
 import { useUiStore } from '@/stores/ui'
 import { useGitEvents } from '@/composables/useGitEvents'
 
@@ -18,6 +19,7 @@ const workspaceStore = useWorkspaceStore()
 const historyStore = useHistoryStore()
 const submodulesStore = useSubmodulesStore()
 const stashStore = useStashStore()
+const diffStore = useDiffStore()
 const uiStore = useUiStore()
 const { onStatusChanged } = useGitEvents()
 
@@ -54,6 +56,9 @@ onStatusChanged((repoId) => {
   if (repoId === repoStore.activeRepoId) {
     workspaceStore.refresh(repoId)
     submodulesStore.loadSubmodules()
+    // WIP 模式下右侧 diff 也要跟着工作区内容自动刷新；
+    // diffStore.refresh 在 currentPath === null 时是 no-op，非 WIP 场景安全。
+    diffStore.refresh()
   }
 })
 
