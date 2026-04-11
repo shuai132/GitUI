@@ -83,34 +83,22 @@ const filePath = computed(() => props.diff?.new_path ?? props.diff?.old_path ?? 
     <div v-else-if="diff.is_binary" class="sbs-state">二进制文件</div>
     <div v-else-if="diff.hunks.length === 0" class="sbs-state">无内容变更</div>
 
-    <!-- Side-by-side content -->
+    <!-- Side-by-side content: 每行是一个 flex row，左右两半共享同一 row，
+         保证左右严格同行对齐；body 是唯一的垂直滚动容器 -->
     <template v-else>
       <div class="sbs-body">
-        <!-- Left pane (old / deletions) -->
-        <div class="sbs-pane">
-          <div
-            v-for="(row, i) in alignedRows"
-            :key="'l' + i"
-            class="diff-line"
-            :class="'line-' + row.left.kind"
-          >
+        <div
+          v-for="(row, i) in alignedRows"
+          :key="i"
+          class="sbs-row"
+        >
+          <div class="sbs-half" :class="'line-' + row.left.kind">
             <span class="ln">{{ row.left.lineNo ?? '' }}</span>
             <span class="sign">{{ row.left.kind === 'del' ? '-' : row.left.kind === 'ctx' ? ' ' : '' }}</span>
             <span class="code">{{ row.left.content }}</span>
           </div>
-        </div>
-
-        <!-- Divider -->
-        <div class="sbs-divider" />
-
-        <!-- Right pane (new / additions) -->
-        <div class="sbs-pane">
-          <div
-            v-for="(row, i) in alignedRows"
-            :key="'r' + i"
-            class="diff-line"
-            :class="'line-' + row.right.kind"
-          >
+          <div class="sbs-divider" />
+          <div class="sbs-half" :class="'line-' + row.right.kind">
             <span class="ln">{{ row.right.lineNo ?? '' }}</span>
             <span class="sign">{{ row.right.kind === 'add' ? '+' : row.right.kind === 'ctx' ? ' ' : '' }}</span>
             <span class="code">{{ row.right.content }}</span>
@@ -141,30 +129,33 @@ const filePath = computed(() => props.diff?.new_path ?? props.diff?.old_path ?? 
 
 .sbs-body {
   flex: 1;
-  display: flex;
-  overflow: auto;
+  /* 唯一的垂直滚动容器，保证左右两侧同步滚动；长行由 .sbs-half 截断 */
+  overflow-y: auto;
+  overflow-x: hidden;
   font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
   font-size: 12px;
   line-height: 18px;
 }
 
-.sbs-pane {
-  flex: 1;
+.sbs-row {
+  display: flex;
+  align-items: stretch;
+  min-height: 18px;
+}
+
+.sbs-half {
+  flex: 1 1 0;
   min-width: 0;
-  overflow-x: auto;
+  display: flex;
+  align-items: flex-start;
+  white-space: pre;
+  overflow: hidden;
 }
 
 .sbs-divider {
   width: 1px;
   background: var(--border);
   flex-shrink: 0;
-}
-
-.diff-line {
-  display: flex;
-  align-items: flex-start;
-  white-space: pre;
-  min-height: 18px;
 }
 
 .ln {
