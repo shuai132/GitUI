@@ -1,0 +1,140 @@
+# 02. 多仓库管理
+
+GitUI 的核心使用场景是"同时挂着多个仓库，随时切换"。这份文档描述仓库的打开、切换、持久化、监控，以及窗口/托盘行为。
+
+## 涉及模块
+
+- 后端：`commands/repo.rs`、`repo_manager.rs`、`watcher.rs`、`tray.rs`、`lib.rs`
+- 前端：`stores/repos.ts`、`components/layout/AppSidebar.vue`、`App.vue`
+- 事件：`repo://status-changed`
+
+## RepoManager
+
+`repo_manager::RepoManager` 持有：
+
+```rust
+pub struct RepoManager {
+    pub repos: Arc<Mutex<HashMap<String, RepoCacheEntry>>>,
+}
+
+pub struct RepoCacheEntry {
+    pub meta: RepoMeta,           // { id, path, name }
+    pub status: Option<WorkspaceStatus>,  // 目前仅冗余，可选
+    pub dirty: bool,
+}
+```
+
+- 通过 `.manage(RepoManager::new())` 注册成 Tauri 全局 state
+- 所有命令通过 `State<'_, RepoManager>` 注入，先用 `repo_id` 取出 `path`，再调 `GitEngine`
+- `id` 是后端生成的 `Uuid::new_v4()` —— 每次 `open_repo` 会生成新的 id，即便同一路径重新打开也会换 id
+- 前端根据 path 去重：`repos.ts::openRepo()` 发现同 path 已存在时直接激活，不会重复调 `open_repo`
+
+## 打开流程
+
+```
+用户点击 + 按钮 / 顶栏"打开"
+  → plugin-dialog openDialog({ directory: true })
+  → reposStore.openRepo(path)
+  → git.openRepo(path) → invoke("open_repo")
+  → Rust open_repo:
+      1. Repository::open() 验证是 git 仓库
+      2. 取 workdir 名作为 repo.name
+      3. 生成 Uuid 作为 repo.id
+      4. RepoManager::add_repo(meta)
+      5. WatcherService::watch(id, workdir, callback)
+      6. 返回 RepoMeta
+  → reposStore.repos.push(meta), activeRepoId = meta.id
+  → 持久化 paths + activePath 到 gitui-repos.json
+  → App.vue watch(activeRepoId) 触发:
+      workspace.refresh + history.loadLog + history.loadBranches +
+      submodules.loadSubmodules + stash.refresh
+```
+
+## 持久化
+
+用 `@tauri-apps/plugin-store` 的 `LazyStore`：
+
+| Key | Value |
+|-----|-------|
+| `paths` | `string[]`，所有已打开仓库的绝对路径（顺序即用户可见顺序） |
+| `activePath` | 上次激活的路径 |
+
+存储文件：`gitui-repos.json`（由 tauri-plugin-store 管理）。
+
+启动时 `reposStore.loadPersisted()` 依次重新调 `open_repo` 恢复每个仓库（后端 `RepoManager` 是内存态，必须重新注册）。恢复过程中：
+
+- 失败的路径会记录 `hasFailed` 标志
+- 路径去重（历史数据可能有重复）
+- 若有清理动作会把新列表回写
+
+## 切换仓库
+
+侧边栏"其他仓库"区域点击任一项 → `reposStore.setActive(repoId)`：
+
+- 只改 `activeRepoId`，不调用任何后端命令
+- `App.vue` 的 `watch(() => repoStore.activeRepoId)` 自动触发刷新链
+- 路由强制跳到 `/history`
+- 持久化 `activePath`
+
+## 侧边栏拖动排序
+
+`AppSidebar.vue` 的"其他仓库"列表支持拖动重排。**不用 HTML5 DnD**：Tauri WKWebView 下 drag image / dropEffect / hit testing 都不稳定，改用 pointer events 自己实现：
+
+- `pointerdown` 记录 `fromIndex`，移动超过 `DRAG_THRESHOLD = 4px` 才算拖动
+- 拖动时按当前 Y 计算 `dragOverIndex` 和 `dragInsertBefore`，显示蓝色插入指示线
+- `pointerup` 把 `(from, target)` 传给 `reposStore.reorderRepos`
+- 拖动结束后 300ms 抑制 click，避免触发 `setActive`
+
+"其他仓库"区域的高度本身也可拖动调整，持久化到 `localStorage.gitui.sidebar.reposHeight`。
+
+## 文件系统监控
+
+`WatcherService` 包装 `notify-debouncer-mini`：
+
+```rust
+pub fn watch<F>(&self, repo_id: String, git_dir: PathBuf, callback: F)
+    where F: Fn(DebounceEventResult) + Send + 'static
+```
+
+- 每个 `repo_id` 对应一个 `Debouncer`，防抖 **300ms**
+- 监控的是 **整个工作目录**（不是 `.git/`），原因：只监听 `.git/` 会漏掉 tracked 文件的编辑，无法刷新 status
+- 回调里 `app.emit("repo://status-changed", repo_id)`
+- `close_repo` 时 `watcher.unwatch(repo_id)` 释放
+
+前端 `useGitEvents.onStatusChanged` 订阅：
+
+```ts
+onStatusChanged((repoId) => {
+  if (repoId === repoStore.activeRepoId) {
+    workspaceStore.refresh(repoId)
+    submodulesStore.loadSubmodules()
+  }
+})
+```
+
+只响应当前激活的仓库——其他仓库的变动仅缓存在后端，不触发前端渲染。
+
+## 窗口与托盘
+
+### 关闭 = 隐藏
+
+`lib.rs`:
+
+```rust
+.on_window_event(|window, event| {
+    if let WindowEvent::CloseRequested { api, .. } = event {
+        window.hide().unwrap();
+        api.prevent_close();
+    }
+})
+```
+
+### 托盘（`tray.rs`）
+
+- 菜单：`显示窗口`、`退出`
+- 左键点击 tray icon → 显示并聚焦窗口
+- 只有点"退出"才真正 `app.exit(0)`
+
+### macOS 细节
+
+`App.vue` / `AppToolbar.vue` 在 macOS 下留 78px 给 traffic lights，工具栏整体承担窗口拖动区域（`data-tauri-drag-region` + `startDragging`）。双击工具栏空白区域切换最大化。

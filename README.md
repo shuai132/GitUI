@@ -4,11 +4,11 @@
 
 ## 功能
 
-### 工作区（Workspace）
-- 查看暂存区 / 未暂存 / 未追踪文件
-- 单文件暂存、取消暂存、一键全部暂存 / 全部取消
-- 行内 / 并排 / CodeMirror 三种 Diff 模式
-- 多行提交信息
+### 提交与工作副本
+- 工作副本有改动时直接嵌在历史视图顶部（WIP 行），不占独立路由
+- 暂存区 / 未暂存 / 未追踪三类分区，单文件或一键全部暂存 / 取消
+- 摘要 + 详细描述两行提交框，Cmd/Ctrl+Enter 提交
+- Amend（修补上次提交）、Discard（单文件或全部）
 
 ### 提交历史（History）
 - 分页加载（每页 200 条），提交图可视化
@@ -21,22 +21,23 @@
 - 检出远程分支并建立追踪
 
 ### 远程操作
-- Fetch、Push、Pull
-- 多 Remote 支持
+- Fetch、Push、Pull（当前仅支持 fast-forward pull）
+- SSH 凭据链：ssh-agent → `~/.ssh/id_ed25519` → `~/.ssh/id_rsa`；HTTPS 走系统 credential helper
 
 ### Submodule
 - 列表、Initialize、Update、Edit URL、Deinit（完整清理 .gitmodules / .git/config / .git/modules）
 - 已克隆的 submodule 可直接作为新仓库打开
 
 ### Diff 查看器
-- 三种模式：行内（InlineDiff）、并排（SideBySideDiff）、CodeMirror
-- 按文件扩展名自动识别语言的语法高亮（20+ 种）
+- 三种模式：行内（InlineDiff）、并排（SideBySideDiff）、按 hunk 分块
+- 按文件扩展名自动识别语言的语法高亮（15 种左右）
 - 高亮开关、跳转变更块工具栏
+- Untracked 文件也能看到完整的行级 diff
 
 ### 多仓库管理
-- 侧边栏快速切换仓库
+- 侧边栏快速切换仓库，路径持久化跨启动恢复
 - 仓库列表可拖动排序、可调整面板高度
-- `.git/` 目录文件监控，自动刷新工作区状态（300ms 防抖）
+- 工作目录文件监控，自动刷新工作区状态（300ms 防抖）
 
 ### 其他
 - 关闭窗口隐藏到系统托盘，不退出进程
@@ -53,7 +54,7 @@
 | 状态管理 | Pinia |
 | 路由 | Vue Router（Hash 模式） |
 | 样式 | Tailwind CSS v4 |
-| Diff 渲染 | CodeMirror 6 + Highlight.js |
+| Diff 渲染 | 自绘 inline / side-by-side + Highlight.js |
 | 虚拟滚动 | TanStack Vue Virtual |
 
 ## 开发
@@ -63,16 +64,16 @@
 pnpm install
 
 # 开发（同时启动 Vite dev server 和 Tauri 进程）
-npm run tauri dev
+pnpm tauri dev
 
 # 仅 TypeScript 类型检查
-npx vue-tsc --noEmit
+pnpm exec vue-tsc --noEmit
 
 # 仅检查 Rust 代码（速度快）
 cd src-tauri && cargo check
 
 # 打包发布
-npm run tauri build
+pnpm tauri build
 ```
 
 ## 架构
@@ -94,7 +95,7 @@ git2-rs（libgit2，in-process）
 | `git/credentials.rs` | SSH 凭据回调链 |
 | `commands/` | IPC command 层，按功能域拆分 |
 | `repo_manager.rs` | 多仓库状态中心 |
-| `watcher.rs` | `.git/` 目录监控，推送 `repo://status-changed` 事件 |
+| `watcher.rs` | 工作目录监控，推送 `repo://status-changed` 事件 |
 
 ## 语法高亮支持的语言
 
@@ -105,10 +106,12 @@ git2-rs（libgit2，in-process）
 - Java
 - C / C++
 - JSON
-- CSS / HTML
+- CSS / HTML / XML
 - Markdown
 - SQL
 - YAML
 - Shell / Bash
-- XML
-- Vue / Svelte
+
+## 设计文档
+
+想看实现细节或参与开发，见 [`doc/`](./doc/README.md) 下按功能域组织的设计文档。
