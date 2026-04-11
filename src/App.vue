@@ -6,11 +6,13 @@ import AppStatusBar from '@/components/layout/AppStatusBar.vue'
 import { useRepoStore } from '@/stores/repos'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useHistoryStore } from '@/stores/history'
+import { useSubmodulesStore } from '@/stores/submodules'
 import { useGitEvents } from '@/composables/useGitEvents'
 
 const repoStore = useRepoStore()
 const workspaceStore = useWorkspaceStore()
 const historyStore = useHistoryStore()
+const submodulesStore = useSubmodulesStore()
 const { onStatusChanged } = useGitEvents()
 
 // 启动时从持久化存储恢复仓库列表
@@ -47,6 +49,7 @@ function startSidebarResize(e: PointerEvent) {
 onStatusChanged((repoId) => {
   if (repoId === repoStore.activeRepoId) {
     workspaceStore.refresh(repoId)
+    submodulesStore.loadSubmodules()
   }
 })
 
@@ -58,6 +61,9 @@ watch(
       await workspaceStore.refresh(id)
       await historyStore.loadLog()
       await historyStore.loadBranches()
+      await submodulesStore.loadSubmodules()
+    } else {
+      submodulesStore.reset()
     }
   }
 )

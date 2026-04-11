@@ -7,6 +7,7 @@ import type {
   LogPage,
   FileDiff,
   BranchInfo,
+  SubmoduleInfo,
 } from '@/types/git'
 
 export function useGitCommands() {
@@ -115,6 +116,25 @@ export function useGitCommands() {
   const listRemotes = (repoId: string) =>
     invoke<string[]>('list_remotes', { repoId })
 
+  // ---- Submodule ----
+  const listSubmodules = (repoId: string) =>
+    invoke<SubmoduleInfo[]>('list_submodules', { repoId })
+
+  const initSubmodule = (repoId: string, name: string) =>
+    invoke<void>('init_submodule', { repoId, name })
+
+  const updateSubmodule = (repoId: string, name: string) =>
+    invoke<void>('update_submodule', { repoId, name })
+
+  const setSubmoduleUrl = (repoId: string, name: string, url: string) =>
+    invoke<void>('set_submodule_url', { repoId, name, url })
+
+  const submoduleWorkdir = (repoId: string, name: string) =>
+    invoke<string>('submodule_workdir', { repoId, name })
+
+  const deinitSubmodule = (repoId: string, name: string) =>
+    invoke<void>('deinit_submodule', { repoId, name })
+
   return {
     openRepo,
     closeRepo,
@@ -143,5 +163,11 @@ export function useGitCommands() {
     pushBranch,
     pullBranch,
     listRemotes,
+    listSubmodules,
+    initSubmodule,
+    updateSubmodule,
+    setSubmoduleUrl,
+    submoduleWorkdir,
+    deinitSubmodule,
   }
 }

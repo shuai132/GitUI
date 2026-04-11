@@ -4,7 +4,9 @@ mod repo_manager;
 mod tray;
 mod watcher;
 
-use commands::{branch::*, commit::*, diff::*, log::*, remote::*, repo::*, status::*};
+use commands::{
+    branch::*, commit::*, diff::*, log::*, remote::*, repo::*, status::*, submodule::*,
+};
 use repo_manager::RepoManager;
 use tauri::WindowEvent;
 use watcher::WatcherService;
@@ -52,6 +54,13 @@ pub fn run() {
             push_branch,
             pull_branch,
             list_remotes,
+            // Submodule
+            list_submodules,
+            init_submodule,
+            update_submodule,
+            set_submodule_url,
+            submodule_workdir,
+            deinit_submodule,
         ])
         .setup(|app| {
             tray::setup_tray(&app.handle())?;

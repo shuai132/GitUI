@@ -109,3 +109,29 @@ pub struct StashEntry {
     pub message: String,
     pub commit_oid: String,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum SubmoduleState {
+    /// 在 .gitmodules 中存在但 .git/config 中未注册
+    Uninitialized,
+    /// 已 init 但工作区没有 clone（WD_UNINITIALIZED）
+    NotCloned,
+    /// workdir commit 与父仓库记录的 head commit 一致，且工作区干净
+    UpToDate,
+    /// workdir commit 偏离 head commit，或工作区有本地修改
+    Modified,
+    /// 条目存在于 .gitmodules 中但磁盘上找不到（罕见情况）
+    NotFound,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SubmoduleInfo {
+    pub name: String,
+    pub path: String,
+    pub url: Option<String>,
+    pub head_oid: Option<String>,
+    pub workdir_oid: Option<String>,
+    pub state: SubmoduleState,
+    pub has_workdir_modifications: bool,
+}

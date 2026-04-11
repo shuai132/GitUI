@@ -79,6 +79,23 @@ export interface LogPage {
   total_loaded: number
 }
 
+export type SubmoduleState =
+  | 'uninitialized'
+  | 'not_cloned'
+  | 'up_to_date'
+  | 'modified'
+  | 'not_found'
+
+export interface SubmoduleInfo {
+  name: string
+  path: string
+  url?: string
+  head_oid?: string
+  workdir_oid?: string
+  state: SubmoduleState
+  has_workdir_modifications: boolean
+}
+
 // Graph node for DAG visualization
 export interface GraphNode {
   oid: string

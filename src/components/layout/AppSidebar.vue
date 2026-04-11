@@ -4,15 +4,18 @@ import { RouterLink } from 'vue-router'
 import { useRepoStore } from '@/stores/repos'
 import { useHistoryStore } from '@/stores/history'
 import { useWorkspaceStore } from '@/stores/workspace'
+import { useSubmodulesStore } from '@/stores/submodules'
 import { buildBranchTree } from '@/utils/branchTree'
-import type { BranchInfo } from '@/types/git'
+import type { BranchInfo, SubmoduleInfo } from '@/types/git'
 import BranchTreeNode from './BranchTreeNode.vue'
 import ContextMenu, { type ContextMenuItem } from '@/components/common/ContextMenu.vue'
 import CheckoutRemoteDialog from '@/components/branch/CheckoutRemoteDialog.vue'
+import EditSubmoduleDialog from '@/components/submodule/EditSubmoduleDialog.vue'
 
 const repoStore = useRepoStore()
 const historyStore = useHistoryStore()
 const workspaceStore = useWorkspaceStore()
+const submodulesStore = useSubmodulesStore()
 
 // Changed files badge count
 const changedCount = computed(() =>
@@ -295,6 +298,111 @@ async function onContextAction(action: string) {
     console.error(err)
   }
 }
+
+// ── Submodules ───────────────────────────────────────────────────────
+const submodules = computed(() => submodulesStore.submodules)
+
+const submoduleMenu = reactive({
+  visible: false,
+  x: 0,
+  y: 0,
+  target: null as SubmoduleInfo | null,
+})
+
+const editDialog = reactive({
+  visible: false,
+  target: null as SubmoduleInfo | null,
+})
+
+const submoduleMenuItems = computed<ContextMenuItem[]>(() => {
+  const s = submoduleMenu.target
+  if (!s) return []
+  const isInitialized = s.state !== 'uninitialized'
+  return [
+    {
+      label: `Initialize ${s.path}`,
+      action: 'init',
+      disabled: isInitialized,
+    },
+    { label: `Update ${s.path}`, action: 'update' },
+    { separator: true },
+    { label: `Edit ${s.path}`, action: 'edit' },
+    { separator: true },
+    { label: 'Delete this submodule', action: 'delete', danger: true },
+  ]
+})
+
+function openSubmoduleMenu(e: MouseEvent, s: SubmoduleInfo) {
+  e.preventDefault()
+  e.stopPropagation()
+  submoduleMenu.target = s
+  // 把菜单定位到按钮右下方而非鼠标位置，视觉更稳定
+  const btn = e.currentTarget as HTMLElement | null
+  if (btn) {
+    const rect = btn.getBoundingClientRect()
+    submoduleMenu.x = rect.right
+    submoduleMenu.y = rect.bottom
+  } else {
+    submoduleMenu.x = e.clientX
+    submoduleMenu.y = e.clientY
+  }
+  submoduleMenu.visible = true
+}
+
+function closeSubmoduleMenu() {
+  submoduleMenu.visible = false
+}
+
+async function onSubmoduleMenuAction(action: string) {
+  const s = submoduleMenu.target
+  if (!s) return
+  try {
+    switch (action) {
+      case 'init':
+        await submodulesStore.init(s.name)
+        break
+      case 'update':
+        await submodulesStore.update(s.name)
+        break
+      case 'edit':
+        editDialog.target = s
+        editDialog.visible = true
+        break
+      case 'delete':
+        if (
+          confirm(
+            `确认删除 submodule "${s.path}"？\n\n` +
+              `这将删除：\n` +
+              `  • 工作区目录 ${s.path}/\n` +
+              `  • .git/modules/${s.name}/\n` +
+              `  • .gitmodules 中对应条目\n` +
+              `  • .git/config 中对应条目\n\n` +
+              `操作完成后请手动 commit 这次变更。`,
+          )
+        ) {
+          await submodulesStore.deinit(s.name)
+        }
+        break
+    }
+  } catch (err) {
+    console.error(err)
+    alert(`操作失败：${String(err)}`)
+  }
+}
+
+async function onSubmoduleClick(s: SubmoduleInfo) {
+  // 未初始化 / 未 clone 的 submodule 不能作为仓库打开
+  if (s.state === 'uninitialized' || s.state === 'not_cloned' || s.state === 'not_found') {
+    return
+  }
+  try {
+    const absPath = await submodulesStore.workdir(s.name)
+    await repoStore.openRepo(absPath)
+  } catch (err) {
+    console.error(err)
+    alert(`打开 submodule 失败：${String(err)}`)
+  }
+}
 </script>
 
 <template>
@@ -350,6 +458,73 @@ async function onContextAction(action: string) {
             <span v-if="(b.ahead ?? 0) > 0" class="ab-ahead">↑{{ b.ahead }}</span>
             <span v-if="(b.behind ?? 0) > 0" class="ab-behind">↓{{ b.behind }}</span>
           </span>
+        </div>
+      </div>
+
+      <!-- SUBMODULES section -->
+      <div class="section" v-if="submodules.length > 0 && repoStore.activeRepoId">
+        <div class="section-title submodule-title">
+          <span>SUBMODULES</span>
+          <span class="section-count">{{ submodules.length }}</span>
+        </div>
+        <div
+          v-for="s in submodules"
+          :key="s.name"
+          class="submodule-item"
+          :class="{
+            'submodule-item--dim':
+              s.state === 'uninitialized' || s.state === 'not_cloned' || s.state === 'not_found',
+          }"
+          :title="`${s.path}${s.url ? '\n' + s.url : ''}`"
+          @click="onSubmoduleClick(s)"
+        >
+          <!-- 警告三角：未 init / 未 clone / 找不到 -->
+          <svg
+            v-if="s.state === 'uninitialized' || s.state === 'not_cloned' || s.state === 'not_found'"
+            class="sub-warn"
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+            <line x1="12" y1="9" x2="12" y2="13"/>
+            <line x1="12" y1="17" x2="12.01" y2="17"/>
+          </svg>
+          <!-- submodule 小图标（立方体） -->
+          <svg
+            v-else
+            class="sub-icon"
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+            <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+            <line x1="12" y1="22.08" x2="12" y2="12"/>
+          </svg>
+          <span class="submodule-label">{{ s.path }}</span>
+          <span v-if="s.has_workdir_modifications" class="sub-dot" title="有未提交修改" />
+          <button
+            class="submodule-kebab"
+            title="Submodule 操作"
+            @click="openSubmoduleMenu($event, s)"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+              <circle cx="12" cy="5" r="1.7"/>
+              <circle cx="12" cy="12" r="1.7"/>
+              <circle cx="12" cy="19" r="1.7"/>
+            </svg>
+          </button>
         </div>
       </div>
 
@@ -427,6 +602,23 @@ async function onContextAction(action: string) {
       :remote-branches="remoteBranchesFlat"
       :initial-remote="checkoutInitialRemote"
       @close="showCheckoutDialog = false"
+    />
+
+    <!-- Submodule kebab context menu -->
+    <ContextMenu
+      :visible="submoduleMenu.visible"
+      :x="submoduleMenu.x"
+      :y="submoduleMenu.y"
+      :items="submoduleMenuItems"
+      @close="closeSubmoduleMenu"
+      @select="onSubmoduleMenuAction"
+    />
+
+    <!-- Edit submodule dialog -->
+    <EditSubmoduleDialog
+      :visible="editDialog.visible"
+      :submodule="editDialog.target"
+      @close="editDialog.visible = false"
     />
   </aside>
 </template>
@@ -625,6 +817,92 @@ async function onContextAction(action: string) {
 
 .ab-behind {
   color: var(--accent-orange);
+}
+
+/* ── Submodules section ──────────────────────────────────────────── */
+.submodule-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.section-count {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--accent-blue);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.submodule-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 6px 3px 16px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background 0.1s;
+  position: relative;
+}
+
+.submodule-item:hover {
+  background: var(--bg-overlay);
+}
+
+.submodule-item--dim {
+  color: var(--text-muted);
+  cursor: default;
+}
+
+.sub-warn {
+  color: var(--accent-orange);
+  flex-shrink: 0;
+}
+
+.sub-icon {
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.submodule-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sub-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent-orange);
+  flex-shrink: 0;
+}
+
+.submodule-kebab {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  padding: 2px 4px;
+  border-radius: 3px;
+  color: var(--text-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+  line-height: 0;
+  transition: background 0.1s, color 0.1s;
+}
+
+.submodule-item:hover .submodule-kebab {
+  display: inline-flex;
+}
+
+.submodule-kebab:hover {
+  background: rgba(138, 173, 244, 0.18);
+  color: var(--text-primary);
 }
 
 /* ── Repos footer ────────────────────────────────────────────────── */
