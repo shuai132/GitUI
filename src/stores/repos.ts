@@ -44,6 +44,12 @@ export const useRepoStore = defineStore('repos', () => {
       for (const path of paths) {
         try {
           const meta = await git.openRepo(path)
+          // Pinia store 是单例，repos.value 不会因组件重新挂载而清空；
+          // HMR / 重复触发 loadPersisted 时，这里能防止同一 path 被 push 两次
+          if (repos.value.find((r) => r.path === path)) {
+            hasFailed = true
+            continue
+          }
           repos.value.push(meta)
         } catch (e) {
           console.error(`Failed to restore repo "${path}":`, e)
