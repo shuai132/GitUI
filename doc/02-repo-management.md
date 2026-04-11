@@ -135,14 +135,42 @@ pub struct RepoManager {
 `WatcherService` 包装 `notify-debouncer-mini`：
 
 ```rust
-pub fn watch<F>(&self, repo_id: String, git_dir: PathBuf, callback: F)
-    where F: Fn(DebounceEventResult) + Send + 'static
+pub fn watch<F>(
+    &self,
+    repo_id: String,
+    watch_root: PathBuf,
+    ignore_filter: Option<Arc<IgnoreFilter>>,
+    callback: F,
+) -> notify::Result<()>
+where
+    F: Fn(DebounceEventResult) + Send + 'static
 ```
 
 - 每个 `repo_id` 对应一个 `Debouncer`，防抖 **300ms**
-- 监控的是 **整个工作目录**（不是 `.git/`），原因：只监听 `.git/` 会漏掉 tracked 文件的编辑，无法刷新 status
+- 监控的是 **整个工作目录**（不是 `.git/`）。只监听 `.git/` 会漏掉 tracked 文件的编辑，无法刷新 status
 - 回调里 `app.emit("repo://status-changed", repo_id)`
 - `close_repo` 时 `watcher.unwatch(repo_id)` 释放
+
+### gitignore 过滤
+
+"监听整个工作目录"的副作用是 `node_modules/` / `target/` / `.venv/` / `dist/` 里的任何变动都会触发 debounce 和前端 `get_status`——大型项目里构建或依赖安装会让 watcher 疯狂抖动。
+
+解决方案：**打开仓库时读 `.gitignore`，构造 `ignore::gitignore::Gitignore` matcher，在 watcher 回调里按路径前置过滤**。
+
+实现细节：
+
+1. `commands/repo.rs::open_repo` 调 `IgnoreFilter::build(workdir)` 构造一个 `Arc<IgnoreFilter>`，传给 `watcher.watch()`
+2. `IgnoreFilter::build` 用 `ignore::gitignore::GitignoreBuilder` 读 `<workdir>/.gitignore`（若存在），再加一条硬编码的 `.git/` —— 虽然 git 会自动排除 `.git`，但这里额外兜底
+3. `watcher.rs` 在包装 callback 时遍历 `DebouncedEvent`，对每个事件：
+   - **`.git/` 内部路径永远放行**（HEAD / refs / index 变化是我们最关心的信号）
+   - 其他路径用 `Gitignore::matched_path_or_any_parents(rel, is_dir)` 判断，命中 ignore 就丢弃
+4. 一批事件全被过滤后就不 emit 任何事件；留下至少一条就照常 emit
+
+### 限制 / 已知不完美
+
+- **只读仓库根的 `.gitignore`**：嵌套子目录里的 `.gitignore`、`.git/info/exclude`、全局 `core.excludesfile` 都不参与匹配。对主要痛点场景（`node_modules` / `target` / `dist`）足够——这些目录几乎都由根 `.gitignore` 管理
+- **`.gitignore` 本身变化时不会自动重建 matcher**：用户改了 `.gitignore` 需要关闭再打开仓库才会生效。第一版不自动重建，避免增加同步复杂度
+- **刚 clone 但 `.gitignore` 尚未 tracked 的文件**：matcher 是在 `open_repo` 时构造的一次性快照，之后永远不变（直到仓库重新打开）
 
 前端 `useGitEvents.onStatusChanged` 订阅：
 

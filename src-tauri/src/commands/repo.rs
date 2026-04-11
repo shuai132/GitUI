@@ -5,7 +5,7 @@ use uuid::Uuid;
 use crate::{
     git::{engine::GitEngine, error::GitError, types::RepoMeta},
     repo_manager::RepoManager,
-    watcher::WatcherService,
+    watcher::{IgnoreFilter, WatcherService},
 };
 
 #[tauri::command]
@@ -36,15 +36,19 @@ pub async fn open_repo(
 
     repo_manager.add_repo(meta.clone());
 
-    // Set up file watcher for working directory (includes .git/)
-    // Watching only .git/ misses edits to tracked files in the work tree.
+    // Set up file watcher for working directory (includes .git/).
+    // 监控整个工作目录否则会漏掉 tracked 文件的外部编辑；
+    // 代价是 node_modules / target 等目录也会触发大量事件——
+    // 用 IgnoreFilter 读根 .gitignore 做路径前置过滤。
     let watch_dir = workdir.to_path_buf();
+    let ignore_filter = Some(IgnoreFilter::build(watch_dir.clone()));
     let app_clone = app.clone();
     let repo_id_clone = id.clone();
 
     let _ = watcher.watch(
         id.clone(),
         watch_dir,
+        ignore_filter,
         move |_result| {
             let _ = app_clone.emit("repo://status-changed", &repo_id_clone);
         },

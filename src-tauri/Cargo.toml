@@ -23,6 +23,7 @@ git2 = { version = "0.19", features = ["https", "ssh"] }
 tokio = { version = "1", features = ["full"] }
 notify = "6"
 notify-debouncer-mini = "0.4"
+ignore = "0.4"
 parking_lot = "0.12"
 thiserror = "1"
 uuid = { version = "1", features = ["v4"] }
