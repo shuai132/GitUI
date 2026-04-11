@@ -14,10 +14,28 @@ async function openFolder() {
     console.error(e)
   }
 }
+
+// ── 顶部工具栏作为窗口拖动区域 ─────────────────────────────────────
+async function handleDragStart(e: MouseEvent) {
+  // 只响应左键
+  if (e.button !== 0) return
+  // 点击在按钮等可交互元素上时不触发拖动
+  if ((e.target as HTMLElement).closest('button, input, a, select, textarea')) return
+  const { getCurrentWindow } = await import('@tauri-apps/api/window')
+  await getCurrentWindow().startDragging()
+}
+
+async function handleDblClick(e: MouseEvent) {
+  if ((e.target as HTMLElement).closest('button, input, a, select, textarea')) return
+  const { getCurrentWindow } = await import('@tauri-apps/api/window')
+  const win = getCurrentWindow()
+  if (await win.isMaximized()) await win.unmaximize()
+  else await win.maximize()
+}
 </script>
 
 <template>
-  <div class="toolbar">
+  <div class="toolbar" @mousedown="handleDragStart" @dblclick="handleDblClick">
     <div class="toolbar-brand">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent-blue)" stroke-width="2">
         <line x1="6" y1="3" x2="6" y2="15"/>
@@ -49,8 +67,8 @@ async function openFolder() {
   border-bottom: 1px solid var(--border);
   gap: 12px;
   flex-shrink: 0;
-  /* macOS traffic lights padding */
-  padding-left: max(12px, env(titlebar-area-x, 12px));
+  /* macOS traffic lights 让出 78px 空间 */
+  padding-left: 78px;
 }
 
 .toolbar-brand {
