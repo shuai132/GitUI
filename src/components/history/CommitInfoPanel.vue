@@ -160,8 +160,7 @@ const bodyText = computed(() => {
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
-  /* 当 height 被显式设定后，内部超出的内容允许滚动 */
-  overflow-y: auto;
+  overflow: hidden;
   min-height: 0;
 }
 
@@ -222,23 +221,16 @@ const bodyText = computed(() => {
   max-height: 160px;
 }
 
-/* 细滚动条，避免滚动条占走太多空间 */
+/* 隐藏滚动条（内容仍可滚动，但不显示指示条） */
+.commit-summary,
+.commit-body,
+.mv {
+  scrollbar-width: none;
+}
 .commit-summary::-webkit-scrollbar,
 .commit-body::-webkit-scrollbar,
 .mv::-webkit-scrollbar {
-  height: 4px;
-  width: 6px;
-}
-.commit-summary::-webkit-scrollbar-thumb,
-.commit-body::-webkit-scrollbar-thumb,
-.mv::-webkit-scrollbar-thumb {
-  background: var(--border);
-  border-radius: 2px;
-}
-.commit-summary::-webkit-scrollbar-track,
-.commit-body::-webkit-scrollbar-track,
-.mv::-webkit-scrollbar-track {
-  background: transparent;
+  display: none;
 }
 
 .meta-grid {
