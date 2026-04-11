@@ -98,7 +98,37 @@ pub struct RepoManager {
 - `pointerup` 把 `(from, target)` 传给 `reposStore.reorderRepos`
 - 拖动结束后 300ms 抑制 click，避免触发 `setActive`
 
-"其他仓库"区域的高度本身也可拖动调整，持久化到 `localStorage.gitui.sidebar.reposHeight`。
+"其他仓库"区域的高度本身也可拖动调整，持久化通过 `uiStore`（见下）。
+
+## UI 偏好持久化
+
+除了仓库列表（走 `plugin-store` 的 `gitui-repos.json`），所有用户 UI 偏好统一由 `stores/ui.ts` 管理，后端数据用 `localStorage`。之所以仍用 `localStorage` 而不是 `plugin-store`：纯 UI 偏好不需要跨进程 / 跨仓库访问，localStorage 同步写入更简单。
+
+关键是**读写必须经过 store**，组件里不再直接调 `localStorage.getItem` / `setItem`。这样：
+
+- 偏好清单一览表就是 `ui.ts` 的 state 列表
+- 未来要做"导出 / 重置所有偏好"时只改 store 一个文件
+- 测试时 mock store 就能控制所有偏好
+
+### 当前偏好清单
+
+| state 字段 | localStorage key | 默认值 | 说明 |
+|------|------|-------|------|
+| `sidebarWidth` | `gitui.sidebar.width` | `220` | 主侧栏宽度 |
+| `reposHeight` | `gitui.sidebar.reposHeight` | `160` | "其他仓库"面板高度 |
+| `historyLayoutMode` | `gitui.history.layout` | `'vertical'` | 历史详情面板布局 |
+| `showUnreachableCommits` | `gitui.history.showUnreachable` | `false` | 显示丢失引用的提交 |
+| `showStashCommits` | `gitui.history.showStashes` | `true` | 显示 stash 作为提交 |
+| `historyPaneSizes` | `gitui.history.sizes`（JSON blob） | 见 store | 历史视图的分割百分比 + 三列宽度 |
+| `diffViewMode` | `gitui.diff.viewMode` | `'side-by-side'` | diff 模式 |
+| `diffHighlightEnabled` | `gitui.diff.syntax-highlight` | `true` | diff 语法高亮开关 |
+| `historySearchQuery` | —（不持久化） | `''` | 当前历史搜索词 |
+
+### 写入时机
+
+拖动类偏好（`sidebarWidth` / `reposHeight` / `historyPaneSizes`）走"拖动中只改响应式、pointerup 时持久化"模式——避免拖 100 像素写 100 次 localStorage。store 对这类字段提供 `persistXxx()` 方法，组件在 pointerup 时调用。
+
+其他 toggle / 选择类偏好（layout mode、show*、diff mode、高亮）直接 setter 写入。
 
 ## 文件系统监控
 

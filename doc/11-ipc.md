@@ -171,4 +171,29 @@ Git2(#[from] git2::Error)
 Io(#[from] std::io::Error)
 ```
 
-前端收到的 rejection 是一个形如 `{ RepoNotFound: "..." }` 或 `{ OperationFailed: "..." }` 的对象（取决于 `Serialize` 的默认行为），大部分调用处只需要 `catch (e) { showError(String(e)) }`，不细分错误类型。
+前端收到的 rejection 是一个形如 `{ RepoNotFound: "..." }` 或 `{ OperationFailed: "..." }` 的对象（取决于 `Serialize` 的默认行为）。
+
+## 前端错误映射
+
+所有 IPC 调用都经过 `useGitCommands.wrap(op, fn)`：
+
+```ts
+async function wrap<T>(op: string, fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn()
+  } catch (raw) {
+    errorsStore.push(op, raw)
+    throw new Error(mapGitError(op, raw))
+  }
+}
+```
+
+`lib/errorMap.ts` 负责把原始错误（可能是 `{ Git2: "..." }` 对象、`{ OperationFailed: "..." }` 对象或字符串）映射成中文友好消息。映射规则按优先级匹配：
+
+1. 命中 `GitError` 变体结构 → 按变体分类
+2. 命中已知 git2 原始消息子串（`reference ... already exists`、`needs merge`、`non-fast-forward`、`authentication required` 等）→ 中文说明
+3. 兜底 → 截断后的原始字符串
+
+调用方的 `catch` 拿到的 `Error.message` 就是用户可读的中文，同时 `errorsStore` 保留完整原始记录以备翻查。
+
+新增 IPC 命令时不用改 errorMap——错误映射是事后分析，未命中规则会走兜底分支，体验只比原始串好一点但不会崩。

@@ -1,51 +1,153 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 
-const LAYOUT_KEY = 'gitui.history.layout'
-const SHOW_UNREACHABLE_KEY = 'gitui.history.showUnreachable'
-const SHOW_STASHES_KEY = 'gitui.history.showStashes'
+// ── localStorage keys（集中管理） ───────────────────────────────────
+const KEYS = {
+  sidebarWidth: 'gitui.sidebar.width',
+  reposHeight: 'gitui.sidebar.reposHeight',
+  historyLayout: 'gitui.history.layout',
+  showUnreachable: 'gitui.history.showUnreachable',
+  showStashes: 'gitui.history.showStashes',
+  historySizes: 'gitui.history.sizes',
+  diffViewMode: 'gitui.diff.viewMode',
+  diffHighlight: 'gitui.diff.syntax-highlight',
+} as const
 
-function readBool(key: string, defaultValue: boolean): boolean {
+// ── 读取工具 ──────────────────────────────────────────────────────────
+function loadNumber(key: string, fallback: number): number {
   const v = localStorage.getItem(key)
-  if (v === null) return defaultValue
+  if (v === null) return fallback
+  const n = Number(v)
+  return Number.isFinite(n) ? n : fallback
+}
+
+function loadBool(key: string, fallback: boolean): boolean {
+  const v = localStorage.getItem(key)
+  if (v === null) return fallback
   return v === 'true'
 }
 
+function loadString<T extends string>(key: string, fallback: T, allowed?: readonly T[]): T {
+  const v = localStorage.getItem(key)
+  if (v === null) return fallback
+  if (allowed && !allowed.includes(v as T)) return fallback
+  return v as T
+}
+
+function loadJson<T>(key: string, fallback: T): T {
+  const raw = localStorage.getItem(key)
+  if (!raw) return fallback
+  try {
+    return { ...fallback, ...JSON.parse(raw) }
+  } catch {
+    return fallback
+  }
+}
+
+// ── 类型 ──────────────────────────────────────────────────────────────
+export type HistoryLayoutMode = 'horizontal' | 'vertical'
+export type DiffViewMode = 'side-by-side' | 'inline' | 'by-hunk'
+
+const HISTORY_LAYOUT_VALUES = ['horizontal', 'vertical'] as const
+const DIFF_MODE_VALUES = ['side-by-side', 'inline', 'by-hunk'] as const
+
+export interface HistoryPaneSizes {
+  /** horizontal 布局：commit 列占比（%） */
+  commitPanePct: number
+  /** vertical 布局：info 列占比（%） */
+  infoPanePct: number
+  /** horizontal 布局：diff 区高度占比（%） */
+  diffRowPct: number
+  /** vertical 布局：commit 行高度占比（%） */
+  commitRowPct: number
+  /** commit 列表 - hash 列宽 */
+  hashColW: number
+  /** commit 列表 - author 列宽 */
+  authorColW: number
+  /** commit 列表 - date 列宽 */
+  dateColW: number
+}
+
+const DEFAULT_HISTORY_SIZES: HistoryPaneSizes = {
+  commitPanePct: 55,
+  infoPanePct: 38,
+  diffRowPct: 70,
+  commitRowPct: 55,
+  hashColW: 64,
+  authorColW: 96,
+  dateColW: 80,
+}
+
+// ── Store ─────────────────────────────────────────────────────────────
 export const useUiStore = defineStore('ui', () => {
+  // 粘性请求：从 Actions 菜单转发 "丢弃所有变更" 给 WipPanel
   const shouldOpenDiscardAll = ref(false)
 
-  /** 提交历史的搜索关键词（AppToolbar 搜索框 ↔ HistoryView 过滤） */
+  // 提交历史搜索词（不持久化）
   const historySearchQuery = ref('')
 
-  /** 提交历史的面板布局，持久化到 localStorage */
-  const historyLayoutMode = ref<'horizontal' | 'vertical'>(
-    (localStorage.getItem(LAYOUT_KEY) as 'horizontal' | 'vertical') ?? 'vertical',
+  // ── 持久化字段 ────────────────────────────────────────────────────
+  const sidebarWidth = ref<number>(loadNumber(KEYS.sidebarWidth, 220))
+  const reposHeight = ref<number>(loadNumber(KEYS.reposHeight, 160))
+
+  const historyLayoutMode = ref<HistoryLayoutMode>(
+    loadString<HistoryLayoutMode>(KEYS.historyLayout, 'vertical', HISTORY_LAYOUT_VALUES),
   )
 
-  /** 是否在历史图里显示丢失引用的提交（仅 reflog 可达），默认关闭 */
-  const showUnreachableCommits = ref<boolean>(
-    readBool(SHOW_UNREACHABLE_KEY, false),
+  const showUnreachableCommits = ref<boolean>(loadBool(KEYS.showUnreachable, false))
+  const showStashCommits = ref<boolean>(loadBool(KEYS.showStashes, true))
+
+  const historyPaneSizes = ref<HistoryPaneSizes>(
+    loadJson<HistoryPaneSizes>(KEYS.historySizes, DEFAULT_HISTORY_SIZES),
   )
 
-  /** 是否在历史图里显示 stash commit，默认开启 */
-  const showStashCommits = ref<boolean>(readBool(SHOW_STASHES_KEY, true))
+  const diffViewMode = ref<DiffViewMode>(
+    loadString<DiffViewMode>(KEYS.diffViewMode, 'side-by-side', DIFF_MODE_VALUES),
+  )
+  const diffHighlightEnabled = ref<boolean>(loadBool(KEYS.diffHighlight, true))
 
+  // ── 持久化动作 ────────────────────────────────────────────────────
+  // 拖动类：组件在 pointermove 里直接改 .value，pointerup 再调 persistXxx()
+  function persistSidebarWidth() {
+    localStorage.setItem(KEYS.sidebarWidth, String(sidebarWidth.value))
+  }
+
+  function persistReposHeight() {
+    localStorage.setItem(KEYS.reposHeight, String(reposHeight.value))
+  }
+
+  function persistHistoryPaneSizes() {
+    localStorage.setItem(KEYS.historySizes, JSON.stringify(historyPaneSizes.value))
+  }
+
+  // Toggle / setter 类：直接写入
   function toggleHistoryLayout() {
     historyLayoutMode.value =
       historyLayoutMode.value === 'horizontal' ? 'vertical' : 'horizontal'
-    localStorage.setItem(LAYOUT_KEY, historyLayoutMode.value)
+    localStorage.setItem(KEYS.historyLayout, historyLayoutMode.value)
   }
 
   function toggleShowUnreachable() {
     showUnreachableCommits.value = !showUnreachableCommits.value
-    localStorage.setItem(SHOW_UNREACHABLE_KEY, String(showUnreachableCommits.value))
+    localStorage.setItem(KEYS.showUnreachable, String(showUnreachableCommits.value))
   }
 
   function toggleShowStashes() {
     showStashCommits.value = !showStashCommits.value
-    localStorage.setItem(SHOW_STASHES_KEY, String(showStashCommits.value))
+    localStorage.setItem(KEYS.showStashes, String(showStashCommits.value))
   }
 
+  function setDiffViewMode(mode: DiffViewMode) {
+    diffViewMode.value = mode
+    localStorage.setItem(KEYS.diffViewMode, mode)
+  }
+
+  function toggleDiffHighlight() {
+    diffHighlightEnabled.value = !diffHighlightEnabled.value
+    localStorage.setItem(KEYS.diffHighlight, String(diffHighlightEnabled.value))
+  }
+
+  // ── WipPanel 粘性请求 ─────────────────────────────────────────────
   function requestDiscardAll() {
     shouldOpenDiscardAll.value = true
   }
@@ -55,14 +157,28 @@ export const useUiStore = defineStore('ui', () => {
   }
 
   return {
+    // state
     shouldOpenDiscardAll,
     historySearchQuery,
+    sidebarWidth,
+    reposHeight,
     historyLayoutMode,
     showUnreachableCommits,
     showStashCommits,
+    historyPaneSizes,
+    diffViewMode,
+    diffHighlightEnabled,
+    // persistence
+    persistSidebarWidth,
+    persistReposHeight,
+    persistHistoryPaneSizes,
+    // setters / togglers
     toggleHistoryLayout,
     toggleShowUnreachable,
     toggleShowStashes,
+    setDiffViewMode,
+    toggleDiffHighlight,
+    // transient
     requestDiscardAll,
     consumeDiscardAllRequest,
   }

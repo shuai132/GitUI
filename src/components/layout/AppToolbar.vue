@@ -1,13 +1,15 @@
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { useRepoStore } from '@/stores/repos'
 import { useHistoryStore } from '@/stores/history'
 import { useStashStore } from '@/stores/stash'
 import { useUiStore } from '@/stores/ui'
+import { useErrorsStore } from '@/stores/errors'
 import { useGitCommands } from '@/composables/useGitCommands'
 import ReflogDialog from '@/components/common/ReflogDialog.vue'
+import ErrorHistoryDialog from '@/components/common/ErrorHistoryDialog.vue'
 import ContextMenu, { type ContextMenuItem } from '@/components/common/ContextMenu.vue'
 
 const router = useRouter()
@@ -15,8 +17,50 @@ const repoStore = useRepoStore()
 const historyStore = useHistoryStore()
 const stashStore = useStashStore()
 const uiStore = useUiStore()
+const errorsStore = useErrorsStore()
 const git = useGitCommands()
 const appWindow = getCurrentWindow()
+
+// ── IPC 错误自动弹 toast ─────────────────────────────────────────
+// errorsStore 由 useGitCommands.call() 统一 push。watch latestId 即可。
+const OP_LABELS: Record<string, string> = {
+  pull_branch: 'Pull',
+  push_branch: 'Push',
+  fetch_remote: 'Fetch',
+  stash_push: 'Stash',
+  stash_pop: 'Stash pop',
+  run_gc: 'git gc',
+  open_repo: '打开仓库',
+  checkout_commit: '检出提交',
+  cherry_pick_commit: 'Cherry pick',
+  revert_commit: 'Revert',
+  reset_to_commit: 'Reset',
+  create_branch: '创建分支',
+  switch_branch: '切换分支',
+  delete_branch: '删除分支',
+  checkout_remote_branch: '检出远程分支',
+  create_commit: '提交',
+  amend_commit: 'Amend',
+  create_tag: '创建标签',
+  discard_all_changes: '丢弃全部',
+  discard_file: '丢弃文件',
+  open_terminal: '打开终端',
+  init_submodule: 'Init submodule',
+  update_submodule: 'Update submodule',
+  set_submodule_url: '修改 submodule URL',
+  deinit_submodule: '删除 submodule',
+}
+
+watch(
+  () => errorsStore.latestId,
+  (id) => {
+    if (!id) return
+    const entry = errorsStore.entries[0]
+    if (!entry) return
+    const label = OP_LABELS[entry.op]
+    showError(label ? `${label} 失败：${entry.friendly}` : entry.friendly)
+  },
+)
 
 // ── 每个按钮的 loading 状态 ────────────────────────────────────────
 const busy = reactive({
@@ -29,6 +73,7 @@ const busy = reactive({
 })
 
 const showReflogDialog = ref(false)
+const showErrorHistoryDialog = ref(false)
 const searchInputEl = ref<HTMLInputElement | null>(null)
 const searchExpanded = ref(false)
 
@@ -162,8 +207,8 @@ async function onPull(e: MouseEvent) {
   try {
     await git.pullBranch(id, remote, branch)
     await Promise.all([historyStore.loadLog(), historyStore.loadBranches()])
-  } catch (e) {
-    showError(`Pull 失败：${String(e)}`)
+  } catch {
+    /* toast 由 errorsStore watch 统一处理 */
   } finally {
     busy.pull = false
   }
@@ -185,8 +230,8 @@ async function onPush(e: MouseEvent) {
   try {
     await git.pushBranch(id, remote, branch)
     await historyStore.loadBranches()
-  } catch (e) {
-    showError(`Push 失败：${String(e)}`)
+  } catch {
+    /* toast 由 errorsStore watch 统一处理 */
   } finally {
     busy.push = false
   }
@@ -198,8 +243,8 @@ async function onStash() {
   busy.stash = true
   try {
     await stashStore.push()
-  } catch (e) {
-    showError(`Stash 失败：${String(e)}`)
+  } catch {
+    /* toast 由 errorsStore watch 统一处理 */
   } finally {
     busy.stash = false
   }
@@ -210,8 +255,8 @@ async function onPop() {
   busy.pop = true
   try {
     await stashStore.pop()
-  } catch (e) {
-    showError(`Stash pop 失败：${String(e)}`)
+  } catch {
+    /* toast 由 errorsStore watch 统一处理 */
   } finally {
     busy.pop = false
   }
@@ -223,8 +268,8 @@ async function onTerminal() {
   if (!id) return
   try {
     await git.openTerminal(id)
-  } catch (e) {
-    showError(`打开终端失败：${String(e)}`)
+  } catch {
+    /* toast 由 errorsStore watch 统一处理 */
   }
 }
 
@@ -260,6 +305,14 @@ const actionsMenuItems = computed<ContextMenuItem[]>(() => [
     label: '显示 Reflog...',
     action: 'reflog',
     disabled: !hasRepo.value,
+  },
+  {
+    label:
+      errorsStore.entries.length > 0
+        ? `最近错误 (${errorsStore.entries.length})...`
+        : '最近错误...',
+    action: 'error-history',
+    disabled: errorsStore.entries.length === 0,
   },
   {
     label: busy.gc ? '清理中...' : '清理仓库 (git gc)',
@@ -308,8 +361,8 @@ async function onActionsSelect(action: string) {
         // fetch 会带来新的远端 commits，log 也要刷新，
         // 不然用户会以为 fetch 没生效
         await Promise.all([historyStore.loadLog(), historyStore.loadBranches()])
-      } catch (e) {
-        showError(`Fetch 失败：${String(e)}`)
+      } catch {
+        /* toast 由 errorsStore watch 统一处理 */
       } finally {
         busy.fetch = false
       }
@@ -324,11 +377,15 @@ async function onActionsSelect(action: string) {
       try {
         const msg = await git.runGc(id)
         showError(msg)  // 借用 toast 展示成功信息
-      } catch (e) {
-        showError(`git gc 失败：${String(e)}`)
+      } catch {
+        /* toast 由 errorsStore watch 统一处理 */
       } finally {
         busy.gc = false
       }
+      break
+    }
+    case 'error-history': {
+      showErrorHistoryDialog.value = true
       break
     }
     case 'discard-all': {
@@ -522,6 +579,11 @@ async function handleDblClick(e: MouseEvent) {
     <ReflogDialog
       :visible="showReflogDialog"
       @close="showReflogDialog = false"
+    />
+
+    <ErrorHistoryDialog
+      :visible="showErrorHistoryDialog"
+      @close="showErrorHistoryDialog = false"
     />
 
     <ContextMenu

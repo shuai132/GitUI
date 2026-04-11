@@ -50,11 +50,26 @@
 |----|------|
 | `views/` | 路由页面：`HistoryView.vue`、`BranchesView.vue` |
 | `components/` | 按功能域组织：`layout/` `history/` `workspace/` `diff/` `branch/` `commit/` `submodule/` `common/` |
-| `stores/` (Pinia) | `repos` `workspace` `history` `diff` `stash` `submodules` `ui` |
-| `composables/` | `useGitCommands`（所有 `invoke` 封装）、`useGitEvents`（Tauri Events 订阅）、`useBranchTreeState` |
+| `stores/` (Pinia) | `repos` `workspace` `history` `diff` `stash` `submodules` `ui` `errors` |
+| `composables/` | `useGitCommands`（所有 `invoke` 封装 + 错误统一映射）、`useGitEvents`（Tauri Events 订阅）、`useBranchTreeState` |
 | `utils/` | `graph.ts`（提交图 lane 算法）、`branchTree.ts`（远程分支树形构造）、`format.ts` |
 | `lib/highlight.ts` | highlight.js 子集注册 + 扩展名到语言映射 |
+| `lib/errorMap.ts` | `GitError` 和 git2 原始消息 → 中文友好提示 |
 | `types/git.ts` | 与 `git/types.rs` 一一对应的 TypeScript 接口 |
+
+### 错误处理
+
+所有 IPC 调用都经过 `useGitCommands` 里的 `wrap(op, fn)` helper：
+
+1. 成功 → 原值返回
+2. 失败 → 把 `(op, rawError)` 推入 `errorsStore`（保留最近 N 条）
+3. 失败 → 再用 `lib/errorMap.ts` 把原始消息映射成中文友好消息，rethrow 一个 `Error(friendlyMessage)`
+
+调用方只需要 `catch (e) { showError(String(e)) }`——拿到的 `e.message` 已经是用户能读懂的中文。想看原始错误时翻 `errorsStore` 的历史列表（Actions 菜单提供入口）。这样：
+
+- 原始的 `"Git2(reference 'refs/heads/foo' already exists; class=Reference (4); code=Exists (-4))"` 不会直接摔到用户脸上
+- toast 消失后失败记录仍然能查
+- 映射规则集中在一个文件，方便维护
 
 ## 数据流
 

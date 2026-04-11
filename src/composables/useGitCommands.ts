@@ -10,65 +10,85 @@ import type {
   StashEntry,
   ReflogEntry,
 } from '@/types/git'
+import { useErrorsStore } from '@/stores/errors'
 
 export function useGitCommands() {
+  const errorsStore = useErrorsStore()
+
+  /**
+   * 统一包装所有 IPC 调用：
+   * 1. 成功 → 返回原值
+   * 2. 失败 → push 到 errorsStore，rethrow 一个 Error(friendlyMessage)
+   *
+   * 调用方 catch 时拿到的 e.message 已经是中文友好消息。
+   * 想看原始错误翻 errorsStore.entries。
+   */
+  async function call<T>(op: string, args?: Record<string, unknown>): Promise<T> {
+    try {
+      return await invoke<T>(op, args)
+    } catch (raw) {
+      const entry = errorsStore.push(op, raw)
+      throw new Error(entry.friendly)
+    }
+  }
+
   // ---- Repo ----
   const openRepo = (path: string) =>
-    invoke<RepoMeta>('open_repo', { path })
+    call<RepoMeta>('open_repo', { path })
 
   const closeRepo = (repoId: string) =>
-    invoke<void>('close_repo', { repoId })
+    call<void>('close_repo', { repoId })
 
   const listRepos = () =>
-    invoke<RepoMeta[]>('list_repos')
+    call<RepoMeta[]>('list_repos')
 
   const validateRepoPath = (path: string) =>
-    invoke<boolean>('validate_repo_path', { path })
+    call<boolean>('validate_repo_path', { path })
 
   // ---- Status ----
   const getStatus = (repoId: string) =>
-    invoke<WorkspaceStatus>('get_status', { repoId })
+    call<WorkspaceStatus>('get_status', { repoId })
 
   const stageFile = (repoId: string, filePath: string) =>
-    invoke<void>('stage_file', { repoId, filePath })
+    call<void>('stage_file', { repoId, filePath })
 
   const unstageFile = (repoId: string, filePath: string) =>
-    invoke<void>('unstage_file', { repoId, filePath })
+    call<void>('unstage_file', { repoId, filePath })
 
   const stageAll = (repoId: string) =>
-    invoke<void>('stage_all', { repoId })
+    call<void>('stage_all', { repoId })
 
   const unstageAll = (repoId: string) =>
-    invoke<void>('unstage_all', { repoId })
+    call<void>('unstage_all', { repoId })
 
   // ---- Commit ----
   const createCommit = (repoId: string, message: string) =>
-    invoke<string>('create_commit', { repoId, message })
+    call<string>('create_commit', { repoId, message })
 
   const amendCommit = (repoId: string, message: string) =>
-    invoke<string>('amend_commit', { repoId, message })
+    call<string>('amend_commit', { repoId, message })
 
   const checkoutCommit = (repoId: string, oid: string) =>
-    invoke<void>('checkout_commit', { repoId, oid })
+    call<void>('checkout_commit', { repoId, oid })
 
   const cherryPickCommit = (repoId: string, oid: string) =>
-    invoke<void>('cherry_pick_commit', { repoId, oid })
+    call<void>('cherry_pick_commit', { repoId, oid })
 
   const revertCommit = (repoId: string, oid: string) =>
-    invoke<void>('revert_commit', { repoId, oid })
+    call<void>('revert_commit', { repoId, oid })
 
   const resetToCommit = (
     repoId: string,
     oid: string,
     mode: 'soft' | 'mixed' | 'hard',
-  ) => invoke<void>('reset_to_commit', { repoId, oid, mode })
+  ) => call<void>('reset_to_commit', { repoId, oid, mode })
 
   const createTag = (
     repoId: string,
     name: string,
     oid: string,
     message: string | null,
-  ) => invoke<void>('create_tag', { repoId, name, oid, message })
+  ) => call<void>('create_tag', { repoId, name, oid, message })
 
   // ---- Log ----
   const getLog = (
@@ -78,7 +98,7 @@ export function useGitCommands() {
     includeUnreachable: boolean,
     includeStashes: boolean,
   ) =>
-    invoke<LogPage>('get_log', {
+    call<LogPage>('get_log', {
       repoId,
       offset,
       limit,
@@ -87,24 +107,24 @@ export function useGitCommands() {
     })
 
   const getCommitDetail = (repoId: string, oid: string) =>
-    invoke<CommitDetail>('get_commit_detail', { repoId, oid })
+    call<CommitDetail>('get_commit_detail', { repoId, oid })
 
   // ---- Diff ----
   const getFileDiff = (repoId: string, filePath: string, staged: boolean) =>
-    invoke<FileDiff>('get_file_diff', { repoId, filePath, staged })
+    call<FileDiff>('get_file_diff', { repoId, filePath, staged })
 
   // ---- Branch ----
   const listBranches = (repoId: string) =>
-    invoke<BranchInfo[]>('list_branches', { repoId })
+    call<BranchInfo[]>('list_branches', { repoId })
 
   const createBranch = (repoId: string, name: string, fromOid?: string) =>
-    invoke<void>('create_branch', { repoId, name, fromOid })
+    call<void>('create_branch', { repoId, name, fromOid })
 
   const switchBranch = (repoId: string, name: string) =>
-    invoke<void>('switch_branch', { repoId, name })
+    call<void>('switch_branch', { repoId, name })
 
   const deleteBranch = (repoId: string, name: string) =>
-    invoke<void>('delete_branch', { repoId, name })
+    call<void>('delete_branch', { repoId, name })
 
   const checkoutRemoteBranch = (
     repoId: string,
@@ -112,7 +132,7 @@ export function useGitCommands() {
     localName: string,
     track: boolean,
   ) =>
-    invoke<void>('checkout_remote_branch', {
+    call<void>('checkout_remote_branch', {
       repoId,
       remoteBranch,
       localName,
@@ -121,61 +141,61 @@ export function useGitCommands() {
 
   // ---- Remote ----
   const fetchRemote = (repoId: string, remoteName: string) =>
-    invoke<void>('fetch_remote', { repoId, remoteName })
+    call<void>('fetch_remote', { repoId, remoteName })
 
   const pushBranch = (repoId: string, remoteName: string, branchName: string) =>
-    invoke<void>('push_branch', { repoId, remoteName, branchName })
+    call<void>('push_branch', { repoId, remoteName, branchName })
 
   const pullBranch = (repoId: string, remoteName: string, branchName: string) =>
-    invoke<void>('pull_branch', { repoId, remoteName, branchName })
+    call<void>('pull_branch', { repoId, remoteName, branchName })
 
   const listRemotes = (repoId: string) =>
-    invoke<string[]>('list_remotes', { repoId })
+    call<string[]>('list_remotes', { repoId })
 
   // ---- Submodule ----
   const listSubmodules = (repoId: string) =>
-    invoke<SubmoduleInfo[]>('list_submodules', { repoId })
+    call<SubmoduleInfo[]>('list_submodules', { repoId })
 
   const initSubmodule = (repoId: string, name: string) =>
-    invoke<void>('init_submodule', { repoId, name })
+    call<void>('init_submodule', { repoId, name })
 
   const updateSubmodule = (repoId: string, name: string) =>
-    invoke<void>('update_submodule', { repoId, name })
+    call<void>('update_submodule', { repoId, name })
 
   const setSubmoduleUrl = (repoId: string, name: string, url: string) =>
-    invoke<void>('set_submodule_url', { repoId, name, url })
+    call<void>('set_submodule_url', { repoId, name, url })
 
   const submoduleWorkdir = (repoId: string, name: string) =>
-    invoke<string>('submodule_workdir', { repoId, name })
+    call<string>('submodule_workdir', { repoId, name })
 
   const deinitSubmodule = (repoId: string, name: string) =>
-    invoke<void>('deinit_submodule', { repoId, name })
+    call<void>('deinit_submodule', { repoId, name })
 
   // ---- Stash ----
   const stashPush = (repoId: string, message?: string) =>
-    invoke<void>('stash_push', { repoId, message: message ?? null })
+    call<void>('stash_push', { repoId, message: message ?? null })
 
   const stashPop = (repoId: string) =>
-    invoke<void>('stash_pop', { repoId })
+    call<void>('stash_pop', { repoId })
 
   const stashList = (repoId: string) =>
-    invoke<StashEntry[]>('stash_list', { repoId })
+    call<StashEntry[]>('stash_list', { repoId })
 
   // ---- System ----
   const openTerminal = (repoId: string) =>
-    invoke<void>('open_terminal', { repoId })
+    call<void>('open_terminal', { repoId })
 
   const discardAllChanges = (repoId: string) =>
-    invoke<void>('discard_all_changes', { repoId })
+    call<void>('discard_all_changes', { repoId })
 
   const discardFile = (repoId: string, filePath: string) =>
-    invoke<void>('discard_file', { repoId, filePath })
+    call<void>('discard_file', { repoId, filePath })
 
   const getReflog = (repoId: string) =>
-    invoke<ReflogEntry[]>('get_reflog', { repoId })
+    call<ReflogEntry[]>('get_reflog', { repoId })
 
   const runGc = (repoId: string) =>
-    invoke<string>('run_gc', { repoId })
+    call<string>('run_gc', { repoId })
 
   return {
     openRepo,

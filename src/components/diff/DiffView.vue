@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed } from 'vue'
 import type { FileDiff } from '@/types/git'
 import SideBySideDiff from './SideBySideDiff.vue'
 import InlineDiff from './InlineDiff.vue'
 import { EXT_TO_LANG } from '@/lib/highlight'
+import { useUiStore } from '@/stores/ui'
 
 const props = defineProps<{
   diff: FileDiff | null
@@ -12,31 +13,10 @@ const props = defineProps<{
 
 const emit = defineEmits<{ close: [] }>()
 
-type ViewMode = 'side-by-side' | 'inline' | 'by-hunk'
-
-const VIEW_MODE_KEY = 'gitui.diff.viewMode'
-const HIGHLIGHT_KEY = 'gitui.diff.syntax-highlight'
-
-function loadViewMode(): ViewMode {
-  const v = localStorage.getItem(VIEW_MODE_KEY)
-  if (v === 'side-by-side' || v === 'inline' || v === 'by-hunk') return v
-  return 'side-by-side'
-}
-
-const viewMode = ref<ViewMode>(loadViewMode())
-const highlightEnabled = ref(localStorage.getItem(HIGHLIGHT_KEY) !== 'false')
-
-watch(viewMode, (v) => {
-  localStorage.setItem(VIEW_MODE_KEY, v)
-})
-
-function toggleHighlight() {
-  highlightEnabled.value = !highlightEnabled.value
-  localStorage.setItem(HIGHLIGHT_KEY, String(highlightEnabled.value))
-}
+const uiStore = useUiStore()
 
 const syntaxLang = computed<string | null>(() => {
-  if (!highlightEnabled.value || !props.diff) return null
+  if (!uiStore.diffHighlightEnabled || !props.diff) return null
   const filePath = props.diff.new_path ?? props.diff.old_path ?? ''
   const ext = filePath.split('.').pop()?.toLowerCase() ?? ''
   return EXT_TO_LANG[ext] ?? null
@@ -95,9 +75,9 @@ function onPrevChange() {
       <!-- 语法高亮开关 -->
       <button
         class="btn-icon"
-        :class="{ active: highlightEnabled }"
+        :class="{ active: uiStore.diffHighlightEnabled }"
         title="语法高亮"
-        @click="toggleHighlight"
+        @click="uiStore.toggleDiffHighlight()"
       >
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <polyline points="16 18 22 12 16 6" />
@@ -110,9 +90,9 @@ function onPrevChange() {
       <!-- 模式切换 -->
       <button
         class="btn-icon"
-        :class="{ active: viewMode === 'by-hunk' }"
+        :class="{ active: uiStore.diffViewMode === 'by-hunk' }"
         title="按 hunk 分块"
-        @click="viewMode = 'by-hunk'"
+        @click="uiStore.setDiffViewMode('by-hunk')"
       >
         <!-- 两个独立方块 -->
         <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -122,9 +102,9 @@ function onPrevChange() {
       </button>
       <button
         class="btn-icon"
-        :class="{ active: viewMode === 'inline' }"
+        :class="{ active: uiStore.diffViewMode === 'inline' }"
         title="单列连续"
-        @click="viewMode = 'inline'"
+        @click="uiStore.setDiffViewMode('inline')"
       >
         <!-- 水平条列表 -->
         <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -135,9 +115,9 @@ function onPrevChange() {
       </button>
       <button
         class="btn-icon"
-        :class="{ active: viewMode === 'side-by-side' }"
+        :class="{ active: uiStore.diffViewMode === 'side-by-side' }"
         title="左右分栏"
-        @click="viewMode = 'side-by-side'"
+        @click="uiStore.setDiffViewMode('side-by-side')"
       >
         <!-- 左右双栏 -->
         <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -160,7 +140,7 @@ function onPrevChange() {
     <!-- Diff body -->
     <div class="diff-body">
       <SideBySideDiff
-        v-if="viewMode === 'side-by-side'"
+        v-if="uiStore.diffViewMode === 'side-by-side'"
         ref="diffRef"
         :diff="diff"
         :loading="loading"
@@ -171,7 +151,7 @@ function onPrevChange() {
         ref="diffRef"
         :diff="diff"
         :loading="loading"
-        :group-by-hunk="viewMode === 'by-hunk'"
+        :group-by-hunk="uiStore.diffViewMode === 'by-hunk'"
         :syntax-lang="syntaxLang"
       />
     </div>

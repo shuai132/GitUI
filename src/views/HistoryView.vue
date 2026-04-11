@@ -194,42 +194,9 @@ watch(showWipRow, (has) => {
   }
 })
 
-// ── Persisted sizes (layout + pane splits + column widths) ───────────
-const SIZES_KEY = 'gitui.history.sizes'
-interface SavedSizes {
-  commitPanePct: number     // horizontal: commit-panel 宽度百分比
-  infoPanePct: number       // vertical: info-pane 宽度百分比
-  diffRowPct: number        // horizontal: diff-area 高度百分比（上下分隔）
-  commitRowPct: number      // vertical: commit-panel 高度百分比（上下分隔）
-  hashColW: number
-  authorColW: number
-  dateColW: number
-}
-function loadSizes(): Partial<SavedSizes> {
-  try { return JSON.parse(localStorage.getItem(SIZES_KEY) ?? '{}') } catch { return {} }
-}
-const saved = loadSizes()
-
-const commitPanePct = ref<number>(saved.commitPanePct ?? 55)
-const infoPanePct = ref<number>(saved.infoPanePct ?? 38)
-const diffRowPct = ref<number>(saved.diffRowPct ?? 70)
-const commitRowPct = ref<number>(saved.commitRowPct ?? 55)
-const hashColW = ref<number>(saved.hashColW ?? 64)
-const authorColW = ref<number>(saved.authorColW ?? 96)
-const dateColW = ref<number>(saved.dateColW ?? 80)
-
-function persistSizes() {
-  const data: SavedSizes = {
-    commitPanePct: commitPanePct.value,
-    infoPanePct: infoPanePct.value,
-    diffRowPct: diffRowPct.value,
-    commitRowPct: commitRowPct.value,
-    hashColW: hashColW.value,
-    authorColW: authorColW.value,
-    dateColW: dateColW.value,
-  }
-  localStorage.setItem(SIZES_KEY, JSON.stringify(data))
-}
+// ── Pane sizes：响应式绑定到 uiStore.historyPaneSizes ────────────────
+// 拖动时直接改 store 对象，pointerup 调 persistHistoryPaneSizes() 写 localStorage
+const sizes = uiStore.historyPaneSizes
 
 // ── Content area grid style ──────────────────────────────────────────
 const contentAreaRef = ref<HTMLElement | null>(null)
@@ -243,14 +210,14 @@ const contentGridStyle = computed(() => {
   }
   if (uiStore.historyLayoutMode === 'horizontal') {
     return {
-      gridTemplateColumns: `${commitPanePct.value}% 1fr`,
-      gridTemplateRows: `${diffRowPct.value}% ${100 - diffRowPct.value}%`,
+      gridTemplateColumns: `${sizes.commitPanePct}% 1fr`,
+      gridTemplateRows: `${sizes.diffRowPct}% ${100 - sizes.diffRowPct}%`,
       gridTemplateAreas: '"commits info" "commits diff"',
     }
   }
   return {
-    gridTemplateColumns: `${infoPanePct.value}% 1fr`,
-    gridTemplateRows: `${commitRowPct.value}% ${100 - commitRowPct.value}%`,
+    gridTemplateColumns: `${sizes.infoPanePct}% 1fr`,
+    gridTemplateRows: `${sizes.commitRowPct}% ${100 - sizes.commitRowPct}%`,
     gridTemplateAreas: '"commits commits" "info diff"',
   }
 })
@@ -264,15 +231,15 @@ function startPaneResize(e: PointerEvent) {
   const onMove = (ev: PointerEvent) => {
     const pct = ((ev.clientX - rect.left) / rect.width) * 100
     const clamped = Math.max(20, Math.min(80, pct))
-    if (uiStore.historyLayoutMode === 'horizontal') commitPanePct.value = clamped
-    else infoPanePct.value = clamped
+    if (uiStore.historyLayoutMode === 'horizontal') sizes.commitPanePct = clamped
+    else sizes.infoPanePct = clamped
   }
   const onUp = () => {
     window.removeEventListener('pointermove', onMove)
     window.removeEventListener('pointerup', onUp)
     document.body.style.cursor = ''
     document.body.style.userSelect = ''
-    persistSizes()
+    uiStore.persistHistoryPaneSizes()
   }
   window.addEventListener('pointermove', onMove)
   window.addEventListener('pointerup', onUp)
@@ -289,15 +256,15 @@ function startRowResize(e: PointerEvent) {
   const onMove = (ev: PointerEvent) => {
     const pct = ((ev.clientY - rect.top) / rect.height) * 100
     const clamped = Math.max(20, Math.min(85, pct))
-    if (uiStore.historyLayoutMode === 'horizontal') diffRowPct.value = clamped
-    else commitRowPct.value = clamped
+    if (uiStore.historyLayoutMode === 'horizontal') sizes.diffRowPct = clamped
+    else sizes.commitRowPct = clamped
   }
   const onUp = () => {
     window.removeEventListener('pointermove', onMove)
     window.removeEventListener('pointerup', onUp)
     document.body.style.cursor = ''
     document.body.style.userSelect = ''
-    persistSizes()
+    uiStore.persistHistoryPaneSizes()
   }
   window.addEventListener('pointermove', onMove)
   window.addEventListener('pointerup', onUp)
@@ -313,25 +280,29 @@ const COL_LIMITS: Record<ColKey, [number, number]> = {
   author: [60, 240],
   date: [60, 240],
 }
+const COL_KEY_MAP: Record<ColKey, 'hashColW' | 'authorColW' | 'dateColW'> = {
+  hash: 'hashColW',
+  author: 'authorColW',
+  date: 'dateColW',
+}
 function startColResize(e: PointerEvent, col: ColKey) {
   e.preventDefault()
   e.stopPropagation()
   const startX = e.clientX
-  const refMap = { hash: hashColW, author: authorColW, date: dateColW }
-  const target = refMap[col]
-  const startW = target.value
+  const sizeKey = COL_KEY_MAP[col]
+  const startW = sizes[sizeKey]
   const [min, max] = COL_LIMITS[col]
   const onMove = (ev: PointerEvent) => {
     // handle 在列左边缘：向右拖 → 本列缩小（delta 取反）
     const delta = startX - ev.clientX
-    target.value = Math.max(min, Math.min(max, startW + delta))
+    sizes[sizeKey] = Math.max(min, Math.min(max, startW + delta))
   }
   const onUp = () => {
     window.removeEventListener('pointermove', onMove)
     window.removeEventListener('pointerup', onUp)
     document.body.style.cursor = ''
     document.body.style.userSelect = ''
-    persistSizes()
+    uiStore.persistHistoryPaneSizes()
   }
   window.addEventListener('pointermove', onMove)
   window.addEventListener('pointerup', onUp)
@@ -535,15 +506,15 @@ onUnmounted(() => {
         <div class="col-header">
           <div class="col-graph" :style="{ width: graphColWidth + 'px' }"></div>
           <div class="col-message">提交信息</div>
-          <div class="col-hash header-col" :style="{ width: hashColW + 'px' }">
+          <div class="col-hash header-col" :style="{ width: sizes.hashColW + 'px' }">
             哈希
             <div class="col-resize" @pointerdown="startColResize($event, 'hash')" />
           </div>
-          <div class="col-author header-col" :style="{ width: authorColW + 'px' }">
+          <div class="col-author header-col" :style="{ width: sizes.authorColW + 'px' }">
             作者
             <div class="col-resize" @pointerdown="startColResize($event, 'author')" />
           </div>
-          <div class="col-date header-col" :style="{ width: dateColW + 'px' }">
+          <div class="col-date header-col" :style="{ width: sizes.dateColW + 'px' }">
             日期
             <div class="col-resize" @pointerdown="startColResize($event, 'date')" />
           </div>
@@ -582,9 +553,9 @@ onUnmounted(() => {
                   :is-selected="selectedWip"
                   :graph-col-width="graphColWidth"
                 />
-                <div class="col-hash" :style="{ width: hashColW + 'px' }">—</div>
-                <div class="col-author" :style="{ width: authorColW + 'px' }">—</div>
-                <div class="col-date" :style="{ width: dateColW + 'px' }">—</div>
+                <div class="col-hash" :style="{ width: sizes.hashColW + 'px' }">—</div>
+                <div class="col-author" :style="{ width: sizes.authorColW + 'px' }">—</div>
+                <div class="col-date" :style="{ width: sizes.dateColW + 'px' }">—</div>
               </div>
 
               <!-- Regular commit row -->
@@ -626,13 +597,13 @@ onUnmounted(() => {
                 </div>
 
                 <!-- Hash column -->
-                <div class="col-hash" :style="{ width: hashColW + 'px' }">{{ filteredCommits[toRealIdx(vRow.index)]?.short_oid }}</div>
+                <div class="col-hash" :style="{ width: sizes.hashColW + 'px' }">{{ filteredCommits[toRealIdx(vRow.index)]?.short_oid }}</div>
 
                 <!-- Author column -->
-                <div class="col-author" :style="{ width: authorColW + 'px' }">{{ filteredCommits[toRealIdx(vRow.index)]?.author_name }}</div>
+                <div class="col-author" :style="{ width: sizes.authorColW + 'px' }">{{ filteredCommits[toRealIdx(vRow.index)]?.author_name }}</div>
 
                 <!-- Date column -->
-                <div class="col-date" :style="{ width: dateColW + 'px' }">{{ formatTime(filteredCommits[toRealIdx(vRow.index)]?.time ?? 0) }}</div>
+                <div class="col-date" :style="{ width: sizes.dateColW + 'px' }">{{ formatTime(filteredCommits[toRealIdx(vRow.index)]?.time ?? 0) }}</div>
               </div>
             </template>
           </div>
@@ -669,8 +640,8 @@ onUnmounted(() => {
         v-if="showDetail"
         class="pane-resize"
         :style="uiStore.historyLayoutMode === 'horizontal'
-          ? { left: commitPanePct + '%', top: 0, bottom: 0 }
-          : { left: infoPanePct + '%', top: commitRowPct + '%', bottom: 0 }"
+          ? { left: sizes.commitPanePct + '%', top: 0, bottom: 0 }
+          : { left: sizes.infoPanePct + '%', top: sizes.commitRowPct + '%', bottom: 0 }"
         @pointerdown="startPaneResize"
       />
 
@@ -679,8 +650,8 @@ onUnmounted(() => {
         v-if="showDetail"
         class="pane-resize-h"
         :style="uiStore.historyLayoutMode === 'horizontal'
-          ? { top: diffRowPct + '%', left: commitPanePct + '%', right: 0 }
-          : { top: commitRowPct + '%', left: 0, right: 0 }"
+          ? { top: sizes.diffRowPct + '%', left: sizes.commitPanePct + '%', right: 0 }
+          : { top: sizes.commitRowPct + '%', left: 0, right: 0 }"
         @pointerdown="startRowResize"
       />
     </div>

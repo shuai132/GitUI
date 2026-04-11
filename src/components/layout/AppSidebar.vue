@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue'
-import { RouterLink } from 'vue-router'
 import { useRepoStore } from '@/stores/repos'
 import { useHistoryStore } from '@/stores/history'
 import { useSubmodulesStore } from '@/stores/submodules'
 import { useStashStore } from '@/stores/stash'
+import { useUiStore } from '@/stores/ui'
 import { buildBranchTree } from '@/utils/branchTree'
 import type { BranchInfo, SubmoduleInfo, StashEntry } from '@/types/git'
 import BranchTreeNode from './BranchTreeNode.vue'
@@ -16,6 +16,7 @@ const repoStore = useRepoStore()
 const historyStore = useHistoryStore()
 const submodulesStore = useSubmodulesStore()
 const stashStore = useStashStore()
+const uiStore = useUiStore()
 
 // Local branches
 const localBranches = computed(() =>
@@ -47,14 +48,9 @@ async function removeRepo(repoId: string) {
   }
 }
 
-// ── 其他仓库列表：可拖动高度 + 持久化 ────────────────────────────────
-// 默认大约 6 条的高度（section-title ~22 + 6 行 × 22 + padding ~6 ≈ 160）
-const REPOS_HEIGHT_KEY = 'gitui.sidebar.reposHeight'
+// ── 其他仓库列表：可拖动高度 ─────────────────────────────────────────
+// 持久化由 uiStore 管理，组件只负责 clamp + 拖动期间的响应式更新
 const REPOS_MIN_HEIGHT = 40
-const REPOS_DEFAULT_HEIGHT = 160
-const reposHeight = ref<number>(
-  Number(localStorage.getItem(REPOS_HEIGHT_KEY)) || REPOS_DEFAULT_HEIGHT,
-)
 
 function clampReposHeight(h: number): number {
   // 上限：不能把 sidebar 上方挤到只剩 160px
@@ -67,18 +63,18 @@ function clampReposHeight(h: number): number {
 function startReposResize(e: PointerEvent) {
   e.preventDefault()
   const startY = e.clientY
-  const startH = reposHeight.value
+  const startH = uiStore.reposHeight
   const onMove = (ev: PointerEvent) => {
     // 往上拖（y 减小）→ footer 变高
     const delta = startY - ev.clientY
-    reposHeight.value = clampReposHeight(startH + delta)
+    uiStore.reposHeight = clampReposHeight(startH + delta)
   }
   const onUp = () => {
     window.removeEventListener('pointermove', onMove)
     window.removeEventListener('pointerup', onUp)
     document.body.style.cursor = ''
     document.body.style.userSelect = ''
-    localStorage.setItem(REPOS_HEIGHT_KEY, String(reposHeight.value))
+    uiStore.persistReposHeight()
   }
   window.addEventListener('pointermove', onMove)
   window.addEventListener('pointerup', onUp)
@@ -596,7 +592,7 @@ async function onStashMenuAction(action: string) {
     <div
       class="repos-footer"
       v-if="repoStore.repos.length > 1"
-      :style="{ height: reposHeight + 'px' }"
+      :style="{ height: uiStore.reposHeight + 'px' }"
     >
       <div class="repos-resize" @pointerdown="startReposResize" />
       <div class="section-title">其他仓库</div>
