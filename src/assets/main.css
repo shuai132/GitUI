@@ -31,6 +31,10 @@
     font-size: 13px;
     -webkit-font-smoothing: antialiased;
     user-select: none;
+    /* 禁用 WebView 整体的 overscroll / rubber-band 弹性回弹。
+       内部可滚动区域依然正常滚动，但达到边界后不会反弹。 */
+    overscroll-behavior: none;
+    overflow: hidden;
   }
 
   /* Scrollbar styling */
