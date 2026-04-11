@@ -3,6 +3,7 @@ import { ref } from 'vue'
 import type { CommitInfo, BranchInfo, CommitDetail } from '@/types/git'
 import { useGitCommands } from '@/composables/useGitCommands'
 import { useRepoStore } from './repos'
+import { useUiStore } from './ui'
 import { computeGraphLayout, type GraphRow } from '@/utils/graph'
 
 const PAGE_SIZE = 200
@@ -22,12 +23,19 @@ export const useHistoryStore = defineStore('history', () => {
 
   async function loadLog() {
     const repoStore = useRepoStore()
+    const uiStore = useUiStore()
     if (!repoStore.activeRepoId) return
 
     loading.value = true
     error.value = null
     try {
-      const page = await git.getLog(repoStore.activeRepoId, 0, PAGE_SIZE)
+      const page = await git.getLog(
+        repoStore.activeRepoId,
+        0,
+        PAGE_SIZE,
+        uiStore.showUnreachableCommits,
+        uiStore.showStashCommits,
+      )
       commits.value = page.commits
       hasMore.value = page.has_more
       graphRows.value = computeGraphLayout(commits.value)
@@ -40,11 +48,18 @@ export const useHistoryStore = defineStore('history', () => {
 
   async function loadMore() {
     const repoStore = useRepoStore()
+    const uiStore = useUiStore()
     if (!repoStore.activeRepoId || !hasMore.value) return
 
     loadingMore.value = true
     try {
-      const page = await git.getLog(repoStore.activeRepoId, commits.value.length, PAGE_SIZE)
+      const page = await git.getLog(
+        repoStore.activeRepoId,
+        commits.value.length,
+        PAGE_SIZE,
+        uiStore.showUnreachableCommits,
+        uiStore.showStashCommits,
+      )
       commits.value.push(...page.commits)
       hasMore.value = page.has_more
       graphRows.value = computeGraphLayout(commits.value)

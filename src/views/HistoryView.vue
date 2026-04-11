@@ -504,6 +504,14 @@ watch(selectedWip, (v) => {
   if (!v) diffStore.clear()
 })
 
+// ── 开关「显示丢失引用 / 显示贮藏」时重新加载历史 ─────────────────
+watch(
+  () => [uiStore.showUnreachableCommits, uiStore.showStashCommits],
+  () => {
+    if (repoStore.activeRepoId) historyStore.loadLog()
+  },
+)
+
 onMounted(() => {
   window.addEventListener('keydown', onKeyDown)
 })
@@ -583,7 +591,11 @@ onUnmounted(() => {
               <div
                 v-else
                 class="commit-row"
-                :class="{ selected: isSelected(vRow.index) }"
+                :class="{
+                  selected: isSelected(vRow.index),
+                  'commit-dim': filteredCommits[toRealIdx(vRow.index)]?.is_unreachable,
+                  'commit-stash': filteredCommits[toRealIdx(vRow.index)]?.is_stash,
+                }"
                 :style="{
                   position: 'absolute',
                   top: vRow.start + 'px',
@@ -935,6 +947,22 @@ onUnmounted(() => {
 
 .commit-row.selected .commit-msg {
   color: var(--text-primary);
+}
+
+/* ── 丢失引用的提交（unreachable）：整行变灰 ─────────────────── */
+.commit-row.commit-dim .commit-msg,
+.commit-row.commit-dim .col-hash,
+.commit-row.commit-dim .col-author,
+.commit-row.commit-dim .col-date {
+  color: var(--text-muted);
+  opacity: 0.75;
+  font-style: italic;
+}
+
+/* stash 行：略微淡化 message 颜色，与普通提交区分 */
+.commit-row.commit-stash .commit-msg {
+  color: var(--text-secondary);
+  font-style: italic;
 }
 
 .branch-tag {

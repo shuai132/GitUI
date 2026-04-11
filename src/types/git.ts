@@ -31,6 +31,10 @@ export interface CommitInfo {
   author_email: string
   time: number
   parent_oids: string[]
+  /** 该提交不在任何 ref 的可达集合中（仅 reflog 可达） */
+  is_unreachable: boolean
+  /** 该提交是某条 stash 的根提交 */
+  is_stash: boolean
 }
 
 export interface BranchInfo {

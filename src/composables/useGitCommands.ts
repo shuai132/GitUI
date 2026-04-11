@@ -71,8 +71,20 @@ export function useGitCommands() {
   ) => invoke<void>('create_tag', { repoId, name, oid, message })
 
   // ---- Log ----
-  const getLog = (repoId: string, offset: number, limit: number) =>
-    invoke<LogPage>('get_log', { repoId, offset, limit })
+  const getLog = (
+    repoId: string,
+    offset: number,
+    limit: number,
+    includeUnreachable: boolean,
+    includeStashes: boolean,
+  ) =>
+    invoke<LogPage>('get_log', {
+      repoId,
+      offset,
+      limit,
+      includeUnreachable,
+      includeStashes,
+    })
 
   const getCommitDetail = (repoId: string, oid: string) =>
     invoke<CommitDetail>('get_commit_detail', { repoId, oid })

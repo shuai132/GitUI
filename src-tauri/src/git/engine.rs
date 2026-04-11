@@ -382,7 +382,7 @@ impl GitEngine {
             // show a proper line-by-line diff instead of an empty result.
             diff_opts
                 .include_untracked(true)
-                .include_untracked_content(true)
+                .show_untracked_content(true)
                 .recurse_untracked_dirs(true);
             let index = repo.index()?;
             repo.diff_index_to_workdir(Some(&index), Some(&mut diff_opts))?

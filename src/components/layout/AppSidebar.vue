@@ -4,8 +4,9 @@ import { RouterLink } from 'vue-router'
 import { useRepoStore } from '@/stores/repos'
 import { useHistoryStore } from '@/stores/history'
 import { useSubmodulesStore } from '@/stores/submodules'
+import { useStashStore } from '@/stores/stash'
 import { buildBranchTree } from '@/utils/branchTree'
-import type { BranchInfo, SubmoduleInfo } from '@/types/git'
+import type { BranchInfo, SubmoduleInfo, StashEntry } from '@/types/git'
 import BranchTreeNode from './BranchTreeNode.vue'
 import ContextMenu, { type ContextMenuItem } from '@/components/common/ContextMenu.vue'
 import CheckoutRemoteDialog from '@/components/branch/CheckoutRemoteDialog.vue'
@@ -14,6 +15,7 @@ import EditSubmoduleDialog from '@/components/submodule/EditSubmoduleDialog.vue'
 const repoStore = useRepoStore()
 const historyStore = useHistoryStore()
 const submodulesStore = useSubmodulesStore()
+const stashStore = useStashStore()
 
 // Local branches
 const localBranches = computed(() =>
@@ -394,6 +396,62 @@ async function onSubmoduleClick(s: SubmoduleInfo) {
     alert(`打开 submodule 失败：${String(err)}`)
   }
 }
+
+// ── Stash ────────────────────────────────────────────────────────────
+async function onStashClick(commitOid: string) {
+  try {
+    await historyStore.selectCommit(commitOid)
+  } catch (e) {
+    console.error(e)
+  }
+}
+
+const stashMenu = reactive({
+  visible: false,
+  x: 0,
+  y: 0,
+  target: null as StashEntry | null,
+})
+
+const stashMenuItems = computed<ContextMenuItem[]>(() => {
+  const s = stashMenu.target
+  if (!s) return []
+  return [
+    { label: `Pop stash@{${s.index}}（最新）`, action: 'pop', disabled: s.index !== 0 },
+    { label: '复制 commit hash', action: 'copy-oid' },
+  ]
+})
+
+function openStashMenu(e: MouseEvent, s: StashEntry) {
+  e.preventDefault()
+  e.stopPropagation()
+  stashMenu.target = s
+  stashMenu.x = e.clientX
+  stashMenu.y = e.clientY
+  stashMenu.visible = true
+}
+
+function closeStashMenu() {
+  stashMenu.visible = false
+}
+
+async function onStashMenuAction(action: string) {
+  const s = stashMenu.target
+  if (!s) return
+  try {
+    switch (action) {
+      case 'pop':
+        await stashStore.pop()
+        break
+      case 'copy-oid':
+        await navigator.clipboard.writeText(s.commit_oid)
+        break
+    }
+  } catch (err) {
+    console.error(err)
+    alert(`操作失败：${String(err)}`)
+  }
+}
 </script>
 
 <template>
@@ -427,6 +485,29 @@ async function onSubmoduleClick(s: SubmoduleInfo) {
             <span v-if="(b.ahead ?? 0) > 0" class="ab-ahead">↑{{ b.ahead }}</span>
             <span v-if="(b.behind ?? 0) > 0" class="ab-behind">↓{{ b.behind }}</span>
           </span>
+        </div>
+      </div>
+
+      <!-- STASH section -->
+      <div
+        class="section"
+        v-if="stashStore.entries.length > 0 && repoStore.activeRepoId"
+      >
+        <div class="section-title submodule-title">
+          <span>STASH</span>
+          <span class="section-count">{{ stashStore.entries.length }}</span>
+        </div>
+        <div
+          v-for="s in stashStore.entries"
+          :key="s.index"
+          class="branch-item stash-item"
+          :title="s.message"
+          @click="onStashClick(s.commit_oid)"
+          @contextmenu="openStashMenu($event, s)"
+        >
+          <span class="branch-dot dot-outline" />
+          <span class="stash-index">{{ '{' + s.index + '}' }}</span>
+          <span class="branch-label">{{ s.message }}</span>
         </div>
       </div>
 
@@ -581,6 +662,16 @@ async function onSubmoduleClick(s: SubmoduleInfo) {
       :items="submoduleMenuItems"
       @close="closeSubmoduleMenu"
       @select="onSubmoduleMenuAction"
+    />
+
+    <!-- Stash context menu -->
+    <ContextMenu
+      :visible="stashMenu.visible"
+      :x="stashMenu.x"
+      :y="stashMenu.y"
+      :items="stashMenuItems"
+      @close="closeStashMenu"
+      @select="onStashMenuAction"
     />
 
     <!-- Edit submodule dialog -->
@@ -752,6 +843,24 @@ async function onSubmoduleClick(s: SubmoduleInfo) {
 
 .dot-outline {
   border: 1.5px solid var(--text-muted);
+}
+
+.stash-item .branch-dot {
+  border-color: var(--accent-orange, #f5a97f);
+}
+
+.stash-index {
+  font-family: 'SF Mono', monospace;
+  font-size: 10px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.stash-item .branch-label {
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .dot-remote {

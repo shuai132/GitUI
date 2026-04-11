@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { useRepoStore } from '@/stores/repos'
 import { useHistoryStore } from '@/stores/history'
@@ -9,6 +10,7 @@ import { useGitCommands } from '@/composables/useGitCommands'
 import ReflogDialog from '@/components/common/ReflogDialog.vue'
 import ContextMenu, { type ContextMenuItem } from '@/components/common/ContextMenu.vue'
 
+const router = useRouter()
 const repoStore = useRepoStore()
 const historyStore = useHistoryStore()
 const stashStore = useStashStore()
@@ -194,6 +196,19 @@ const actionsMenuItems = computed<ContextMenuItem[]>(() => [
   },
   { separator: true },
   {
+    label:
+      (uiStore.showUnreachableCommits ? '✓ ' : '   ') +
+      '显示丢失引用的提交',
+    action: 'toggle-unreachable',
+    disabled: !hasRepo.value,
+  },
+  {
+    label: (uiStore.showStashCommits ? '✓ ' : '   ') + '显示贮藏',
+    action: 'toggle-stashes',
+    disabled: !hasRepo.value,
+  },
+  { separator: true },
+  {
     label: '显示 Reflog...',
     action: 'reflog',
     disabled: !hasRepo.value,
@@ -209,6 +224,11 @@ const actionsMenuItems = computed<ContextMenuItem[]>(() => [
     action: 'discard-all',
     danger: true,
     disabled: !hasRepo.value,
+  },
+  { separator: true },
+  {
+    label: '关于 GitUI',
+    action: 'about',
   },
 ])
 
@@ -262,6 +282,19 @@ async function onActionsSelect(action: string) {
     case 'discard-all': {
       // 转发到 HistoryView 的 WipPanel 处理：通过 uiStore 触发
       uiStore.requestDiscardAll()
+      break
+    }
+    case 'about': {
+      router.push('/about')
+      break
+    }
+    case 'toggle-unreachable': {
+      uiStore.toggleShowUnreachable()
+      // HistoryView 的 watch 会自动 reload；这里无需手动调用
+      break
+    }
+    case 'toggle-stashes': {
+      uiStore.toggleShowStashes()
       break
     }
   }
@@ -601,6 +634,7 @@ async function handleDblClick(e: MouseEvent) {
   opacity: 0.4;
   cursor: not-allowed;
 }
+
 
 .toast-error {
   position: absolute;

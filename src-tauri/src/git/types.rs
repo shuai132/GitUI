@@ -46,6 +46,12 @@ pub struct CommitInfo {
     pub author_email: String,
     pub time: i64,
     pub parent_oids: Vec<String>,
+    /// 该提交在所有 ref 之外，仅通过 reflog 才能找到（"丢失引用"）
+    #[serde(default)]
+    pub is_unreachable: bool,
+    /// 该提交是一条 stash 的根提交
+    #[serde(default)]
+    pub is_stash: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

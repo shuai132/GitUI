@@ -31,6 +31,10 @@ export interface GraphRow {
   color: string
   segments: GraphSegment[]
   totalColumns: number
+  /** 该提交不在任何 ref 的可达集合中（仅 reflog 可达） */
+  isUnreachable: boolean
+  /** 该提交是某条 stash 的根提交 */
+  isStash: boolean
 }
 
 function laneX(col: number): number {
@@ -211,6 +215,8 @@ export function computeGraphLayout(commits: CommitInfo[]): GraphRow[] {
       color: myColor,
       segments,
       totalColumns,
+      isUnreachable: commit.is_unreachable,
+      isStash: commit.is_stash,
     })
   }
 
