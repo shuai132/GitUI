@@ -117,6 +117,44 @@ export const useHistoryStore = defineStore('history', () => {
     await Promise.all([loadLog(), loadBranches()])
   }
 
+  // ── 提交级操作 ────────────────────────────────────────────────────
+
+  async function checkoutCommit(oid: string) {
+    const repoStore = useRepoStore()
+    if (!repoStore.activeRepoId) return
+    await git.checkoutCommit(repoStore.activeRepoId, oid)
+    // HEAD detached 后需要刷新分支列表和日志
+    await Promise.all([loadLog(), loadBranches()])
+  }
+
+  async function cherryPickCommit(oid: string) {
+    const repoStore = useRepoStore()
+    if (!repoStore.activeRepoId) return
+    await git.cherryPickCommit(repoStore.activeRepoId, oid)
+    await Promise.all([loadLog(), loadBranches()])
+  }
+
+  async function revertCommit(oid: string) {
+    const repoStore = useRepoStore()
+    if (!repoStore.activeRepoId) return
+    await git.revertCommit(repoStore.activeRepoId, oid)
+    await Promise.all([loadLog(), loadBranches()])
+  }
+
+  async function resetToCommit(oid: string, mode: 'soft' | 'mixed' | 'hard') {
+    const repoStore = useRepoStore()
+    if (!repoStore.activeRepoId) return
+    await git.resetToCommit(repoStore.activeRepoId, oid, mode)
+    await Promise.all([loadLog(), loadBranches()])
+  }
+
+  async function createTag(name: string, oid: string, message: string | null) {
+    const repoStore = useRepoStore()
+    if (!repoStore.activeRepoId) return
+    await git.createTag(repoStore.activeRepoId, name, oid, message)
+    // 标签列表暂未在 UI 展示，无需 refresh
+  }
+
   function reset() {
     commits.value = []
     branches.value = []
@@ -145,6 +183,11 @@ export const useHistoryStore = defineStore('history', () => {
     switchBranch,
     deleteBranch,
     checkoutRemoteBranch,
+    checkoutCommit,
+    cherryPickCommit,
+    revertCommit,
+    resetToCommit,
+    createTag,
     reset,
   }
 })

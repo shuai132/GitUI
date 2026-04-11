@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { useVirtualizer } from '@tanstack/vue-virtual'
 import { useHistoryStore } from '@/stores/history'
 import { useRepoStore } from '@/stores/repos'
@@ -8,7 +8,10 @@ import { LANE_W, ROW_H } from '@/utils/graph'
 import CommitGraphRow from '@/components/history/CommitGraphRow.vue'
 import SideBySideDiff from '@/components/diff/SideBySideDiff.vue'
 import CommitInfoPanel from '@/components/history/CommitInfoPanel.vue'
-import type { BranchInfo } from '@/types/git'
+import ContextMenu, { type ContextMenuItem } from '@/components/common/ContextMenu.vue'
+import CreateBranchDialog from '@/components/commit/CreateBranchDialog.vue'
+import CreateTagDialog from '@/components/commit/CreateTagDialog.vue'
+import type { BranchInfo, CommitInfo } from '@/types/git'
 
 const historyStore = useHistoryStore()
 const repoStore = useRepoStore()
@@ -279,6 +282,125 @@ function onKeyDown(e: KeyboardEvent) {
   e.preventDefault()
 }
 
+// ── 提交右键菜单 ─────────────────────────────────────────────────────
+const commitMenu = reactive({
+  visible: false,
+  x: 0,
+  y: 0,
+  commit: null as CommitInfo | null,
+})
+
+const showCreateBranchDialog = ref(false)
+const showCreateTagDialog = ref(false)
+const createTagAnnotated = ref(false)
+const dialogCommit = ref<CommitInfo | null>(null)
+
+const currentBranchName = computed(
+  () =>
+    historyStore.branches.find((b) => b.is_head && !b.is_remote)?.name ?? 'HEAD',
+)
+
+const commitMenuItems = computed<ContextMenuItem[]>(() => {
+  if (!commitMenu.commit) return []
+  return [
+    { label: '检出此提交', action: 'checkout' },
+    { separator: true },
+    { label: '在此创建分支...', action: 'create-branch' },
+    { label: 'Cherry pick 此提交', action: 'cherry-pick' },
+    {
+      label: `将 ${currentBranchName.value} 重置到此提交`,
+      children: [
+        { label: 'Soft（保留工作区与暂存区）', action: 'reset-soft' },
+        { label: 'Mixed（保留工作区，清空暂存区）', action: 'reset-mixed' },
+        { label: 'Hard（丢弃所有变更）', action: 'reset-hard', danger: true },
+      ],
+    },
+    { label: 'Revert 此提交', action: 'revert' },
+    { separator: true },
+    { label: '复制提交 SHA', action: 'copy-sha' },
+    { separator: true },
+    { label: '在此创建标签...', action: 'create-tag' },
+    { label: '创建附注标签...', action: 'create-annotated-tag' },
+  ]
+})
+
+function onCommitContextMenu(e: MouseEvent, commit: CommitInfo | undefined) {
+  if (!commit) return
+  e.preventDefault()
+  commitMenu.commit = commit
+  commitMenu.x = e.clientX
+  commitMenu.y = e.clientY
+  commitMenu.visible = true
+  // 右键同时选中此提交（符合直觉）
+  historyStore.selectCommit(commit.oid)
+}
+
+function closeCommitMenu() {
+  commitMenu.visible = false
+}
+
+async function onCommitMenuAction(action: string) {
+  const c = commitMenu.commit
+  if (!c) return
+  try {
+    switch (action) {
+      case 'checkout':
+        if (
+          confirm(
+            `检出到提交 ${c.short_oid} 将进入 detached HEAD 状态，确认？`,
+          )
+        ) {
+          await historyStore.checkoutCommit(c.oid)
+        }
+        break
+      case 'create-branch':
+        dialogCommit.value = c
+        showCreateBranchDialog.value = true
+        break
+      case 'cherry-pick':
+        if (confirm(`Cherry pick 提交 "${c.summary}"？`)) {
+          await historyStore.cherryPickCommit(c.oid)
+        }
+        break
+      case 'revert':
+        if (
+          confirm(
+            `Revert 提交 "${c.summary}"？将创建一条新提交撤销该改动`,
+          )
+        ) {
+          await historyStore.revertCommit(c.oid)
+        }
+        break
+      case 'reset-soft':
+      case 'reset-mixed':
+      case 'reset-hard': {
+        const mode = action.slice(6) as 'soft' | 'mixed' | 'hard'
+        const warn =
+          mode === 'hard'
+            ? `Hard reset 将丢弃所有未提交变更，确认把 ${currentBranchName.value} 重置到 ${c.short_oid}？`
+            : `将 ${currentBranchName.value} ${mode} reset 到 ${c.short_oid}？`
+        if (confirm(warn)) await historyStore.resetToCommit(c.oid, mode)
+        break
+      }
+      case 'copy-sha':
+        await navigator.clipboard.writeText(c.oid)
+        break
+      case 'create-tag':
+        dialogCommit.value = c
+        createTagAnnotated.value = false
+        showCreateTagDialog.value = true
+        break
+      case 'create-annotated-tag':
+        dialogCommit.value = c
+        createTagAnnotated.value = true
+        showCreateTagDialog.value = true
+        break
+    }
+  } catch (err) {
+    alert(String(err))
+  }
+}
+
 onMounted(() => {
   window.addEventListener('keydown', onKeyDown)
 })
@@ -375,6 +497,7 @@ onUnmounted(() => {
                 width: '100%',
               }"
               @click="selectRow(vRow.index)"
+              @contextmenu="onCommitContextMenu($event, historyStore.commits[vRow.index])"
             >
               <!-- Graph column -->
               <div class="col-graph" :style="{ width: graphColWidth + 'px' }">
@@ -460,6 +583,31 @@ onUnmounted(() => {
   <div v-else class="no-repo">
     请从左侧打开一个 Git 仓库
   </div>
+
+  <!-- Commit context menu -->
+  <ContextMenu
+    :visible="commitMenu.visible"
+    :x="commitMenu.x"
+    :y="commitMenu.y"
+    :items="commitMenuItems"
+    @close="closeCommitMenu"
+    @select="onCommitMenuAction"
+  />
+
+  <!-- Create branch at commit dialog -->
+  <CreateBranchDialog
+    :visible="showCreateBranchDialog"
+    :commit="dialogCommit"
+    @close="showCreateBranchDialog = false"
+  />
+
+  <!-- Create tag dialog -->
+  <CreateTagDialog
+    :visible="showCreateTagDialog"
+    :commit="dialogCommit"
+    :annotated="createTagAnnotated"
+    @close="showCreateTagDialog = false"
+  />
 </template>
 
 <style scoped>
