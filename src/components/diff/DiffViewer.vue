@@ -3,21 +3,8 @@ import { ref, watch, onUnmounted, nextTick } from 'vue'
 import { EditorView, basicSetup } from 'codemirror'
 import { EditorState, Compartment } from '@codemirror/state'
 import { oneDark } from '@codemirror/theme-one-dark'
-import { javascript } from '@codemirror/lang-javascript'
-import { python } from '@codemirror/lang-python'
-import { rust } from '@codemirror/lang-rust'
-import { go } from '@codemirror/lang-go'
-import { json } from '@codemirror/lang-json'
-import { css } from '@codemirror/lang-css'
-import { html } from '@codemirror/lang-html'
-import { markdown } from '@codemirror/lang-markdown'
-import { java } from '@codemirror/lang-java'
-import { cpp } from '@codemirror/lang-cpp'
-import { sql } from '@codemirror/lang-sql'
-import { xml } from '@codemirror/lang-xml'
-import { StreamLanguage } from '@codemirror/language'
-import { yaml } from '@codemirror/legacy-modes/mode/yaml'
-import { shell } from '@codemirror/legacy-modes/mode/shell'
+import { LanguageDescription } from '@codemirror/language'
+import { languages } from '@codemirror/language-data'
 import type { Extension } from '@codemirror/state'
 import type { FileDiff } from '@/types/git'
 
@@ -33,41 +20,12 @@ const HIGHLIGHT_KEY = 'gitui.diff.syntax-highlight'
 const highlightEnabled = ref(localStorage.getItem(HIGHLIGHT_KEY) !== 'false')
 const langCompartment = new Compartment()
 
-function getLanguageExtension(diff: FileDiff | null): Extension {
+async function getLanguageExtension(diff: FileDiff | null): Promise<Extension> {
   if (!highlightEnabled.value || !diff) return []
   const filePath = diff.new_path ?? diff.old_path ?? ''
-  const ext = filePath.split('.').pop()?.toLowerCase() ?? ''
-  switch (ext) {
-    case 'js':   return javascript()
-    case 'ts':   return javascript({ typescript: true })
-    case 'jsx':  return javascript({ jsx: true })
-    case 'tsx':  return javascript({ typescript: true, jsx: true })
-    case 'py':   return python()
-    case 'rs':   return rust()
-    case 'go':   return go()
-    case 'json': return json()
-    case 'css':  return css()
-    case 'html':
-    case 'htm':  return html()
-    case 'md':   return markdown()
-    case 'java': return java()
-    case 'c':
-    case 'h':
-    case 'cpp':
-    case 'cc':
-    case 'cxx':
-    case 'hpp':  return cpp()
-    case 'xml':
-    case 'vue':
-    case 'svelte': return xml()
-    case 'sql':  return sql()
-    case 'yaml':
-    case 'yml':  return StreamLanguage.define(yaml)
-    case 'sh':
-    case 'bash':
-    case 'zsh':  return StreamLanguage.define(shell)
-    default:     return []
-  }
+  const desc = LanguageDescription.matchFilename(languages, filePath)
+  if (!desc) return []
+  return await desc.load()
 }
 
 function buildDiffText(diff: FileDiff): string {
@@ -83,7 +41,7 @@ function buildDiffText(diff: FileDiff): string {
   return lines.join('\n')
 }
 
-function createView(text: string) {
+async function createView(text: string) {
   if (!container.value) return
   if (view) {
     view.destroy()
@@ -97,7 +55,7 @@ function createView(text: string) {
         oneDark,
         EditorView.editable.of(false),
         EditorView.lineWrapping,
-        langCompartment.of(getLanguageExtension(props.diff)),
+        langCompartment.of([]),  // 先空白渲染，语言包异步加载后再注入
         EditorView.theme({
           '&': { height: '100%', fontSize: '12px' },
           '.cm-scroller': { fontFamily: "'SF Mono', 'Fira Code', monospace" },
@@ -107,15 +65,17 @@ function createView(text: string) {
     }),
     parent: container.value,
   })
+  // 语言包懒加载（已缓存的类型几乎无延迟）
+  const lang = await getLanguageExtension(props.diff)
+  view?.dispatch({ effects: langCompartment.reconfigure(lang) })
 }
 
-function toggleHighlight() {
+async function toggleHighlight() {
   highlightEnabled.value = !highlightEnabled.value
   localStorage.setItem(HIGHLIGHT_KEY, String(highlightEnabled.value))
   if (view) {
-    view.dispatch({
-      effects: langCompartment.reconfigure(getLanguageExtension(props.diff))
-    })
+    const lang = await getLanguageExtension(props.diff)
+    view.dispatch({ effects: langCompartment.reconfigure(lang) })
   }
 }
 

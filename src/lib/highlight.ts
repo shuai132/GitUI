@@ -23,6 +23,7 @@ hljs.registerLanguage('go', go)
 hljs.registerLanguage('json', json)
 hljs.registerLanguage('css', css)
 hljs.registerLanguage('xml', xml)
+hljs.registerLanguage('html', xml)  // html 与 xml 共享同一语言定义
 hljs.registerLanguage('markdown', markdown)
 hljs.registerLanguage('java', java)
 hljs.registerLanguage('bash', bash)
@@ -40,7 +41,7 @@ export const EXT_TO_LANG: Record<string, string> = {
   go: 'go',
   json: 'json',
   css: 'css',
-  html: 'xml', htm: 'xml', xml: 'xml', vue: 'xml', svelte: 'xml',
+  html: 'html', htm: 'html', xml: 'xml', vue: 'html', svelte: 'html',
   md: 'markdown', mdx: 'markdown',
   java: 'java',
   sh: 'bash', bash: 'bash', zsh: 'bash',
