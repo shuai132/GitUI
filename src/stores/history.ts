@@ -3,6 +3,7 @@ import { ref } from 'vue'
 import type { CommitInfo, BranchInfo, CommitDetail } from '@/types/git'
 import { useGitCommands } from '@/composables/useGitCommands'
 import { useRepoStore } from './repos'
+import { computeGraphLayout, type GraphRow } from '@/utils/graph'
 
 const PAGE_SIZE = 200
 
@@ -10,6 +11,8 @@ export const useHistoryStore = defineStore('history', () => {
   const commits = ref<CommitInfo[]>([])
   const branches = ref<BranchInfo[]>([])
   const selectedCommit = ref<CommitDetail | null>(null)
+  const graphRows = ref<GraphRow[]>([])
+  const selectedFileDiffIndex = ref(0)
   const hasMore = ref(false)
   const loading = ref(false)
   const loadingMore = ref(false)
@@ -27,6 +30,7 @@ export const useHistoryStore = defineStore('history', () => {
       const page = await git.getLog(repoStore.activeRepoId, 0, PAGE_SIZE)
       commits.value = page.commits
       hasMore.value = page.has_more
+      graphRows.value = computeGraphLayout(commits.value)
     } catch (e: unknown) {
       error.value = String(e)
     } finally {
@@ -43,6 +47,7 @@ export const useHistoryStore = defineStore('history', () => {
       const page = await git.getLog(repoStore.activeRepoId, commits.value.length, PAGE_SIZE)
       commits.value.push(...page.commits)
       hasMore.value = page.has_more
+      graphRows.value = computeGraphLayout(commits.value)
     } finally {
       loadingMore.value = false
     }
@@ -63,11 +68,16 @@ export const useHistoryStore = defineStore('history', () => {
     const repoStore = useRepoStore()
     if (!repoStore.activeRepoId) return
 
+    selectedFileDiffIndex.value = 0
     try {
       selectedCommit.value = await git.getCommitDetail(repoStore.activeRepoId, oid)
     } catch (e: unknown) {
       error.value = String(e)
     }
+  }
+
+  function selectFileDiff(idx: number) {
+    selectedFileDiffIndex.value = idx
   }
 
   async function createBranch(name: string, fromOid?: string) {
@@ -95,6 +105,8 @@ export const useHistoryStore = defineStore('history', () => {
     commits.value = []
     branches.value = []
     selectedCommit.value = null
+    graphRows.value = []
+    selectedFileDiffIndex.value = 0
     hasMore.value = false
   }
 
@@ -102,6 +114,8 @@ export const useHistoryStore = defineStore('history', () => {
     commits,
     branches,
     selectedCommit,
+    graphRows,
+    selectedFileDiffIndex,
     hasMore,
     loading,
     loadingMore,
@@ -110,6 +124,7 @@ export const useHistoryStore = defineStore('history', () => {
     loadMore,
     loadBranches,
     selectCommit,
+    selectFileDiff,
     createBranch,
     switchBranch,
     deleteBranch,

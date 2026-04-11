@@ -98,6 +98,7 @@ pub struct LogPage {
     pub total_loaded: usize,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StashEntry {
     pub index: usize,

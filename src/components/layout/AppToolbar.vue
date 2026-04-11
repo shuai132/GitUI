@@ -1,13 +1,9 @@
 <script setup lang="ts">
-import { useRouter, useRoute } from 'vue-router'
 import { useRepoStore } from '@/stores/repos'
 
-const router = useRouter()
-const route = useRoute()
 const repoStore = useRepoStore()
 
 async function openFolder() {
-  // Use Tauri dialog to open directory
   try {
     const { open: openDialog } = await import('@tauri-apps/plugin-dialog')
     const selected = await openDialog({ directory: true })
@@ -18,116 +14,81 @@ async function openFolder() {
     console.error(e)
   }
 }
-
-const tabs = [
-  { name: 'workspace', label: '工作区', route: '/workspace' },
-  { name: 'history', label: '历史', route: '/history' },
-  { name: 'branches', label: '分支', route: '/branches' },
-]
 </script>
 
 <template>
   <div class="toolbar">
-    <div class="toolbar-left">
+    <div class="toolbar-brand">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent-blue)" stroke-width="2">
+        <line x1="6" y1="3" x2="6" y2="15"/>
+        <circle cx="18" cy="6" r="3"/>
+        <circle cx="6" cy="18" r="3"/>
+        <path d="M18 9a9 9 0 0 1-9 9"/>
+      </svg>
+      <span class="brand-name">GitUI</span>
+    </div>
+
+    <div class="toolbar-actions">
       <button class="btn-icon" title="打开仓库" @click="openFolder">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
         </svg>
+        <span>打开</span>
       </button>
-    </div>
-
-    <div class="toolbar-tabs">
-      <button
-        v-for="tab in tabs"
-        :key="tab.name"
-        class="tab-btn"
-        :class="{ active: route.path === tab.route }"
-        @click="router.push(tab.route)"
-      >
-        {{ tab.label }}
-      </button>
-    </div>
-
-    <div class="toolbar-right">
-      <span class="repo-name">{{ repoStore.activeRepo()?.name ?? '无仓库' }}</span>
     </div>
   </div>
 </template>
 
 <style scoped>
 .toolbar {
-  height: 40px;
+  height: 38px;
   display: flex;
   align-items: center;
-  padding: 0 8px;
+  padding: 0 12px;
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border);
-  gap: 8px;
+  gap: 12px;
   flex-shrink: 0;
+  /* macOS traffic lights padding */
+  padding-left: max(12px, env(titlebar-area-x, 12px));
 }
 
-.toolbar-left {
-  display: flex;
-  gap: 4px;
-}
-
-.toolbar-tabs {
-  display: flex;
-  gap: 2px;
-  flex: 1;
-  justify-content: center;
-}
-
-.toolbar-right {
+.toolbar-brand {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 12px;
-  color: var(--text-muted);
+  gap: 6px;
 }
 
-.repo-name {
-  font-weight: 500;
-  color: var(--text-secondary);
+.brand-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: 0.02em;
+}
+
+.toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .btn-icon {
   background: none;
-  border: none;
+  border: 1px solid var(--border);
   cursor: pointer;
   color: var(--text-secondary);
-  padding: 4px;
+  padding: 4px 8px;
   border-radius: 4px;
   display: flex;
   align-items: center;
-  justify-content: center;
+  gap: 5px;
+  font-size: 11px;
+  font-family: inherit;
   transition: background 0.15s, color 0.15s;
 }
 
 .btn-icon:hover {
   background: var(--bg-overlay);
   color: var(--text-primary);
-}
-
-.tab-btn {
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: var(--text-secondary);
-  padding: 4px 12px;
-  border-radius: 4px;
-  font-size: 12px;
-  font-family: inherit;
-  transition: background 0.15s, color 0.15s;
-}
-
-.tab-btn:hover {
-  background: var(--bg-overlay);
-  color: var(--text-primary);
-}
-
-.tab-btn.active {
-  background: var(--bg-overlay);
-  color: var(--accent-blue);
 }
 </style>

@@ -22,6 +22,7 @@ pub enum GitError {
     #[error("Operation failed: {0}")]
     OperationFailed(String),
 
+    #[allow(dead_code)]
     #[error("Credentials error: {0}")]
     Credentials(String),
 }

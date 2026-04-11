@@ -51,6 +51,7 @@ impl RepoManager {
         repos.get(repo_id).map(|e| e.meta.clone())
     }
 
+    #[allow(dead_code)]
     pub fn mark_dirty(&self, repo_id: &str) {
         let mut repos = self.repos.lock().unwrap();
         if let Some(entry) = repos.get_mut(repo_id) {
@@ -66,6 +67,7 @@ impl RepoManager {
         }
     }
 
+    #[allow(dead_code)]
     pub fn get_cached_status(&self, repo_id: &str) -> Option<WorkspaceStatus> {
         let repos = self.repos.lock().unwrap();
         repos.get(repo_id).and_then(|e| e.status.clone())

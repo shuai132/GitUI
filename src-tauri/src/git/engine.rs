@@ -581,6 +581,7 @@ impl GitEngine {
         Ok(remotes.iter().flatten().map(|s| s.to_string()).collect())
     }
 
+    #[allow(dead_code)]
     pub fn get_repo_state(path: &str) -> GitResult<String> {
         let repo = Self::open(path)?;
         let state = match repo.state() {
