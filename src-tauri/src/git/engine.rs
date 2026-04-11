@@ -1092,6 +1092,55 @@ impl GitEngine {
         Ok(())
     }
 
+    /// 读取 HEAD 的 reflog，返回最多 `limit` 条记录（最新在前）。
+    pub fn get_reflog(path: &str, limit: usize) -> GitResult<Vec<ReflogEntry>> {
+        let repo = Self::open(path)?;
+        let reflog = repo
+            .reflog("HEAD")
+            .map_err(|e| GitError::OperationFailed(format!("读取 reflog 失败：{}", e)))?;
+
+        let count = reflog.len().min(limit);
+        let mut entries = Vec::with_capacity(count);
+
+        for i in 0..count {
+            let entry = reflog.get(i).unwrap();
+            let oid = entry.id_new();
+            let oid_str = oid.to_string();
+            let short_oid = oid_str[..7.min(oid_str.len())].to_string();
+            let message = entry.message().unwrap_or("").to_string();
+            let committer = entry.committer();
+            let committer_name = committer.name().unwrap_or("").to_string();
+            let time = committer.when().seconds();
+            entries.push(ReflogEntry {
+                oid: oid_str,
+                short_oid,
+                message,
+                committer_name,
+                time,
+            });
+        }
+
+        Ok(entries)
+    }
+
+    /// 对仓库执行 `git gc`，返回命令输出文本。
+    pub fn run_gc(path: &str) -> GitResult<String> {
+        let output = std::process::Command::new("git")
+            .args(["-C", path, "gc", "--quiet"])
+            .output()
+            .map_err(|e| GitError::OperationFailed(format!("启动 git gc 失败：{}", e)))?;
+
+        if output.status.success() {
+            Ok("git gc 完成".to_string())
+        } else {
+            let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+            Err(GitError::OperationFailed(format!(
+                "git gc 失败：{}",
+                stderr.trim()
+            )))
+        }
+    }
+
     /// 从 .gitmodules 文本中移除 `[submodule "<name>"]` 及其后续字段行。
     /// 若删除后整个文件仅剩空白则删除文件本身。
     fn strip_gitmodules_section(gitmodules_path: &Path, name: &str) -> GitResult<()> {

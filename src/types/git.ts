@@ -102,6 +102,14 @@ export interface SubmoduleInfo {
   has_workdir_modifications: boolean
 }
 
+export interface ReflogEntry {
+  oid: string
+  short_oid: string
+  message: string
+  committer_name: string
+  time: number
+}
+
 // Graph node for DAG visualization
 export interface GraphNode {
   oid: string

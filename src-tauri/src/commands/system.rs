@@ -2,7 +2,7 @@ use std::process::Command;
 use tauri::State;
 
 use crate::{
-    git::{engine::GitEngine, error::GitError},
+    git::{engine::GitEngine, error::GitError, types::ReflogEntry},
     repo_manager::RepoManager,
 };
 
@@ -81,6 +81,30 @@ pub async fn discard_all_changes(
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
     GitEngine::discard_all_changes(&meta.path)
+}
+
+/// 读取 HEAD reflog，返回最新的 500 条记录
+#[tauri::command]
+pub async fn get_reflog(
+    repo_id: String,
+    repo_manager: State<'_, RepoManager>,
+) -> Result<Vec<ReflogEntry>, GitError> {
+    let meta = repo_manager
+        .get_meta(&repo_id)
+        .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
+    GitEngine::get_reflog(&meta.path, 500)
+}
+
+/// 执行 git gc
+#[tauri::command]
+pub async fn run_gc(
+    repo_id: String,
+    repo_manager: State<'_, RepoManager>,
+) -> Result<String, GitError> {
+    let meta = repo_manager
+        .get_meta(&repo_id)
+        .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
+    GitEngine::run_gc(&meta.path)
 }
 
 /// 丢弃单个文件的工作区变更

@@ -7,6 +7,7 @@ import { useStashStore } from '@/stores/stash'
 import { useUiStore } from '@/stores/ui'
 import { useGitCommands } from '@/composables/useGitCommands'
 import CreateBranchDialog from '@/components/commit/CreateBranchDialog.vue'
+import ReflogDialog from '@/components/common/ReflogDialog.vue'
 import ContextMenu, { type ContextMenuItem } from '@/components/common/ContextMenu.vue'
 
 const repoStore = useRepoStore()
@@ -23,7 +24,10 @@ const busy = reactive({
   stash: false,
   pop: false,
   fetch: false,
+  gc: false,
 })
+
+const showReflogDialog = ref(false)
 
 // ── 仓库已打开时按钮才可用 ────────────────────────────────────────
 const hasRepo = computed(() => !!repoStore.activeRepoId)
@@ -180,6 +184,17 @@ const actionsMenuItems = computed<ContextMenuItem[]>(() => [
   },
   { separator: true },
   {
+    label: '显示 Reflog...',
+    action: 'reflog',
+    disabled: !hasRepo.value,
+  },
+  {
+    label: busy.gc ? '清理中...' : '清理仓库 (git gc)',
+    action: 'gc',
+    disabled: !hasRepo.value || busy.gc,
+  },
+  { separator: true },
+  {
     label: '丢弃所有变更...',
     action: 'discard-all',
     danger: true,
@@ -215,6 +230,22 @@ async function onActionsSelect(action: string) {
         showError(`Fetch 失败：${String(e)}`)
       } finally {
         busy.fetch = false
+      }
+      break
+    }
+    case 'reflog': {
+      showReflogDialog.value = true
+      break
+    }
+    case 'gc': {
+      busy.gc = true
+      try {
+        const msg = await git.runGc(id)
+        showError(msg)  // 借用 toast 展示成功信息
+      } catch (e) {
+        showError(`git gc 失败：${String(e)}`)
+      } finally {
+        busy.gc = false
       }
       break
     }
@@ -392,6 +423,10 @@ async function handleDblClick(e: MouseEvent) {
       :visible="showBranchDialog"
       :commit="null"
       @close="showBranchDialog = false"
+    />
+    <ReflogDialog
+      :visible="showReflogDialog"
+      @close="showReflogDialog = false"
     />
 
     <ContextMenu

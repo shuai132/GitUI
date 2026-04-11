@@ -71,6 +71,8 @@ pub fn run() {
             open_terminal,
             discard_all_changes,
             discard_file,
+            get_reflog,
+            run_gc,
         ])
         .setup(|app| {
             tray::setup_tray(&app.handle())?;

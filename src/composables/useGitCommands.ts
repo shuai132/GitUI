@@ -8,6 +8,7 @@ import type {
   BranchInfo,
   SubmoduleInfo,
   StashEntry,
+  ReflogEntry,
 } from '@/types/git'
 
 export function useGitCommands() {
@@ -158,6 +159,12 @@ export function useGitCommands() {
   const discardFile = (repoId: string, filePath: string) =>
     invoke<void>('discard_file', { repoId, filePath })
 
+  const getReflog = (repoId: string) =>
+    invoke<ReflogEntry[]>('get_reflog', { repoId })
+
+  const runGc = (repoId: string) =>
+    invoke<string>('run_gc', { repoId })
+
   return {
     openRepo,
     closeRepo,
@@ -199,5 +206,7 @@ export function useGitCommands() {
     openTerminal,
     discardAllChanges,
     discardFile,
+    getReflog,
+    runGc,
   }
 }

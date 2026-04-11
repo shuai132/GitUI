@@ -125,6 +125,16 @@ pub enum SubmoduleState {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReflogEntry {
+    pub oid: String,
+    pub short_oid: String,
+    /// reflog 动作描述，如 "commit: fix bug" / "reset: moving to HEAD~1"
+    pub message: String,
+    pub committer_name: String,
+    pub time: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SubmoduleInfo {
     pub name: String,
     pub path: String,
