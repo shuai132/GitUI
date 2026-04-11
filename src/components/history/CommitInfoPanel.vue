@@ -114,6 +114,16 @@ const bodyText = computed(() => {
   min-height: 0;
 }
 
+/* 盖过全局 * { user-select: none }：通配符直接给每个子元素设 none，
+   单独给父元素设 text 不会继承，需要连子孙一起覆写。 */
+.panel-header,
+.panel-header *,
+.meta-grid,
+.meta-grid * {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
 .avatar {
   width: 36px;
   height: 36px;
@@ -136,25 +146,44 @@ const bodyText = computed(() => {
   font-size: 13px;
   font-weight: 600;
   color: var(--text-primary);
-  overflow: hidden;
-  text-overflow: ellipsis;
+  /* 超长标题改为水平滚动而非截断 */
   white-space: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
 }
 
 .commit-body {
   font-size: 11px;
   color: var(--text-secondary);
   margin-top: 3px;
-  overflow: hidden;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  white-space: pre-wrap;
+  /* 多行 body 完整显示：保留原始换行；超长行水平滚动，超高内容垂直滚动 */
+  white-space: pre;
+  overflow: auto;
+  max-height: 160px;
+}
+
+/* 细滚动条，避免滚动条占走太多空间 */
+.commit-summary::-webkit-scrollbar,
+.commit-body::-webkit-scrollbar,
+.mv::-webkit-scrollbar {
+  height: 4px;
+  width: 6px;
+}
+.commit-summary::-webkit-scrollbar-thumb,
+.commit-body::-webkit-scrollbar-thumb,
+.mv::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 2px;
+}
+.commit-summary::-webkit-scrollbar-track,
+.commit-body::-webkit-scrollbar-track,
+.mv::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 .meta-grid {
   display: grid;
-  grid-template-columns: 40px 1fr;
+  grid-template-columns: 40px minmax(0, 1fr);
   gap: 2px 8px;
   padding: 6px 12px;
   font-size: 11px;
@@ -171,10 +200,12 @@ const bodyText = computed(() => {
 
 .mv {
   color: var(--text-primary);
-  overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
   align-self: center;
+  /* 最小高度保持行对齐，避免滚动条把行撑高 */
+  min-width: 0;
 }
 
 .mv.oid {

@@ -104,6 +104,8 @@ const filteredCommits = computed(() => {
 - 关联的 refs（本地/远程分支、tags）
 - 变更文件列表，点击切换 `selectedFileDiffIndex`
 
+**文本选择与超长内容**：面板头部（summary + body）和 meta-grid 两块显式设 `user-select: text`，盖过全局 `* { user-select: none }`，支持选中复制 commit 标题、message、oid、作者、邮箱等。超长的单行内容（过长的 summary、完整 oid、长邮箱、多 parent 列表）改为水平滚动（`overflow-x: auto + white-space: nowrap`）而非 `text-overflow: ellipsis` 截断，配一条 4px 细滚动条，避免占垂直空间又能提示"右侧还有内容"。
+
 ### DiffView
 
 见 [06-diff-viewer.md](./06-diff-viewer.md)，支持三种模式切换。
