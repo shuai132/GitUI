@@ -12,6 +12,12 @@ import { css } from '@codemirror/lang-css'
 import { html } from '@codemirror/lang-html'
 import { markdown } from '@codemirror/lang-markdown'
 import { java } from '@codemirror/lang-java'
+import { cpp } from '@codemirror/lang-cpp'
+import { sql } from '@codemirror/lang-sql'
+import { xml } from '@codemirror/lang-xml'
+import { StreamLanguage } from '@codemirror/language'
+import { yaml } from '@codemirror/legacy-modes/mode/yaml'
+import { shell } from '@codemirror/legacy-modes/mode/shell'
 import type { Extension } from '@codemirror/state'
 import type { FileDiff } from '@/types/git'
 
@@ -45,6 +51,21 @@ function getLanguageExtension(diff: FileDiff | null): Extension {
     case 'htm':  return html()
     case 'md':   return markdown()
     case 'java': return java()
+    case 'c':
+    case 'h':
+    case 'cpp':
+    case 'cc':
+    case 'cxx':
+    case 'hpp':  return cpp()
+    case 'xml':
+    case 'vue':
+    case 'svelte': return xml()
+    case 'sql':  return sql()
+    case 'yaml':
+    case 'yml':  return StreamLanguage.define(yaml)
+    case 'sh':
+    case 'bash':
+    case 'zsh':  return StreamLanguage.define(shell)
     default:     return []
   }
 }
