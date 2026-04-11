@@ -119,6 +119,20 @@ export const useRepoStore = defineStore('repos', () => {
     await persist()
   }
 
+  async function reorderRepos(fromIndex: number, toIndex: number) {
+    const len = repos.value.length
+    if (
+      fromIndex === toIndex ||
+      fromIndex < 0 || fromIndex >= len ||
+      toIndex < 0 || toIndex >= len
+    ) {
+      return
+    }
+    const [moved] = repos.value.splice(fromIndex, 1)
+    repos.value.splice(toIndex, 0, moved)
+    await persist()
+  }
+
   const activeRepo = () => repos.value.find((r) => r.id === activeRepoId.value) ?? null
 
   return {
@@ -130,6 +144,7 @@ export const useRepoStore = defineStore('repos', () => {
     openRepo,
     closeRepo,
     setActive,
+    reorderRepos,
     activeRepo,
   }
 })

@@ -51,6 +51,159 @@ async function removeRepo(repoId: string) {
   }
 }
 
+// ── 其他仓库列表：可拖动高度 + 持久化 ────────────────────────────────
+// 默认大约 6 条的高度（section-title ~22 + 6 行 × 22 + padding ~6 ≈ 160）
+const REPOS_HEIGHT_KEY = 'gitui.sidebar.reposHeight'
+const REPOS_MIN_HEIGHT = 40
+const REPOS_DEFAULT_HEIGHT = 160
+const reposHeight = ref<number>(
+  Number(localStorage.getItem(REPOS_HEIGHT_KEY)) || REPOS_DEFAULT_HEIGHT,
+)
+
+function clampReposHeight(h: number): number {
+  // 上限：不能把 sidebar 上方挤到只剩 160px
+  const sidebarEl = document.querySelector('.sidebar') as HTMLElement | null
+  const sidebarH = sidebarEl?.clientHeight ?? 800
+  const max = Math.max(REPOS_MIN_HEIGHT, sidebarH - 160)
+  return Math.max(REPOS_MIN_HEIGHT, Math.min(max, h))
+}
+
+function startReposResize(e: PointerEvent) {
+  e.preventDefault()
+  const startY = e.clientY
+  const startH = reposHeight.value
+  const onMove = (ev: PointerEvent) => {
+    // 往上拖（y 减小）→ footer 变高
+    const delta = startY - ev.clientY
+    reposHeight.value = clampReposHeight(startH + delta)
+  }
+  const onUp = () => {
+    window.removeEventListener('pointermove', onMove)
+    window.removeEventListener('pointerup', onUp)
+    document.body.style.cursor = ''
+    document.body.style.userSelect = ''
+    localStorage.setItem(REPOS_HEIGHT_KEY, String(reposHeight.value))
+  }
+  window.addEventListener('pointermove', onMove)
+  window.addEventListener('pointerup', onUp)
+  document.body.style.cursor = 'row-resize'
+  document.body.style.userSelect = 'none'
+}
+
+// ── 其他仓库列表：基于 pointer events 的拖动排序 ────────────────────
+// 不用 HTML5 DnD 是因为 Tauri WKWebView 下 drag image / dropEffect / hit
+// testing 都不稳；自实现更可控，也能完全去掉浏览器的 drag cursor。
+interface RepoDragState {
+  fromIndex: number
+  startY: number
+  isDragging: boolean
+}
+const dragState = ref<RepoDragState | null>(null)
+const dragOverIndex = ref<number | null>(null)
+const dragInsertBefore = ref(true) // 插入到 overIndex 之前还是之后
+const reposListRef = ref<HTMLElement | null>(null)
+// 拖动结束后短时间抑制 click，避免触发 setActive
+let suppressClickUntil = 0
+const DRAG_THRESHOLD = 4
+
+// drop indicator 的 top 偏移（相对 .repos-list），null 表示不显示
+const dropIndicatorTop = computed<number | null>(() => {
+  const state = dragState.value
+  if (!state || !state.isDragging) return null
+  if (dragOverIndex.value === null) return null
+  const from = state.fromIndex
+  const over = dragOverIndex.value
+  // 等价于不动的几种位置：拖到自己、拖到前一项下半、拖到后一项上半
+  if (over === from) return null
+  if (over === from - 1 && !dragInsertBefore.value) return null
+  if (over === from + 1 && dragInsertBefore.value) return null
+
+  const listEl = reposListRef.value
+  if (!listEl) return null
+  const items = listEl.querySelectorAll<HTMLElement>('.repo-item')
+  const item = items[over]
+  if (!item) return null
+  return dragInsertBefore.value ? item.offsetTop : item.offsetTop + item.offsetHeight
+})
+
+function updateDragOverFromPointer(clientY: number) {
+  const listEl = reposListRef.value
+  if (!listEl) return
+  const items = listEl.querySelectorAll<HTMLElement>('.repo-item')
+  for (let i = 0; i < items.length; i++) {
+    const rect = items[i].getBoundingClientRect()
+    if (clientY < rect.top) {
+      dragOverIndex.value = i
+      dragInsertBefore.value = true
+      return
+    }
+    if (clientY <= rect.bottom) {
+      dragOverIndex.value = i
+      dragInsertBefore.value = clientY < rect.top + rect.height / 2
+      return
+    }
+  }
+  if (items.length > 0) {
+    dragOverIndex.value = items.length - 1
+    dragInsertBefore.value = false
+  }
+}
+
+function onRepoPointerDown(e: PointerEvent, index: number) {
+  if (e.button !== 0) return
+  dragState.value = {
+    fromIndex: index,
+    startY: e.clientY,
+    isDragging: false,
+  }
+  window.addEventListener('pointermove', onPointerMove)
+  window.addEventListener('pointerup', onPointerUp)
+  window.addEventListener('pointercancel', onPointerUp)
+}
+
+function onPointerMove(e: PointerEvent) {
+  const state = dragState.value
+  if (!state) return
+  if (!state.isDragging) {
+    if (Math.abs(e.clientY - state.startY) < DRAG_THRESHOLD) return
+    state.isDragging = true
+  }
+  updateDragOverFromPointer(e.clientY)
+}
+
+async function onPointerUp(_e: PointerEvent) {
+  window.removeEventListener('pointermove', onPointerMove)
+  window.removeEventListener('pointerup', onPointerUp)
+  window.removeEventListener('pointercancel', onPointerUp)
+  const state = dragState.value
+  dragState.value = null
+  if (!state) return
+  const over = dragOverIndex.value
+  const before = dragInsertBefore.value
+  dragOverIndex.value = null
+  if (!state.isDragging) return // 未达阈值，视为普通 click
+  suppressClickUntil = Date.now() + 300
+  if (over === null) return
+
+  // 用户视角的目标位置（删除源前的坐标系）
+  const from = state.fromIndex
+  let target = before ? over : over + 1
+  if (from < target) target -= 1
+  if (target < 0) target = 0
+  if (target >= repoStore.repos.length) target = repoStore.repos.length - 1
+  if (target === from) return
+  await repoStore.reorderRepos(from, target)
+}
+
+function onRepoClick(e: MouseEvent, repoId: string) {
+  if (Date.now() < suppressClickUntil) {
+    e.preventDefault()
+    e.stopPropagation()
+    return
+  }
+  repoStore.setActive(repoId)
+}
+
 async function switchBranch(name: string) {
   try {
     await historyStore.switchBranch(name)
@@ -214,31 +367,47 @@ async function onContextAction(action: string) {
       </div>
     </div>
 
-    <!-- Bottom: additional repos -->
-    <div class="repos-footer" v-if="repoStore.repos.length > 1">
+    <!-- Bottom: additional repos (可拖动高度 + 拖动排序) -->
+    <div
+      class="repos-footer"
+      v-if="repoStore.repos.length > 1"
+      :style="{ height: reposHeight + 'px' }"
+    >
+      <div class="repos-resize" @pointerdown="startReposResize" />
       <div class="section-title">其他仓库</div>
-      <div
-        v-for="repo in repoStore.repos"
-        :key="repo.id"
-        class="repo-item"
-        :class="{ 'repo-item--active': repo.id === repoStore.activeRepoId }"
-        :title="repo.path"
-        @click="repoStore.setActive(repo.id)"
-      >
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
-        </svg>
-        <span class="repo-item-name">{{ repo.name }}</span>
-        <button
-          class="repo-item-remove"
-          title="移除仓库"
-          @click.stop="removeRepo(repo.id)"
+      <div class="repos-list" ref="reposListRef">
+        <div
+          v-if="dropIndicatorTop !== null"
+          class="drop-indicator"
+          :style="{ top: dropIndicatorTop + 'px' }"
+        />
+        <div
+          v-for="(repo, idx) in repoStore.repos"
+          :key="repo.id"
+          class="repo-item"
+          :class="{
+            'repo-item--active': repo.id === repoStore.activeRepoId,
+            'repo-item--dragging': dragState?.isDragging && dragState?.fromIndex === idx,
+          }"
+          :title="repo.path"
+          @pointerdown="onRepoPointerDown($event, idx)"
+          @click="onRepoClick($event, repo.id)"
         >
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
-            <line x1="18" y1="6" x2="6" y2="18"/>
-            <line x1="6" y1="6" x2="18" y2="18"/>
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
           </svg>
-        </button>
+          <span class="repo-item-name">{{ repo.name }}</span>
+          <button
+            class="repo-item-remove"
+            title="移除仓库"
+            @click.stop="removeRepo(repo.id)"
+          >
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+              <line x1="18" y1="6" x2="6" y2="18"/>
+              <line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
+        </div>
       </div>
     </div>
 
@@ -460,9 +629,50 @@ async function onContextAction(action: string) {
 
 /* ── Repos footer ────────────────────────────────────────────────── */
 .repos-footer {
+  position: relative;
   border-top: 1px solid var(--border);
-  padding-top: 4px;
+  display: flex;
+  flex-direction: column;
   flex-shrink: 0;
+  min-height: 40px;
+}
+
+/* 顶部拖动条，骑在 border-top 上 */
+.repos-resize {
+  position: absolute;
+  top: -3px;
+  left: 0;
+  right: 0;
+  height: 6px;
+  cursor: row-resize;
+  z-index: 10;
+  background: transparent;
+  transition: background 0.15s;
+}
+.repos-resize:hover,
+.repos-resize:active {
+  background: rgba(138, 173, 244, 0.3);
+}
+
+.repos-list {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 4px 0;
+}
+
+/* 拖动时的插入位置高亮横线 */
+.drop-indicator {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  height: 2px;
+  background: var(--accent-blue);
+  border-radius: 1px;
+  pointer-events: none;
+  z-index: 5;
+  transform: translateY(-1px);
 }
 
 .repo-item {
@@ -474,6 +684,19 @@ async function onContextAction(action: string) {
   color: var(--text-secondary);
   cursor: pointer;
   transition: background 0.1s;
+  /* 阻止浏览器 HTML5 拖动默认行为（会生成 drag image + 加号光标） */
+  -webkit-user-drag: none;
+}
+
+/* 子元素不接收 pointer，让 drag 事件冒泡到 .repo-item；
+   删除按钮单独解除（下面的 .repo-item > .repo-item-remove） */
+.repo-item > * {
+  pointer-events: none;
+}
+
+/* 特异性 0-2-0 > 上面的 0-1-1，覆盖回可响应 */
+.repo-item > .repo-item-remove {
+  pointer-events: auto;
 }
 
 .repo-item:hover {
@@ -482,6 +705,11 @@ async function onContextAction(action: string) {
 
 .repo-item--active {
   color: var(--accent-blue);
+}
+
+/* 拖动源半透明反馈 */
+.repo-item--dragging {
+  opacity: 0.4;
 }
 
 .repo-item-name {
@@ -504,6 +732,8 @@ async function onContextAction(action: string) {
   cursor: pointer;
   flex-shrink: 0;
   transition: background 0.1s, color 0.1s;
+  /* 覆盖 .repo-item > * 的 pointer-events: none 让按钮仍可点击 */
+  pointer-events: auto;
 }
 
 .repo-item:hover .repo-item-remove {
