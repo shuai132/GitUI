@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useVirtualizer } from '@tanstack/vue-virtual'
 import { useHistoryStore } from '@/stores/history'
 import { useRepoStore } from '@/stores/repos'
@@ -12,6 +12,10 @@ import type { BranchInfo } from '@/types/git'
 
 const historyStore = useHistoryStore()
 const repoStore = useRepoStore()
+
+// ── 键盘导航焦点：最后一次点击过 commits / files 中的哪一个 ────────
+type ActivePane = 'commits' | 'files'
+const activePane = ref<ActivePane>('commits')
 
 const scrollContainer = ref<HTMLElement | null>(null)
 
@@ -62,13 +66,23 @@ const graphColWidth = computed(() => {
 // ── Row selection ────────────────────────────────────────────────────
 const selectedOid = computed(() => historyStore.selectedCommit?.info.oid ?? null)
 
+const selectedCommitIndex = computed(() =>
+  historyStore.commits.findIndex((c) => c.oid === selectedOid.value)
+)
+
 function selectRow(idx: number) {
   const commit = historyStore.commits[idx]
   if (commit) historyStore.selectCommit(commit.oid)
+  activePane.value = 'commits'
 }
 
 function isSelected(idx: number): boolean {
   return historyStore.commits[idx]?.oid === selectedOid.value
+}
+
+function onSelectFile(idx: number) {
+  historyStore.selectFileDiff(idx)
+  activePane.value = 'files'
 }
 
 // ── Current diff ─────────────────────────────────────────────────────
@@ -224,6 +238,53 @@ function startColResize(e: PointerEvent, col: ColKey) {
   document.body.style.cursor = 'col-resize'
   document.body.style.userSelect = 'none'
 }
+
+// ── 键盘 ↑↓ 在当前激活的 pane 中切换条目 ─────────────────────────────
+function moveCommitSelection(delta: number) {
+  const len = historyStore.commits.length
+  if (len === 0) return
+  const cur = selectedCommitIndex.value
+  const next = cur < 0 ? 0 : Math.max(0, Math.min(len - 1, cur + delta))
+  if (next === cur) return
+  selectRow(next)
+  // 让被选中的行滚入视野（tanstack virtualizer 的能力）
+  virtualizer.value.scrollToIndex(next, { align: 'auto' })
+}
+
+function moveFileSelection(delta: number) {
+  const diffs = historyStore.selectedCommit?.diffs
+  if (!diffs || diffs.length === 0) return
+  const cur = historyStore.selectedFileDiffIndex
+  const next = Math.max(0, Math.min(diffs.length - 1, cur + delta))
+  if (next !== cur) onSelectFile(next)
+}
+
+function onKeyDown(e: KeyboardEvent) {
+  if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return
+  // 编辑元素（搜索框等）中按 ↑↓ 不拦截
+  const t = e.target as HTMLElement | null
+  if (t) {
+    const tag = t.tagName
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || t.isContentEditable) return
+  }
+  // 只在 history 路由可见时响应
+  if (!repoStore.activeRepoId) return
+
+  const delta = e.key === 'ArrowDown' ? 1 : -1
+  if (activePane.value === 'commits') {
+    moveCommitSelection(delta)
+  } else {
+    moveFileSelection(delta)
+  }
+  e.preventDefault()
+}
+
+onMounted(() => {
+  window.addEventListener('keydown', onKeyDown)
+})
+onUnmounted(() => {
+  window.removeEventListener('keydown', onKeyDown)
+})
 </script>
 
 <template>
@@ -372,7 +433,7 @@ function startColResize(e: PointerEvent, col: ColKey) {
         <CommitInfoPanel
           :commit="historyStore.selectedCommit"
           :selected-file-idx="historyStore.selectedFileDiffIndex"
-          @select-file="historyStore.selectFileDiff"
+          @select-file="onSelectFile"
         />
       </div>
 
