@@ -81,14 +81,116 @@ const currentDiff = computed(() => {
 // ── Search / filter ──────────────────────────────────────────────────
 const searchQuery = ref('')
 
-// ── Layout mode (horizontal = diff 在右; vertical = diff 在下) ────────
-const LAYOUT_KEY = 'gitui.history.layout'
-const layoutMode = ref<'horizontal' | 'vertical'>(
-  (localStorage.getItem(LAYOUT_KEY) as 'horizontal' | 'vertical') || 'vertical'
-)
+// ── Persisted sizes (layout + pane splits + column widths) ───────────
+const SIZES_KEY = 'gitui.history.sizes'
+interface SavedSizes {
+  layoutMode: 'horizontal' | 'vertical'
+  commitPanePct: number     // horizontal: commit-panel 宽度百分比
+  infoPanePct: number       // vertical: info-pane 宽度百分比
+  hashColW: number
+  authorColW: number
+  dateColW: number
+}
+function loadSizes(): Partial<SavedSizes> {
+  try { return JSON.parse(localStorage.getItem(SIZES_KEY) ?? '{}') } catch { return {} }
+}
+const saved = loadSizes()
+
+const layoutMode = ref<'horizontal' | 'vertical'>(saved.layoutMode ?? 'vertical')
+const commitPanePct = ref<number>(saved.commitPanePct ?? 55)
+const infoPanePct = ref<number>(saved.infoPanePct ?? 38)
+const hashColW = ref<number>(saved.hashColW ?? 64)
+const authorColW = ref<number>(saved.authorColW ?? 96)
+const dateColW = ref<number>(saved.dateColW ?? 80)
+
+function persistSizes() {
+  const data: SavedSizes = {
+    layoutMode: layoutMode.value,
+    commitPanePct: commitPanePct.value,
+    infoPanePct: infoPanePct.value,
+    hashColW: hashColW.value,
+    authorColW: authorColW.value,
+    dateColW: dateColW.value,
+  }
+  localStorage.setItem(SIZES_KEY, JSON.stringify(data))
+}
+
 function toggleLayout() {
   layoutMode.value = layoutMode.value === 'horizontal' ? 'vertical' : 'horizontal'
-  localStorage.setItem(LAYOUT_KEY, layoutMode.value)
+  persistSizes()
+}
+
+// ── Content area grid style ──────────────────────────────────────────
+const contentAreaRef = ref<HTMLElement | null>(null)
+const contentGridStyle = computed(() => {
+  if (layoutMode.value === 'horizontal') {
+    return {
+      gridTemplateColumns: `${commitPanePct.value}% 1fr`,
+      gridTemplateRows: 'minmax(0, 1fr) 230px',
+    }
+  }
+  return {
+    gridTemplateColumns: `${infoPanePct.value}% 1fr`,
+    gridTemplateRows: 'minmax(0, 55%) minmax(0, 45%)',
+  }
+})
+
+// ── Pane resize (horizontal: commit|right, vertical: info|diff) ──────
+function startPaneResize(e: PointerEvent) {
+  e.preventDefault()
+  const container = contentAreaRef.value
+  if (!container) return
+  const rect = container.getBoundingClientRect()
+  const onMove = (ev: PointerEvent) => {
+    const pct = ((ev.clientX - rect.left) / rect.width) * 100
+    const clamped = Math.max(20, Math.min(80, pct))
+    if (layoutMode.value === 'horizontal') commitPanePct.value = clamped
+    else infoPanePct.value = clamped
+  }
+  const onUp = () => {
+    window.removeEventListener('pointermove', onMove)
+    window.removeEventListener('pointerup', onUp)
+    document.body.style.cursor = ''
+    document.body.style.userSelect = ''
+    persistSizes()
+  }
+  window.addEventListener('pointermove', onMove)
+  window.addEventListener('pointerup', onUp)
+  document.body.style.cursor = 'col-resize'
+  document.body.style.userSelect = 'none'
+}
+
+// ── Column resize (hash / author / date) ─────────────────────────────
+type ColKey = 'hash' | 'author' | 'date'
+const COL_LIMITS: Record<ColKey, [number, number]> = {
+  hash: [48, 200],
+  author: [60, 240],
+  date: [60, 200],
+}
+function startColResize(e: PointerEvent, col: ColKey) {
+  e.preventDefault()
+  e.stopPropagation()
+  const startX = e.clientX
+  const refMap = { hash: hashColW, author: authorColW, date: dateColW }
+  const target = refMap[col]
+  const startW = target.value
+  const [min, max] = COL_LIMITS[col]
+  const onMove = (ev: PointerEvent) => {
+    // 拖 handle 向左缩小本列：handle 在列的右边缘
+    const delta = ev.clientX - startX
+    target.value = Math.max(min, Math.min(max, startW + delta))
+  }
+  const onUp = () => {
+    window.removeEventListener('pointermove', onMove)
+    window.removeEventListener('pointerup', onUp)
+    document.body.style.cursor = ''
+    document.body.style.userSelect = ''
+    persistSizes()
+  }
+  window.addEventListener('pointermove', onMove)
+  window.addEventListener('pointerup', onUp)
+  document.body.style.cursor = 'col-resize'
+  document.body.style.userSelect = 'none'
 }
 </script>
 
@@ -131,16 +233,30 @@ function toggleLayout() {
     </div>
 
     <!-- Content area -->
-    <div class="content-area" :class="'layout-' + layoutMode">
+    <div
+      class="content-area"
+      :class="'layout-' + layoutMode"
+      :style="contentGridStyle"
+      ref="contentAreaRef"
+    >
       <!-- Commit graph + list -->
       <div class="commit-panel">
         <!-- Column headers -->
         <div class="col-header">
           <div class="col-graph" :style="{ width: graphColWidth + 'px' }"></div>
           <div class="col-message">提交信息</div>
-          <div class="col-hash">哈希</div>
-          <div class="col-author">作者</div>
-          <div class="col-date">日期</div>
+          <div class="col-hash header-col" :style="{ width: hashColW + 'px' }">
+            哈希
+            <div class="col-resize" @pointerdown="startColResize($event, 'hash')" />
+          </div>
+          <div class="col-author header-col" :style="{ width: authorColW + 'px' }">
+            作者
+            <div class="col-resize" @pointerdown="startColResize($event, 'author')" />
+          </div>
+          <div class="col-date header-col" :style="{ width: dateColW + 'px' }">
+            日期
+            <div class="col-resize" @pointerdown="startColResize($event, 'date')" />
+          </div>
         </div>
 
         <!-- Virtual list body -->
@@ -188,13 +304,13 @@ function toggleLayout() {
               </div>
 
               <!-- Hash column -->
-              <div class="col-hash">{{ historyStore.commits[vRow.index]?.short_oid }}</div>
+              <div class="col-hash" :style="{ width: hashColW + 'px' }">{{ historyStore.commits[vRow.index]?.short_oid }}</div>
 
               <!-- Author column -->
-              <div class="col-author">{{ historyStore.commits[vRow.index]?.author_name }}</div>
+              <div class="col-author" :style="{ width: authorColW + 'px' }">{{ historyStore.commits[vRow.index]?.author_name }}</div>
 
               <!-- Date column -->
-              <div class="col-date">{{ formatTime(historyStore.commits[vRow.index]?.time ?? 0) }}</div>
+              <div class="col-date" :style="{ width: dateColW + 'px' }">{{ formatTime(historyStore.commits[vRow.index]?.time ?? 0) }}</div>
             </div>
           </div>
 
@@ -227,6 +343,15 @@ function toggleLayout() {
           @select-file="historyStore.selectFileDiff"
         />
       </div>
+
+      <!-- Pane resize handle (horizontal: commit|right; vertical: info|diff) -->
+      <div
+        class="pane-resize"
+        :style="layoutMode === 'horizontal'
+          ? { left: commitPanePct + '%', top: 0, bottom: 0 }
+          : { left: infoPanePct + '%', top: '55%', bottom: 0 }"
+        @pointerdown="startPaneResize"
+      />
     </div>
   </div>
 
@@ -327,12 +452,11 @@ function toggleLayout() {
   display: grid;
   overflow: hidden;
   min-height: 0;
+  position: relative;
 }
 
 /* 左右布局：commits 占左列满高；右列上 diff 下 info */
 .content-area.layout-horizontal {
-  grid-template-columns: minmax(300px, 55%) 1fr;
-  grid-template-rows: minmax(0, 1fr) 230px;
   grid-template-areas:
     "commits diff"
     "commits info";
@@ -343,8 +467,6 @@ function toggleLayout() {
 
 /* 上下布局：上 commits 占满宽；下 左 info 右 diff */
 .content-area.layout-vertical {
-  grid-template-columns: minmax(280px, 38%) 1fr;
-  grid-template-rows: minmax(0, 55%) minmax(0, 45%);
   grid-template-areas:
     "commits commits"
     "info diff";
@@ -358,6 +480,21 @@ function toggleLayout() {
 .content-area.layout-vertical .info-pane :deep(.commit-info-panel),
 .content-area.layout-vertical .info-pane :deep(.panel-empty) {
   border-top: none;
+}
+
+/* Pane resize handle (左右拖动主分隔条) */
+.pane-resize {
+  position: absolute;
+  width: 6px;
+  transform: translateX(-3px);
+  cursor: col-resize;
+  z-index: 15;
+  background: transparent;
+  transition: background 0.15s;
+}
+.pane-resize:hover,
+.pane-resize:active {
+  background: rgba(138, 173, 244, 0.3);
 }
 
 /* Grid 区域映射 */
@@ -437,16 +574,17 @@ function toggleLayout() {
 }
 
 .col-hash {
-  width: 64px;
   flex-shrink: 0;
   font-family: 'SF Mono', monospace;
   font-size: 11px;
   color: var(--accent-blue);
   padding: 0 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .col-author {
-  width: 96px;
   flex-shrink: 0;
   font-size: 11px;
   color: var(--text-secondary);
@@ -457,12 +595,36 @@ function toggleLayout() {
 }
 
 .col-date {
-  width: 80px;
   flex-shrink: 0;
   font-size: 11px;
   color: var(--text-muted);
   padding: 0 8px;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Header column wrappers — relative for resize handle */
+.header-col {
+  position: relative;
+}
+
+/* Column resize handle (列头右边缘) */
+.col-resize {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 6px;
+  transform: translateX(3px);
+  cursor: col-resize;
+  z-index: 5;
+  background: transparent;
+  transition: background 0.15s;
+}
+.col-resize:hover,
+.col-resize:active {
+  background: rgba(138, 173, 244, 0.3);
 }
 
 .commit-msg {
