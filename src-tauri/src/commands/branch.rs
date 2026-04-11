@@ -52,3 +52,17 @@ pub async fn delete_branch(
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
     GitEngine::delete_branch(&meta.path, &name)
 }
+
+#[tauri::command]
+pub async fn checkout_remote_branch(
+    repo_id: String,
+    remote_branch: String,
+    local_name: String,
+    track: bool,
+    repo_manager: State<'_, RepoManager>,
+) -> Result<(), GitError> {
+    let meta = repo_manager
+        .get_meta(&repo_id)
+        .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
+    GitEngine::checkout_remote_branch(&meta.path, &remote_branch, &local_name, track)
+}

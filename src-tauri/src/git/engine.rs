@@ -461,19 +461,31 @@ impl GitEngine {
             let name = branch.name()?.unwrap_or("").to_string();
             let is_remote = branch_type == BranchType::Remote;
             let is_head = !is_remote && head_name.as_deref() == Some(name.as_str());
-            let upstream = if !is_remote {
-                branch
-                    .upstream()
-                    .ok()
-                    .and_then(|u| u.name().ok().flatten().map(|s| s.to_string()))
+
+            // 对本地分支尝试获取上游分支信息
+            let upstream_branch = if !is_remote { branch.upstream().ok() } else { None };
+            let upstream = upstream_branch
+                .as_ref()
+                .and_then(|u| u.name().ok().flatten().map(|s| s.to_string()));
+
+            let local_oid = branch.get().peel_to_commit().ok().map(|c| c.id());
+            let commit_oid = local_oid.map(|o| o.to_string());
+
+            // 计算 ahead/behind（仅本地 && 有上游）
+            let (ahead, behind) = if let (Some(local), Some(up)) =
+                (local_oid, upstream_branch.as_ref())
+            {
+                match up.get().peel_to_commit() {
+                    Ok(upstream_commit) => match repo.graph_ahead_behind(local, upstream_commit.id())
+                    {
+                        Ok((a, b)) => (Some(a as u32), Some(b as u32)),
+                        Err(_) => (None, None),
+                    },
+                    Err(_) => (None, None),
+                }
             } else {
-                None
+                (None, None)
             };
-            let commit_oid = branch
-                .get()
-                .peel_to_commit()
-                .ok()
-                .map(|c| c.id().to_string());
 
             branches.push(BranchInfo {
                 name,
@@ -481,10 +493,52 @@ impl GitEngine {
                 is_head,
                 upstream,
                 commit_oid,
+                ahead,
+                behind,
             });
         }
 
         Ok(branches)
+    }
+
+    /// 基于远端分支的 commit 创建本地分支、可选设置上游并 checkout
+    pub fn checkout_remote_branch(
+        path: &str,
+        remote_branch: &str,
+        local_name: &str,
+        track: bool,
+    ) -> GitResult<()> {
+        let repo = Self::open(path)?;
+
+        // 找到远端分支并取得其 commit
+        let remote_ref = repo
+            .find_branch(remote_branch, BranchType::Remote)
+            .map_err(|e| GitError::OperationFailed(format!("找不到远端分支 {}: {}", remote_branch, e.message())))?;
+        let commit = remote_ref
+            .get()
+            .peel_to_commit()
+            .map_err(|e| GitError::OperationFailed(e.message().to_string()))?;
+
+        // 创建本地分支（若已存在则报错）
+        let mut new_branch = repo
+            .branch(local_name, &commit, false)
+            .map_err(|e| GitError::OperationFailed(format!("创建本地分支失败: {}", e.message())))?;
+
+        // 设置上游跟踪
+        if track {
+            new_branch
+                .set_upstream(Some(remote_branch))
+                .map_err(|e| GitError::OperationFailed(format!("设置上游失败: {}", e.message())))?;
+        }
+
+        // checkout
+        let refname = format!("refs/heads/{}", local_name);
+        let obj = repo
+            .revparse_single(&refname)
+            .map_err(|e| GitError::OperationFailed(e.message().to_string()))?;
+        repo.checkout_tree(&obj, None)?;
+        repo.set_head(&refname)?;
+        Ok(())
     }
 
     pub fn create_branch(path: &str, name: &str, from_oid: Option<&str>) -> GitResult<()> {

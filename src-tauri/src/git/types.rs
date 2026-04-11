@@ -55,6 +55,10 @@ pub struct BranchInfo {
     pub is_head: bool,
     pub upstream: Option<String>,
     pub commit_oid: Option<String>,
+    /// 本地分支相对上游的领先提交数（无上游时为 None）
+    pub ahead: Option<u32>,
+    /// 本地分支相对上游的落后提交数（无上游时为 None）
+    pub behind: Option<u32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

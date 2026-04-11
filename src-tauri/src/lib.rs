@@ -41,6 +41,7 @@ pub fn run() {
             create_branch,
             switch_branch,
             delete_branch,
+            checkout_remote_branch,
             // Remote
             fetch_remote,
             push_branch,

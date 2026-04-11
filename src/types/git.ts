@@ -39,6 +39,8 @@ export interface BranchInfo {
   is_head: boolean
   upstream?: string
   commit_oid?: string
+  ahead?: number
+  behind?: number
 }
 
 export interface DiffLine {

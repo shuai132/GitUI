@@ -67,6 +67,19 @@ export function useGitCommands() {
   const deleteBranch = (repoId: string, name: string) =>
     invoke<void>('delete_branch', { repoId, name })
 
+  const checkoutRemoteBranch = (
+    repoId: string,
+    remoteBranch: string,
+    localName: string,
+    track: boolean,
+  ) =>
+    invoke<void>('checkout_remote_branch', {
+      repoId,
+      remoteBranch,
+      localName,
+      track,
+    })
+
   // ---- Remote ----
   const fetchRemote = (repoId: string, remoteName: string) =>
     invoke<void>('fetch_remote', { repoId, remoteName })
@@ -98,6 +111,7 @@ export function useGitCommands() {
     createBranch,
     switchBranch,
     deleteBranch,
+    checkoutRemoteBranch,
     fetchRemote,
     pushBranch,
     pullBranch,
