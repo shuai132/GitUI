@@ -5,7 +5,8 @@ mod tray;
 mod watcher;
 
 use commands::{
-    branch::*, commit::*, diff::*, log::*, remote::*, repo::*, status::*, submodule::*,
+    branch::*, commit::*, diff::*, log::*, remote::*, repo::*, stash::*, status::*, submodule::*,
+    system::*,
 };
 use repo_manager::RepoManager;
 use tauri::WindowEvent;
@@ -33,6 +34,7 @@ pub fn run() {
             unstage_all,
             // Commit
             create_commit,
+            amend_commit,
             checkout_commit,
             cherry_pick_commit,
             revert_commit,
@@ -61,6 +63,14 @@ pub fn run() {
             set_submodule_url,
             submodule_workdir,
             deinit_submodule,
+            // Stash
+            stash_push,
+            stash_pop,
+            stash_list,
+            // System
+            open_terminal,
+            discard_all_changes,
+            discard_file,
         ])
         .setup(|app| {
             tray::setup_tray(&app.handle())?;

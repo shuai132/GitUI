@@ -1,13 +1,18 @@
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useVirtualizer } from '@tanstack/vue-virtual'
 import { useHistoryStore } from '@/stores/history'
 import { useRepoStore } from '@/stores/repos'
+import { useWorkspaceStore } from '@/stores/workspace'
+import { useDiffStore } from '@/stores/diff'
+import { useUiStore } from '@/stores/ui'
 import { formatTime } from '@/utils/format'
 import { LANE_W, ROW_H } from '@/utils/graph'
 import CommitGraphRow from '@/components/history/CommitGraphRow.vue'
+import WipRow from '@/components/history/WipRow.vue'
 import DiffView from '@/components/diff/DiffView.vue'
 import CommitInfoPanel from '@/components/history/CommitInfoPanel.vue'
+import WipPanel from '@/components/workspace/WipPanel.vue'
 import ContextMenu, { type ContextMenuItem } from '@/components/common/ContextMenu.vue'
 import CreateBranchDialog from '@/components/commit/CreateBranchDialog.vue'
 import CreateTagDialog from '@/components/commit/CreateTagDialog.vue'
@@ -15,6 +20,9 @@ import type { BranchInfo, CommitInfo } from '@/types/git'
 
 const historyStore = useHistoryStore()
 const repoStore = useRepoStore()
+const workspaceStore = useWorkspaceStore()
+const diffStore = useDiffStore()
+const uiStore = useUiStore()
 
 // ── 键盘导航焦点：最后一次点击过 commits / files 中的哪一个 ────────
 type ActivePane = 'commits' | 'files'
@@ -23,12 +31,40 @@ const activePane = ref<ActivePane>('commits')
 // ── 详情区（info + diff）显示状态（默认隐藏，点击提交后显示）────────
 const showDetail = ref(false)
 
+// ── 虚拟 WIP 行：工作副本有变更时显示在列表顶部 ────────────────────
+const showWipRow = computed(() => {
+  const s = workspaceStore.status
+  if (!s) return false
+  return s.staged.length + s.unstaged.length + s.untracked.length > 0
+})
+
+// 当前是否选中的是 WIP 行（而不是某条 commit）
+const selectedWip = ref(false)
+
+// 虚拟行数 = 过滤后 commits + (WIP 行占 1 个，搜索时隐藏)
+const virtualRowCount = computed(() =>
+  filteredCommits.value.length + (!searchQuery.value.trim() && showWipRow.value ? 1 : 0),
+)
+
+// 真实 commit 索引 → 虚拟行索引
+function toVirtualIdx(realIdx: number): number {
+  return showWipRow.value ? realIdx + 1 : realIdx
+}
+
+// 虚拟行索引 → 真实 commit 索引（WIP 行返回 -1）
+function toRealIdx(virtualIdx: number): number {
+  if (showWipRow.value) {
+    return virtualIdx === 0 ? -1 : virtualIdx - 1
+  }
+  return virtualIdx
+}
+
 const scrollContainer = ref<HTMLElement | null>(null)
 
 // ── Virtual list ────────────────────────────────────────────────────
 const virtualizer = useVirtualizer(
   computed(() => ({
-    count: historyStore.commits.length,
+    count: virtualRowCount.value,
     getScrollElement: () => scrollContainer.value,
     estimateSize: () => ROW_H,
     overscan: 10,
@@ -73,12 +109,41 @@ const graphColWidth = computed(() => {
 const selectedOid = computed(() => historyStore.selectedCommit?.info.oid ?? null)
 
 const selectedCommitIndex = computed(() =>
-  historyStore.commits.findIndex((c) => c.oid === selectedOid.value)
+  filteredCommits.value.findIndex((c) => c.oid === selectedOid.value)
 )
 
-function selectRow(idx: number) {
-  const commit = historyStore.commits[idx]
+// 虚拟行层面的"选中行"索引：
+// - 选中 WIP 行 → 0（且 showWipRow）
+// - 选中真实 commit → toVirtualIdx(realIdx)
+// - 没选中 → -1
+const selectedVirtualIndex = computed(() => {
+  if (selectedWip.value && showWipRow.value) return 0
+  if (selectedCommitIndex.value >= 0) return toVirtualIdx(selectedCommitIndex.value)
+  return -1
+})
+
+function selectWipRow() {
+  if (selectedWip.value) {
+    // 再次点击 WIP 行 → 折叠详情
+    showDetail.value = !showDetail.value
+    return
+  }
+  selectedWip.value = true
+  historyStore.selectedCommit = null
+  showDetail.value = true
+  activePane.value = 'commits'
+}
+
+function selectRow(virtualIdx: number) {
+  if (showWipRow.value && virtualIdx === 0) {
+    selectWipRow()
+    return
+  }
+  const realIdx = toRealIdx(virtualIdx)
+  const commit = historyStore.commits[realIdx]
   if (!commit) return
+  // 切换到普通 commit：清除 WIP 选中
+  selectedWip.value = false
   if (commit.oid === selectedOid.value) {
     showDetail.value = !showDetail.value
   } else {
@@ -88,8 +153,10 @@ function selectRow(idx: number) {
   activePane.value = 'commits'
 }
 
-function isSelected(idx: number): boolean {
-  return historyStore.commits[idx]?.oid === selectedOid.value
+function isSelected(virtualIdx: number): boolean {
+  if (showWipRow.value && virtualIdx === 0) return selectedWip.value
+  const realIdx = toRealIdx(virtualIdx)
+  return historyStore.commits[realIdx]?.oid === selectedOid.value
 }
 
 function onSelectFile(idx: number) {
@@ -98,14 +165,36 @@ function onSelectFile(idx: number) {
 }
 
 // ── Current diff ─────────────────────────────────────────────────────
+// 选中 WIP 时显示工作区 diff（diffStore.currentDiff）；
+// 选中普通 commit 时显示 commit 内的文件 diff。
 const currentDiff = computed(() => {
+  if (selectedWip.value) return diffStore.currentDiff
   const commit = historyStore.selectedCommit
   if (!commit) return null
   return commit.diffs[historyStore.selectedFileDiffIndex] ?? null
 })
 
+// 工作副本从"有变更"变回"无变更"时自动取消 WIP 选中 + 隐藏面板
+watch(showWipRow, (has) => {
+  if (!has && selectedWip.value) {
+    selectedWip.value = false
+    showDetail.value = false
+  }
+})
+
 // ── Search / filter ──────────────────────────────────────────────────
 const searchQuery = ref('')
+
+const filteredCommits = computed(() => {
+  const q = searchQuery.value.trim().toLowerCase()
+  if (!q) return historyStore.commits
+  return historyStore.commits.filter(c =>
+    c.summary.toLowerCase().includes(q) ||
+    c.author_name.toLowerCase().includes(q) ||
+    c.short_oid.toLowerCase().startsWith(q) ||
+    c.oid.toLowerCase().startsWith(q)
+  )
+})
 
 // ── Persisted sizes (layout + pane splits + column widths) ───────────
 const SIZES_KEY = 'gitui.history.sizes'
@@ -261,14 +350,14 @@ function startColResize(e: PointerEvent, col: ColKey) {
 }
 
 // ── 键盘 ↑↓ 在当前激活的 pane 中切换条目 ─────────────────────────────
+// 把 WIP 行视为虚拟索引 0。real commits 占虚拟索引 (showWipRow ? 1 : 0)...count-1。
 function moveCommitSelection(delta: number) {
-  const len = historyStore.commits.length
-  if (len === 0) return
-  const cur = selectedCommitIndex.value
-  const next = cur < 0 ? 0 : Math.max(0, Math.min(len - 1, cur + delta))
+  const total = virtualRowCount.value
+  if (total === 0) return
+  const cur = selectedVirtualIndex.value
+  const next = cur < 0 ? 0 : Math.max(0, Math.min(total - 1, cur + delta))
   if (next === cur) return
   selectRow(next)
-  // 让被选中的行滚入视野（tanstack virtualizer 的能力）
   virtualizer.value.scrollToIndex(next, { align: 'auto' })
 }
 
@@ -350,6 +439,7 @@ function onCommitContextMenu(e: MouseEvent, commit: CommitInfo | undefined) {
   commitMenu.y = e.clientY
   commitMenu.visible = true
   // 右键同时选中此提交（符合直觉）
+  selectedWip.value = false
   historyStore.selectCommit(commit.oid)
 }
 
@@ -419,6 +509,22 @@ async function onCommitMenuAction(action: string) {
   }
 }
 
+// ── 搜索框聚焦：响应 AppToolbar Search 按钮 ─────────────────────────
+const searchInputEl = ref<HTMLInputElement | null>(null)
+watch(
+  () => uiStore.searchFocusTick,
+  async () => {
+    await nextTick()
+    searchInputEl.value?.focus()
+    searchInputEl.value?.select()
+  },
+)
+
+// ── WIP 行文件 diff：离开 WIP 模式时清掉 diff store 里的工作区 diff ───
+watch(selectedWip, (v) => {
+  if (!v) diffStore.clear()
+})
+
 onMounted(() => {
   window.addEventListener('keydown', onKeyDown)
 })
@@ -431,21 +537,16 @@ onUnmounted(() => {
   <div class="history-view" v-if="repoStore.activeRepoId">
     <!-- Top toolbar -->
     <div class="history-toolbar">
-      <select class="filter-select">
-        <option>所有分支</option>
-      </select>
-      <select class="filter-select">
-        <option>显示远程分支</option>
-        <option>隐藏远程分支</option>
-      </select>
-      <select class="filter-select">
-        <option>所有远端</option>
-      </select>
       <div class="search-box">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
         </svg>
-        <input v-model="searchQuery" class="search-input" placeholder="搜索提交..." />
+        <input
+          ref="searchInputEl"
+          v-model="searchQuery"
+          class="search-input"
+          placeholder="搜索提交..."
+        />
       </div>
 
       <!-- Layout toggle -->
@@ -503,54 +604,85 @@ onUnmounted(() => {
             v-else
             :style="{ height: virtualizer.getTotalSize() + 'px', position: 'relative' }"
           >
-            <div
-              v-for="vRow in virtualizer.getVirtualItems()"
-              :key="vRow.index"
-              class="commit-row"
-              :class="{ selected: isSelected(vRow.index) }"
-              :style="{
-                position: 'absolute',
-                top: vRow.start + 'px',
-                height: ROW_H + 'px',
-                width: '100%',
-              }"
-              @click="selectRow(vRow.index)"
-              @contextmenu="onCommitContextMenu($event, historyStore.commits[vRow.index])"
-            >
-              <!-- Graph column -->
-              <div class="col-graph" :style="{ width: graphColWidth + 'px' }">
-                <CommitGraphRow
-                  v-if="historyStore.graphRows[vRow.index]"
-                  :row="historyStore.graphRows[vRow.index]"
-                  :is-selected="isSelected(vRow.index)"
+            <template v-for="vRow in virtualizer.getVirtualItems()" :key="vRow.index">
+              <!-- Virtual WIP row (index 0 when working copy has changes) -->
+              <div
+                v-if="showWipRow && vRow.index === 0"
+                class="commit-row wip-row"
+                :class="{ selected: selectedWip }"
+                :style="{
+                  position: 'absolute',
+                  top: vRow.start + 'px',
+                  height: ROW_H + 'px',
+                  width: '100%',
+                }"
+                @click="selectWipRow"
+              >
+                <WipRow
+                  :unstaged-count="workspaceStore.status?.unstaged.length ?? 0"
+                  :untracked-count="workspaceStore.status?.untracked.length ?? 0"
+                  :staged-count="workspaceStore.status?.staged.length ?? 0"
+                  :branch-name="workspaceStore.status?.head_branch ?? 'HEAD'"
+                  :is-selected="selectedWip"
+                  :graph-col-width="graphColWidth"
                 />
+                <div class="col-hash" :style="{ width: hashColW + 'px' }">—</div>
+                <div class="col-author" :style="{ width: authorColW + 'px' }">—</div>
+                <div class="col-date" :style="{ width: dateColW + 'px' }">—</div>
               </div>
 
-              <!-- Message column with branch tags -->
-              <div class="col-message">
-                <span
-                  v-for="tag in branchTagMap.get(historyStore.commits[vRow.index]?.oid ?? '')"
-                  :key="tag.name"
-                  class="branch-tag"
-                  :style="{ color: branchTagColor(tag), borderColor: branchTagColor(tag) }"
-                >{{ tag.name }}</span>
-                <span class="commit-msg">{{ historyStore.commits[vRow.index]?.summary }}</span>
+              <!-- Regular commit row -->
+              <div
+                v-else
+                class="commit-row"
+                :class="{ selected: isSelected(vRow.index) }"
+                :style="{
+                  position: 'absolute',
+                  top: vRow.start + 'px',
+                  height: ROW_H + 'px',
+                  width: '100%',
+                }"
+                @click="selectRow(vRow.index)"
+                @contextmenu="onCommitContextMenu($event, filteredCommits[toRealIdx(vRow.index)])"
+              >
+                <!-- Graph column -->
+                <div class="col-graph" :style="{ width: graphColWidth + 'px' }">
+                  <CommitGraphRow
+                    v-if="!searchQuery.trim() && historyStore.graphRows[toRealIdx(vRow.index)]"
+                    :row="historyStore.graphRows[toRealIdx(vRow.index)]"
+                    :is-selected="isSelected(vRow.index)"
+                  />
+                </div>
+
+                <!-- Message column with branch tags -->
+                <div class="col-message">
+                  <span
+                    v-for="tag in branchTagMap.get(filteredCommits[toRealIdx(vRow.index)]?.oid ?? '')"
+                    :key="tag.name"
+                    class="branch-tag"
+                    :style="{ color: branchTagColor(tag), borderColor: branchTagColor(tag) }"
+                  >{{ tag.name }}</span>
+                  <span class="commit-msg">{{ filteredCommits[toRealIdx(vRow.index)]?.summary }}</span>
+                </div>
+
+                <!-- Hash column -->
+                <div class="col-hash" :style="{ width: hashColW + 'px' }">{{ filteredCommits[toRealIdx(vRow.index)]?.short_oid }}</div>
+
+                <!-- Author column -->
+                <div class="col-author" :style="{ width: authorColW + 'px' }">{{ filteredCommits[toRealIdx(vRow.index)]?.author_name }}</div>
+
+                <!-- Date column -->
+                <div class="col-date" :style="{ width: dateColW + 'px' }">{{ formatTime(filteredCommits[toRealIdx(vRow.index)]?.time ?? 0) }}</div>
               </div>
-
-              <!-- Hash column -->
-              <div class="col-hash" :style="{ width: hashColW + 'px' }">{{ historyStore.commits[vRow.index]?.short_oid }}</div>
-
-              <!-- Author column -->
-              <div class="col-author" :style="{ width: authorColW + 'px' }">{{ historyStore.commits[vRow.index]?.author_name }}</div>
-
-              <!-- Date column -->
-              <div class="col-date" :style="{ width: dateColW + 'px' }">{{ formatTime(historyStore.commits[vRow.index]?.time ?? 0) }}</div>
-            </div>
+            </template>
           </div>
 
           <!-- Load more indicators -->
           <div v-if="historyStore.loadingMore" class="list-hint">加载更多...</div>
-          <div v-if="!historyStore.hasMore && historyStore.commits.length > 0" class="list-hint dim">
+          <div v-if="searchQuery.trim()" class="list-hint dim">
+            找到 {{ filteredCommits.length }} 条（已加载 {{ historyStore.commits.length }} 条）
+          </div>
+          <div v-else-if="!historyStore.hasMore && historyStore.commits.length > 0" class="list-hint dim">
             共 {{ historyStore.commits.length }} 条
           </div>
         </div>
@@ -561,9 +693,11 @@ onUnmounted(() => {
         <DiffView :diff="currentDiff" @close="showDetail = false" />
       </div>
 
-      <!-- Commit info panel -->
+      <!-- Right info panel: WipPanel when WIP row selected, else CommitInfoPanel -->
       <div class="info-pane" v-if="showDetail">
+        <WipPanel v-if="selectedWip" />
         <CommitInfoPanel
+          v-else
           :commit="historyStore.selectedCommit"
           :selected-file-idx="historyStore.selectedFileDiffIndex"
           @select-file="onSelectFile"
@@ -648,22 +782,6 @@ onUnmounted(() => {
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
-}
-
-.filter-select {
-  background: var(--bg-surface);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  color: var(--text-secondary);
-  font-size: 11px;
-  font-family: inherit;
-  padding: 3px 6px;
-  cursor: pointer;
-  outline: none;
-}
-
-.filter-select:hover {
-  border-color: var(--text-muted);
 }
 
 .search-box {
@@ -830,6 +948,14 @@ onUnmounted(() => {
 
 .commit-row.selected {
   background: rgba(138, 173, 244, 0.12);
+}
+
+.commit-row.wip-row {
+  background: rgba(245, 169, 127, 0.04);
+}
+
+.commit-row.wip-row.selected {
+  background: rgba(245, 169, 127, 0.15);
 }
 
 /* ── Columns ─────────────────────────────────────────────────────── */

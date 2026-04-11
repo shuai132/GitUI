@@ -74,6 +74,25 @@ pub async fn reset_to_commit(
 }
 
 #[tauri::command]
+pub async fn amend_commit(
+    repo_id: String,
+    message: String,
+    repo_manager: State<'_, RepoManager>,
+) -> Result<String, GitError> {
+    let meta = repo_manager
+        .get_meta(&repo_id)
+        .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
+
+    if message.trim().is_empty() {
+        return Err(GitError::OperationFailed(
+            "Commit message cannot be empty".to_string(),
+        ));
+    }
+
+    GitEngine::amend_commit(&meta.path, &message)
+}
+
+#[tauri::command]
 pub async fn create_tag(
     repo_id: String,
     name: String,

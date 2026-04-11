@@ -36,8 +36,7 @@ const canSubmit = computed(
   () =>
     !!branchName.value.trim() &&
     !nameConflict.value &&
-    !submitting.value &&
-    !!props.commit,
+    !submitting.value,
 )
 
 // 弹窗打开时重置状态 + 自动聚焦
@@ -56,12 +55,13 @@ watch(
 )
 
 async function onSubmit() {
-  if (!canSubmit.value || !props.commit) return
+  if (!canSubmit.value) return
   const name = branchName.value.trim()
   submitting.value = true
   error.value = null
   try {
-    await historyStore.createBranch(name, props.commit.oid)
+    // commit=null → 基于当前 HEAD 创建分支
+    await historyStore.createBranch(name, props.commit?.oid)
     if (switchAfterCreate.value) {
       await historyStore.switchBranch(name)
     }
@@ -79,12 +79,20 @@ function onCancel() {
 </script>
 
 <template>
-  <Modal :visible="visible" title="在此提交上创建分支" width="460px" @close="onCancel">
+  <Modal
+    :visible="visible"
+    :title="commit ? '在此提交上创建分支' : '基于 HEAD 创建分支'"
+    width="460px"
+    @close="onCancel"
+  >
     <div v-if="commit" class="commit-hint">
       在提交
       <span class="hint-sha">{{ commit.short_oid }}</span>
       <span class="hint-summary">{{ commit.summary }}</span>
       上创建新分支
+    </div>
+    <div v-else class="commit-hint">
+      基于当前 HEAD 创建新分支
     </div>
 
     <div class="form-row">

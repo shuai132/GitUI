@@ -5,12 +5,7 @@ const router = createRouter({
   routes: [
     {
       path: '/',
-      redirect: '/workspace',
-    },
-    {
-      path: '/workspace',
-      name: 'workspace',
-      component: () => import('@/views/WorkspaceView.vue'),
+      redirect: '/history',
     },
     {
       path: '/history',

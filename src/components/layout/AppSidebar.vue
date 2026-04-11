@@ -3,7 +3,6 @@ import { computed, reactive, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useRepoStore } from '@/stores/repos'
 import { useHistoryStore } from '@/stores/history'
-import { useWorkspaceStore } from '@/stores/workspace'
 import { useSubmodulesStore } from '@/stores/submodules'
 import { buildBranchTree } from '@/utils/branchTree'
 import type { BranchInfo, SubmoduleInfo } from '@/types/git'
@@ -14,15 +13,7 @@ import EditSubmoduleDialog from '@/components/submodule/EditSubmoduleDialog.vue'
 
 const repoStore = useRepoStore()
 const historyStore = useHistoryStore()
-const workspaceStore = useWorkspaceStore()
 const submodulesStore = useSubmodulesStore()
-
-// Changed files badge count
-const changedCount = computed(() =>
-  (workspaceStore.status?.staged.length ?? 0) +
-  (workspaceStore.status?.unstaged.length ?? 0) +
-  (workspaceStore.status?.untracked.length ?? 0)
-)
 
 // Local branches
 const localBranches = computed(() =>
@@ -416,28 +407,6 @@ async function onSubmoduleClick(s: SubmoduleInfo) {
     </div>
 
     <div class="sidebar-scroll">
-      <!-- WORKSPACE section -->
-      <div class="section">
-        <div class="section-title">WORKSPACE</div>
-
-        <RouterLink to="/workspace" class="nav-item" active-class="nav-item--active">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-            <polyline points="14 2 14 8 20 8"/>
-          </svg>
-          <span>文件变更</span>
-          <span v-if="changedCount > 0" class="badge">{{ changedCount }}</span>
-        </RouterLink>
-
-        <RouterLink to="/history" class="nav-item" active-class="nav-item--active">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="10"/>
-            <polyline points="12 6 12 12 16 14"/>
-          </svg>
-          <span>历史</span>
-        </RouterLink>
-      </div>
-
       <!-- LOCAL BRANCHES section -->
       <div class="section" v-if="localBranches.length > 0 && repoStore.activeRepoId">
         <div class="section-title">LOCAL BRANCHES</div>

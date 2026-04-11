@@ -79,6 +79,12 @@ export interface LogPage {
   total_loaded: number
 }
 
+export interface StashEntry {
+  index: number
+  message: string
+  commit_oid: string
+}
+
 export type SubmoduleState =
   | 'uninitialized'
   | 'not_cloned'

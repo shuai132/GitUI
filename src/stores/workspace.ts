@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref, watch } from 'vue'
+import { ref } from 'vue'
 import type { WorkspaceStatus, FileEntry } from '@/types/git'
 import { useGitCommands } from '@/composables/useGitCommands'
 import { useRepoStore } from './repos'
@@ -75,6 +75,28 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     return oid
   }
 
+  async function amend(message: string) {
+    const repoStore = useRepoStore()
+    if (!repoStore.activeRepoId) return
+    const oid = await git.amendCommit(repoStore.activeRepoId, message)
+    await refresh()
+    return oid
+  }
+
+  async function discardAll() {
+    const repoStore = useRepoStore()
+    if (!repoStore.activeRepoId) return
+    await git.discardAllChanges(repoStore.activeRepoId)
+    await refresh()
+  }
+
+  async function discardFile(filePath: string) {
+    const repoStore = useRepoStore()
+    if (!repoStore.activeRepoId) return
+    await git.discardFile(repoStore.activeRepoId, filePath)
+    await refresh()
+  }
+
   function selectFile(file: FileEntry | null) {
     selectedFile.value = file
   }
@@ -90,6 +112,9 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     stageAll,
     unstageAll,
     commit,
+    amend,
+    discardAll,
+    discardFile,
     selectFile,
   }
 })

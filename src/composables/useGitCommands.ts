@@ -2,12 +2,12 @@ import { invoke } from '@tauri-apps/api/core'
 import type {
   RepoMeta,
   WorkspaceStatus,
-  CommitInfo,
   CommitDetail,
   LogPage,
   FileDiff,
   BranchInfo,
   SubmoduleInfo,
+  StashEntry,
 } from '@/types/git'
 
 export function useGitCommands() {
@@ -43,6 +43,9 @@ export function useGitCommands() {
   // ---- Commit ----
   const createCommit = (repoId: string, message: string) =>
     invoke<string>('create_commit', { repoId, message })
+
+  const amendCommit = (repoId: string, message: string) =>
+    invoke<string>('amend_commit', { repoId, message })
 
   const checkoutCommit = (repoId: string, oid: string) =>
     invoke<void>('checkout_commit', { repoId, oid })
@@ -135,6 +138,26 @@ export function useGitCommands() {
   const deinitSubmodule = (repoId: string, name: string) =>
     invoke<void>('deinit_submodule', { repoId, name })
 
+  // ---- Stash ----
+  const stashPush = (repoId: string, message?: string) =>
+    invoke<void>('stash_push', { repoId, message: message ?? null })
+
+  const stashPop = (repoId: string) =>
+    invoke<void>('stash_pop', { repoId })
+
+  const stashList = (repoId: string) =>
+    invoke<StashEntry[]>('stash_list', { repoId })
+
+  // ---- System ----
+  const openTerminal = (repoId: string) =>
+    invoke<void>('open_terminal', { repoId })
+
+  const discardAllChanges = (repoId: string) =>
+    invoke<void>('discard_all_changes', { repoId })
+
+  const discardFile = (repoId: string, filePath: string) =>
+    invoke<void>('discard_file', { repoId, filePath })
+
   return {
     openRepo,
     closeRepo,
@@ -146,6 +169,7 @@ export function useGitCommands() {
     stageAll,
     unstageAll,
     createCommit,
+    amendCommit,
     checkoutCommit,
     cherryPickCommit,
     revertCommit,
@@ -169,5 +193,11 @@ export function useGitCommands() {
     setSubmoduleUrl,
     submoduleWorkdir,
     deinitSubmodule,
+    stashPush,
+    stashPop,
+    stashList,
+    openTerminal,
+    discardAllChanges,
+    discardFile,
   }
 }

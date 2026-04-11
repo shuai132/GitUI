@@ -6,28 +6,42 @@ const props = defineProps<{
   files: FileEntry[]
   title: string
   emptyText?: string
+  /** 显示每行的快捷操作按钮（Stage / Unstage / Discard），用于 WipPanel */
+  showRowActions?: boolean
+  /** 被选中的文件路径（用于高亮） */
+  selectedPath?: string | null
 }>()
 
 const emit = defineEmits<{
   select: [file: FileEntry]
   toggle: [file: FileEntry]
   toggleAll: []
+  contextMenu: [event: MouseEvent, file: FileEntry]
 }>()
+
+function onRowContext(e: MouseEvent, file: FileEntry) {
+  if (!props.showRowActions) return
+  e.preventDefault()
+  emit('contextMenu', e, file)
+}
 </script>
 
 <template>
   <div class="file-list-section">
-    <div class="section-header" @click="emit('toggleAll')">
+    <div class="section-header">
       <span class="section-title">{{ title }}</span>
       <span class="section-count">{{ files.length }}</span>
+      <slot name="header-actions" />
     </div>
     <div class="file-entries">
       <div
         v-for="file in files"
         :key="file.path"
         class="file-entry"
+        :class="{ selected: selectedPath === file.path }"
         @click="emit('select', file)"
         @dblclick="emit('toggle', file)"
+        @contextmenu="onRowContext($event, file)"
       >
         <span
           class="status-badge"
@@ -39,6 +53,14 @@ const emit = defineEmits<{
             &nbsp;{{ file.path.substring(0, file.path.lastIndexOf('/')) }}
           </span>
         </span>
+        <button
+          v-if="showRowActions"
+          class="row-action"
+          :title="file.staged ? '取消暂存此文件' : '暂存此文件'"
+          @click.stop="emit('toggle', file)"
+        >
+          {{ file.staged ? '取消暂存' : '暂存' }}
+        </button>
       </div>
       <div v-if="files.length === 0" class="empty-hint">
         {{ emptyText ?? '无变更' }}
@@ -57,8 +79,8 @@ const emit = defineEmits<{
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 6px;
   padding: 5px 10px;
-  cursor: pointer;
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border);
   user-select: none;
@@ -87,10 +109,40 @@ const emit = defineEmits<{
   padding: 3px 10px;
   cursor: pointer;
   transition: background 0.1s;
+  position: relative;
 }
 
 .file-entry:hover {
   background: var(--bg-overlay);
+}
+
+.file-entry.selected {
+  background: rgba(138, 173, 244, 0.18);
+}
+
+.row-action {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 10px;
+  padding: 2px 6px;
+  margin-left: auto;
+  opacity: 0;
+  transition: opacity 0.1s, background 0.1s, color 0.1s;
+  flex-shrink: 0;
+}
+
+.file-entry:hover .row-action {
+  opacity: 1;
+}
+
+.row-action:hover {
+  background: var(--accent-blue);
+  color: var(--bg-primary);
+  border-color: var(--accent-blue);
 }
 
 .status-badge {

@@ -1,5 +1,5 @@
 use git2::{
-    BranchType, DiffFormat, DiffOptions, Repository, RepositoryState, ResetType,
+    BranchType, DiffFormat, DiffOptions, Repository, RepositoryState, ResetType, StashFlags,
     StatusOptions, SubmoduleIgnore, SubmoduleStatus,
 };
 use std::path::{Path, PathBuf};
@@ -998,6 +998,97 @@ impl GitEngine {
         }
         index.write()?;
 
+        Ok(())
+    }
+
+    // ── Stash ──────────────────────────────────────────────────────────
+
+    /// Stash 当前工作区（包含未暂存的变更和 untracked 文件）
+    pub fn stash_push(path: &str, message: Option<&str>) -> GitResult<()> {
+        let mut repo = Self::open(path)?;
+        let sig = repo.signature()?;
+        let flags = StashFlags::INCLUDE_UNTRACKED;
+        repo.stash_save2(&sig, message, Some(flags))?;
+        Ok(())
+    }
+
+    /// Pop 最新的 stash（index 0）
+    pub fn stash_pop(path: &str) -> GitResult<()> {
+        let mut repo = Self::open(path)?;
+        let mut has_any = false;
+        repo.stash_foreach(|_, _, _| {
+            has_any = true;
+            false // 第一条就够了
+        })?;
+        if !has_any {
+            return Err(GitError::OperationFailed("没有可 pop 的 stash".to_string()));
+        }
+        repo.stash_pop(0, None)?;
+        Ok(())
+    }
+
+    /// 列出所有 stash 条目
+    pub fn stash_list(path: &str) -> GitResult<Vec<StashEntry>> {
+        let mut repo = Self::open(path)?;
+        let mut out = Vec::new();
+        repo.stash_foreach(|index, msg, oid| {
+            out.push(StashEntry {
+                index,
+                message: msg.to_string(),
+                commit_oid: oid.to_string(),
+            });
+            true
+        })?;
+        Ok(out)
+    }
+
+    // ── Amend ──────────────────────────────────────────────────────────
+
+    /// 在当前 HEAD 上 amend 一次提交：用 index 里的 tree + 新 message 替换
+    /// HEAD commit。返回新 commit OID。
+    pub fn amend_commit(path: &str, message: &str) -> GitResult<String> {
+        let repo = Self::open(path)?;
+        if message.trim().is_empty() {
+            return Err(GitError::OperationFailed(
+                "提交信息不能为空".to_string(),
+            ));
+        }
+        let head = repo.head()?.peel_to_commit()?;
+        let sig = repo.signature()?;
+        let mut index = repo.index()?;
+        index.write()?;
+        let tree_oid = index.write_tree()?;
+        let tree = repo.find_tree(tree_oid)?;
+        let new_oid = head.amend(
+            Some("HEAD"),
+            Some(&sig),
+            Some(&sig),
+            None,
+            Some(message),
+            Some(&tree),
+        )?;
+        Ok(new_oid.to_string())
+    }
+
+    // ── Discard ────────────────────────────────────────────────────────
+
+    /// 丢弃所有工作区变更 + untracked 文件。保持 HEAD 不动。
+    /// 不删除 `.gitignore` 里的 ignored 文件。
+    pub fn discard_all_changes(path: &str) -> GitResult<()> {
+        let repo = Self::open(path)?;
+        let mut cb = git2::build::CheckoutBuilder::new();
+        cb.force().remove_untracked(true);
+        repo.checkout_head(Some(&mut cb))?;
+        Ok(())
+    }
+
+    /// 丢弃单个文件的工作区变更（恢复到 HEAD 版本）
+    /// 若是 untracked 文件，会被移除。
+    pub fn discard_file(path: &str, file_path: &str) -> GitResult<()> {
+        let repo = Self::open(path)?;
+        let mut cb = git2::build::CheckoutBuilder::new();
+        cb.force().remove_untracked(true).path(file_path);
+        repo.checkout_head(Some(&mut cb))?;
         Ok(())
     }
 
