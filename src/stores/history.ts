@@ -101,6 +101,22 @@ export const useHistoryStore = defineStore('history', () => {
     await loadBranches()
   }
 
+  async function checkoutRemoteBranch(
+    remoteBranch: string,
+    localName: string,
+    track: boolean,
+  ) {
+    const repoStore = useRepoStore()
+    if (!repoStore.activeRepoId) return
+    await git.checkoutRemoteBranch(
+      repoStore.activeRepoId,
+      remoteBranch,
+      localName,
+      track,
+    )
+    await Promise.all([loadLog(), loadBranches()])
+  }
+
   function reset() {
     commits.value = []
     branches.value = []
@@ -128,6 +144,7 @@ export const useHistoryStore = defineStore('history', () => {
     createBranch,
     switchBranch,
     deleteBranch,
+    checkoutRemoteBranch,
     reset,
   }
 })

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, reactive } from 'vue'
+import { computed, reactive, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useRepoStore } from '@/stores/repos'
 import { useHistoryStore } from '@/stores/history'
@@ -8,6 +8,7 @@ import { buildBranchTree } from '@/utils/branchTree'
 import type { BranchInfo } from '@/types/git'
 import BranchTreeNode from './BranchTreeNode.vue'
 import ContextMenu, { type ContextMenuItem } from '@/components/common/ContextMenu.vue'
+import CheckoutRemoteDialog from '@/components/branch/CheckoutRemoteDialog.vue'
 
 const repoStore = useRepoStore()
 const historyStore = useHistoryStore()
@@ -62,7 +63,19 @@ function onSelectRemoteBranch(_branch: BranchInfo) {
   // 远程分支点击暂不切换（需要经过"检出..."弹窗，Step 5 实现）
 }
 
-// ── 右键菜单 ─────────────────────────────────────────────────────────
+// ── 右键菜单 / 检出对话框 ────────────────────────────────────────────
+const remoteBranchesFlat = computed(() =>
+  historyStore.branches.filter((b) => b.is_remote),
+)
+
+const showCheckoutDialog = ref(false)
+const checkoutInitialRemote = ref<string | null>(null)
+
+function openCheckoutDialog(remoteBranchName: string) {
+  checkoutInitialRemote.value = remoteBranchName
+  showCheckoutDialog.value = true
+}
+
 const contextMenu = reactive({
   visible: false,
   x: 0,
@@ -114,8 +127,7 @@ async function onContextAction(action: string) {
         await historyStore.switchBranch(b.name)
         break
       case 'checkout-remote':
-        // Step 5 实现检出对话框
-        console.log('[TODO Step 5] 打开检出远程分支对话框:', b.name)
+        openCheckoutDialog(b.name)
         break
       case 'copy-name':
         await navigator.clipboard.writeText(b.name)
@@ -238,6 +250,14 @@ async function onContextAction(action: string) {
       :items="contextMenuItems"
       @close="closeContextMenu"
       @select="onContextAction"
+    />
+
+    <!-- Checkout remote branch dialog -->
+    <CheckoutRemoteDialog
+      :visible="showCheckoutDialog"
+      :remote-branches="remoteBranchesFlat"
+      :initial-remote="checkoutInitialRemote"
+      @close="showCheckoutDialog = false"
     />
   </aside>
 </template>
