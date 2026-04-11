@@ -697,11 +697,11 @@ onUnmounted(() => {
   position: relative;
 }
 
-/* 左右布局：commits 占左列满高；右列上 diff 下 info */
+/* 左右布局：commits 占左列满高；右列上 info 下 diff */
 .content-area.layout-horizontal {
   grid-template-areas:
-    "commits diff"
-    "commits info";
+    "commits info"
+    "commits diff";
 }
 .content-area.layout-horizontal .commit-panel {
   border-right: 1px solid var(--border);

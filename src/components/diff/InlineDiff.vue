@@ -1,12 +1,15 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import type { FileDiff } from '@/types/git'
+import { highlightLine } from '@/lib/highlight'
 
 const props = defineProps<{
   diff: FileDiff | null
   loading?: boolean
   /** true → 每个 hunk 独立成块，块间有空隙；false → 所有 hunk 连续显示 */
   groupByHunk: boolean
+  /** 语法高亮语言（null 表示关闭高亮） */
+  syntaxLang?: string | null
 }>()
 
 interface InlineRow {
@@ -163,7 +166,8 @@ defineExpose({ goNextChange, goPrevChange })
             <span class="sign">{{
               row.kind === 'del' ? '-' : row.kind === 'add' ? '+' : ' '
             }}</span>
-            <span class="code">{{ row.content }}</span>
+            <span v-if="syntaxLang" class="code" v-html="highlightLine(row.content, syntaxLang)" />
+            <span v-else class="code">{{ row.content }}</span>
           </template>
         </div>
       </div>
@@ -199,7 +203,8 @@ defineExpose({ goNextChange, goPrevChange })
             <span class="sign">{{
               row.kind === 'del' ? '-' : row.kind === 'add' ? '+' : ' '
             }}</span>
-            <span class="code">{{ row.content }}</span>
+            <span v-if="syntaxLang" class="code" v-html="highlightLine(row.content, syntaxLang)" />
+            <span v-else class="code">{{ row.content }}</span>
           </div>
         </template>
       </div>

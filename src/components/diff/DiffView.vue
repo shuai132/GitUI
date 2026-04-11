@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, computed, watch } from 'vue'
 import type { FileDiff } from '@/types/git'
 import SideBySideDiff from './SideBySideDiff.vue'
 import InlineDiff from './InlineDiff.vue'
+import { EXT_TO_LANG } from '@/lib/highlight'
 
-defineProps<{
+const props = defineProps<{
   diff: FileDiff | null
   loading?: boolean
 }>()
@@ -12,6 +13,7 @@ defineProps<{
 type ViewMode = 'side-by-side' | 'inline' | 'by-hunk'
 
 const VIEW_MODE_KEY = 'gitui.diff.viewMode'
+const HIGHLIGHT_KEY = 'gitui.diff.syntax-highlight'
 
 function loadViewMode(): ViewMode {
   const v = localStorage.getItem(VIEW_MODE_KEY)
@@ -20,8 +22,22 @@ function loadViewMode(): ViewMode {
 }
 
 const viewMode = ref<ViewMode>(loadViewMode())
+const highlightEnabled = ref(localStorage.getItem(HIGHLIGHT_KEY) !== 'false')
+
 watch(viewMode, (v) => {
   localStorage.setItem(VIEW_MODE_KEY, v)
+})
+
+function toggleHighlight() {
+  highlightEnabled.value = !highlightEnabled.value
+  localStorage.setItem(HIGHLIGHT_KEY, String(highlightEnabled.value))
+}
+
+const syntaxLang = computed<string | null>(() => {
+  if (!highlightEnabled.value || !props.diff) return null
+  const filePath = props.diff.new_path ?? props.diff.old_path ?? ''
+  const ext = filePath.split('.').pop()?.toLowerCase() ?? ''
+  return EXT_TO_LANG[ext] ?? null
 })
 
 // 子 diff 组件的引用（切换 viewMode 时 v-if 切换实例，ref 自动更新）
@@ -74,6 +90,21 @@ function onPrevChange() {
 
       <div class="toolbar-divider" />
 
+      <!-- 语法高亮开关 -->
+      <button
+        class="btn-icon"
+        :class="{ active: highlightEnabled }"
+        title="语法高亮"
+        @click="toggleHighlight"
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="16 18 22 12 16 6" />
+          <polyline points="8 6 2 12 8 18" />
+        </svg>
+      </button>
+
+      <div class="toolbar-divider" />
+
       <!-- 模式切换 -->
       <button
         class="btn-icon"
@@ -121,6 +152,7 @@ function onPrevChange() {
         ref="diffRef"
         :diff="diff"
         :loading="loading"
+        :syntax-lang="syntaxLang"
       />
       <InlineDiff
         v-else
@@ -128,6 +160,7 @@ function onPrevChange() {
         :diff="diff"
         :loading="loading"
         :group-by-hunk="viewMode === 'by-hunk'"
+        :syntax-lang="syntaxLang"
       />
     </div>
   </div>

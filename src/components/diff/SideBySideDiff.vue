@@ -1,10 +1,13 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import type { FileDiff, DiffLine } from '@/types/git'
+import { highlightLine } from '@/lib/highlight'
 
 const props = defineProps<{
   diff: FileDiff | null
   loading?: boolean
+  /** 语法高亮语言（null 表示关闭高亮） */
+  syntaxLang?: string | null
 }>()
 
 interface AlignedLine {
@@ -181,7 +184,8 @@ defineExpose({ goNextChange, goPrevChange })
             >
               <span class="ln">{{ row.left.lineNo ?? '' }}</span>
               <span class="sign">{{ row.left.kind === 'del' ? '-' : row.left.kind === 'ctx' ? ' ' : '' }}</span>
-              <span class="code">{{ row.left.content }}</span>
+              <span v-if="syntaxLang" class="code" v-html="highlightLine(row.left.content, syntaxLang)" />
+              <span v-else class="code">{{ row.left.content }}</span>
             </div>
           </div>
         </div>
@@ -202,7 +206,8 @@ defineExpose({ goNextChange, goPrevChange })
             >
               <span class="ln">{{ row.right.lineNo ?? '' }}</span>
               <span class="sign">{{ row.right.kind === 'add' ? '+' : row.right.kind === 'ctx' ? ' ' : '' }}</span>
-              <span class="code">{{ row.right.content }}</span>
+              <span v-if="syntaxLang" class="code" v-html="highlightLine(row.right.content, syntaxLang)" />
+              <span v-else class="code">{{ row.right.content }}</span>
             </div>
           </div>
         </div>
