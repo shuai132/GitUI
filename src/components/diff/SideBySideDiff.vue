@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import type { FileDiff, DiffLine } from '@/types/git'
 
 const props = defineProps<{
@@ -72,7 +72,24 @@ const alignedRows = computed((): AlignedRow[] => {
   return rows
 })
 
-const filePath = computed(() => props.diff?.new_path ?? props.diff?.old_path ?? '')
+// ── 双 pane：各自独立水平滚动，JS 同步垂直 scrollTop 维持行级对齐 ──
+const leftPaneRef = ref<HTMLElement | null>(null)
+const rightPaneRef = ref<HTMLElement | null>(null)
+// 防止 A → B 同步后触发 B 的 scroll 事件再回写 A 造成循环
+let syncSource: 'left' | 'right' | null = null
+
+function onScroll(source: 'left' | 'right') {
+  if (syncSource && syncSource !== source) return
+  const src = source === 'left' ? leftPaneRef.value : rightPaneRef.value
+  const dst = source === 'left' ? rightPaneRef.value : leftPaneRef.value
+  if (!src || !dst) return
+  if (dst.scrollTop === src.scrollTop) return
+  syncSource = source
+  dst.scrollTop = src.scrollTop
+  requestAnimationFrame(() => {
+    syncSource = null
+  })
+}
 </script>
 
 <template>
@@ -83,25 +100,47 @@ const filePath = computed(() => props.diff?.new_path ?? props.diff?.old_path ?? 
     <div v-else-if="diff.is_binary" class="sbs-state">二进制文件</div>
     <div v-else-if="diff.hunks.length === 0" class="sbs-state">无内容变更</div>
 
-    <!-- Side-by-side content: 每行是一个 flex row，左右两半共享同一 row，
-         保证左右严格同行对齐；body 是唯一的垂直滚动容器 -->
+    <!-- Side-by-side content：左右两个独立可水平滚动的 pane，
+         行级对齐由 JS 同步 scrollTop 保证 -->
     <template v-else>
       <div class="sbs-body">
         <div
-          v-for="(row, i) in alignedRows"
-          :key="i"
-          class="sbs-row"
+          class="sbs-pane"
+          ref="leftPaneRef"
+          @scroll="onScroll('left')"
         >
-          <div class="sbs-half" :class="'line-' + row.left.kind">
-            <span class="ln">{{ row.left.lineNo ?? '' }}</span>
-            <span class="sign">{{ row.left.kind === 'del' ? '-' : row.left.kind === 'ctx' ? ' ' : '' }}</span>
-            <span class="code">{{ row.left.content }}</span>
+          <div class="sbs-lines">
+            <div
+              v-for="(row, i) in alignedRows"
+              :key="'l' + i"
+              class="sbs-line"
+              :class="'line-' + row.left.kind"
+            >
+              <span class="ln">{{ row.left.lineNo ?? '' }}</span>
+              <span class="sign">{{ row.left.kind === 'del' ? '-' : row.left.kind === 'ctx' ? ' ' : '' }}</span>
+              <span class="code">{{ row.left.content }}</span>
+            </div>
           </div>
-          <div class="sbs-divider" />
-          <div class="sbs-half" :class="'line-' + row.right.kind">
-            <span class="ln">{{ row.right.lineNo ?? '' }}</span>
-            <span class="sign">{{ row.right.kind === 'add' ? '+' : row.right.kind === 'ctx' ? ' ' : '' }}</span>
-            <span class="code">{{ row.right.content }}</span>
+        </div>
+
+        <div class="sbs-divider" />
+
+        <div
+          class="sbs-pane"
+          ref="rightPaneRef"
+          @scroll="onScroll('right')"
+        >
+          <div class="sbs-lines">
+            <div
+              v-for="(row, i) in alignedRows"
+              :key="'r' + i"
+              class="sbs-line"
+              :class="'line-' + row.right.kind"
+            >
+              <span class="ln">{{ row.right.lineNo ?? '' }}</span>
+              <span class="sign">{{ row.right.kind === 'add' ? '+' : row.right.kind === 'ctx' ? ' ' : '' }}</span>
+              <span class="code">{{ row.right.content }}</span>
+            </div>
           </div>
         </div>
       </div>
@@ -129,27 +168,34 @@ const filePath = computed(() => props.diff?.new_path ?? props.diff?.old_path ?? 
 
 .sbs-body {
   flex: 1;
-  /* 唯一的垂直滚动容器，保证左右两侧同步滚动；长行由 .sbs-half 截断 */
-  overflow-y: auto;
-  overflow-x: hidden;
+  display: flex;
+  overflow: hidden;
   font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
   font-size: 12px;
   line-height: 18px;
 }
 
-.sbs-row {
-  display: flex;
-  align-items: stretch;
-  min-height: 18px;
-}
-
-.sbs-half {
+/* 每个 pane 是独立滚动容器，水平 + 垂直都可滚；
+   垂直由 JS 同步另一侧以保持行级对齐 */
+.sbs-pane {
   flex: 1 1 0;
   min-width: 0;
+  overflow: auto;
+}
+
+/* inline-block 的 wrapper 让宽度 = max(最长行自然宽度, pane 的 clientWidth)。
+   每个 .sbs-line 作为 block child 会自动拉伸到 wrapper 宽度，
+   这样即使 pane 水平滚动时，行背景色也能一直铺满整行。 */
+.sbs-lines {
+  display: inline-block;
+  min-width: 100%;
+}
+
+.sbs-line {
   display: flex;
   align-items: flex-start;
   white-space: pre;
-  overflow: hidden;
+  min-height: 18px;
 }
 
 .sbs-divider {
@@ -175,9 +221,11 @@ const filePath = computed(() => props.diff?.new_path ?? props.diff?.old_path ?? 
   user-select: none;
 }
 
+/* code 不使用 flex:1，按 content 自然宽度展开，让 .sbs-line 的
+   intrinsic width 能参与 wrapper 的 shrink-to-fit 计算，
+   从而让 wrapper 宽度能反映最长内容 */
 .code {
-  flex: 1;
-  overflow: hidden;
+  flex-shrink: 0;
   padding-right: 8px;
 }
 
