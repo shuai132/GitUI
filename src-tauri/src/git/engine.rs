@@ -248,13 +248,30 @@ impl GitEngine {
             }
         }
 
-        // ── Step B: 收集所有 stash 的 oid 集合
+        // ── Step B: 收集所有 stash 的 oid 集合，以及 stash 的辅助 parent
+        // （index / untracked 快照 commit），这些在用户视角里不该作为独立行出现。
         let mut stash_set: HashSet<git2::Oid> = HashSet::new();
         repo.stash_foreach(|_, _, oid| {
             stash_set.insert(*oid);
             true
         })
         .ok();
+
+        // stash commit 是 3-parent 的特殊对象：
+        //   parent[0] = HEAD（基准提交）
+        //   parent[1] = "index on <branch>" 快照
+        //   parent[2] = "untracked files on <branch>" 快照（INCLUDE_UNTRACKED 时）
+        // 后两者只是 git 存储细节，收集进 stash_aux_set 以便稍后过滤。
+        let mut stash_aux_set: HashSet<git2::Oid> = HashSet::new();
+        for stash_oid in stash_set.iter().copied().collect::<Vec<_>>() {
+            if let Ok(commit) = repo.find_commit(stash_oid) {
+                for (i, parent) in commit.parent_ids().enumerate() {
+                    if i > 0 {
+                        stash_aux_set.insert(parent);
+                    }
+                }
+            }
+        }
 
         // ── Step C: 主 revwalk —— 推所有 ref + 可选 stash + 可选 reflog
         let mut revwalk = repo.revwalk()?;
@@ -288,6 +305,10 @@ impl GitEngine {
 
         for oid_result in revwalk {
             let oid = oid_result?;
+            // 跳过 stash 的辅助 commit（index / untracked 快照），它们不作为独立行
+            if stash_aux_set.contains(&oid) {
+                continue;
+            }
             if idx < offset {
                 idx += 1;
                 continue;
@@ -297,10 +318,19 @@ impl GitEngine {
                 break;
             }
             let commit = repo.find_commit(oid)?;
-            let parent_oids = commit.parent_ids().map(|p| p.to_string()).collect();
-
             let is_stash = stash_set.contains(&oid);
             let is_unreachable = !is_stash && !reachable.contains(&oid);
+
+            // stash 在 DAG 中视作普通 1-parent commit：parent_oids 只保留 parent[0] (HEAD)
+            let parent_oids: Vec<String> = if is_stash {
+                commit
+                    .parent_ids()
+                    .next()
+                    .map(|p| vec![p.to_string()])
+                    .unwrap_or_default()
+            } else {
+                commit.parent_ids().map(|p| p.to_string()).collect()
+            };
 
             commits.push(CommitInfo {
                 oid: oid.to_string(),

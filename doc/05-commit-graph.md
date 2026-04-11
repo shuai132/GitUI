@@ -88,10 +88,12 @@ GRAPH_COLORS = [blue, orange, green, yellow, purple, red, sky, pink]
 
 `is_unreachable` / `is_stash` 由后端 `get_log` 在构造 `CommitInfo` 时标记，前端透传到 `GraphRow`：
 
-- Unreachable：`.commit-row.commit-dim` 整行文本变灰 + 斜体；图形部分颜色不变
-- Stash：`.commit-row.commit-stash` 的 message 变斜体 + 次要色；图形保留
+- Unreachable：`.commit-row.commit-dim` 整行文本变灰 + 斜体；圆点改为空心虚线灰框
+- Stash：message 变斜体 + 次要色；圆点改为"空心 + 分支色描边"的图标，和普通实心圆区分
 
-切换 toggle 会触发 `historyStore.loadLog` 重新走 revwalk，graph 也会重算。
+**Stash 在 lane 算法里被视作普通 1-parent commit**。git 原生 stash 对象是 3-parent（HEAD + index 快照 + untracked 快照），但后端 `get_log` 会把 `parent[1]`/`parent[2]` 对应的辅助 commit 从输出里剔除，并把 stash 的 `parent_oids` 裁成只剩 HEAD——详见 [10-stash-reflog.md](./10-stash-reflog.md#历史图里的-stash)。所以对 `computeGraphLayout` 来说，stash 和普通 commit 没有结构差异，只有渲染时圆点样式不同。
+
+切换 toggle（`showUnreachableCommits` / `showStashCommits`）会触发 `historyStore.loadLog` 重新走 revwalk，graph 也会重算。
 
 ## 关键决策
 
