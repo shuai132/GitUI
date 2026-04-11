@@ -20,6 +20,9 @@ const repoStore = useRepoStore()
 type ActivePane = 'commits' | 'files'
 const activePane = ref<ActivePane>('commits')
 
+// ── 详情区（info + diff）显示状态（默认隐藏，点击提交后显示）────────
+const showDetail = ref(false)
+
 const scrollContainer = ref<HTMLElement | null>(null)
 
 // ── Virtual list ────────────────────────────────────────────────────
@@ -75,7 +78,13 @@ const selectedCommitIndex = computed(() =>
 
 function selectRow(idx: number) {
   const commit = historyStore.commits[idx]
-  if (commit) historyStore.selectCommit(commit.oid)
+  if (!commit) return
+  if (commit.oid === selectedOid.value) {
+    showDetail.value = !showDetail.value
+  } else {
+    historyStore.selectCommit(commit.oid)
+    showDetail.value = true
+  }
   activePane.value = 'commits'
 }
 
@@ -146,15 +155,24 @@ function toggleLayout() {
 // ── Content area grid style ──────────────────────────────────────────
 const contentAreaRef = ref<HTMLElement | null>(null)
 const contentGridStyle = computed(() => {
+  if (!showDetail.value) {
+    return {
+      gridTemplateColumns: '1fr',
+      gridTemplateRows: '1fr',
+      gridTemplateAreas: '"commits"',
+    }
+  }
   if (layoutMode.value === 'horizontal') {
     return {
       gridTemplateColumns: `${commitPanePct.value}% 1fr`,
       gridTemplateRows: `${diffRowPct.value}% ${100 - diffRowPct.value}%`,
+      gridTemplateAreas: '"commits info" "commits diff"',
     }
   }
   return {
     gridTemplateColumns: `${infoPanePct.value}% 1fr`,
     gridTemplateRows: `${commitRowPct.value}% ${100 - commitRowPct.value}%`,
+    gridTemplateAreas: '"commits commits" "info diff"',
   }
 })
 
@@ -539,12 +557,12 @@ onUnmounted(() => {
       </div>
 
       <!-- Diff (三种模式由 DiffView 内部切换) -->
-      <div class="diff-area">
-        <DiffView :diff="currentDiff" />
+      <div class="diff-area" v-if="showDetail">
+        <DiffView :diff="currentDiff" @close="showDetail = false" />
       </div>
 
       <!-- Commit info panel -->
-      <div class="info-pane">
+      <div class="info-pane" v-if="showDetail">
         <CommitInfoPanel
           :commit="historyStore.selectedCommit"
           :selected-file-idx="historyStore.selectedFileDiffIndex"
@@ -554,6 +572,7 @@ onUnmounted(() => {
 
       <!-- Vertical resize handle (左右拖动) -->
       <div
+        v-if="showDetail"
         class="pane-resize"
         :style="layoutMode === 'horizontal'
           ? { left: commitPanePct + '%', top: 0, bottom: 0 }
@@ -563,6 +582,7 @@ onUnmounted(() => {
 
       <!-- Horizontal resize handle (上下拖动) -->
       <div
+        v-if="showDetail"
         class="pane-resize-h"
         :style="layoutMode === 'horizontal'
           ? { top: diffRowPct + '%', left: commitPanePct + '%', right: 0 }

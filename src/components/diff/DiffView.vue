@@ -10,6 +10,8 @@ const props = defineProps<{
   loading?: boolean
 }>()
 
+const emit = defineEmits<{ close: [] }>()
+
 type ViewMode = 'side-by-side' | 'inline' | 'by-hunk'
 
 const VIEW_MODE_KEY = 'gitui.diff.viewMode'
@@ -141,6 +143,16 @@ function onPrevChange() {
         <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
           <rect x="2" y="2" width="12" height="12" rx="1" />
           <line x1="8" y1="2" x2="8" y2="14" />
+        </svg>
+      </button>
+
+      <div class="toolbar-divider" />
+
+      <!-- 关闭 diff 面板 -->
+      <button class="btn-icon" title="关闭" @click="emit('close')">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <line x1="18" y1="6" x2="6" y2="18" />
+          <line x1="6" y1="6" x2="18" y2="18" />
         </svg>
       </button>
     </div>
