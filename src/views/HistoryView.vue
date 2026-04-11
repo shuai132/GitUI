@@ -192,11 +192,12 @@ function startRowResize(e: PointerEvent) {
 }
 
 // ── Column resize (hash / author / date) ─────────────────────────────
+// handle 在每列的左边缘：拖 handle 向右 → 本列缩小（分隔线右移，右列被挤）
 type ColKey = 'hash' | 'author' | 'date'
 const COL_LIMITS: Record<ColKey, [number, number]> = {
-  hash: [48, 200],
+  hash: [48, 240],
   author: [60, 240],
-  date: [60, 200],
+  date: [60, 240],
 }
 function startColResize(e: PointerEvent, col: ColKey) {
   e.preventDefault()
@@ -207,8 +208,8 @@ function startColResize(e: PointerEvent, col: ColKey) {
   const startW = target.value
   const [min, max] = COL_LIMITS[col]
   const onMove = (ev: PointerEvent) => {
-    // 拖 handle 向左缩小本列：handle 在列的右边缘
-    const delta = ev.clientX - startX
+    // handle 在列左边缘：向右拖 → 本列缩小（delta 取反）
+    const delta = startX - ev.clientX
     target.value = Math.max(min, Math.min(max, startW + delta))
   }
   const onUp = () => {
@@ -659,19 +660,20 @@ function startColResize(e: PointerEvent, col: ColKey) {
   text-overflow: ellipsis;
 }
 
-/* Header column wrappers — relative for resize handle */
+/* Header column wrappers — relative for resize handle, visible for overflow */
 .header-col {
   position: relative;
+  overflow: visible;
 }
 
-/* Column resize handle (列头右边缘) */
+/* Column resize handle (列头左边缘) */
 .col-resize {
   position: absolute;
   top: 0;
-  right: 0;
+  left: 0;
   bottom: 0;
   width: 6px;
-  transform: translateX(3px);
+  transform: translateX(-3px);
   cursor: col-resize;
   z-index: 5;
   background: transparent;
