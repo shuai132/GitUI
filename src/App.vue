@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { onMounted, watch } from 'vue'
-import { useRouter } from 'vue-router'
 import AppSidebar from '@/components/layout/AppSidebar.vue'
 import AppToolbar from '@/components/layout/AppToolbar.vue'
 import AppStatusBar from '@/components/layout/AppStatusBar.vue'
@@ -12,8 +11,12 @@ import { useGitEvents } from '@/composables/useGitEvents'
 const repoStore = useRepoStore()
 const workspaceStore = useWorkspaceStore()
 const historyStore = useHistoryStore()
-const router = useRouter()
 const { onStatusChanged } = useGitEvents()
+
+// 启动时从持久化存储恢复仓库列表
+onMounted(() => {
+  repoStore.loadPersisted()
+})
 
 // Listen for file system changes and refresh status
 onStatusChanged((repoId) => {
