@@ -87,6 +87,8 @@ interface SavedSizes {
   layoutMode: 'horizontal' | 'vertical'
   commitPanePct: number     // horizontal: commit-panel 宽度百分比
   infoPanePct: number       // vertical: info-pane 宽度百分比
+  diffRowPct: number        // horizontal: diff-area 高度百分比（上下分隔）
+  commitRowPct: number      // vertical: commit-panel 高度百分比（上下分隔）
   hashColW: number
   authorColW: number
   dateColW: number
@@ -99,6 +101,8 @@ const saved = loadSizes()
 const layoutMode = ref<'horizontal' | 'vertical'>(saved.layoutMode ?? 'vertical')
 const commitPanePct = ref<number>(saved.commitPanePct ?? 55)
 const infoPanePct = ref<number>(saved.infoPanePct ?? 38)
+const diffRowPct = ref<number>(saved.diffRowPct ?? 70)
+const commitRowPct = ref<number>(saved.commitRowPct ?? 55)
 const hashColW = ref<number>(saved.hashColW ?? 64)
 const authorColW = ref<number>(saved.authorColW ?? 96)
 const dateColW = ref<number>(saved.dateColW ?? 80)
@@ -108,6 +112,8 @@ function persistSizes() {
     layoutMode: layoutMode.value,
     commitPanePct: commitPanePct.value,
     infoPanePct: infoPanePct.value,
+    diffRowPct: diffRowPct.value,
+    commitRowPct: commitRowPct.value,
     hashColW: hashColW.value,
     authorColW: authorColW.value,
     dateColW: dateColW.value,
@@ -126,12 +132,12 @@ const contentGridStyle = computed(() => {
   if (layoutMode.value === 'horizontal') {
     return {
       gridTemplateColumns: `${commitPanePct.value}% 1fr`,
-      gridTemplateRows: 'minmax(0, 1fr) 230px',
+      gridTemplateRows: `${diffRowPct.value}% ${100 - diffRowPct.value}%`,
     }
   }
   return {
     gridTemplateColumns: `${infoPanePct.value}% 1fr`,
-    gridTemplateRows: 'minmax(0, 55%) minmax(0, 45%)',
+    gridTemplateRows: `${commitRowPct.value}% ${100 - commitRowPct.value}%`,
   }
 })
 
@@ -157,6 +163,31 @@ function startPaneResize(e: PointerEvent) {
   window.addEventListener('pointermove', onMove)
   window.addEventListener('pointerup', onUp)
   document.body.style.cursor = 'col-resize'
+  document.body.style.userSelect = 'none'
+}
+
+// ── Row resize (horizontal: diff|info, vertical: commit|bottom) ──────
+function startRowResize(e: PointerEvent) {
+  e.preventDefault()
+  const container = contentAreaRef.value
+  if (!container) return
+  const rect = container.getBoundingClientRect()
+  const onMove = (ev: PointerEvent) => {
+    const pct = ((ev.clientY - rect.top) / rect.height) * 100
+    const clamped = Math.max(20, Math.min(85, pct))
+    if (layoutMode.value === 'horizontal') diffRowPct.value = clamped
+    else commitRowPct.value = clamped
+  }
+  const onUp = () => {
+    window.removeEventListener('pointermove', onMove)
+    window.removeEventListener('pointerup', onUp)
+    document.body.style.cursor = ''
+    document.body.style.userSelect = ''
+    persistSizes()
+  }
+  window.addEventListener('pointermove', onMove)
+  window.addEventListener('pointerup', onUp)
+  document.body.style.cursor = 'row-resize'
   document.body.style.userSelect = 'none'
 }
 
@@ -344,13 +375,22 @@ function startColResize(e: PointerEvent, col: ColKey) {
         />
       </div>
 
-      <!-- Pane resize handle (horizontal: commit|right; vertical: info|diff) -->
+      <!-- Vertical resize handle (左右拖动) -->
       <div
         class="pane-resize"
         :style="layoutMode === 'horizontal'
           ? { left: commitPanePct + '%', top: 0, bottom: 0 }
-          : { left: infoPanePct + '%', top: '55%', bottom: 0 }"
+          : { left: infoPanePct + '%', top: commitRowPct + '%', bottom: 0 }"
         @pointerdown="startPaneResize"
+      />
+
+      <!-- Horizontal resize handle (上下拖动) -->
+      <div
+        class="pane-resize-h"
+        :style="layoutMode === 'horizontal'
+          ? { top: diffRowPct + '%', left: commitPanePct + '%', right: 0 }
+          : { top: commitRowPct + '%', left: 0, right: 0 }"
+        @pointerdown="startRowResize"
       />
     </div>
   </div>
@@ -494,6 +534,21 @@ function startColResize(e: PointerEvent, col: ColKey) {
 }
 .pane-resize:hover,
 .pane-resize:active {
+  background: rgba(138, 173, 244, 0.3);
+}
+
+/* Pane resize handle (上下拖动主分隔条) */
+.pane-resize-h {
+  position: absolute;
+  height: 6px;
+  transform: translateY(-3px);
+  cursor: row-resize;
+  z-index: 15;
+  background: transparent;
+  transition: background 0.15s;
+}
+.pane-resize-h:hover,
+.pane-resize-h:active {
   background: rgba(138, 173, 244, 0.3);
 }
 
