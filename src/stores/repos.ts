@@ -9,11 +9,6 @@ const STORE_FILE = 'gitui-repos.json'
 const KEY_PATHS = 'paths'
 const KEY_ACTIVE_PATH = 'activePath'
 
-interface PersistedState {
-  paths: string[]
-  activePath: string | null
-}
-
 export const useRepoStore = defineStore('repos', () => {
   const repos = ref<RepoMeta[]>([])
   const activeRepoId = ref<string | null>(null)
@@ -24,13 +19,11 @@ export const useRepoStore = defineStore('repos', () => {
   const store = new LazyStore(STORE_FILE)
 
   async function persist() {
-    const state: PersistedState = {
-      paths: repos.value.map((r) => r.path),
-      activePath:
-        repos.value.find((r) => r.id === activeRepoId.value)?.path ?? null,
-    }
-    await store.set(KEY_PATHS, state.paths)
-    await store.set(KEY_ACTIVE_PATH, state.activePath)
+    const paths = repos.value.map((r) => r.path)
+    const activePath =
+      repos.value.find((r) => r.id === activeRepoId.value)?.path ?? null
+    await store.set(KEY_PATHS, paths)
+    await store.set(KEY_ACTIVE_PATH, activePath)
     await store.save()
   }
 
@@ -42,19 +35,19 @@ export const useRepoStore = defineStore('repos', () => {
     loading.value = true
     error.value = null
     try {
-      const paths = (await store.get<string[]>(KEY_PATHS)) ?? []
+      const rawPaths = (await store.get<string[]>(KEY_PATHS)) ?? []
+      // 去重：历史持久化数据可能包含重复 path
+      const paths = Array.from(new Set(rawPaths))
       const activePath = (await store.get<string | null>(KEY_ACTIVE_PATH)) ?? null
 
-      const failed: string[] = []
+      let hasFailed = rawPaths.length !== paths.length // 去重本身算一次清理
       for (const path of paths) {
         try {
           const meta = await git.openRepo(path)
-          if (!repos.value.find((r) => r.id === meta.id)) {
-            repos.value.push(meta)
-          }
+          repos.value.push(meta)
         } catch (e) {
           console.error(`Failed to restore repo "${path}":`, e)
-          failed.push(path)
+          hasFailed = true
         }
       }
 
@@ -70,8 +63,8 @@ export const useRepoStore = defineStore('repos', () => {
         activeRepoId.value = repos.value[0].id
       }
 
-      // 有仓库恢复失败（例如路径已被删除），把新列表回写以清理脏数据
-      if (failed.length > 0) {
+      // 有清理动作（去重或恢复失败）时把新列表回写
+      if (hasFailed) {
         await persist()
       }
     } catch (e: unknown) {
@@ -85,10 +78,16 @@ export const useRepoStore = defineStore('repos', () => {
     loading.value = true
     error.value = null
     try {
-      const meta = await git.openRepo(path)
-      if (!repos.value.find((r) => r.id === meta.id)) {
-        repos.value.push(meta)
+      // 按 path 去重：相同路径已打开则直接激活，避免后端重复注册 watcher
+      const existing = repos.value.find((r) => r.path === path)
+      if (existing) {
+        activeRepoId.value = existing.id
+        await persist()
+        return existing
       }
+
+      const meta = await git.openRepo(path)
+      repos.value.push(meta)
       activeRepoId.value = meta.id
       await persist()
       return meta

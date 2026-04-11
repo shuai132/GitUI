@@ -54,6 +54,14 @@ async function openRepo() {
   }
 }
 
+async function removeRepo(repoId: string) {
+  try {
+    await repoStore.closeRepo(repoId)
+  } catch (e) {
+    console.error(e)
+  }
+}
+
 async function switchBranch(name: string) {
   try {
     await historyStore.switchBranch(name)
@@ -151,12 +159,23 @@ function branchShortName(fullName: string): string {
         :key="repo.id"
         class="repo-item"
         :class="{ 'repo-item--active': repo.id === repoStore.activeRepoId }"
+        :title="repo.path"
         @click="repoStore.setActive(repo.id)"
       >
         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
         </svg>
-        <span>{{ repo.name }}</span>
+        <span class="repo-item-name">{{ repo.name }}</span>
+        <button
+          class="repo-item-remove"
+          title="移除仓库"
+          @click.stop="removeRepo(repo.id)"
+        >
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+            <line x1="18" y1="6" x2="6" y2="18"/>
+            <line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
       </div>
     </div>
   </aside>
@@ -346,7 +365,7 @@ function branchShortName(fullName: string): string {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 12px;
+  padding: 4px 8px 4px 12px;
   font-size: 11px;
   color: var(--text-secondary);
   cursor: pointer;
@@ -359,5 +378,36 @@ function branchShortName(fullName: string): string {
 
 .repo-item--active {
   color: var(--accent-blue);
+}
+
+.repo-item-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.repo-item-remove {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  padding: 2px;
+  border-radius: 3px;
+  color: var(--text-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.1s, color 0.1s;
+}
+
+.repo-item:hover .repo-item-remove {
+  display: inline-flex;
+}
+
+.repo-item-remove:hover {
+  background: rgba(237, 135, 150, 0.18);
+  color: var(--accent-red);
 }
 </style>
