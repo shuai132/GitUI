@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useVirtualizer } from '@tanstack/vue-virtual'
 import { useHistoryStore } from '@/stores/history'
 import { useRepoStore } from '@/stores/repos'
@@ -31,11 +31,9 @@ const activePane = ref<ActivePane>('commits')
 // ── 详情区（info + diff）显示状态（默认隐藏，点击提交后显示）────────
 const showDetail = ref(false)
 
-// ── Search / filter（需在 virtualRowCount 之前声明，避免 TDZ）────────
-const searchQuery = ref('')
-
+// ── Search / filter ─────────────────────────────────────────────────
 const filteredCommits = computed(() => {
-  const q = searchQuery.value.trim().toLowerCase()
+  const q = uiStore.historySearchQuery.trim().toLowerCase()
   if (!q) return historyStore.commits
   return historyStore.commits.filter(c =>
     c.summary.toLowerCase().includes(q) ||
@@ -57,7 +55,7 @@ const selectedWip = ref(false)
 
 // 虚拟行数 = 过滤后 commits + (WIP 行占 1 个，搜索时隐藏)
 const virtualRowCount = computed(() =>
-  filteredCommits.value.length + (!searchQuery.value.trim() && showWipRow.value ? 1 : 0),
+  filteredCommits.value.length + (!uiStore.historySearchQuery.trim() && showWipRow.value ? 1 : 0),
 )
 
 // 真实 commit 索引 → 虚拟行索引
@@ -199,7 +197,6 @@ watch(showWipRow, (has) => {
 // ── Persisted sizes (layout + pane splits + column widths) ───────────
 const SIZES_KEY = 'gitui.history.sizes'
 interface SavedSizes {
-  layoutMode: 'horizontal' | 'vertical'
   commitPanePct: number     // horizontal: commit-panel 宽度百分比
   infoPanePct: number       // vertical: info-pane 宽度百分比
   diffRowPct: number        // horizontal: diff-area 高度百分比（上下分隔）
@@ -213,7 +210,6 @@ function loadSizes(): Partial<SavedSizes> {
 }
 const saved = loadSizes()
 
-const layoutMode = ref<'horizontal' | 'vertical'>(saved.layoutMode ?? 'vertical')
 const commitPanePct = ref<number>(saved.commitPanePct ?? 55)
 const infoPanePct = ref<number>(saved.infoPanePct ?? 38)
 const diffRowPct = ref<number>(saved.diffRowPct ?? 70)
@@ -224,7 +220,6 @@ const dateColW = ref<number>(saved.dateColW ?? 80)
 
 function persistSizes() {
   const data: SavedSizes = {
-    layoutMode: layoutMode.value,
     commitPanePct: commitPanePct.value,
     infoPanePct: infoPanePct.value,
     diffRowPct: diffRowPct.value,
@@ -234,11 +229,6 @@ function persistSizes() {
     dateColW: dateColW.value,
   }
   localStorage.setItem(SIZES_KEY, JSON.stringify(data))
-}
-
-function toggleLayout() {
-  layoutMode.value = layoutMode.value === 'horizontal' ? 'vertical' : 'horizontal'
-  persistSizes()
 }
 
 // ── Content area grid style ──────────────────────────────────────────
@@ -251,7 +241,7 @@ const contentGridStyle = computed(() => {
       gridTemplateAreas: '"commits"',
     }
   }
-  if (layoutMode.value === 'horizontal') {
+  if (uiStore.historyLayoutMode === 'horizontal') {
     return {
       gridTemplateColumns: `${commitPanePct.value}% 1fr`,
       gridTemplateRows: `${diffRowPct.value}% ${100 - diffRowPct.value}%`,
@@ -274,7 +264,7 @@ function startPaneResize(e: PointerEvent) {
   const onMove = (ev: PointerEvent) => {
     const pct = ((ev.clientX - rect.left) / rect.width) * 100
     const clamped = Math.max(20, Math.min(80, pct))
-    if (layoutMode.value === 'horizontal') commitPanePct.value = clamped
+    if (uiStore.historyLayoutMode === 'horizontal') commitPanePct.value = clamped
     else infoPanePct.value = clamped
   }
   const onUp = () => {
@@ -299,7 +289,7 @@ function startRowResize(e: PointerEvent) {
   const onMove = (ev: PointerEvent) => {
     const pct = ((ev.clientY - rect.top) / rect.height) * 100
     const clamped = Math.max(20, Math.min(85, pct))
-    if (layoutMode.value === 'horizontal') diffRowPct.value = clamped
+    if (uiStore.historyLayoutMode === 'horizontal') diffRowPct.value = clamped
     else commitRowPct.value = clamped
   }
   const onUp = () => {
@@ -509,17 +499,6 @@ async function onCommitMenuAction(action: string) {
   }
 }
 
-// ── 搜索框聚焦：响应 AppToolbar Search 按钮 ─────────────────────────
-const searchInputEl = ref<HTMLInputElement | null>(null)
-watch(
-  () => uiStore.searchFocusTick,
-  async () => {
-    await nextTick()
-    searchInputEl.value?.focus()
-    searchInputEl.value?.select()
-  },
-)
-
 // ── WIP 行文件 diff：离开 WIP 模式时清掉 diff store 里的工作区 diff ───
 watch(selectedWip, (v) => {
   if (!v) diffStore.clear()
@@ -535,41 +514,10 @@ onUnmounted(() => {
 
 <template>
   <div class="history-view" v-if="repoStore.activeRepoId">
-    <!-- Top toolbar -->
-    <div class="history-toolbar">
-      <div class="search-box">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-        </svg>
-        <input
-          ref="searchInputEl"
-          v-model="searchQuery"
-          class="search-input"
-          placeholder="搜索提交..."
-        />
-      </div>
-
-      <!-- Layout toggle -->
-      <button
-        class="btn-layout"
-        @click="toggleLayout"
-        :title="layoutMode === 'horizontal' ? '切换为上下布局' : '切换为左右布局'"
-      >
-        <svg v-if="layoutMode === 'horizontal'" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-          <rect x="2" y="2" width="12" height="12" rx="1"/>
-          <line x1="8" y1="2" x2="8" y2="14"/>
-        </svg>
-        <svg v-else width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-          <rect x="2" y="2" width="12" height="12" rx="1"/>
-          <line x1="2" y1="8" x2="14" y2="8"/>
-        </svg>
-      </button>
-    </div>
-
     <!-- Content area -->
     <div
       class="content-area"
-      :class="'layout-' + layoutMode"
+      :class="'layout-' + uiStore.historyLayoutMode"
       :style="contentGridStyle"
       ref="contentAreaRef"
     >
@@ -648,7 +596,7 @@ onUnmounted(() => {
                 <!-- Graph column -->
                 <div class="col-graph" :style="{ width: graphColWidth + 'px' }">
                   <CommitGraphRow
-                    v-if="!searchQuery.trim() && historyStore.graphRows[toRealIdx(vRow.index)]"
+                    v-if="!uiStore.historySearchQuery.trim() && historyStore.graphRows[toRealIdx(vRow.index)]"
                     :row="historyStore.graphRows[toRealIdx(vRow.index)]"
                     :is-selected="isSelected(vRow.index)"
                   />
@@ -679,7 +627,7 @@ onUnmounted(() => {
 
           <!-- Load more indicators -->
           <div v-if="historyStore.loadingMore" class="list-hint">加载更多...</div>
-          <div v-if="searchQuery.trim()" class="list-hint dim">
+          <div v-if="uiStore.historySearchQuery.trim()" class="list-hint dim">
             找到 {{ filteredCommits.length }} 条（已加载 {{ historyStore.commits.length }} 条）
           </div>
           <div v-else-if="!historyStore.hasMore && historyStore.commits.length > 0" class="list-hint dim">
@@ -708,7 +656,7 @@ onUnmounted(() => {
       <div
         v-if="showDetail"
         class="pane-resize"
-        :style="layoutMode === 'horizontal'
+        :style="uiStore.historyLayoutMode === 'horizontal'
           ? { left: commitPanePct + '%', top: 0, bottom: 0 }
           : { left: infoPanePct + '%', top: commitRowPct + '%', bottom: 0 }"
         @pointerdown="startPaneResize"
@@ -718,7 +666,7 @@ onUnmounted(() => {
       <div
         v-if="showDetail"
         class="pane-resize-h"
-        :style="layoutMode === 'horizontal'
+        :style="uiStore.historyLayoutMode === 'horizontal'
           ? { top: diffRowPct + '%', left: commitPanePct + '%', right: 0 }
           : { top: commitRowPct + '%', left: 0, right: 0 }"
         @pointerdown="startRowResize"
@@ -759,7 +707,7 @@ onUnmounted(() => {
 <style scoped>
 .history-view {
   display: grid;
-  grid-template-rows: 36px 1fr;
+  grid-template-rows: 1fr;
   height: 100%;
   overflow: hidden;
 }
@@ -771,60 +719,6 @@ onUnmounted(() => {
   height: 100%;
   color: var(--text-muted);
   font-size: 13px;
-}
-
-/* ── Toolbar ─────────────────────────────────────────────────────── */
-.history-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 0 10px;
-  background: var(--bg-secondary);
-  border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
-}
-
-.search-box {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  background: var(--bg-surface);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 3px 8px;
-  color: var(--text-muted);
-  margin-left: auto;
-}
-
-.search-input {
-  background: none;
-  border: none;
-  color: var(--text-primary);
-  font-size: 11px;
-  font-family: inherit;
-  outline: none;
-  width: 140px;
-}
-
-.search-input::placeholder {
-  color: var(--text-muted);
-}
-
-.btn-layout {
-  background: none;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  color: var(--text-muted);
-  cursor: pointer;
-  padding: 3px 5px;
-  display: flex;
-  align-items: center;
-  transition: color 0.15s, border-color 0.15s;
-}
-
-.btn-layout:hover {
-  color: var(--text-primary);
-  border-color: var(--text-muted);
 }
 
 /* ── Content area (两种布局模式) ──────────────────────────────────── */

@@ -6,7 +6,6 @@ import { useHistoryStore } from '@/stores/history'
 import { useStashStore } from '@/stores/stash'
 import { useUiStore } from '@/stores/ui'
 import { useGitCommands } from '@/composables/useGitCommands'
-import CreateBranchDialog from '@/components/commit/CreateBranchDialog.vue'
 import ReflogDialog from '@/components/common/ReflogDialog.vue'
 import ContextMenu, { type ContextMenuItem } from '@/components/common/ContextMenu.vue'
 
@@ -28,6 +27,7 @@ const busy = reactive({
 })
 
 const showReflogDialog = ref(false)
+const searchInputEl = ref<HTMLInputElement | null>(null)
 
 // ── 仓库已打开时按钮才可用 ────────────────────────────────────────
 const hasRepo = computed(() => !!repoStore.activeRepoId)
@@ -120,13 +120,6 @@ async function onPush() {
   }
 }
 
-// ── Branch（创建分支对话框） ─────────────────────────────────────────
-const showBranchDialog = ref(false)
-function onBranch() {
-  if (!hasRepo.value) return
-  showBranchDialog.value = true
-}
-
 // ── Stash / Pop ─────────────────────────────────────────────────────
 async function onStash() {
   if (!hasRepo.value) return
@@ -161,11 +154,6 @@ async function onTerminal() {
   } catch (e) {
     showError(`打开终端失败：${String(e)}`)
   }
-}
-
-// ── Search 聚焦 ────────────────────────────────────────────────────
-function onSearch() {
-  uiStore.focusSearch()
 }
 
 // ── Actions 下拉菜单 ───────────────────────────────────────────────
@@ -278,17 +266,6 @@ async function handleDblClick(e: MouseEvent) {
     @mousedown="handleDragStart"
     @dblclick="handleDblClick"
   >
-    <div class="toolbar-brand" data-tauri-drag-region>
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent-blue)" stroke-width="2" data-tauri-drag-region>
-        <line x1="6" y1="3" x2="6" y2="15"/>
-        <circle cx="18" cy="6" r="3"/>
-        <circle cx="6" cy="18" r="3"/>
-        <path d="M18 9a9 9 0 0 1-9 9"/>
-      </svg>
-      <span class="brand-name" data-tauri-drag-region>GitUI</span>
-    </div>
-
-    <div class="toolbar-sep" />
 
     <div class="toolbar-actions">
       <button class="btn-tool" title="打开仓库" @click="openFolder">
@@ -329,22 +306,6 @@ async function handleDblClick(e: MouseEvent) {
           <polyline points="5 12 12 5 19 12"/>
         </svg>
         <span>{{ busy.push ? 'Pushing...' : 'Push' }}</span>
-      </button>
-
-      <!-- Branch -->
-      <button
-        class="btn-tool"
-        title="基于 HEAD 创建新分支"
-        :disabled="!hasRepo"
-        @click="onBranch"
-      >
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <line x1="6" y1="3" x2="6" y2="15"/>
-          <circle cx="18" cy="6" r="3"/>
-          <circle cx="6" cy="18" r="3"/>
-          <path d="M18 9a9 9 0 0 1-9 9"/>
-        </svg>
-        <span>Branch</span>
       </button>
 
       <!-- Stash -->
@@ -396,7 +357,7 @@ async function handleDblClick(e: MouseEvent) {
       {{ toastError }}
     </div>
 
-    <!-- Actions / Search（右侧） -->
+    <!-- 右侧：更多、搜索框、布局切换 -->
     <div class="toolbar-right">
       <button
         ref="actionsBtnRef"
@@ -411,19 +372,37 @@ async function handleDblClick(e: MouseEvent) {
           <circle cx="5" cy="12" r="1"/>
         </svg>
       </button>
-      <button class="btn-icon-only" title="搜索提交" :disabled="!hasRepo" @click="onSearch">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+
+      <div v-if="hasRepo" class="search-box">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <circle cx="11" cy="11" r="8"/>
           <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+        </svg>
+        <input
+          ref="searchInputEl"
+          v-model="uiStore.historySearchQuery"
+          class="search-input"
+          placeholder="搜索提交..."
+        />
+      </div>
+
+      <button
+        v-if="hasRepo"
+        class="btn-icon-only"
+        :title="uiStore.historyLayoutMode === 'horizontal' ? '切换为上下布局' : '切换为左右布局'"
+        @click="uiStore.toggleHistoryLayout()"
+      >
+        <svg v-if="uiStore.historyLayoutMode === 'horizontal'" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+          <rect x="2" y="2" width="12" height="12" rx="1"/>
+          <line x1="8" y1="2" x2="8" y2="14"/>
+        </svg>
+        <svg v-else width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+          <rect x="2" y="2" width="12" height="12" rx="1"/>
+          <line x1="2" y1="8" x2="14" y2="8"/>
         </svg>
       </button>
     </div>
 
-    <CreateBranchDialog
-      :visible="showBranchDialog"
-      :commit="null"
-      @close="showBranchDialog = false"
-    />
     <ReflogDialog
       :visible="showReflogDialog"
       @close="showReflogDialog = false"
@@ -455,19 +434,6 @@ async function handleDblClick(e: MouseEvent) {
   position: relative;
 }
 
-.toolbar-brand {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.brand-name {
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--text-primary);
-  letter-spacing: 0.02em;
-}
-
 .toolbar-sep {
   width: 1px;
   height: 22px;
@@ -490,7 +456,32 @@ async function handleDblClick(e: MouseEvent) {
 .toolbar-right {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 4px;
+}
+
+.search-box {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 3px 8px;
+  color: var(--text-muted);
+}
+
+.search-input {
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  font-size: 11px;
+  font-family: inherit;
+  outline: none;
+  width: 150px;
+}
+
+.search-input::placeholder {
+  color: var(--text-muted);
 }
 
 .btn-tool {
