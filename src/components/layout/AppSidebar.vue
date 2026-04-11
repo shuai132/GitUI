@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, reactive } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useRepoStore } from '@/stores/repos'
 import { useHistoryStore } from '@/stores/history'
@@ -7,6 +7,7 @@ import { useWorkspaceStore } from '@/stores/workspace'
 import { buildBranchTree } from '@/utils/branchTree'
 import type { BranchInfo } from '@/types/git'
 import BranchTreeNode from './BranchTreeNode.vue'
+import ContextMenu, { type ContextMenuItem } from '@/components/common/ContextMenu.vue'
 
 const repoStore = useRepoStore()
 const historyStore = useHistoryStore()
@@ -60,6 +61,75 @@ async function switchBranch(name: string) {
 function onSelectRemoteBranch(_branch: BranchInfo) {
   // 远程分支点击暂不切换（需要经过"检出..."弹窗，Step 5 实现）
 }
+
+// ── 右键菜单 ─────────────────────────────────────────────────────────
+const contextMenu = reactive({
+  visible: false,
+  x: 0,
+  y: 0,
+  branch: null as BranchInfo | null,
+})
+
+const contextMenuItems = computed<ContextMenuItem[]>(() => {
+  const b = contextMenu.branch
+  if (!b) return []
+  const items: ContextMenuItem[] = []
+
+  if (b.is_remote) {
+    items.push({ label: '检出...', action: 'checkout-remote' })
+  } else if (!b.is_head) {
+    items.push({ label: '切换到此分支', action: 'switch' })
+  }
+
+  items.push({ label: '复制分支名字', action: 'copy-name' })
+
+  // 只有非当前分支可以删除（当前分支 / 远程分支暂不开放删除）
+  if (!b.is_remote && !b.is_head) {
+    items.push({ separator: true })
+    items.push({ label: '删除...', action: 'delete', danger: true })
+  }
+
+  return items
+})
+
+function openContextMenu(e: MouseEvent, branch: BranchInfo) {
+  e.preventDefault()
+  contextMenu.branch = branch
+  contextMenu.x = e.clientX
+  contextMenu.y = e.clientY
+  contextMenu.visible = true
+}
+
+function closeContextMenu() {
+  contextMenu.visible = false
+}
+
+async function onContextAction(action: string) {
+  const b = contextMenu.branch
+  if (!b) return
+
+  try {
+    switch (action) {
+      case 'switch':
+        await historyStore.switchBranch(b.name)
+        break
+      case 'checkout-remote':
+        // Step 5 实现检出对话框
+        console.log('[TODO Step 5] 打开检出远程分支对话框:', b.name)
+        break
+      case 'copy-name':
+        await navigator.clipboard.writeText(b.name)
+        break
+      case 'delete':
+        if (confirm(`确认删除分支 "${b.name}"？此操作无法撤销。`)) {
+          await historyStore.deleteBranch(b.name)
+        }
+        break
+    }
+  } catch (err) {
+    console.error(err)
+  }
+}
 </script>
 
 <template>
@@ -104,6 +174,7 @@ function onSelectRemoteBranch(_branch: BranchInfo) {
           class="branch-item"
           :class="{ 'branch-item--current': b.is_head }"
           @click="!b.is_head && switchBranch(b.name)"
+          @contextmenu="openContextMenu($event, b)"
         >
           <span class="branch-dot" :class="b.is_head ? 'dot-solid' : 'dot-outline'" />
           <span class="branch-label">{{ b.name }}</span>
@@ -126,6 +197,7 @@ function onSelectRemoteBranch(_branch: BranchInfo) {
           :node="root"
           :level="0"
           @select-branch="onSelectRemoteBranch"
+          @branch-context-menu="openContextMenu"
         />
       </div>
     </div>
@@ -157,6 +229,16 @@ function onSelectRemoteBranch(_branch: BranchInfo) {
         </button>
       </div>
     </div>
+
+    <!-- Branch context menu -->
+    <ContextMenu
+      :visible="contextMenu.visible"
+      :x="contextMenu.x"
+      :y="contextMenu.y"
+      :items="contextMenuItems"
+      @close="closeContextMenu"
+      @select="onContextAction"
+    />
   </aside>
 </template>
 
