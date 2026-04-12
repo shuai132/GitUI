@@ -159,16 +159,13 @@ watch(() => uiStore.shouldOpenDiscardAll, checkDiscardAllRequest)
 
 // ── 提交表单 ──────────────────────────────────────────────────────
 const amendChecked = ref(false)
-const summary = ref('')
-const description = ref('')
+const message = ref('')
 const committing = ref(false)
 const commitError = ref<string | null>(null)
 
-const SUMMARY_MAX = 72
-
 const canCommit = computed(() => {
   if (committing.value) return false
-  if (summary.value.trim().length === 0) return false
+  if (message.value.trim().length === 0) return false
   // 普通提交：必须有暂存文件；amend：HEAD 必须存在 + 允许无新增暂存
   if (amendChecked.value) return !isUnborn.value
   return stagedAll.value.length > 0
@@ -181,25 +178,32 @@ const commitButtonLabel = computed(() => {
   return `提交 ${stagedAll.value.length} 个变更`
 })
 
-function buildMessage(): string {
-  const s = summary.value.trim()
-  const d = description.value.trim()
-  return d ? `${s}\n\n${d}` : s
-}
+// amend 勾选时自动填充上次提交信息
+watch(amendChecked, (checked) => {
+  const headMsg = workspaceStore.status?.head_commit_message ?? ''
+  if (checked) {
+    if (message.value.trim() === '') {
+      message.value = headMsg
+    }
+  } else {
+    if (message.value === headMsg) {
+      message.value = ''
+    }
+  }
+})
 
 async function onCommit() {
   if (!canCommit.value) return
   committing.value = true
   commitError.value = null
   try {
-    const msg = buildMessage()
+    const msg = message.value.trim()
     if (amendChecked.value) {
       await workspaceStore.amend(msg)
     } else {
       await workspaceStore.commit(msg)
     }
-    summary.value = ''
-    description.value = ''
+    message.value = ''
     amendChecked.value = false
     await historyStore.loadLog()
     await historyStore.loadBranches()
@@ -210,7 +214,7 @@ async function onCommit() {
   }
 }
 
-function onSummaryKeydown(e: KeyboardEvent) {
+function onMessageKeydown(e: KeyboardEvent) {
   if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
     onCommit()
   }
@@ -336,26 +340,12 @@ watch(
         <span v-if="isUnborn" class="amend-hint">（尚无历史提交）</span>
       </label>
 
-      <div class="summary-wrapper">
-        <input
-          v-model="summary"
-          class="summary-input"
-          type="text"
-          :maxlength="SUMMARY_MAX"
-          placeholder="提交摘要（Cmd+Enter 提交）"
-          @keydown="onSummaryKeydown"
-        />
-        <span class="summary-counter" :class="{ warn: summary.length > SUMMARY_MAX * 0.9 }">
-          {{ SUMMARY_MAX - summary.length }}
-        </span>
-      </div>
-
       <textarea
-        v-model="description"
-        class="description-input"
+        v-model="message"
+        class="message-input"
         rows="3"
-        placeholder="详细描述（可选）"
-        @keydown="onSummaryKeydown"
+        placeholder="提交信息（Cmd+Enter 提交）"
+        @keydown="onMessageKeydown"
       />
 
       <div v-if="commitError" class="commit-error">{{ commitError }}</div>
@@ -516,43 +506,7 @@ watch(
   font-size: 10px;
 }
 
-.summary-wrapper {
-  position: relative;
-  display: flex;
-  align-items: center;
-}
-
-.summary-input {
-  flex: 1;
-  background: var(--bg-surface);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  color: var(--text-primary);
-  font-family: inherit;
-  font-size: 12px;
-  padding: 6px 38px 6px 8px;
-  outline: none;
-  transition: border-color 0.15s;
-}
-
-.summary-input:focus {
-  border-color: var(--accent-blue);
-}
-
-.summary-counter {
-  position: absolute;
-  right: 10px;
-  font-size: 10px;
-  color: var(--text-muted);
-  pointer-events: none;
-  font-variant-numeric: tabular-nums;
-}
-
-.summary-counter.warn {
-  color: var(--accent-orange);
-}
-
-.description-input {
+.message-input {
   background: var(--bg-surface);
   border: 1px solid var(--border);
   border-radius: 4px;
@@ -565,7 +519,7 @@ watch(
   transition: border-color 0.15s;
 }
 
-.description-input:focus {
+.message-input:focus {
   border-color: var(--accent-blue);
 }
 

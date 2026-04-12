@@ -23,6 +23,7 @@
 | `untracked` | 未追踪文件 |
 | `head_branch` | 当前分支名（若 HEAD 指向分支） |
 | `head_commit` | HEAD commit OID（unborn 时为 None） |
+| `head_commit_message` | HEAD commit 的完整 message（供 amend 回填用；unborn 时为 None） |
 | `is_detached` | HEAD detached 标志 |
 
 每个 `FileEntry` 带：
@@ -65,10 +66,10 @@
 │   A  bar.rs                      │
 ├──────────────────────────────────┤
 │ ☐ 修补上次提交 (Amend)           │
-│ [ 提交摘要      ]  72 ← 倒数计数  │
-│ [                              ] │
-│ [  详细描述 (可选)              ] │
-│                                  │
+│ ┌──────────────────────────────┐ │
+│ │  提交信息                    │ │
+│ │                              │ │
+│ └──────────────────────────────┘ │
 │ [ 提交 N 个变更 ]                │
 └──────────────────────────────────┘
 ```
@@ -82,11 +83,11 @@
 
 ### 提交表单
 
-- **两行结构**：摘要（最多 72 字符，超出变橙警告）+ 可选详细描述
-- `buildMessage()` 把摘要和描述拼成 `summary\n\ndescription`
+- **单个多行 textarea**：直接编辑完整提交信息（首行做摘要、空行后做正文是 git 的习惯，不由 UI 强制拆分）
 - **Amend 勾选**：
   - `isUnborn`（HEAD 不存在）时禁用
   - 勾上后即使没有暂存变更也可提交，只改 message
+  - 勾选时若输入框为空，自动回填 `head_commit_message`；取消勾选时若内容仍等于该 message 则清空（允许连续勾/取消而不丢用户编辑）
 - **Cmd/Ctrl + Enter** 提交
 - `canCommit` 逻辑：普通提交要求 staged 非空；amend 要求 HEAD 存在
 - 提交成功后清空表单 + `historyStore.loadLog()` + `loadBranches()`

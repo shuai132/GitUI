@@ -19,6 +19,7 @@ export interface WorkspaceStatus {
   untracked: FileEntry[]
   head_branch?: string
   head_commit?: string
+  head_commit_message?: string
   is_detached: boolean
 }
 
