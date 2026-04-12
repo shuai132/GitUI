@@ -797,6 +797,9 @@ async function onStashMenuAction(action: string) {
   letter-spacing: 0.06em;
   color: var(--text-muted);
   user-select: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .section-title.collapsible {
@@ -810,6 +813,10 @@ async function onStashMenuAction(action: string) {
 
 .section-label {
   flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .chevron {

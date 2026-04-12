@@ -45,15 +45,27 @@ listen<{ level: string; target: string; message: string; ts: number }>(
   },
 )
 
-// ── Sidebar width (可拖动) ───────────────────────────────────────────
+// ── Sidebar width (可拖动，支持拖到 0 完全隐藏) ──────────────────────
 // 持久化由 uiStore 托管，这里只负责拖动期间的响应式更新
+// 吸附规则：<30px 吸附到 0（隐藏），[30, 60) 吸附到 60（最小可用宽度）
+const SIDEBAR_MIN = 60
+const SIDEBAR_MAX = 480
+const SIDEBAR_SNAP = 30
+const SIDEBAR_DEFAULT = 220
+
 function startSidebarResize(e: PointerEvent) {
   e.preventDefault()
   const startX = e.clientX
   const startW = uiStore.sidebarWidth
+  let moved = false
   const onMove = (ev: PointerEvent) => {
-    const delta = ev.clientX - startX
-    uiStore.sidebarWidth = Math.max(160, Math.min(480, startW + delta))
+    if (Math.abs(ev.clientX - startX) > 2) moved = true
+    const raw = startW + (ev.clientX - startX)
+    let next: number
+    if (raw < SIDEBAR_SNAP) next = 0
+    else if (raw < SIDEBAR_MIN) next = SIDEBAR_MIN
+    else next = Math.min(SIDEBAR_MAX, raw)
+    uiStore.sidebarWidth = next
   }
   const onUp = () => {
     window.removeEventListener('pointermove', onMove)
@@ -61,11 +73,19 @@ function startSidebarResize(e: PointerEvent) {
     document.body.style.cursor = ''
     document.body.style.userSelect = ''
     uiStore.persistSidebarWidth()
+    // 未拖动（点击）：不做任何事，双击 handler 单独处理切换
+    void moved
   }
   window.addEventListener('pointermove', onMove)
   window.addEventListener('pointerup', onUp)
   document.body.style.cursor = 'col-resize'
   document.body.style.userSelect = 'none'
+}
+
+// 双击分割条：在"隐藏"和"默认宽度"之间切换
+function toggleSidebar() {
+  uiStore.sidebarWidth = uiStore.sidebarWidth === 0 ? SIDEBAR_DEFAULT : 0
+  uiStore.persistSidebarWidth()
 }
 
 // Listen for file system changes and refresh status
@@ -108,7 +128,13 @@ watch(
     <AppToolbar />
     <div class="app-body">
       <AppSidebar :style="{ width: uiStore.sidebarWidth + 'px' }" />
-      <div class="sidebar-resize" @pointerdown="startSidebarResize" />
+      <div
+        class="sidebar-resize"
+        :class="{ 'sidebar-resize-collapsed': uiStore.sidebarWidth === 0 }"
+        :title="uiStore.sidebarWidth === 0 ? '双击展开侧边栏' : '拖动调整宽度 / 双击隐藏'"
+        @pointerdown="startSidebarResize"
+        @dblclick="toggleSidebar"
+      />
       <main class="app-main">
         <RouterView />
       </main>
@@ -154,5 +180,14 @@ watch(
 .sidebar-resize:hover,
 .sidebar-resize:active {
   background: rgba(138, 173, 244, 0.3);
+}
+/* sidebar 隐藏时，handle 贴左边缘显示，不向左偏移，确保完全可见 */
+.sidebar-resize-collapsed {
+  margin-left: 0;
+  background: var(--border);
+}
+.sidebar-resize-collapsed:hover,
+.sidebar-resize-collapsed:active {
+  background: rgba(138, 173, 244, 0.5);
 }
 </style>
