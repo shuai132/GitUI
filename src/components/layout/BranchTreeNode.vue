@@ -10,6 +10,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   selectBranch: [branch: BranchInfo]
+  dblclickBranch: [branch: BranchInfo]
   branchContextMenu: [event: MouseEvent, branch: BranchInfo]
 }>()
 
@@ -23,6 +24,11 @@ function onFolderClick() {
 function onBranchClick() {
   if (props.node.kind !== 'branch') return
   emit('selectBranch', props.node.branch)
+}
+
+function onBranchDblclick() {
+  if (props.node.kind !== 'branch') return
+  emit('dblclickBranch', props.node.branch)
 }
 
 function onBranchContextMenu(e: MouseEvent) {
@@ -68,6 +74,7 @@ const indentPx = (level: number) => 10 + level * 12 + 'px'
         :node="child"
         :level="level + 1"
         @select-branch="(b) => emit('selectBranch', b)"
+        @dblclick-branch="(b) => emit('dblclickBranch', b)"
         @branch-context-menu="(ev, b) => emit('branchContextMenu', ev, b)"
       />
     </template>
@@ -81,6 +88,7 @@ const indentPx = (level: number) => 10 + level * 12 + 'px'
       :style="{ paddingLeft: indentPx(level) }"
       :title="node.fullName"
       @click="onBranchClick"
+      @dblclick.stop="onBranchDblclick"
       @contextmenu="onBranchContextMenu"
     >
       <span

@@ -18,6 +18,8 @@ export const useHistoryStore = defineStore('history', () => {
   const loading = ref(false)
   const loadingMore = ref(false)
   const error = ref<string | null>(null)
+  // 由侧边栏设置，HistoryView 消费后清空；用于从 sidebar 跳转到历史中某个 commit
+  const pendingJumpOid = ref<string | null>(null)
 
   const git = useGitCommands()
 
@@ -189,6 +191,7 @@ export const useHistoryStore = defineStore('history', () => {
     loading,
     loadingMore,
     error,
+    pendingJumpOid,
     loadLog,
     loadMore,
     loadBranches,

@@ -483,6 +483,24 @@ watch(
   },
 )
 
+// ── 侧边栏点击分支/stash 跳转到对应 commit ──────────────────────────
+watch(
+  () => historyStore.pendingJumpOid,
+  (oid) => {
+    if (!oid) return
+    historyStore.pendingJumpOid = null
+    const idx = filteredCommits.value.findIndex((c) => c.oid === oid)
+    if (idx < 0) return
+    selectedWip.value = false
+    historyStore.selectCommit(oid)
+    showDetail.value = true
+    activePane.value = 'commits'
+    const vIdx = toVirtualIdx(idx)
+    virtualizer.value.scrollToIndex(vIdx, { align: 'center' })
+  },
+  { immediate: true },
+)
+
 onMounted(() => {
   window.addEventListener('keydown', onKeyDown)
 })

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { useRepoStore } from '@/stores/repos'
 import { useHistoryStore } from '@/stores/history'
 import { useSubmodulesStore } from '@/stores/submodules'
@@ -12,6 +13,7 @@ import ContextMenu, { type ContextMenuItem } from '@/components/common/ContextMe
 import CheckoutRemoteDialog from '@/components/branch/CheckoutRemoteDialog.vue'
 import EditSubmoduleDialog from '@/components/submodule/EditSubmoduleDialog.vue'
 
+const router = useRouter()
 const repoStore = useRepoStore()
 const historyStore = useHistoryStore()
 const submodulesStore = useSubmodulesStore()
@@ -196,6 +198,13 @@ function onRepoClick(e: MouseEvent, repoId: string) {
   repoStore.setActive(repoId)
 }
 
+// 单击任意分支/stash：跳历史并选中对应 commit
+function jumpToBranchCommit(commitOid: string) {
+  historyStore.pendingJumpOid = commitOid
+  router.push('/history')
+}
+
+// 双击本地分支：切换
 async function switchBranch(name: string) {
   try {
     await historyStore.switchBranch(name)
@@ -204,8 +213,14 @@ async function switchBranch(name: string) {
   }
 }
 
-function onSelectRemoteBranch(_branch: BranchInfo) {
-  // 远程分支点击暂不切换（需要经过"检出..."弹窗，Step 5 实现）
+// 单击 remote 分支：跳历史
+function onSelectRemoteBranch(branch: BranchInfo) {
+  if (branch.commit_oid) jumpToBranchCommit(branch.commit_oid)
+}
+
+// 双击 remote 分支：弹出 checkout 对话框
+function onDblclickRemoteBranch(branch: BranchInfo) {
+  openCheckoutDialog(branch.name)
 }
 
 // ── 右键菜单 / 检出对话框 ────────────────────────────────────────────
@@ -394,12 +409,8 @@ async function onSubmoduleClick(s: SubmoduleInfo) {
 }
 
 // ── Stash ────────────────────────────────────────────────────────────
-async function onStashClick(commitOid: string) {
-  try {
-    await historyStore.selectCommit(commitOid)
-  } catch (e) {
-    console.error(e)
-  }
+function onStashClick(commitOid: string) {
+  jumpToBranchCommit(commitOid)
 }
 
 const stashMenu = reactive({
@@ -469,7 +480,8 @@ async function onStashMenuAction(action: string) {
           :key="b.name"
           class="branch-item"
           :class="{ 'branch-item--current': b.is_head }"
-          @click="!b.is_head && switchBranch(b.name)"
+          @click="b.commit_oid && jumpToBranchCommit(b.commit_oid)"
+          @dblclick.stop="!b.is_head && switchBranch(b.name)"
           @contextmenu="openContextMenu($event, b)"
         >
           <span class="branch-dot" :class="b.is_head ? 'dot-solid' : 'dot-outline'" />
@@ -583,6 +595,7 @@ async function onStashMenuAction(action: string) {
           :node="root"
           :level="0"
           @select-branch="onSelectRemoteBranch"
+          @dblclick-branch="onDblclickRemoteBranch"
           @branch-context-menu="openContextMenu"
         />
       </div>
