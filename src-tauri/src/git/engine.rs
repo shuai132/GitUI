@@ -5,7 +5,7 @@ use git2::{
 use std::path::{Path, PathBuf};
 
 use crate::git::{
-    credentials::credential_callback,
+    credentials::make_credentials_callback,
     error::{GitError, GitResult},
     types::*,
 };
@@ -804,9 +804,7 @@ impl GitEngine {
         let repo = Self::open(path)?;
         let mut remote = repo.find_remote(remote_name)?;
         let mut callbacks = git2::RemoteCallbacks::new();
-        callbacks.credentials(|url, username, allowed| {
-            credential_callback(url, username, allowed)
-        });
+        callbacks.credentials(make_credentials_callback());
         let mut fetch_opts = git2::FetchOptions::new();
         fetch_opts.remote_callbacks(callbacks);
         remote.fetch(&[] as &[&str], Some(&mut fetch_opts), None)?;
@@ -819,10 +817,7 @@ impl GitEngine {
         log::debug!("[engine::push] finding remote {remote_name}");
         let mut remote = repo.find_remote(remote_name)?;
         let mut callbacks = git2::RemoteCallbacks::new();
-        callbacks.credentials(|url, username, allowed| {
-            log::debug!("[engine::push] credential_callback url={url} user={username:?} allowed={allowed:?}");
-            credential_callback(url, username, allowed)
-        });
+        callbacks.credentials(make_credentials_callback());
         let mut push_opts = git2::PushOptions::new();
         push_opts.remote_callbacks(callbacks);
         let refspec = format!("refs/heads/{}:refs/heads/{}", branch_name, branch_name);
@@ -837,10 +832,7 @@ impl GitEngine {
         let repo = Self::open(path)?;
         let mut remote = repo.find_remote(remote_name)?;
         let mut callbacks = git2::RemoteCallbacks::new();
-        callbacks.credentials(|url, username, allowed| {
-            log::debug!("[engine::pull] credential_callback url={url} user={username:?} allowed={allowed:?}");
-            credential_callback(url, username, allowed)
-        });
+        callbacks.credentials(make_credentials_callback());
         let mut fetch_opts = git2::FetchOptions::new();
         fetch_opts.remote_callbacks(callbacks);
         log::debug!("[engine::pull] fetching...");
@@ -1058,9 +1050,7 @@ impl GitEngine {
         let mut sub = repo.find_submodule(name)?;
 
         let mut callbacks = git2::RemoteCallbacks::new();
-        callbacks.credentials(|url, username, allowed| {
-            credential_callback(url, username, allowed)
-        });
+        callbacks.credentials(make_credentials_callback());
         let mut fetch_opts = git2::FetchOptions::new();
         fetch_opts.remote_callbacks(callbacks);
 
