@@ -12,6 +12,8 @@ const KEYS = {
   diffViewMode: 'gitui.diff.viewMode',
   diffHighlight: 'gitui.diff.syntax-highlight',
   dockLayout: 'gitui.history.dockLayout',
+  customDockLayout: 'gitui.history.customDockLayout',
+  layoutPreset: 'gitui.history.layoutPreset',
   debugPanel: 'gitui.debug.visible',
 } as const
 
@@ -48,6 +50,7 @@ function loadJson<T>(key: string, fallback: T): T {
 
 // ── 类型 ──────────────────────────────────────────────────────────────
 export type HistoryLayoutMode = 'horizontal' | 'vertical'
+export type LayoutPreset = 'custom' | 'vertical' | 'horizontal'
 export type DiffViewMode = 'side-by-side' | 'inline' | 'by-hunk'
 export type PanelId = 'commits' | 'info' | 'diff'
 export type DockEdge = 'top' | 'bottom' | 'left' | 'right'
@@ -120,6 +123,15 @@ export const useUiStore = defineStore('ui', () => {
     loadJson<DockLayout>(KEYS.dockLayout, DEFAULT_DOCK_LAYOUT),
   )
 
+  const customDockLayout = ref<DockLayout>(
+    loadJson<DockLayout>(KEYS.customDockLayout, DEFAULT_DOCK_LAYOUT),
+  )
+
+  const LAYOUT_PRESET_VALUES = ['custom', 'vertical', 'horizontal'] as const
+  const layoutPreset = ref<LayoutPreset>(
+    loadString<LayoutPreset>(KEYS.layoutPreset, 'custom', LAYOUT_PRESET_VALUES),
+  )
+
   // 向后兼容：派生只读 historyLayoutMode
   const historyLayoutMode = computed<HistoryLayoutMode>(() => {
     const e = dockLayout.value.edge
@@ -154,18 +166,33 @@ export const useUiStore = defineStore('ui', () => {
   }
 
   // Toggle / setter 类：直接写入
+  /** 拖拽停靠时调用：更新当前布局 + 保存为自定义布局 */
   function setDockLayout(layout: DockLayout) {
     dockLayout.value = layout
     localStorage.setItem(KEYS.dockLayout, JSON.stringify(layout))
+    // 拖拽产生的布局自动归入自定义
+    customDockLayout.value = layout
+    localStorage.setItem(KEYS.customDockLayout, JSON.stringify(layout))
+    layoutPreset.value = 'custom'
+    localStorage.setItem(KEYS.layoutPreset, 'custom')
   }
 
+  /** 循环切换：自定义 → 上下 → 左右 → 自定义 */
   function toggleHistoryLayout() {
-    const e = dockLayout.value.edge
-    if (e === 'left' || e === 'right') {
-      setDockLayout(PRESET_LAYOUTS.vertical)
+    const order: LayoutPreset[] = ['custom', 'vertical', 'horizontal']
+    const idx = order.indexOf(layoutPreset.value)
+    const next = order[(idx + 1) % order.length]
+    layoutPreset.value = next
+    localStorage.setItem(KEYS.layoutPreset, next)
+
+    let layout: DockLayout
+    if (next === 'custom') {
+      layout = customDockLayout.value
     } else {
-      setDockLayout(PRESET_LAYOUTS.horizontal)
+      layout = PRESET_LAYOUTS[next]
     }
+    dockLayout.value = layout
+    localStorage.setItem(KEYS.dockLayout, JSON.stringify(layout))
   }
 
   function toggleShowUnreachable() {
@@ -209,6 +236,7 @@ export const useUiStore = defineStore('ui', () => {
     sidebarWidth,
     reposHeight,
     dockLayout,
+    layoutPreset,
     historyLayoutMode,
     showUnreachableCommits,
     showStashCommits,

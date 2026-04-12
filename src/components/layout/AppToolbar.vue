@@ -642,16 +642,24 @@ async function handleDblClick(e: MouseEvent) {
       <button
         v-if="hasRepo"
         class="btn-icon-only"
-        :title="uiStore.historyLayoutMode === 'horizontal' ? '切换为上下布局' : '切换为左右布局'"
+        :title="{ custom: '自定义布局 → 切换为上下', vertical: '上下布局 → 切换为左右', horizontal: '左右布局 → 切换为自定义' }[uiStore.layoutPreset]"
         @click="uiStore.toggleHistoryLayout()"
       >
-        <svg v-if="uiStore.historyLayoutMode === 'horizontal'" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+        <!-- 自定义布局：田字格图标 -->
+        <svg v-if="uiStore.layoutPreset === 'custom'" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
           <rect x="2" y="2" width="12" height="12" rx="1"/>
           <line x1="8" y1="2" x2="8" y2="14"/>
+          <line x1="2" y1="8" x2="14" y2="8"/>
         </svg>
-        <svg v-else width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+        <!-- 上下布局：水平分割线 -->
+        <svg v-else-if="uiStore.layoutPreset === 'vertical'" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
           <rect x="2" y="2" width="12" height="12" rx="1"/>
           <line x1="2" y1="8" x2="14" y2="8"/>
+        </svg>
+        <!-- 左右布局：垂直分割线 -->
+        <svg v-else width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+          <rect x="2" y="2" width="12" height="12" rx="1"/>
+          <line x1="8" y1="2" x2="8" y2="14"/>
         </svg>
       </button>
 
