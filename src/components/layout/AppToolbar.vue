@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { getCurrentWindow } from '@tauri-apps/api/window'
+import { getVersion } from '@tauri-apps/api/app'
+import { listen } from '@tauri-apps/api/event'
 import { useRepoStore } from '@/stores/repos'
 import { useHistoryStore } from '@/stores/history'
 import { useStashStore } from '@/stores/stash'
@@ -10,9 +11,9 @@ import { useErrorsStore } from '@/stores/errors'
 import { useGitCommands } from '@/composables/useGitCommands'
 import ReflogDialog from '@/components/common/ReflogDialog.vue'
 import ErrorHistoryDialog from '@/components/common/ErrorHistoryDialog.vue'
+import Modal from '@/components/common/Modal.vue'
 import ContextMenu, { type ContextMenuItem } from '@/components/common/ContextMenu.vue'
 
-const router = useRouter()
 const repoStore = useRepoStore()
 const historyStore = useHistoryStore()
 const stashStore = useStashStore()
@@ -121,8 +122,18 @@ function onPullModeSelect(action: string) {
 
 const showReflogDialog = ref(false)
 const showErrorHistoryDialog = ref(false)
+const showAboutDialog = ref(false)
+const appVersion = ref('')
 const searchInputEl = ref<HTMLInputElement | null>(null)
 const searchExpanded = ref(false)
+
+onMounted(async () => {
+  appVersion.value = await getVersion()
+  // 监听系统菜单栏的"关于"菜单
+  listen('show-about', () => {
+    showAboutDialog.value = true
+  })
+})
 
 function expandSearch() {
   searchExpanded.value = true
@@ -385,6 +396,10 @@ const actionsMenuItems = computed<ContextMenuItem[]>(() => [
 ])
 
 function onActions() {
+  if (actionsMenu.visible) {
+    actionsMenu.visible = false
+    return
+  }
   const el = actionsBtnRef.value
   if (!el) return
   const rect = el.getBoundingClientRect()
@@ -445,7 +460,7 @@ async function onActionsSelect(action: string) {
       break
     }
     case 'about': {
-      router.push('/about')
+      showAboutDialog.value = true
       break
     }
     case 'toggle-unreachable': {
@@ -462,6 +477,12 @@ async function onActionsSelect(action: string) {
       break
     }
   }
+}
+
+// ── 打开外部链接 ──────────────────────────────────────────────────
+async function openUrl(url: string) {
+  const { openUrl: open } = await import('@tauri-apps/plugin-opener')
+  open(url)
 }
 
 // ── 顶部工具栏作为窗口拖动区域 ─────────────────────────────────────
@@ -594,22 +615,8 @@ async function handleDblClick(e: MouseEvent) {
       {{ toastError }}
     </div>
 
-    <!-- 右侧：更多、搜索框、布局切换 -->
+    <!-- 右侧：搜索框、布局切换、更多操作 -->
     <div class="toolbar-right">
-      <button
-        ref="actionsBtnRef"
-        class="btn-icon-only"
-        title="更多操作"
-        :disabled="!hasRepo"
-        @click="onActions"
-      >
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="12" cy="12" r="1"/>
-          <circle cx="19" cy="12" r="1"/>
-          <circle cx="5" cy="12" r="1"/>
-        </svg>
-      </button>
-
       <div
         v-if="hasRepo"
         class="search-box"
@@ -647,6 +654,21 @@ async function handleDblClick(e: MouseEvent) {
           <line x1="2" y1="8" x2="14" y2="8"/>
         </svg>
       </button>
+
+      <button
+        ref="actionsBtnRef"
+        class="btn-icon-only"
+        title="更多操作"
+        :disabled="!hasRepo"
+        @mousedown.stop
+        @click="onActions"
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="1"/>
+          <circle cx="19" cy="12" r="1"/>
+          <circle cx="5" cy="12" r="1"/>
+        </svg>
+      </button>
     </div>
 
     <ReflogDialog
@@ -658,6 +680,46 @@ async function handleDblClick(e: MouseEvent) {
       :visible="showErrorHistoryDialog"
       @close="showErrorHistoryDialog = false"
     />
+
+    <Modal
+      :visible="showAboutDialog"
+      title="关于 GitUI"
+      width="320px"
+      @close="showAboutDialog = false"
+    >
+      <div class="about-content">
+        <div class="about-icon">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--accent-blue)" stroke-width="1.5">
+            <circle cx="12" cy="12" r="4"/>
+            <line x1="1.05" y1="12" x2="7" y2="12"/>
+            <line x1="17.01" y1="12" x2="22.96" y2="12"/>
+            <line x1="12" y1="1.05" x2="12" y2="7"/>
+            <line x1="12" y1="17.01" x2="12" y2="22.96"/>
+          </svg>
+        </div>
+        <div class="about-name">GitUI</div>
+        <div class="about-fields">
+          <div class="about-row">
+            <span class="about-label">作者：</span>
+            <span class="about-value">刘帅</span>
+          </div>
+          <div class="about-row">
+            <span class="about-label">项目：</span>
+            <a
+              class="about-link"
+              href="https://github.com/shuai132/GitUI"
+              target="_blank"
+              rel="noopener"
+              @click.prevent="openUrl('https://github.com/shuai132/GitUI')"
+            >https://github.com/shuai132/GitUI</a>
+          </div>
+          <div class="about-row">
+            <span class="about-label">版本：</span>
+            <span class="about-value">{{ appVersion }}</span>
+          </div>
+        </div>
+      </div>
+    </Modal>
 
     <ContextMenu
       :visible="actionsMenu.visible"
@@ -871,6 +933,54 @@ async function handleDblClick(e: MouseEvent) {
   cursor: not-allowed;
 }
 
+
+.about-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.about-icon {
+  margin-bottom: 4px;
+}
+
+.about-name {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.about-fields {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.about-row {
+  display: flex;
+  align-items: center;
+  font-size: 12px;
+}
+
+.about-label {
+  color: var(--text-muted);
+}
+
+.about-value {
+  color: var(--text-primary);
+}
+
+.about-link {
+  color: var(--accent-blue);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.about-link:hover {
+  text-decoration: underline;
+}
 
 .toast-error {
   position: absolute;

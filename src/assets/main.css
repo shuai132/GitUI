@@ -35,6 +35,13 @@
     -webkit-user-select: text;
   }
 
+  /* 调试面板内容可选可复制 */
+  .debug-panel,
+  .debug-panel * {
+    user-select: text;
+    -webkit-user-select: text;
+  }
+
   html, body, #app {
     height: 100%;
     margin: 0;

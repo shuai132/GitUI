@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, nextTick, watch } from 'vue'
+import { ref, nextTick, watch, computed } from 'vue'
 import { useDebugStore, type DebugEntry } from '@/stores/debug'
 import { useUiStore } from '@/stores/ui'
 
@@ -11,8 +11,39 @@ const topPct = ref(50)
 const cmdListEl = ref<HTMLElement | null>(null)
 const logListEl = ref<HTMLElement | null>(null)
 
+const expandedIdx = computed(() => {
+  if (expandedId.value === null) return -1
+  return debugStore.entries.findIndex((e) => e.id === expandedId.value)
+})
+
 function toggleExpand(entry: DebugEntry) {
   expandedId.value = expandedId.value === entry.id ? null : entry.id
+}
+
+function onCmdKeydown(e: KeyboardEvent) {
+  const entries = debugStore.entries
+  if (entries.length === 0) return
+  const idx = expandedIdx.value
+
+  if (e.key === 'ArrowDown') {
+    e.preventDefault()
+    const next = idx < entries.length - 1 ? idx + 1 : 0
+    expandedId.value = entries[next].id
+    scrollToRow(next)
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault()
+    const prev = idx > 0 ? idx - 1 : entries.length - 1
+    expandedId.value = entries[prev].id
+    scrollToRow(prev)
+  }
+}
+
+function scrollToRow(idx: number) {
+  nextTick(() => {
+    if (!cmdListEl.value) return
+    const rows = cmdListEl.value.querySelectorAll('.debug-row')
+    rows[idx]?.scrollIntoView({ block: 'nearest' })
+  })
 }
 
 function formatTime(ts: number): string {
@@ -195,7 +226,7 @@ function startResize(e: PointerEvent) {
       </button>
     </div>
 
-    <!-- Top: Commands (with inline expandable detail) -->
+    <!-- Top: Commands -->
     <div class="debug-section" :style="{ flex: `0 0 ${topPct}%` }">
       <div class="section-bar">
         <span class="section-label">Commands</span>
@@ -206,7 +237,12 @@ function startResize(e: PointerEvent) {
           </svg>
         </button>
       </div>
-      <div ref="cmdListEl" class="debug-list">
+      <div
+        ref="cmdListEl"
+        class="debug-list"
+        tabindex="0"
+        @keydown="onCmdKeydown"
+      >
         <template v-for="entry in debugStore.entries" :key="entry.id">
           <div
             class="debug-row"
@@ -221,11 +257,11 @@ function startResize(e: PointerEvent) {
             <span class="debug-dur">{{ formatDuration(entry.duration) }}</span>
             <span class="debug-status" :class="statusClass(entry.status)">{{ statusIcon(entry.status) }}</span>
           </div>
-          <!-- Inline detail (expanded) -->
-          <div v-if="expandedId === entry.id" class="detail-inline" @click.stop>
-            <pre v-if="toGitCommand(entry)" class="detail-git" @click.stop>$ {{ toGitCommand(entry) }}</pre>
-            <pre class="detail-args" @click.stop>{{ formatArgs(entry.args) }}</pre>
-            <pre v-if="entry.error" class="detail-error" @click.stop>{{ entry.error }}</pre>
+          <!-- Inline detail (single-line, scrollable) -->
+          <div v-if="expandedId === entry.id" class="detail-inline">
+            <pre v-if="toGitCommand(entry)" class="detail-pre detail-git">$ {{ toGitCommand(entry) }}</pre>
+            <pre class="detail-pre detail-args">{{ formatArgs(entry.args) }}</pre>
+            <pre v-if="entry.error" class="detail-pre detail-error">{{ entry.error }}</pre>
           </div>
         </template>
         <div v-if="debugStore.entries.length === 0" class="debug-empty">暂无命令</div>
@@ -246,7 +282,7 @@ function startResize(e: PointerEvent) {
           </svg>
         </button>
       </div>
-      <div ref="logListEl" class="debug-list">
+      <div ref="logListEl" class="debug-list debug-list--logs">
         <div
           v-for="entry in debugStore.logEntries"
           :key="entry.id"
@@ -326,7 +362,7 @@ function startResize(e: PointerEvent) {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 3px 8px 3px 8px;
+  padding: 3px 8px;
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
@@ -343,7 +379,8 @@ function startResize(e: PointerEvent) {
 .debug-list {
   flex: 1;
   overflow-y: auto;
-  overflow-x: hidden;
+  overflow-x: auto;
+  outline: none;
 }
 
 .debug-split {
@@ -370,6 +407,7 @@ function startResize(e: PointerEvent) {
   cursor: pointer;
   transition: background 0.1s;
   border-left: 2px solid transparent;
+  white-space: nowrap;
 }
 
 .debug-row:hover {
@@ -421,34 +459,31 @@ function startResize(e: PointerEvent) {
 
 /* ── Inline detail ────────────────────────────────────────── */
 .detail-inline {
-  padding: 4px 8px 6px 12px;
+  padding: 2px 8px 4px 12px;
   background: var(--bg-secondary);
   border-left: 2px solid var(--accent-blue);
   font-family: 'SF Mono', 'Menlo', 'Monaco', monospace;
   font-size: 11px;
-  line-height: 1.4;
+  overflow-x: auto;
+}
+
+.detail-pre {
+  margin: 0;
+  white-space: pre;
+  line-height: 1.5;
 }
 
 .detail-git {
   color: var(--accent-green);
-  margin: 0 0 2px;
-  white-space: pre-wrap;
-  word-break: break-all;
 }
 
 .detail-args {
   color: var(--text-muted);
-  margin: 0;
-  white-space: pre-wrap;
-  word-break: break-all;
   font-size: 10px;
 }
 
 .detail-error {
   color: var(--accent-red);
-  margin: 4px 0 0;
-  white-space: pre-wrap;
-  word-break: break-all;
 }
 
 /* ── Log rows ─────────────────────────────────────────────── */
@@ -460,7 +495,6 @@ function startResize(e: PointerEvent) {
   font-size: 11px;
   font-family: 'SF Mono', 'Menlo', 'Monaco', monospace;
   white-space: nowrap;
-  overflow: hidden;
 }
 
 .log-level {
@@ -472,11 +506,8 @@ function startResize(e: PointerEvent) {
 }
 
 .log-msg {
-  flex: 1;
-  min-width: 0;
   color: var(--text-secondary);
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: pre;
 }
 
 .log-error .log-level { color: var(--accent-red); }
@@ -491,5 +522,6 @@ function startResize(e: PointerEvent) {
   text-align: center;
   color: var(--text-muted);
   font-size: 11px;
+  white-space: nowrap;
 }
 </style>
