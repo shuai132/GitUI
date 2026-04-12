@@ -9,6 +9,7 @@ const props = defineProps<{
   branchName: string
   isSelected?: boolean
   graphColWidth: number
+  descColWidth: number
 }>()
 
 const midY = ROW_H / 2
@@ -43,7 +44,7 @@ const totalCount = computed(() =>
   </div>
 
   <!-- Message 列：// WIP 文本 + 计数徽章 -->
-  <div class="col-message">
+  <div class="col-message" :style="{ width: descColWidth + 'px' }">
     <span class="wip-label">// WIP</span>
     <span v-if="unstagedCount > 0" class="wip-badge" title="未暂存修改">
       <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -86,8 +87,7 @@ const totalCount = computed(() =>
 }
 
 .col-message {
-  flex: 1;
-  min-width: 0;
+  flex-shrink: 0;
   padding: 0 8px;
   display: flex;
   align-items: center;

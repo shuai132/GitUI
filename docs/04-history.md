@@ -62,11 +62,23 @@
 
 - 主分割条（commit 列表 ↔ 详情区）：`pane-resize`，左右拖
 - 次分割条（info ↔ diff）：`pane-resize-h`，上下拖
-- 四个百分比 + 三个列宽（hash / author / date）都持久化到 `localStorage.gitui.history.sizes`
+- 四个百分比 + 四个列宽（desc / hash / author / date）都持久化到 `localStorage.gitui.history.sizes`
 
-### 列宽拖动
+### 列宽与横向布局
 
-commit 列表 header 的每列左边缘有一条细隐形拖拽区（`col-resize`），拖动调整本列宽度。
+列布局：`graph | 描述 | 提交 | 作者 | 日期`，描述固定宽度 `descColW`，右三列各自固定宽度。
+
+每个 header 的左边缘有一条拖拽区（`col-resize`），调整**左邻列**的宽度——即"divider 模型"：向右拖 → 左邻列变宽，整体右移。
+
+- **提交左侧**：调整 `descColW`，整体左右移动"提交/作者/日期"组。
+- **作者左侧**：调整 `hashColW`，作者距离提交的距离。
+- **日期左侧**：调整 `authorColW`，日期距离作者的距离。
+
+commit 面板内容有一个计算出的 `commitListMinWidth = graph + desc + hash + author + date`；当面板比这个宽度窄时，`.commit-panel` 出现横向滚动（`overflow-x: auto`），右侧次要列通过横向滑动查看。body 上绑定了 `@wheel` 处理器，把水平 delta 转发到 `.commit-panel.scrollLeft`，保证在列表区（有 `overflow-y: auto`）双指横向滑动也能触发面板横向滚动。
+
+### 悬停预览
+
+每行描述列带 `title` 属性，悬停时通过浏览器原生 tooltip 显示完整提交信息（message body + 作者 + 绝对时间 + 短 oid），方便快速查看不点进详情。
 
 ## 右侧详情面板
 

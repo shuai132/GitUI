@@ -172,7 +172,7 @@ function onPrevChange() {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 5px 8px 5px 12px;
+  padding: 5px 8px 5px 24px;
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;

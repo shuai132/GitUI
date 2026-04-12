@@ -79,6 +79,8 @@ export interface HistoryPaneSizes {
   diffRowPct: number
   /** vertical 布局：commit 行高度占比（%） */
   commitRowPct: number
+  /** commit 列表 - 描述列宽（可拖动，用于整体左右移动右侧三列组） */
+  descColW: number
   /** commit 列表 - hash 列宽 */
   hashColW: number
   /** commit 列表 - author 列宽 */
@@ -94,6 +96,7 @@ const DEFAULT_HISTORY_SIZES: HistoryPaneSizes = {
   infoPanePct: 38,
   diffRowPct: 70,
   commitRowPct: 55,
+  descColW: 400,
   hashColW: 64,
   authorColW: 96,
   dateColW: 80,

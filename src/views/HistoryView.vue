@@ -6,7 +6,7 @@ import { useRepoStore } from '@/stores/repos'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useDiffStore } from '@/stores/diff'
 import { useUiStore } from '@/stores/ui'
-import { formatTime } from '@/utils/format'
+import { formatTime, formatAbsoluteTime } from '@/utils/format'
 import { LANE_W, ROW_H } from '@/utils/graph'
 import CommitGraphRow from '@/components/history/CommitGraphRow.vue'
 import WipRow from '@/components/history/WipRow.vue'
@@ -94,6 +94,30 @@ function onScroll() {
   }
 }
 
+// 悬停提交行时显示的完整预览（浏览器原生 title 多行 tooltip）
+function commitPreview(c: CommitInfo | undefined): string {
+  if (!c) return ''
+  return [
+    c.message.trim(),
+    '',
+    `作者: ${c.author_name} <${c.author_email}>`,
+    `时间: ${formatAbsoluteTime(c.time)}`,
+    `提交: ${c.short_oid}`,
+  ].join('\n')
+}
+
+// 把 wheel 的 deltaX 转发到外层 .commit-panel（横向滚动）
+// 原因：body 有 overflow-y: auto，部分浏览器会吞掉 deltaX 不冒泡到父元素
+function onBodyWheel(e: WheelEvent) {
+  if (e.deltaX === 0) return
+  const panel = scrollContainer.value?.closest('.commit-panel') as HTMLElement | null
+  if (!panel) return
+  const before = panel.scrollLeft
+  panel.scrollLeft += e.deltaX
+  // 只有实际消费了横向滚动才 preventDefault，避免影响浏览器前进/后退或纵向滚动
+  if (panel.scrollLeft !== before) e.preventDefault()
+}
+
 // ── Branch tag map (oid → branches pointing to this commit) ─────────
 const branchTagMap = computed(() => {
   const map = new Map<string, BranchInfo[]>()
@@ -117,6 +141,13 @@ const graphColWidth = computed(() => {
   if (!historyStore.graphRows.length) return LANE_W * 2
   const maxCols = historyStore.graphRows.reduce((m, r) => Math.max(m, r.totalColumns), 1)
   return Math.min(maxCols * LANE_W, 180)
+})
+
+// 提交列表内容的最小宽度：图形 + 描述 + 右三列
+// 面板窄于此时会出现横向滚动条，描述优先、右三列通过滑动查看
+// descColW 可由用户拖动"提交"列左边缘调整（整体移动右三列组）
+const commitListMinWidth = computed(() => {
+  return graphColWidth.value + sizes.descColW + sizes.hashColW + sizes.authorColW + sizes.dateColW
 })
 
 // ── Row selection ────────────────────────────────────────────────────
@@ -329,13 +360,15 @@ function startSecondaryResize(e: PointerEvent) {
 
 // ── Column resize (hash / author / date) ─────────────────────────────
 // handle 在每列的左边缘：拖 handle 向右 → 本列缩小（分隔线右移，右列被挤）
-type ColKey = 'hash' | 'author' | 'date'
+type ColKey = 'desc' | 'hash' | 'author' | 'date'
 const COL_LIMITS: Record<ColKey, [number, number]> = {
+  desc: [200, 1200],
   hash: [48, 240],
   author: [60, 240],
   date: [60, 240],
 }
-const COL_KEY_MAP: Record<ColKey, 'hashColW' | 'authorColW' | 'dateColW'> = {
+const COL_KEY_MAP: Record<ColKey, 'descColW' | 'hashColW' | 'authorColW' | 'dateColW'> = {
+  desc: 'descColW',
   hash: 'hashColW',
   author: 'authorColW',
   date: 'dateColW',
@@ -348,8 +381,9 @@ function startColResize(e: PointerEvent, col: ColKey) {
   const startW = sizes[sizeKey]
   const [min, max] = COL_LIMITS[col]
   const onMove = (ev: PointerEvent) => {
-    // handle 在列左边缘：向右拖 → 本列缩小（delta 取反）
-    const delta = startX - ev.clientX
+    // 每个 handle 位于"右邻列"的左边缘，拖动调整左邻列（col 指定）的宽度。
+    // 向右拖 → 左邻列变宽 → delta = +（ev.clientX - startX）
+    const delta = ev.clientX - startX
     sizes[sizeKey] = Math.max(min, Math.min(max, startW + delta))
   }
   const onUp = () => {
@@ -626,23 +660,23 @@ onUnmounted(() => {
       <!-- Commit graph + list -->
       <div class="commit-panel" :style="panelBorders['commits']" data-panel-id="commits">
         <!-- Column headers -->
-        <div class="col-header">
+        <div class="col-header" :style="{ minWidth: commitListMinWidth + 'px' }" @wheel="onBodyWheel">
           <div class="dock-handle" @pointerdown="onDragHandlePointerDown('commits', $event)" title="拖拽停靠">
             <svg width="8" height="14" viewBox="0 0 8 14"><circle cx="2" cy="2" r="1" fill="currentColor"/><circle cx="6" cy="2" r="1" fill="currentColor"/><circle cx="2" cy="7" r="1" fill="currentColor"/><circle cx="6" cy="7" r="1" fill="currentColor"/><circle cx="2" cy="12" r="1" fill="currentColor"/><circle cx="6" cy="12" r="1" fill="currentColor"/></svg>
           </div>
           <div class="col-graph" :style="{ width: graphColWidth + 'px' }"></div>
-          <div class="col-message">描述</div>
+          <div class="col-message" :style="{ width: sizes.descColW + 'px' }">描述</div>
           <div class="col-hash header-col" :style="{ width: sizes.hashColW + 'px' }">
             提交
-            <div class="col-resize" @pointerdown="startColResize($event, 'hash')" />
+            <div class="col-resize" @pointerdown="startColResize($event, 'desc')" title="拖动整体移动提交/作者/日期列组" />
           </div>
           <div class="col-author header-col" :style="{ width: sizes.authorColW + 'px' }">
             作者
-            <div class="col-resize" @pointerdown="startColResize($event, 'author')" />
+            <div class="col-resize" @pointerdown="startColResize($event, 'hash')" title="拖动调整「作者」距离「提交」的位置" />
           </div>
           <div class="col-date header-col" :style="{ width: sizes.dateColW + 'px' }">
             日期
-            <div class="col-resize" @pointerdown="startColResize($event, 'date')" />
+            <div class="col-resize" @pointerdown="startColResize($event, 'author')" title="拖动调整「日期」距离「作者」的位置" />
           </div>
         </div>
 
@@ -650,7 +684,9 @@ onUnmounted(() => {
         <div
           class="commit-list-body"
           ref="scrollContainer"
+          :style="{ minWidth: commitListMinWidth + 'px' }"
           @scroll="onScroll"
+          @wheel="onBodyWheel"
         >
           <div v-if="historyStore.loading" class="list-hint">加载中...</div>
           <div
@@ -678,6 +714,7 @@ onUnmounted(() => {
                   :branch-name="workspaceStore.status?.head_branch ?? 'HEAD'"
                   :is-selected="selectedWip"
                   :graph-col-width="graphColWidth"
+                  :desc-col-width="sizes.descColW"
                 />
                 <div class="col-hash" :style="{ width: sizes.hashColW + 'px' }">—</div>
                 <div class="col-author" :style="{ width: sizes.authorColW + 'px' }">—</div>
@@ -712,7 +749,11 @@ onUnmounted(() => {
                 </div>
 
                 <!-- Message column with branch tags -->
-                <div class="col-message">
+                <div
+                  class="col-message"
+                  :style="{ width: sizes.descColW + 'px' }"
+                  :title="commitPreview(filteredCommits[toRealIdx(vRow.index)])"
+                >
                   <span
                     v-for="tag in branchTagMap.get(filteredCommits[toRealIdx(vRow.index)]?.oid ?? '')"
                     :key="tag.name"
@@ -991,7 +1032,8 @@ onUnmounted(() => {
 .commit-panel {
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: hidden;
   min-width: 0;
   min-height: 0;
 }
@@ -1016,13 +1058,12 @@ onUnmounted(() => {
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  overflow: hidden;
 }
 
 .commit-list-body {
   flex: 1;
   overflow-y: auto;
-  overflow-x: hidden;
+  /* 不设 overflow-x，允许横向滚动事件冒泡到 .commit-panel */
 }
 
 .commit-row {
@@ -1031,7 +1072,6 @@ onUnmounted(() => {
   cursor: pointer;
   border-bottom: 1px solid rgba(54, 58, 79, 0.4);
   transition: background 0.08s;
-  overflow: hidden;
 }
 
 .commit-row:hover {
@@ -1059,8 +1099,7 @@ onUnmounted(() => {
 }
 
 .col-message {
-  flex: 1;
-  min-width: 120px;
+  flex-shrink: 0;
   padding: 0 8px;
   display: flex;
   align-items: center;
@@ -1103,6 +1142,17 @@ onUnmounted(() => {
 .header-col {
   position: relative;
   overflow: visible;
+}
+
+/* Header 单元格：不继承数据行列的字体/颜色（如 hash 的蓝 monospace），
+   而是延用 .col-header 的灰色大写粗体样式，且明确左对齐。 */
+.col-header > .col-hash,
+.col-header > .col-author,
+.col-header > .col-date,
+.col-header > .col-message {
+  color: inherit;
+  font-family: inherit;
+  text-align: left;
 }
 
 /* Column resize handle (列头左边缘) */
