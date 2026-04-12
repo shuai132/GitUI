@@ -94,7 +94,15 @@ function onScroll() {
   }
 }
 
-// 悬停提交行时显示的完整预览（浏览器原生 title 多行 tooltip）
+// ── 悬停提交行时的自定义 tooltip（配合 app 配色，替代浏览器原生 title） ──
+const commitTooltip = reactive({
+  visible: false,
+  x: 0,
+  y: 0,
+  text: '',
+})
+let commitTooltipTimer: number | null = null
+
 function commitPreview(c: CommitInfo | undefined): string {
   if (!c) return ''
   return [
@@ -104,6 +112,32 @@ function commitPreview(c: CommitInfo | undefined): string {
     `时间: ${formatAbsoluteTime(c.time)}`,
     `提交: ${c.short_oid}`,
   ].join('\n')
+}
+
+function showCommitTooltip(e: MouseEvent, commit: CommitInfo | undefined) {
+  if (!commit) return
+  const text = commitPreview(commit)
+  if (commitTooltipTimer !== null) window.clearTimeout(commitTooltipTimer)
+  commitTooltipTimer = window.setTimeout(() => {
+    commitTooltip.text = text
+    commitTooltip.x = e.clientX + 14
+    commitTooltip.y = e.clientY + 14
+    commitTooltip.visible = true
+  }, 400)
+}
+
+function moveCommitTooltip(e: MouseEvent) {
+  if (!commitTooltip.visible) return
+  commitTooltip.x = e.clientX + 14
+  commitTooltip.y = e.clientY + 14
+}
+
+function hideCommitTooltip() {
+  if (commitTooltipTimer !== null) {
+    window.clearTimeout(commitTooltipTimer)
+    commitTooltipTimer = null
+  }
+  commitTooltip.visible = false
 }
 
 // 把 wheel 的 deltaX 转发到外层 .commit-panel（横向滚动）
@@ -752,7 +786,9 @@ onUnmounted(() => {
                 <div
                   class="col-message"
                   :style="{ width: sizes.descColW + 'px' }"
-                  :title="commitPreview(filteredCommits[toRealIdx(vRow.index)])"
+                  @mouseenter="showCommitTooltip($event, filteredCommits[toRealIdx(vRow.index)])"
+                  @mousemove="moveCommitTooltip"
+                  @mouseleave="hideCommitTooltip"
                 >
                   <span
                     v-for="tag in branchTagMap.get(filteredCommits[toRealIdx(vRow.index)]?.oid ?? '')"
@@ -873,6 +909,13 @@ onUnmounted(() => {
     :annotated="createTagAnnotated"
     @close="showCreateTagDialog = false"
   />
+
+  <!-- Commit hover tooltip（自定义样式，跟随鼠标） -->
+  <div
+    v-if="commitTooltip.visible"
+    class="commit-tooltip"
+    :style="{ left: commitTooltip.x + 'px', top: commitTooltip.y + 'px' }"
+  >{{ commitTooltip.text }}</div>
 </template>
 
 <style scoped>
@@ -1047,6 +1090,7 @@ onUnmounted(() => {
 }
 
 .col-header {
+  position: relative;
   display: flex;
   align-items: center;
   height: 26px;
@@ -1058,6 +1102,21 @@ onUnmounted(() => {
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.04em;
+}
+
+/* dock-handle 在 col-header 里绝对定位，避免占 flex 流导致列头整体右移（与数据行 .commit-row 错位）。
+   仅在面板 hover 时 opacity + pointer-events 激活。 */
+.col-header > .dock-handle {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  height: auto;
+  pointer-events: none;
+  z-index: 3;
+}
+.commit-panel:hover > .col-header > .dock-handle {
+  pointer-events: auto;
 }
 
 .commit-list-body {
@@ -1183,6 +1242,23 @@ onUnmounted(() => {
 
 .commit-row.selected .commit-msg {
   color: var(--text-primary);
+}
+
+/* ── 提交悬停 tooltip（自定义，适配 Catppuccin 色彩） ─────────────── */
+.commit-tooltip {
+  position: fixed;
+  z-index: 9999;
+  max-width: 560px;
+  padding: 8px 12px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  pointer-events: none;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
 }
 
 /* ── 丢失引用的提交（unreachable）：整行变灰 ─────────────────── */

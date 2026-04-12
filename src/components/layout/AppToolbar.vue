@@ -364,7 +364,7 @@ const actionsMenuItems = computed<ContextMenuItem[]>(() => [
   },
   { separator: true },
   {
-    label: '显示 Reflog...',
+    label: '显示Reflog',
     action: 'reflog',
     disabled: !hasRepo.value,
   },
@@ -383,9 +383,8 @@ const actionsMenuItems = computed<ContextMenuItem[]>(() => [
   },
   { separator: true },
   {
-    label: '丢弃所有变更...',
+    label: '丢弃所有变更',
     action: 'discard-all',
-    danger: true,
     disabled: !hasRepo.value,
   },
   { separator: true },
