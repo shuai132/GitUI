@@ -82,6 +82,21 @@ const PATTERNS: Array<{ test: (msg: string) => boolean; friendly: (msg: string) 
     test: (m) => /Merge required/i.test(m),
     friendly: () => 'Pull 需要合并（非 fast-forward），当前版本尚未支持——请在终端手动 merge',
   },
+  // Cannot fast-forward (ff_only mode)
+  {
+    test: (m) => /Cannot fast-forward.*diverged/i.test(m),
+    friendly: () => 'Pull 失败：远端分支已分叉，无法 fast-forward。请使用 merge 或 rebase 模式',
+  },
+  // Rebase 冲突
+  {
+    test: (m) => /Rebase conflict/i.test(m),
+    friendly: () => 'Rebase 出现冲突，请在终端手动解决',
+  },
+  // Rebase 工作区不干净
+  {
+    test: (m) => /Cannot rebase.*uncommitted/i.test(m),
+    friendly: () => '工作区有未提交的变更，请先 commit 或 stash 后再 rebase',
+  },
   // 冲突
   {
     test: (m) => /conflict|needs merge/i.test(m),

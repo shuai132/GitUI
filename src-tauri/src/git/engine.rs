@@ -814,34 +814,51 @@ impl GitEngine {
     }
 
     pub fn push(path: &str, remote_name: &str, branch_name: &str) -> GitResult<()> {
+        log::debug!("[engine::push] opening repo at {path}");
         let repo = Self::open(path)?;
+        log::debug!("[engine::push] finding remote {remote_name}");
         let mut remote = repo.find_remote(remote_name)?;
         let mut callbacks = git2::RemoteCallbacks::new();
         callbacks.credentials(|url, username, allowed| {
+            log::debug!("[engine::push] credential_callback url={url} user={username:?} allowed={allowed:?}");
             credential_callback(url, username, allowed)
         });
         let mut push_opts = git2::PushOptions::new();
         push_opts.remote_callbacks(callbacks);
         let refspec = format!("refs/heads/{}:refs/heads/{}", branch_name, branch_name);
+        log::debug!("[engine::push] pushing refspec={refspec}");
         remote.push(&[&refspec], Some(&mut push_opts))?;
+        log::debug!("[engine::push] done");
         Ok(())
     }
 
-    pub fn pull(path: &str, remote_name: &str, branch_name: &str) -> GitResult<()> {
+    pub fn pull(path: &str, remote_name: &str, branch_name: &str, mode: &str) -> GitResult<()> {
+        log::debug!("[engine::pull] mode={mode} remote={remote_name} branch={branch_name}");
         let repo = Self::open(path)?;
         let mut remote = repo.find_remote(remote_name)?;
         let mut callbacks = git2::RemoteCallbacks::new();
         callbacks.credentials(|url, username, allowed| {
+            log::debug!("[engine::pull] credential_callback url={url} user={username:?} allowed={allowed:?}");
             credential_callback(url, username, allowed)
         });
         let mut fetch_opts = git2::FetchOptions::new();
         fetch_opts.remote_callbacks(callbacks);
+        log::debug!("[engine::pull] fetching...");
         remote.fetch(&[branch_name], Some(&mut fetch_opts), None)?;
+        log::debug!("[engine::pull] fetch done, proceeding with mode={mode}");
 
-        // Fast-forward merge
+        if mode == "rebase" {
+            return Self::pull_rebase(&repo, branch_name);
+        }
+
+        // ff / ff_only: merge analysis
         let fetch_head = repo.find_reference("FETCH_HEAD")?;
         let fetch_commit = repo.reference_to_annotated_commit(&fetch_head)?;
         let (merge_analysis, _) = repo.merge_analysis(&[&fetch_commit])?;
+
+        if merge_analysis.is_up_to_date() {
+            return Ok(());
+        }
 
         if merge_analysis.is_fast_forward() {
             let refname = format!("refs/heads/{}", branch_name);
@@ -849,11 +866,79 @@ impl GitEngine {
             reference.set_target(fetch_commit.id(), "Fast-forward")?;
             repo.set_head(&refname)?;
             repo.checkout_head(Some(git2::build::CheckoutBuilder::default().force()))?;
-        } else if merge_analysis.is_normal() {
+        } else if mode == "ff_only" {
+            return Err(GitError::OperationFailed(
+                "Cannot fast-forward: remote branch has diverged".to_string(),
+            ));
+        } else {
+            // mode == "ff": default behavior
             return Err(GitError::OperationFailed(
                 "Merge required - not yet supported in this version".to_string(),
             ));
         }
+
+        Ok(())
+    }
+
+    /// Pull with rebase: fetch has already been done, now rebase HEAD onto FETCH_HEAD.
+    fn pull_rebase(repo: &git2::Repository, branch_name: &str) -> GitResult<()> {
+        // Check for dirty working tree
+        let statuses = repo.statuses(Some(
+            git2::StatusOptions::new()
+                .include_untracked(false)
+                .include_ignored(false),
+        ))?;
+        if !statuses.is_empty() {
+            return Err(GitError::OperationFailed(
+                "Cannot rebase: working tree has uncommitted changes. Commit or stash first.".to_string(),
+            ));
+        }
+
+        let fetch_head = repo.find_reference("FETCH_HEAD")?;
+        let fetch_commit = repo.reference_to_annotated_commit(&fetch_head)?;
+
+        let head_ref = repo.head()?;
+        let head_commit = repo.reference_to_annotated_commit(&head_ref)?;
+
+        // Check if already up-to-date
+        let (merge_analysis, _) = repo.merge_analysis(&[&fetch_commit])?;
+        if merge_analysis.is_up_to_date() {
+            return Ok(());
+        }
+
+        // If fast-forwardable, just do ff (no rebase needed)
+        if merge_analysis.is_fast_forward() {
+            let refname = format!("refs/heads/{}", branch_name);
+            let mut reference = repo.find_reference(&refname)?;
+            reference.set_target(fetch_commit.id(), "Fast-forward")?;
+            repo.set_head(&refname)?;
+            repo.checkout_head(Some(git2::build::CheckoutBuilder::default().force()))?;
+            return Ok(());
+        }
+
+        // Perform rebase
+        let mut rebase = repo.rebase(
+            Some(&head_commit),
+            Some(&fetch_commit),
+            None,
+            None,
+        )?;
+
+        let sig = repo.signature()?;
+
+        while let Some(op) = rebase.next() {
+            let _op = op?;
+            let index = repo.index()?;
+            if index.has_conflicts() {
+                rebase.abort()?;
+                return Err(GitError::OperationFailed(
+                    "Rebase conflict: please resolve conflicts manually in the terminal".to_string(),
+                ));
+            }
+            rebase.commit(None, &sig, None)?;
+        }
+
+        rebase.finish(None)?;
 
         Ok(())
     }

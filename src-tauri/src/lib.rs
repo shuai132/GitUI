@@ -75,6 +75,10 @@ pub fn run() {
             run_gc,
         ])
         .setup(|app| {
+            env_logger::Builder::from_default_env()
+                .filter_level(log::LevelFilter::Debug)
+                .init();
+            log::info!("GitUI started");
             tray::setup_tray(&app.handle())?;
             Ok(())
         })

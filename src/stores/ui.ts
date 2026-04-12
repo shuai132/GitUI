@@ -11,6 +11,7 @@ const KEYS = {
   historySizes: 'gitui.history.sizes',
   diffViewMode: 'gitui.diff.viewMode',
   diffHighlight: 'gitui.diff.syntax-highlight',
+  debugPanel: 'gitui.debug.visible',
 } as const
 
 // ── 读取工具 ──────────────────────────────────────────────────────────
@@ -108,6 +109,7 @@ export const useUiStore = defineStore('ui', () => {
     loadString<DiffViewMode>(KEYS.diffViewMode, 'side-by-side', DIFF_MODE_VALUES),
   )
   const diffHighlightEnabled = ref<boolean>(loadBool(KEYS.diffHighlight, true))
+  const debugPanelVisible = ref<boolean>(loadBool(KEYS.debugPanel, false))
 
   // ── 持久化动作 ────────────────────────────────────────────────────
   // 拖动类：组件在 pointermove 里直接改 .value，pointerup 再调 persistXxx()
@@ -150,6 +152,11 @@ export const useUiStore = defineStore('ui', () => {
     localStorage.setItem(KEYS.diffHighlight, String(diffHighlightEnabled.value))
   }
 
+  function toggleDebugPanel() {
+    debugPanelVisible.value = !debugPanelVisible.value
+    localStorage.setItem(KEYS.debugPanel, String(debugPanelVisible.value))
+  }
+
   // ── WipPanel 粘性请求 ─────────────────────────────────────────────
   function requestDiscardAll() {
     shouldOpenDiscardAll.value = true
@@ -171,6 +178,7 @@ export const useUiStore = defineStore('ui', () => {
     historyPaneSizes,
     diffViewMode,
     diffHighlightEnabled,
+    debugPanelVisible,
     // persistence
     persistSidebarWidth,
     persistReposHeight,
@@ -181,6 +189,7 @@ export const useUiStore = defineStore('ui', () => {
     toggleShowStashes,
     setDiffViewMode,
     toggleDiffHighlight,
+    toggleDebugPanel,
     // transient
     requestDiscardAll,
     consumeDiscardAllRequest,

@@ -21,6 +21,7 @@ pub async fn create_commit(
         ));
     }
 
+    log::debug!("[create_commit] message_len={}", message.len());
     GitEngine::create_commit(&meta.path, &message)
 }
 

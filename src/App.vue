@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import AppSidebar from '@/components/layout/AppSidebar.vue'
 import AppToolbar from '@/components/layout/AppToolbar.vue'
 import AppStatusBar from '@/components/layout/AppStatusBar.vue'
+import DebugPanel from '@/components/debug/DebugPanel.vue'
 import { useRepoStore } from '@/stores/repos'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useHistoryStore } from '@/stores/history'
@@ -95,6 +96,7 @@ watch(
       <main class="app-main">
         <RouterView />
       </main>
+      <DebugPanel v-if="uiStore.debugPanelVisible" />
     </div>
     <AppStatusBar />
   </div>

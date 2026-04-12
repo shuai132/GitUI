@@ -72,6 +72,53 @@ const busy = reactive({
   gc: false,
 })
 
+// ── Pull 模式 ─────────────────────────────────────────────────────
+type PullMode = 'ff' | 'ff_only' | 'rebase'
+const PULL_MODE_KEY = 'gitui.pull.mode'
+const pullMode = ref<PullMode>(
+  (localStorage.getItem(PULL_MODE_KEY) as PullMode) || 'ff',
+)
+
+function setPullMode(mode: PullMode) {
+  pullMode.value = mode
+  localStorage.setItem(PULL_MODE_KEY, mode)
+}
+
+const pullModeMenu = reactive({
+  visible: false,
+  x: 0,
+  y: 0,
+})
+
+const pullModeMenuItems = computed<ContextMenuItem[]>(() => [
+  {
+    label: `${pullMode.value === 'ff' ? '● ' : '○ '}Pull (fast-forward if possible)`,
+    action: 'ff',
+  },
+  {
+    label: `${pullMode.value === 'ff_only' ? '● ' : '○ '}Pull (fast-forward only)`,
+    action: 'ff_only',
+  },
+  {
+    label: `${pullMode.value === 'rebase' ? '● ' : '○ '}Pull (rebase)`,
+    action: 'rebase',
+  },
+])
+
+function onPullChevronClick(e: MouseEvent) {
+  e.stopPropagation()
+  const el = e.currentTarget as HTMLElement
+  const rect = el.getBoundingClientRect()
+  pullModeMenu.x = rect.left
+  pullModeMenu.y = rect.bottom + 4
+  pullModeMenu.visible = true
+}
+
+function onPullModeSelect(action: string) {
+  pullModeMenu.visible = false
+  setPullMode(action as PullMode)
+}
+
 const showReflogDialog = ref(false)
 const showErrorHistoryDialog = ref(false)
 const searchInputEl = ref<HTMLInputElement | null>(null)
@@ -205,7 +252,7 @@ async function onPull(e: MouseEvent) {
   }
   busy.pull = true
   try {
-    await git.pullBranch(id, remote, branch)
+    await git.pullBranch(id, remote, branch, pullMode.value)
     await Promise.all([historyStore.loadLog(), historyStore.loadBranches()])
   } catch {
     /* toast 由 errorsStore watch 统一处理 */
@@ -299,6 +346,10 @@ const actionsMenuItems = computed<ContextMenuItem[]>(() => [
     label: (uiStore.showStashCommits ? '✓ ' : '   ') + '显示贮藏',
     action: 'toggle-stashes',
     disabled: !hasRepo.value,
+  },
+  {
+    label: (uiStore.debugPanelVisible ? '✓ ' : '   ') + '调试日志',
+    action: 'toggle-debug',
   },
   { separator: true },
   {
@@ -406,6 +457,10 @@ async function onActionsSelect(action: string) {
       uiStore.toggleShowStashes()
       break
     }
+    case 'toggle-debug': {
+      uiStore.toggleDebugPanel()
+      break
+    }
   }
 }
 
@@ -433,7 +488,7 @@ async function handleDblClick(e: MouseEvent) {
 
     <div class="toolbar-actions">
       <button class="btn-tool" title="打开仓库" @click="openFolder">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
         </svg>
         <span>打开</span>
@@ -441,22 +496,33 @@ async function handleDblClick(e: MouseEvent) {
 
       <div class="toolbar-sep" />
 
-      <!-- Pull (with chevron placeholder) -->
-      <button
-        class="btn-tool btn-tool--pull"
-        title="Pull (fetch + merge)"
-        :disabled="!canRemoteOp || busy.pull"
-        @click="onPull($event)"
-      >
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M12 5v14"/>
-          <polyline points="19 12 12 19 5 12"/>
-        </svg>
-        <span>{{ busy.pull ? 'Pulling...' : 'Pull' }}</span>
-        <svg class="chevron" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <polyline points="6 9 12 15 18 9"/>
-        </svg>
-      </button>
+      <!-- Pull (split button: main + chevron) -->
+      <div class="btn-tool-group">
+        <button
+          class="btn-tool btn-tool--main"
+          title="Pull (fetch + merge)"
+          :disabled="!canRemoteOp || busy.pull"
+          @click="onPull($event)"
+        >
+          <span v-if="busy.pull" class="spinner" />
+          <svg v-else width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="12" y1="3" x2="12" y2="15"/>
+            <polyline points="6 9 12 15 18 9"/>
+            <line x1="6" y1="21" x2="18" y2="21"/>
+          </svg>
+          <span>Pull</span>
+        </button>
+        <button
+          class="btn-tool btn-tool--chevron"
+          title="选择 Pull 模式"
+          :disabled="!canRemoteOp || busy.pull"
+          @click="onPullChevronClick($event)"
+        >
+          <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <polyline points="6 9 12 15 18 9"/>
+          </svg>
+        </button>
+      </div>
 
       <!-- Push -->
       <button
@@ -465,11 +531,13 @@ async function handleDblClick(e: MouseEvent) {
         :disabled="!canRemoteOp || busy.push"
         @click="onPush($event)"
       >
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M12 19V5"/>
-          <polyline points="5 12 12 5 19 12"/>
+        <span v-if="busy.push" class="spinner" />
+        <svg v-else width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="12" y1="21" x2="12" y2="9"/>
+          <polyline points="18 15 12 9 6 15"/>
+          <line x1="6" y1="3" x2="18" y2="3"/>
         </svg>
-        <span>{{ busy.push ? 'Pushing...' : 'Push' }}</span>
+        <span>Push</span>
       </button>
 
       <!-- Stash -->
@@ -479,8 +547,10 @@ async function handleDblClick(e: MouseEvent) {
         :disabled="!hasRepo || busy.stash"
         @click="onStash"
       >
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+        <span v-if="busy.stash" class="spinner" />
+        <svg v-else width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/>
+          <path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>
         </svg>
         <span>Stash</span>
       </button>
@@ -492,9 +562,12 @@ async function handleDblClick(e: MouseEvent) {
         :disabled="!canStashPop || busy.pop"
         @click="onPop"
       >
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <polyline points="5 12 12 5 19 12"/>
-          <line x1="12" y1="5" x2="12" y2="19"/>
+        <span v-if="busy.pop" class="spinner" />
+        <svg v-else width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/>
+          <path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>
+          <line x1="12" y1="15" x2="12" y2="5"/>
+          <polyline points="9 8 12 5 15 8"/>
         </svg>
         <span>Pop</span>
       </button>
@@ -506,7 +579,7 @@ async function handleDblClick(e: MouseEvent) {
         :disabled="!hasRepo"
         @click="onTerminal"
       >
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <polyline points="4 17 10 11 4 5"/>
           <line x1="12" y1="19" x2="20" y2="19"/>
         </svg>
@@ -603,6 +676,16 @@ async function handleDblClick(e: MouseEvent) {
       :items="remoteMenu.items"
       @close="onRemoteMenuClose"
       @select="onRemoteMenuSelect"
+    />
+
+    <!-- Pull 模式选择菜单 -->
+    <ContextMenu
+      :visible="pullModeMenu.visible"
+      :x="pullModeMenu.x"
+      :y="pullModeMenu.y"
+      :items="pullModeMenuItems"
+      @close="pullModeMenu.visible = false"
+      @select="onPullModeSelect"
     />
   </div>
 </template>
@@ -710,11 +793,11 @@ async function handleDblClick(e: MouseEvent) {
   border: 1px solid var(--border);
   cursor: pointer;
   color: var(--text-secondary);
-  padding: 4px 8px;
+  padding: 2px 6px;
   border-radius: 4px;
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
   font-size: 11px;
   font-family: inherit;
   transition: background 0.15s, color 0.15s, border-color 0.15s;
@@ -732,9 +815,38 @@ async function handleDblClick(e: MouseEvent) {
   cursor: not-allowed;
 }
 
-.btn-tool--pull .chevron {
-  opacity: 0.6;
-  margin-left: 1px;
+.btn-tool-group {
+  display: flex;
+  align-items: stretch;
+}
+
+.btn-tool-group .btn-tool--main {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+  border-right: none;
+}
+
+.btn-tool-group .btn-tool--chevron {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  padding: 0 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.spinner {
+  width: 12px;
+  height: 12px;
+  border: 1.5px solid var(--text-muted);
+  border-top-color: var(--accent-blue);
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 
 .btn-icon-only {

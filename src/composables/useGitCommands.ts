@@ -11,22 +11,29 @@ import type {
   ReflogEntry,
 } from '@/types/git'
 import { useErrorsStore } from '@/stores/errors'
+import { useDebugStore } from '@/stores/debug'
 
 export function useGitCommands() {
   const errorsStore = useErrorsStore()
+  const debugStore = useDebugStore()
 
   /**
    * 统一包装所有 IPC 调用：
    * 1. 成功 → 返回原值
    * 2. 失败 → push 到 errorsStore，rethrow 一个 Error(friendlyMessage)
    *
-   * 调用方 catch 时拿到的 e.message 已经是中文友好消息。
-   * 想看原始错误翻 errorsStore.entries。
+   * 每次调用同时记录到 debugStore（命令名、参数、耗时、结果）。
    */
   async function call<T>(op: string, args?: Record<string, unknown>): Promise<T> {
+    const dbg = debugStore.push(op, args)
+    const start = performance.now()
     try {
-      return await invoke<T>(op, args)
+      const result = await invoke<T>(op, args)
+      debugStore.resolve(dbg.id, performance.now() - start)
+      return result
     } catch (raw) {
+      const rawStr = typeof raw === 'string' ? raw : raw instanceof Error ? raw.message : JSON.stringify(raw)
+      debugStore.reject(dbg.id, performance.now() - start, rawStr)
       const entry = errorsStore.push(op, raw)
       throw new Error(entry.friendly)
     }
@@ -146,8 +153,12 @@ export function useGitCommands() {
   const pushBranch = (repoId: string, remoteName: string, branchName: string) =>
     call<void>('push_branch', { repoId, remoteName, branchName })
 
-  const pullBranch = (repoId: string, remoteName: string, branchName: string) =>
-    call<void>('pull_branch', { repoId, remoteName, branchName })
+  const pullBranch = (
+    repoId: string,
+    remoteName: string,
+    branchName: string,
+    mode: 'ff' | 'ff_only' | 'rebase',
+  ) => call<void>('pull_branch', { repoId, remoteName, branchName, mode })
 
   const listRemotes = (repoId: string) =>
     call<string[]>('list_remotes', { repoId })

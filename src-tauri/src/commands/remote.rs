@@ -11,10 +11,13 @@ pub async fn fetch_remote(
     remote_name: String,
     repo_manager: State<'_, RepoManager>,
 ) -> Result<(), GitError> {
+    log::debug!("[fetch_remote] remote={remote_name}");
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    GitEngine::fetch(&meta.path, &remote_name)
+    let result = GitEngine::fetch(&meta.path, &remote_name);
+    log::debug!("[fetch_remote] result={result:?}");
+    result
 }
 
 #[tauri::command]
@@ -24,10 +27,13 @@ pub async fn push_branch(
     branch_name: String,
     repo_manager: State<'_, RepoManager>,
 ) -> Result<(), GitError> {
+    log::debug!("[push_branch] remote={remote_name} branch={branch_name}");
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    GitEngine::push(&meta.path, &remote_name, &branch_name)
+    let result = GitEngine::push(&meta.path, &remote_name, &branch_name);
+    log::debug!("[push_branch] result={result:?}");
+    result
 }
 
 #[tauri::command]
@@ -35,12 +41,16 @@ pub async fn pull_branch(
     repo_id: String,
     remote_name: String,
     branch_name: String,
+    mode: String,
     repo_manager: State<'_, RepoManager>,
 ) -> Result<(), GitError> {
+    log::debug!("[pull_branch] remote={remote_name} branch={branch_name} mode={mode}");
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    GitEngine::pull(&meta.path, &remote_name, &branch_name)
+    let result = GitEngine::pull(&meta.path, &remote_name, &branch_name, &mode);
+    log::debug!("[pull_branch] result={result:?}");
+    result
 }
 
 #[tauri::command]

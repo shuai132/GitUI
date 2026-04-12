@@ -26,6 +26,7 @@ pub async fn create_branch(
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
+    log::debug!("[create_branch] name={name} from_oid={from_oid:?}");
     GitEngine::create_branch(&meta.path, &name, from_oid.as_deref())
 }
 
@@ -35,6 +36,7 @@ pub async fn switch_branch(
     name: String,
     repo_manager: State<'_, RepoManager>,
 ) -> Result<(), GitError> {
+    log::debug!("[switch_branch] name={name}");
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
@@ -47,6 +49,7 @@ pub async fn delete_branch(
     name: String,
     repo_manager: State<'_, RepoManager>,
 ) -> Result<(), GitError> {
+    log::debug!("[delete_branch] name={name}");
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
