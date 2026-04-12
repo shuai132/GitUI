@@ -9,6 +9,7 @@ import { useUiStore } from '@/stores/ui'
 import { buildBranchTree } from '@/utils/branchTree'
 import type { BranchInfo, SubmoduleInfo, StashEntry } from '@/types/git'
 import BranchTreeNode from './BranchTreeNode.vue'
+import { useSidebarSectionState } from '@/composables/useSidebarSectionState'
 import ContextMenu, { type ContextMenuItem } from '@/components/common/ContextMenu.vue'
 import CheckoutRemoteDialog from '@/components/branch/CheckoutRemoteDialog.vue'
 import EditSubmoduleDialog from '@/components/submodule/EditSubmoduleDialog.vue'
@@ -19,6 +20,7 @@ const historyStore = useHistoryStore()
 const submodulesStore = useSubmodulesStore()
 const stashStore = useStashStore()
 const uiStore = useUiStore()
+const sectionState = useSidebarSectionState()
 
 // Local branches
 const localBranches = computed(() =>
@@ -474,26 +476,36 @@ async function onStashMenuAction(action: string) {
     <div class="sidebar-scroll">
       <!-- LOCAL BRANCHES section -->
       <div class="section" v-if="localBranches.length > 0 && repoStore.activeRepoId">
-        <div class="section-title">LOCAL BRANCHES</div>
-        <div
-          v-for="b in localBranches"
-          :key="b.name"
-          class="branch-item"
-          :class="{ 'branch-item--current': b.is_head }"
-          @click="b.commit_oid && jumpToBranchCommit(b.commit_oid)"
-          @dblclick.stop="!b.is_head && switchBranch(b.name)"
-          @contextmenu="openContextMenu($event, b)"
-        >
-          <span class="branch-dot" :class="b.is_head ? 'dot-solid' : 'dot-outline'" />
-          <span class="branch-label">{{ b.name }}</span>
-          <span
-            v-if="(b.ahead ?? 0) > 0 || (b.behind ?? 0) > 0"
-            class="ahead-behind"
-          >
-            <span v-if="(b.ahead ?? 0) > 0" class="ab-ahead">↑{{ b.ahead }}</span>
-            <span v-if="(b.behind ?? 0) > 0" class="ab-behind">↓{{ b.behind }}</span>
-          </span>
+        <div class="section-title collapsible" @click="sectionState.toggle('local-branches')">
+          <svg class="chevron" :class="{ open: !sectionState.isCollapsed('local-branches') }"
+               width="10" height="10" viewBox="0 0 24 24"
+               fill="none" stroke="currentColor" stroke-width="2.5">
+            <polyline points="9 18 15 12 9 6" />
+          </svg>
+          <span class="section-label">LOCAL BRANCHES</span>
+          <span class="section-count">{{ localBranches.length }}</span>
         </div>
+        <template v-if="!sectionState.isCollapsed('local-branches')">
+          <div
+            v-for="b in localBranches"
+            :key="b.name"
+            class="branch-item"
+            :class="{ 'branch-item--current': b.is_head }"
+            @click="b.commit_oid && jumpToBranchCommit(b.commit_oid)"
+            @dblclick.stop="!b.is_head && switchBranch(b.name)"
+            @contextmenu="openContextMenu($event, b)"
+          >
+            <span class="branch-dot" :class="b.is_head ? 'dot-solid' : 'dot-outline'" />
+            <span class="branch-label">{{ b.name }}</span>
+            <span
+              v-if="(b.ahead ?? 0) > 0 || (b.behind ?? 0) > 0"
+              class="ahead-behind"
+            >
+              <span v-if="(b.ahead ?? 0) > 0" class="ab-ahead">↑{{ b.ahead }}</span>
+              <span v-if="(b.behind ?? 0) > 0" class="ab-behind">↓{{ b.behind }}</span>
+            </span>
+          </div>
+        </template>
       </div>
 
       <!-- STASH section -->
@@ -501,30 +513,43 @@ async function onStashMenuAction(action: string) {
         class="section"
         v-if="stashStore.entries.length > 0 && repoStore.activeRepoId"
       >
-        <div class="section-title submodule-title">
-          <span>STASH</span>
+        <div class="section-title collapsible" @click="sectionState.toggle('stash')">
+          <svg class="chevron" :class="{ open: !sectionState.isCollapsed('stash') }"
+               width="10" height="10" viewBox="0 0 24 24"
+               fill="none" stroke="currentColor" stroke-width="2.5">
+            <polyline points="9 18 15 12 9 6" />
+          </svg>
+          <span class="section-label">STASH</span>
           <span class="section-count">{{ stashStore.entries.length }}</span>
         </div>
-        <div
-          v-for="s in stashStore.entries"
-          :key="s.index"
-          class="branch-item stash-item"
-          :title="s.message"
-          @click="onStashClick(s.commit_oid)"
-          @contextmenu="openStashMenu($event, s)"
-        >
-          <span class="branch-dot dot-outline" />
-          <span class="stash-index">{{ '{' + s.index + '}' }}</span>
-          <span class="branch-label">{{ s.message }}</span>
-        </div>
+        <template v-if="!sectionState.isCollapsed('stash')">
+          <div
+            v-for="s in stashStore.entries"
+            :key="s.index"
+            class="branch-item stash-item"
+            :title="s.message"
+            @click="onStashClick(s.commit_oid)"
+            @contextmenu="openStashMenu($event, s)"
+          >
+            <span class="branch-dot dot-outline" />
+            <span class="stash-index">{{ '{' + s.index + '}' }}</span>
+            <span class="branch-label">{{ s.message }}</span>
+          </div>
+        </template>
       </div>
 
       <!-- SUBMODULES section -->
       <div class="section" v-if="submodules.length > 0 && repoStore.activeRepoId">
-        <div class="section-title submodule-title">
-          <span>SUBMODULES</span>
+        <div class="section-title collapsible" @click="sectionState.toggle('submodules')">
+          <svg class="chevron" :class="{ open: !sectionState.isCollapsed('submodules') }"
+               width="10" height="10" viewBox="0 0 24 24"
+               fill="none" stroke="currentColor" stroke-width="2.5">
+            <polyline points="9 18 15 12 9 6" />
+          </svg>
+          <span class="section-label">SUBMODULES</span>
           <span class="section-count">{{ submodules.length }}</span>
         </div>
+        <template v-if="!sectionState.isCollapsed('submodules')">
         <div
           v-for="s in submodules"
           :key="s.name"
@@ -584,20 +609,31 @@ async function onStashMenuAction(action: string) {
             </svg>
           </button>
         </div>
+        </template>
       </div>
 
       <!-- REMOTE tree section -->
       <div class="section" v-if="remoteTree.length > 0 && repoStore.activeRepoId">
-        <div class="section-title">REMOTE</div>
-        <BranchTreeNode
-          v-for="root in remoteTree"
-          :key="root.path"
-          :node="root"
-          :level="0"
-          @select-branch="onSelectRemoteBranch"
-          @dblclick-branch="onDblclickRemoteBranch"
-          @branch-context-menu="openContextMenu"
-        />
+        <div class="section-title collapsible" @click="sectionState.toggle('remote')">
+          <svg class="chevron" :class="{ open: !sectionState.isCollapsed('remote') }"
+               width="10" height="10" viewBox="0 0 24 24"
+               fill="none" stroke="currentColor" stroke-width="2.5">
+            <polyline points="9 18 15 12 9 6" />
+          </svg>
+          <span class="section-label">REMOTE</span>
+          <span class="section-count">{{ remoteBranchesFlat.length }}</span>
+        </div>
+        <template v-if="!sectionState.isCollapsed('remote')">
+          <BranchTreeNode
+            v-for="root in remoteTree"
+            :key="root.path"
+            :node="root"
+            :level="0"
+            @select-branch="onSelectRemoteBranch"
+            @dblclick-branch="onDblclickRemoteBranch"
+            @branch-context-menu="openContextMenu"
+          />
+        </template>
       </div>
     </div>
 
@@ -765,15 +801,22 @@ async function onStashMenuAction(action: string) {
 
 .section-title.collapsible {
   cursor: pointer;
+  gap: 6px;
 }
 
 .section-title.collapsible:hover {
   color: var(--text-secondary);
 }
 
+.section-label {
+  flex: 1;
+}
+
 .chevron {
-  transition: transform 0.2s;
+  transition: transform 0.15s;
   transform: rotate(0deg);
+  flex-shrink: 0;
+  color: var(--text-muted);
 }
 
 .chevron.open {
@@ -907,11 +950,6 @@ async function onStashMenuAction(action: string) {
 }
 
 /* ── Submodules section ──────────────────────────────────────────── */
-.submodule-title {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
 
 .section-count {
   font-size: 10px;
