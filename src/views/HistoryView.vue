@@ -16,6 +16,8 @@ import WipPanel from '@/components/workspace/WipPanel.vue'
 import ContextMenu, { type ContextMenuItem } from '@/components/common/ContextMenu.vue'
 import CreateBranchDialog from '@/components/commit/CreateBranchDialog.vue'
 import CreateTagDialog from '@/components/commit/CreateTagDialog.vue'
+import { usePanelDock } from '@/composables/usePanelDock'
+import type { PanelId } from '@/stores/ui'
 import type { BranchInfo, CommitInfo } from '@/types/git'
 
 const historyStore = useHistoryStore()
@@ -200,6 +202,19 @@ const sizes = uiStore.historyPaneSizes
 
 // ── Content area grid style ──────────────────────────────────────────
 const contentAreaRef = ref<HTMLElement | null>(null)
+
+// ── Panel dock（拖拽停靠）────────────────────────────────────────────
+const {
+  isDragging,
+  draggedPanel,
+  hoveredEdge,
+  hoveredSwapTarget,
+  onDragHandlePointerDown,
+} = usePanelDock({
+  containerRef: contentAreaRef,
+  currentLayout: computed(() => uiStore.dockLayout),
+  onLayoutChange: (layout) => uiStore.setDockLayout(layout),
+})
 const contentGridStyle = computed(() => {
   if (!showDetail.value) {
     return {
@@ -208,31 +223,60 @@ const contentGridStyle = computed(() => {
       gridTemplateAreas: '"commits"',
     }
   }
-  if (uiStore.historyLayoutMode === 'horizontal') {
-    return {
-      gridTemplateColumns: `${sizes.commitPanePct}% 1fr`,
-      gridTemplateRows: `${sizes.diffRowPct}% ${100 - sizes.diffRowPct}%`,
-      gridTemplateAreas: '"commits info" "commits diff"',
-    }
+  const { spanning, edge, first, second } = uiStore.dockLayout
+  const isH = edge === 'left' || edge === 'right'
+  const mainPct = isH ? sizes.commitPanePct : sizes.commitRowPct
+  const secPct = isH ? sizes.diffRowPct : sizes.infoPanePct
+
+  let areas: string, rows: string, cols: string
+  switch (edge) {
+    case 'top':
+      areas = `"${spanning} ${spanning}" "${first} ${second}"`
+      rows = `${mainPct}% ${100 - mainPct}%`
+      cols = `${secPct}% 1fr`
+      break
+    case 'bottom':
+      areas = `"${first} ${second}" "${spanning} ${spanning}"`
+      rows = `${100 - mainPct}% ${mainPct}%`
+      cols = `${secPct}% 1fr`
+      break
+    case 'left':
+      areas = `"${spanning} ${first}" "${spanning} ${second}"`
+      cols = `${mainPct}% 1fr`
+      rows = `${secPct}% ${100 - secPct}%`
+      break
+    case 'right':
+      areas = `"${first} ${spanning}" "${second} ${spanning}"`
+      cols = `${100 - mainPct}% ${mainPct}%`
+      rows = `${secPct}% ${100 - secPct}%`
+      break
   }
-  return {
-    gridTemplateColumns: `${sizes.infoPanePct}% 1fr`,
-    gridTemplateRows: `${sizes.commitRowPct}% ${100 - sizes.commitRowPct}%`,
-    gridTemplateAreas: '"commits commits" "info diff"',
-  }
+  return { gridTemplateAreas: areas, gridTemplateRows: rows, gridTemplateColumns: cols }
 })
 
-// ── Pane resize (horizontal: commit|right, vertical: info|diff) ──────
-function startPaneResize(e: PointerEvent) {
+// ── Main resize：spanning 面板与 pair 区之间的分割 ──────────────────
+// edge=top/bottom → 水平分割线（上下拖）→ 改 commitRowPct
+// edge=left/right → 垂直分割线（左右拖）→ 改 commitPanePct
+function startMainResize(e: PointerEvent) {
   e.preventDefault()
   const container = contentAreaRef.value
   if (!container) return
   const rect = container.getBoundingClientRect()
+  const edge = uiStore.dockLayout.edge
+  const isH = edge === 'left' || edge === 'right'
+  const cursor = isH ? 'col-resize' : 'row-resize'
+
   const onMove = (ev: PointerEvent) => {
-    const pct = ((ev.clientX - rect.left) / rect.width) * 100
-    const clamped = Math.max(20, Math.min(80, pct))
-    if (uiStore.historyLayoutMode === 'horizontal') sizes.commitPanePct = clamped
-    else sizes.infoPanePct = clamped
+    let pct: number
+    if (isH) {
+      pct = ((ev.clientX - rect.left) / rect.width) * 100
+      if (edge === 'right') pct = 100 - pct
+      sizes.commitPanePct = Math.max(20, Math.min(80, pct))
+    } else {
+      pct = ((ev.clientY - rect.top) / rect.height) * 100
+      if (edge === 'bottom') pct = 100 - pct
+      sizes.commitRowPct = Math.max(20, Math.min(85, pct))
+    }
   }
   const onUp = () => {
     window.removeEventListener('pointermove', onMove)
@@ -243,21 +287,32 @@ function startPaneResize(e: PointerEvent) {
   }
   window.addEventListener('pointermove', onMove)
   window.addEventListener('pointerup', onUp)
-  document.body.style.cursor = 'col-resize'
+  document.body.style.cursor = cursor
   document.body.style.userSelect = 'none'
 }
 
-// ── Row resize (horizontal: diff|info, vertical: commit|bottom) ──────
-function startRowResize(e: PointerEvent) {
+// ── Secondary resize：pair 区内两个面板之间的分割 ──────────────────────
+// edge=top/bottom → pair 横向排列 → 垂直分割线（左右拖）→ 改 infoPanePct
+// edge=left/right → pair 纵向排列 → 水平分割线（上下拖）→ 改 diffRowPct
+function startSecondaryResize(e: PointerEvent) {
   e.preventDefault()
   const container = contentAreaRef.value
   if (!container) return
   const rect = container.getBoundingClientRect()
+  const edge = uiStore.dockLayout.edge
+  const isH = edge === 'left' || edge === 'right'
+  const cursor = isH ? 'row-resize' : 'col-resize'
+
   const onMove = (ev: PointerEvent) => {
-    const pct = ((ev.clientY - rect.top) / rect.height) * 100
-    const clamped = Math.max(20, Math.min(85, pct))
-    if (uiStore.historyLayoutMode === 'horizontal') sizes.diffRowPct = clamped
-    else sizes.commitRowPct = clamped
+    if (isH) {
+      // pair 纵向排列，拖动改行高比例
+      const pct = ((ev.clientY - rect.top) / rect.height) * 100
+      sizes.diffRowPct = Math.max(20, Math.min(85, pct))
+    } else {
+      // pair 横向排列，拖动改列宽比例
+      const pct = ((ev.clientX - rect.left) / rect.width) * 100
+      sizes.infoPanePct = Math.max(20, Math.min(80, pct))
+    }
   }
   const onUp = () => {
     window.removeEventListener('pointermove', onMove)
@@ -268,7 +323,7 @@ function startRowResize(e: PointerEvent) {
   }
   window.addEventListener('pointermove', onMove)
   window.addEventListener('pointerup', onUp)
-  document.body.style.cursor = 'row-resize'
+  document.body.style.cursor = cursor
   document.body.style.userSelect = 'none'
 }
 
@@ -501,6 +556,57 @@ watch(
   { immediate: true },
 )
 
+// ── Resize handle 位置 computed ──────────────────────────────────────
+// mainResizeStyle: spanning 与 pair 之间的分割条
+const mainResizeStyle = computed(() => {
+  const { edge } = uiStore.dockLayout
+  const isH = edge === 'left' || edge === 'right'
+  if (isH) {
+    // 垂直分割线
+    const pos = edge === 'left' ? `${sizes.commitPanePct}%` : `${100 - sizes.commitPanePct}%`
+    return { left: pos, top: '0', bottom: '0', width: '6px', height: 'auto', transform: 'translateX(-3px)', cursor: 'col-resize' }
+  }
+  // 水平分割线
+  const pos = edge === 'top' ? `${sizes.commitRowPct}%` : `${100 - sizes.commitRowPct}%`
+  return { top: pos, left: '0', right: '0', height: '6px', width: 'auto', transform: 'translateY(-3px)', cursor: 'row-resize' }
+})
+
+// secondaryResizeStyle: pair 区内两个面板之间的分割条
+const secondaryResizeStyle = computed(() => {
+  const { edge } = uiStore.dockLayout
+  const isH = edge === 'left' || edge === 'right'
+  if (isH) {
+    // pair 纵向排列 → 水平分割线
+    const spanPct = sizes.commitPanePct
+    return {
+      top: `${sizes.diffRowPct}%`,
+      left: edge === 'left' ? `${spanPct}%` : '0',
+      right: edge === 'right' ? `${spanPct}%` : '0',
+      height: '6px', width: 'auto', transform: 'translateY(-3px)', cursor: 'row-resize',
+    }
+  }
+  // pair 横向排列 → 垂直分割线
+  const spanPct = sizes.commitRowPct
+  return {
+    left: `${sizes.infoPanePct}%`,
+    top: edge === 'top' ? `${spanPct}%` : '0',
+    bottom: edge === 'bottom' ? `${spanPct}%` : '0',
+    width: '6px', height: 'auto', transform: 'translateX(-3px)', cursor: 'col-resize',
+  }
+})
+
+// ── 面板边框 computed ────────────────────────────────────────────────
+const panelBorders = computed(() => {
+  const { edge, spanning, first } = uiStore.dockLayout
+  const borderSide: Record<string, string> = { top: 'bottom', bottom: 'top', left: 'right', right: 'left' }
+  const pairBorderSide = (edge === 'top' || edge === 'bottom') ? 'right' : 'bottom'
+  const border = '1px solid var(--border)'
+  return {
+    [spanning]: { [`border-${borderSide[edge]}`]: border } as Record<string, string>,
+    [first]: { [`border-${pairBorderSide}`]: border } as Record<string, string>,
+  }
+})
+
 onMounted(() => {
   window.addEventListener('keydown', onKeyDown)
 })
@@ -514,14 +620,16 @@ onUnmounted(() => {
     <!-- Content area -->
     <div
       class="content-area"
-      :class="'layout-' + uiStore.historyLayoutMode"
       :style="contentGridStyle"
       ref="contentAreaRef"
     >
       <!-- Commit graph + list -->
-      <div class="commit-panel">
+      <div class="commit-panel" :style="panelBorders['commits']" data-panel-id="commits">
         <!-- Column headers -->
         <div class="col-header">
+          <div class="dock-handle" @pointerdown="onDragHandlePointerDown('commits', $event)" title="拖拽停靠">
+            <svg width="8" height="14" viewBox="0 0 8 14"><circle cx="2" cy="2" r="1" fill="currentColor"/><circle cx="6" cy="2" r="1" fill="currentColor"/><circle cx="2" cy="7" r="1" fill="currentColor"/><circle cx="6" cy="7" r="1" fill="currentColor"/><circle cx="2" cy="12" r="1" fill="currentColor"/><circle cx="6" cy="12" r="1" fill="currentColor"/></svg>
+          </div>
           <div class="col-graph" :style="{ width: graphColWidth + 'px' }"></div>
           <div class="col-message">描述</div>
           <div class="col-hash header-col" :style="{ width: sizes.hashColW + 'px' }">
@@ -638,12 +746,21 @@ onUnmounted(() => {
       </div>
 
       <!-- Diff (三种模式由 DiffView 内部切换) -->
-      <div class="diff-area" v-if="showDetail">
+      <div class="diff-area" v-if="showDetail" :style="panelBorders['diff']" data-panel-id="diff">
+        <div class="dock-handle dock-handle-float" @pointerdown="onDragHandlePointerDown('diff', $event)" title="拖拽停靠">
+          <svg width="8" height="14" viewBox="0 0 8 14"><circle cx="2" cy="2" r="1" fill="currentColor"/><circle cx="6" cy="2" r="1" fill="currentColor"/><circle cx="2" cy="7" r="1" fill="currentColor"/><circle cx="6" cy="7" r="1" fill="currentColor"/><circle cx="2" cy="12" r="1" fill="currentColor"/><circle cx="6" cy="12" r="1" fill="currentColor"/></svg>
+        </div>
         <DiffView :diff="currentDiff" @close="showDetail = false" />
       </div>
 
-      <!-- Right info panel: WipPanel when WIP row selected, else CommitInfoPanel -->
-      <div class="info-pane" v-if="showDetail">
+      <!-- Info panel: WipPanel when WIP row selected, else CommitInfoPanel -->
+      <div class="info-pane" v-if="showDetail" :style="panelBorders['info']" data-panel-id="info">
+        <div class="pane-header">
+          <div class="dock-handle" @pointerdown="onDragHandlePointerDown('info', $event)" title="拖拽停靠">
+            <svg width="8" height="14" viewBox="0 0 8 14"><circle cx="2" cy="2" r="1" fill="currentColor"/><circle cx="6" cy="2" r="1" fill="currentColor"/><circle cx="2" cy="7" r="1" fill="currentColor"/><circle cx="6" cy="7" r="1" fill="currentColor"/><circle cx="2" cy="12" r="1" fill="currentColor"/><circle cx="6" cy="12" r="1" fill="currentColor"/></svg>
+          </div>
+          <span class="pane-header-title">详情</span>
+        </div>
         <WipPanel v-if="selectedWip" />
         <CommitInfoPanel
           v-else
@@ -653,25 +770,37 @@ onUnmounted(() => {
         />
       </div>
 
-      <!-- Vertical resize handle (左右拖动) -->
+      <!-- Main resize handle: spanning 面板与 pair 区之间 -->
       <div
         v-if="showDetail"
-        class="pane-resize"
-        :style="uiStore.historyLayoutMode === 'horizontal'
-          ? { left: sizes.commitPanePct + '%', top: 0, bottom: 0 }
-          : { left: sizes.infoPanePct + '%', top: sizes.commitRowPct + '%', bottom: 0 }"
-        @pointerdown="startPaneResize"
+        class="pane-resize-handle"
+        :style="mainResizeStyle"
+        @pointerdown="startMainResize"
       />
 
-      <!-- Horizontal resize handle (上下拖动) -->
+      <!-- Secondary resize handle: pair 区内两个面板之间 -->
       <div
         v-if="showDetail"
-        class="pane-resize-h"
-        :style="uiStore.historyLayoutMode === 'horizontal'
-          ? { top: sizes.diffRowPct + '%', left: sizes.commitPanePct + '%', right: 0 }
-          : { top: sizes.commitRowPct + '%', left: 0, right: 0 }"
-        @pointerdown="startRowResize"
+        class="pane-resize-handle"
+        :style="secondaryResizeStyle"
+        @pointerdown="startSecondaryResize"
       />
+
+      <!-- Dock drop zone overlay -->
+      <div v-if="isDragging" class="dock-overlay">
+        <div class="dock-zone dock-zone-top" :class="{ active: hoveredEdge === 'top' }">
+          <div class="dock-zone-indicator" />
+        </div>
+        <div class="dock-zone dock-zone-bottom" :class="{ active: hoveredEdge === 'bottom' }">
+          <div class="dock-zone-indicator" />
+        </div>
+        <div class="dock-zone dock-zone-left" :class="{ active: hoveredEdge === 'left' }">
+          <div class="dock-zone-indicator" />
+        </div>
+        <div class="dock-zone dock-zone-right" :class="{ active: hoveredEdge === 'right' }">
+          <div class="dock-zone-indicator" />
+        </div>
+      </div>
     </div>
   </div>
 
@@ -722,7 +851,7 @@ onUnmounted(() => {
   font-size: 13px;
 }
 
-/* ── Content area (两种布局模式) ──────────────────────────────────── */
+/* ── Content area ────────────────────────────────────────────────── */
 .content-area {
   display: grid;
   overflow: hidden;
@@ -730,61 +859,127 @@ onUnmounted(() => {
   position: relative;
 }
 
-/* 左右布局：commits 占左列满高；右列上 info 下 diff */
-.content-area.layout-horizontal {
-  grid-template-areas:
-    "commits info"
-    "commits diff";
-}
-.content-area.layout-horizontal .commit-panel {
-  border-right: 1px solid var(--border);
-}
-
-/* 上下布局：上 commits 占满宽；下 左 info 右 diff */
-.content-area.layout-vertical {
-  grid-template-areas:
-    "commits commits"
-    "info diff";
-}
-.content-area.layout-vertical .commit-panel {
-  border-bottom: 1px solid var(--border);
-}
-.content-area.layout-vertical .info-pane {
-  border-right: 1px solid var(--border);
-}
-.content-area.layout-vertical .info-pane :deep(.commit-info-panel),
-.content-area.layout-vertical .info-pane :deep(.panel-empty) {
+/* 去掉 CommitInfoPanel / WipPanel 自带的 border-top，由外层 panelBorders 控制 */
+.info-pane :deep(.commit-info-panel),
+.info-pane :deep(.panel-empty) {
   border-top: none;
 }
 
-/* Pane resize handle (左右拖动主分隔条) */
-.pane-resize {
+/* Pane resize handle (通用，方向由 inline style 控制) */
+.pane-resize-handle {
   position: absolute;
-  width: 6px;
-  transform: translateX(-3px);
-  cursor: col-resize;
   z-index: 15;
   background: transparent;
   transition: background 0.15s;
 }
-.pane-resize:hover,
-.pane-resize:active {
+.pane-resize-handle:hover,
+.pane-resize-handle:active {
   background: rgba(138, 173, 244, 0.3);
 }
 
-/* Pane resize handle (上下拖动主分隔条) */
-.pane-resize-h {
-  position: absolute;
-  height: 6px;
-  transform: translateY(-3px);
-  cursor: row-resize;
-  z-index: 15;
-  background: transparent;
-  transition: background 0.15s;
+/* ── Dock handle（拖拽手柄）──────────────────────────────────── */
+.dock-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  flex-shrink: 0;
+  cursor: grab;
+  color: var(--text-muted);
+  opacity: 0;
+  transition: opacity 0.15s;
 }
-.pane-resize-h:hover,
-.pane-resize-h:active {
-  background: rgba(138, 173, 244, 0.3);
+.dock-handle:hover {
+  opacity: 1;
+  color: var(--text-secondary);
+}
+.dock-handle:active {
+  cursor: grabbing;
+}
+/* 鼠标进入面板时显示手柄 */
+.commit-panel:hover > .col-header > .dock-handle,
+.info-pane:hover > .pane-header > .dock-handle,
+.diff-area:hover > .dock-handle-float {
+  opacity: 0.5;
+}
+
+/* Diff 面板的浮动手柄 */
+.dock-handle-float {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  z-index: 10;
+  width: 16px;
+  height: 20px;
+}
+
+/* Info 面板的轻量级标题栏 */
+.pane-header {
+  display: flex;
+  align-items: center;
+  height: 22px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.pane-header-title {
+  padding: 0 4px;
+}
+
+/* ── Dock overlay（drop zone）────────────────────────────────── */
+.dock-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 100;
+  pointer-events: none;
+}
+
+.dock-zone {
+  position: absolute;
+  pointer-events: auto;
+}
+
+.dock-zone-indicator {
+  width: 100%;
+  height: 100%;
+  border: 2px dashed transparent;
+  border-radius: 4px;
+  transition: background 0.12s, border-color 0.12s;
+}
+
+.dock-zone.active .dock-zone-indicator {
+  background: rgba(138, 173, 244, 0.15);
+  border-color: rgba(138, 173, 244, 0.5);
+}
+
+.dock-zone-top {
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 60px;
+}
+.dock-zone-bottom {
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 60px;
+}
+.dock-zone-left {
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 60px;
+}
+.dock-zone-right {
+  top: 0;
+  bottom: 0;
+  right: 0;
+  width: 60px;
 }
 
 /* Grid 区域映射 */
@@ -821,6 +1016,7 @@ onUnmounted(() => {
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.04em;
+  overflow: hidden;
 }
 
 .commit-list-body {
@@ -835,6 +1031,7 @@ onUnmounted(() => {
   cursor: pointer;
   border-bottom: 1px solid rgba(54, 58, 79, 0.4);
   transition: background 0.08s;
+  overflow: hidden;
 }
 
 .commit-row:hover {
@@ -863,7 +1060,7 @@ onUnmounted(() => {
 
 .col-message {
   flex: 1;
-  min-width: 0;
+  min-width: 120px;
   padding: 0 8px;
   display: flex;
   align-items: center;
@@ -980,6 +1177,7 @@ onUnmounted(() => {
 
 /* ── Diff area ───────────────────────────────────────────────────── */
 .diff-area {
+  position: relative;
   display: flex;
   flex-direction: column;
   overflow: hidden;

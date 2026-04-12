@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 
 // ── localStorage keys（集中管理） ───────────────────────────────────
 const KEYS = {
@@ -11,6 +11,7 @@ const KEYS = {
   historySizes: 'gitui.history.sizes',
   diffViewMode: 'gitui.diff.viewMode',
   diffHighlight: 'gitui.diff.syntax-highlight',
+  dockLayout: 'gitui.history.dockLayout',
   debugPanel: 'gitui.debug.visible',
 } as const
 
@@ -48,9 +49,23 @@ function loadJson<T>(key: string, fallback: T): T {
 // ── 类型 ──────────────────────────────────────────────────────────────
 export type HistoryLayoutMode = 'horizontal' | 'vertical'
 export type DiffViewMode = 'side-by-side' | 'inline' | 'by-hunk'
+export type PanelId = 'commits' | 'info' | 'diff'
+export type DockEdge = 'top' | 'bottom' | 'left' | 'right'
 
-const HISTORY_LAYOUT_VALUES = ['horizontal', 'vertical'] as const
+export interface DockLayout {
+  spanning: PanelId
+  edge: DockEdge
+  first: PanelId
+  second: PanelId
+}
+
 const DIFF_MODE_VALUES = ['side-by-side', 'inline', 'by-hunk'] as const
+
+const PRESET_LAYOUTS: Record<string, DockLayout> = {
+  vertical:   { spanning: 'commits', edge: 'top',  first: 'info', second: 'diff' },
+  horizontal: { spanning: 'commits', edge: 'left', first: 'info', second: 'diff' },
+}
+const DEFAULT_DOCK_LAYOUT: DockLayout = PRESET_LAYOUTS.vertical
 
 export interface HistoryPaneSizes {
   /** horizontal 布局：commit 列占比（%） */
@@ -94,9 +109,22 @@ export const useUiStore = defineStore('ui', () => {
   const sidebarWidth = ref<number>(loadNumber(KEYS.sidebarWidth, 220))
   const reposHeight = ref<number>(loadNumber(KEYS.reposHeight, 160))
 
-  const historyLayoutMode = ref<HistoryLayoutMode>(
-    loadString<HistoryLayoutMode>(KEYS.historyLayout, 'vertical', HISTORY_LAYOUT_VALUES),
+  // 迁移旧 historyLayout key → dockLayout
+  if (!localStorage.getItem(KEYS.dockLayout) && localStorage.getItem(KEYS.historyLayout)) {
+    const old = localStorage.getItem(KEYS.historyLayout)
+    const migrated = old === 'horizontal' ? PRESET_LAYOUTS.horizontal : PRESET_LAYOUTS.vertical
+    localStorage.setItem(KEYS.dockLayout, JSON.stringify(migrated))
+  }
+
+  const dockLayout = ref<DockLayout>(
+    loadJson<DockLayout>(KEYS.dockLayout, DEFAULT_DOCK_LAYOUT),
   )
+
+  // 向后兼容：派生只读 historyLayoutMode
+  const historyLayoutMode = computed<HistoryLayoutMode>(() => {
+    const e = dockLayout.value.edge
+    return (e === 'left' || e === 'right') ? 'horizontal' : 'vertical'
+  })
 
   const showUnreachableCommits = ref<boolean>(loadBool(KEYS.showUnreachable, true))
   const showStashCommits = ref<boolean>(loadBool(KEYS.showStashes, true))
@@ -126,10 +154,18 @@ export const useUiStore = defineStore('ui', () => {
   }
 
   // Toggle / setter 类：直接写入
+  function setDockLayout(layout: DockLayout) {
+    dockLayout.value = layout
+    localStorage.setItem(KEYS.dockLayout, JSON.stringify(layout))
+  }
+
   function toggleHistoryLayout() {
-    historyLayoutMode.value =
-      historyLayoutMode.value === 'horizontal' ? 'vertical' : 'horizontal'
-    localStorage.setItem(KEYS.historyLayout, historyLayoutMode.value)
+    const e = dockLayout.value.edge
+    if (e === 'left' || e === 'right') {
+      setDockLayout(PRESET_LAYOUTS.vertical)
+    } else {
+      setDockLayout(PRESET_LAYOUTS.horizontal)
+    }
   }
 
   function toggleShowUnreachable() {
@@ -172,6 +208,7 @@ export const useUiStore = defineStore('ui', () => {
     historySearchQuery,
     sidebarWidth,
     reposHeight,
+    dockLayout,
     historyLayoutMode,
     showUnreachableCommits,
     showStashCommits,
@@ -184,6 +221,7 @@ export const useUiStore = defineStore('ui', () => {
     persistReposHeight,
     persistHistoryPaneSizes,
     // setters / togglers
+    setDockLayout,
     toggleHistoryLayout,
     toggleShowUnreachable,
     toggleShowStashes,
