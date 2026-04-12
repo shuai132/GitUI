@@ -2,8 +2,8 @@
 
 ## 设计目标
 
-- **轻量、常驻**：关闭窗口隐藏到托盘，不退出进程，多仓库随时切换
-- **原生性能**：Git 操作通过 `git2-rs`（libgit2）in-process 执行，不 fork CLI
+- **轻量级**：极低的资源占用：保证低RAM占用、静默时CPU占用率要接近0
+- **高性能**：Git 操作通过 `git2-rs`（libgit2）in-process 执行
 - **跨平台**：桌面端基于 Tauri v2，macOS / Linux / Windows 一套代码
 - **响应式**：`.git/` 与工作区变动通过文件监控推送，前端自动刷新
 

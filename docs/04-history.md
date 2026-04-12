@@ -15,24 +15,11 @@
 
 ## 分页加载
 
-```rust
-pub fn get_log(path, offset, limit, include_unreachable, include_stashes) -> LogPage
-```
+后端 `GitEngine::get_log(path, offset, limit, include_unreachable, include_stashes)` 返回 `LogPage`（见 `git/types.rs`）。前端分页策略：
 
-返回：
-
-```rust
-pub struct LogPage {
-    pub commits: Vec<CommitInfo>,
-    pub has_more: bool,
-    pub total_loaded: usize,
-}
-```
-
-- 每页 `PAGE_SIZE = 200`（前端写死）
-- `loadLog()` 全量重载，`loadMore()` 从当前长度继续
-- 接近底部 5 行高度时触发 `loadMore`
-- 切换仓库 / toggle 丢失引用 / toggle 贮藏 时会触发 `loadLog`
+- 每页 200 条
+- `loadLog()` 全量重载；`loadMore()` 从当前长度续拉，列表接近底部 5 行高度时自动触发
+- 切换仓库、toggle 丢失引用、toggle 贮藏 都会触发 `loadLog`
 
 ### revwalk 构造
 
@@ -56,20 +43,7 @@ pub struct LogPage {
 
 ## 过滤与搜索
 
-顶栏右上角的搜索框展开后绑定 `uiStore.historySearchQuery`。`HistoryView` 用 computed `filteredCommits` 在前端过滤（不重查后端）：
-
-```ts
-const filteredCommits = computed(() => {
-  const q = uiStore.historySearchQuery.trim().toLowerCase()
-  if (!q) return historyStore.commits
-  return historyStore.commits.filter(c =>
-    c.summary.toLowerCase().includes(q) ||
-    c.author_name.toLowerCase().includes(q) ||
-    c.short_oid.toLowerCase().startsWith(q) ||
-    c.oid.toLowerCase().startsWith(q),
-  )
-})
-```
+顶栏右上角的搜索框展开后绑定 `uiStore.historySearchQuery`。`HistoryView` 用 computed `filteredCommits` 在前端做本地过滤（不重查后端），匹配 `summary` / `author_name` 的子串，以及 `short_oid` / `oid` 的前缀。
 
 搜索生效时 WIP 行隐藏、提交图隐藏（列表变成纯文本过滤结果）。列表末尾展示 `找到 N 条（已加载 M 条）` 提示。
 
@@ -92,7 +66,7 @@ const filteredCommits = computed(() => {
 
 ### 列宽拖动
 
-每个 header 列的左边缘有一条 6px 隐形 handle（`col-resize`），向右拖 → 本列缩小（因为 handle 在左边缘，delta 取反）。
+commit 列表 header 的每列左边缘有一条细隐形拖拽区（`col-resize`），拖动调整本列宽度。
 
 ## 右侧详情面板
 
@@ -104,9 +78,11 @@ const filteredCommits = computed(() => {
 - 关联的 refs（本地/远程分支、tags）
 - 变更文件列表，点击切换 `selectedFileDiffIndex`
 
-**文本选择与超长内容**：面板头部（summary + body）和 meta-grid 两块显式设 `user-select: text`，盖过全局 `* { user-select: none }`，支持选中复制 commit 标题、message、oid、作者、邮箱等。超长的单行内容（过长的 summary、完整 oid、长邮箱、多 parent 列表）改为水平滚动（`overflow-x: auto + white-space: nowrap`）而非 `text-overflow: ellipsis` 截断，配一条 4px 细滚动条，避免占垂直空间又能提示"右侧还有内容"。
+交互：
 
-**头部与变动文件的分隔条可拖拽**：CommitInfoPanel 把 `panel-header + meta-grid` 包进 `.top-section`，和下方 `.file-tabs` 之间放一个 `.top-resize` 水平拖拽条。头部高度由 `uiStore.historyPaneSizes.commitInfoTopH` 持久化（0 = 自适应内容）。拖动时实时改 store，pointerup 调 `persistHistoryPaneSizes()`。上下限：最低 60px，上限为面板总高减 80px，保证至少给 file-tabs 留出空间。当头部被固定高度后 `.top-section` 的 `overflow-y: auto` 负责内容溢出时的滚动。变动文件很多时用户可以把头部拖小，让 file-tabs 占据更多垂直空间。
+- **文本可选中复制**：头部和 meta 区支持选中复制 commit 标题、message、oid、作者、邮箱等
+- **超长单行水平滚动**：过长的 summary、完整 oid、长邮箱等不做省略号截断，改为横向滚动以避免信息丢失
+- **头部与文件列表可拖拽调高**：变动文件多时可把 meta 区拖小给文件列表腾出空间；高度持久化到 `uiStore`
 
 ### DiffView
 

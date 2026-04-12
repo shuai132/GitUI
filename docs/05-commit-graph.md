@@ -11,34 +11,12 @@
 
 ## 数据结构
 
-```ts
-export interface GraphRow {
-  oid: string
-  column: number            // 本 commit 所在的 lane 列号
-  color: string             // 本 commit 的圆点色
-  segments: GraphSegment[]  // 本行要画的所有线段
-  totalColumns: number      // 本行实际占据的列数（决定行宽）
-  isUnreachable: boolean
-  isStash: boolean
-}
+真身在 `src/utils/graph.ts`，这里只列下文算法描述会引用的字段：
 
-export interface GraphSegment {
-  fromCol: number
-  toCol: number
-  color: string
-  upper: boolean            // 是否占上半行（圆点上方）
-  lower: boolean            // 是否占下半行（圆点下方）
-}
-```
+- **`GraphRow`**：`column`（本 commit 所在 lane 列号）、`color`（圆点色）、`segments`（要画的线段）、`totalColumns`（行宽）、`isUnreachable` / `isStash` 标记
+- **`GraphSegment`**：`fromCol` / `toCol`（起止列）、`color`、`upper` / `lower`（是否占上半行 / 下半行）
 
-常量：
-
-```ts
-LANE_W = 14   // px per lane
-ROW_H = 28    // px per row
-CIRCLE_R = 5  // commit 圆点半径
-GRAPH_COLORS = [blue, orange, green, yellow, purple, red, sky, pink]
-```
+布局常量（lane 宽度、行高、圆点半径）和 `GRAPH_COLORS`（8 色轮换配色表）集中在 `src/utils/graph.ts` 顶部，下文描述中出现的 `LANE_W` / `ROW_H` / `CIRCLE_R` 都指那里的值，需要调整时只改那一处。
 
 ## 算法（pvigier 变体）
 
