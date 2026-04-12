@@ -518,6 +518,8 @@ const commitMenuItems = computed<ContextMenuItem[]>(() => {
 function onCommitContextMenu(e: MouseEvent, commit: CommitInfo | undefined) {
   if (!commit) return
   e.preventDefault()
+  // 右键菜单出现时隐藏悬停 tooltip，避免两者重叠
+  hideCommitTooltip()
   commitMenu.commit = commit
   commitMenu.x = e.clientX
   commitMenu.y = e.clientY
