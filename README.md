@@ -1,5 +1,7 @@
 # GitUI
 
+[![Build](https://github.com/shuai132/GitUI/actions/workflows/build.yml/badge.svg)](https://github.com/shuai132/GitUI/actions/workflows/build.yml)
+
 跨平台 Git 桌面客户端，基于 **Tauri v2（Rust）+ Vue 3** 构建。目标是轻量级、高性能、跨平台。
 
 ## 功能
