@@ -6,18 +6,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 GitUI 是一个跨平台 Git 桌面客户端，基于 **Tauri v2（Rust 后端）+ Vue 3 前端**构建，目标是轻量、快速、易用，方便多仓库快速切换。
 
-按功能域的详细设计文档在 `doc/` 目录，索引见 [doc/README.md](./doc/README.md)。改动任何一个模块前，先读对应那份文档。
+按功能域的详细设计文档在 `docs/` 目录，索引见 [docs/README.md](./docs/README.md)。改动任何一个模块前，先读对应那份文档。
 
 ## 文档驱动开发（强制规则）
 
-**任何功能改动都必须先更新 `doc/` 下对应的设计文档，再动代码。** 文档是单一事实来源，代码只是实现。具体规则：
+**任何功能改动都必须先更新 `docs/` 下对应的设计文档，再动代码。** 文档是单一事实来源，代码只是实现。具体规则：
 
-1. **改功能 / 加功能前**：先定位到 `doc/` 里对应的那份文档（见索引 `doc/README.md`），把新的设计写进去——目标、UI 结构、后端实现、取舍原因都要说明
+1. **改功能 / 加功能前**：先定位到 `docs/` 里对应的那份文档（见索引 `docs/README.md`），把新的设计写进去——目标、UI 结构、后端实现、取舍原因都要说明
 2. **跨多个功能的改动**：每份涉及的文档都要同步更新，不能只改一份
-3. **新功能**：如果现有分类没有合适的归属，在 `doc/` 下新建 `NN-xxx.md` 并更新 `doc/README.md` 的索引；不要把新功能塞进不相关的现有文档
+3. **新功能**：如果现有分类没有合适的归属，在 `docs/` 下新建 `NN-xxx.md` 并更新 `docs/README.md` 的索引；不要把新功能塞进不相关的现有文档
 4. **移除功能**：删代码的同时删文档对应段落（或整份文档），不要留下描述已不存在代码的陈述
 5. **纯 bugfix / 重构** 只有在改变了文档里描述的行为 / 结构 / 契约时才需要动文档；改变量名、内部实现细节不触发文档更新
-6. **IPC 契约变更**（新增/修改/删除命令、新增/修改数据结构、字段改名）**必须**同步更新 `doc/11-ipc.md`，这份文档就是契约本身
+6. **IPC 契约变更**（新增/修改/删除命令、新增/修改数据结构、字段改名）**必须**同步更新 `docs/11-ipc.md`，这份文档就是契约本身
 7. **提交顺序**：文档更新和代码改动放在同一次提交里——审查时可以一眼看到"意图（文档）+ 实现（代码）"是对齐的，也避免文档遗漏被后续提交忘记
 
 如果在实现中发现原方案不合理需要调整，**先回到文档改方案，再继续写代码**——不要让代码和文档分叉。
@@ -71,7 +71,7 @@ git2-rs（libgit2，in-process）
 
 **`src-tauri/src/commands/`** — IPC 命令层，每个文件对应一个功能域（`repo / status / commit / log / diff / branch / remote / submodule / stash / system`）
 
-所有 command 通过 `State<'_, RepoManager>` 获取仓库路径，再调用 `GitEngine` 方法。注册在 `lib.rs` 的 `invoke_handler!` 宏中。完整清单见 [doc/11-ipc.md](./doc/11-ipc.md)。
+所有 command 通过 `State<'_, RepoManager>` 获取仓库路径，再调用 `GitEngine` 方法。注册在 `lib.rs` 的 `invoke_handler!` 宏中。完整清单见 [docs/11-ipc.md](./docs/11-ipc.md)。
 
 **`src-tauri/src/repo_manager.rs`** — 多仓库状态中心
 
@@ -112,7 +112,7 @@ git2-rs（libgit2，in-process）
 - `/history` → `HistoryView.vue`（提交图 + 详情 + **WIP 行**，承担了"工作区"的角色）
 - `/branches` → `BranchesView.vue`（分支列表视图，渲染 `BranchList.vue`）
 
-> **工作区没有独立路由**。当工作副本有改动时，`HistoryView` 会在虚拟列表顶部插入一条 `WipRow`，点击后右侧面板从 `CommitInfoPanel` 切到 `WipPanel`（暂存 / 提交 / amend / discard）。相关组件在 `components/workspace/WipPanel.vue` 和 `components/history/WipRow.vue`。细节见 [doc/03-workspace.md](./doc/03-workspace.md)。
+> **工作区没有独立路由**。当工作副本有改动时，`HistoryView` 会在虚拟列表顶部插入一条 `WipRow`，点击后右侧面板从 `CommitInfoPanel` 切到 `WipPanel`（暂存 / 提交 / amend / discard）。相关组件在 `components/workspace/WipPanel.vue` 和 `components/history/WipRow.vue`。细节见 [docs/03-workspace.md](./docs/03-workspace.md)。
 
 **Diff 渲染**：`components/diff/DiffView.vue` 是主入口，支持三种模式切换（持久化到 localStorage）：
 
@@ -124,11 +124,11 @@ git2-rs（libgit2，in-process）
 
 语法高亮基于 `lib/highlight.ts`（highlight.js 子集 + 扩展名映射表）。另有一个基于 CodeMirror 6 的 `DiffViewer.vue`，目前仅被 `CommitDetail.vue` 引用，而 `CommitDetail.vue` 未挂载到任何路由——当前活跃代码路径不使用 CodeMirror，但相关依赖保留。
 
-**提交图**：`utils/graph.ts` 的 `computeGraphLayout` 基于 pvigier 变体的 lane 算法，每行产出一个 `GraphRow` 独立渲染（支持虚拟滚动），`CommitGraphRow.vue` 负责 SVG 绘制。算法细节见 [doc/05-commit-graph.md](./doc/05-commit-graph.md)。
+**提交图**：`utils/graph.ts` 的 `computeGraphLayout` 基于 pvigier 变体的 lane 算法，每行产出一个 `GraphRow` 独立渲染（支持虚拟滚动），`CommitGraphRow.vue` 负责 SVG 绘制。算法细节见 [docs/05-commit-graph.md](./docs/05-commit-graph.md)。
 
 ### IPC 数据类型对应关系
 
-Rust `snake_case` 字段 ↔ TypeScript `snake_case` 字段（Tauri 默认不做驼峰转换）。完整的命令清单和类型映射见 [doc/11-ipc.md](./doc/11-ipc.md)。
+Rust `snake_case` 字段 ↔ TypeScript `snake_case` 字段（Tauri 默认不做驼峰转换）。完整的命令清单和类型映射见 [docs/11-ipc.md](./docs/11-ipc.md)。
 
 常用：
 

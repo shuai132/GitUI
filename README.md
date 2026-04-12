@@ -114,4 +114,4 @@ git2-rs（libgit2，in-process）
 
 ## 设计文档
 
-想看实现细节或参与开发，见 [`doc/`](./doc/README.md) 下按功能域组织的设计文档。
+想看实现细节或参与开发，见 [`docs/`](./docs/README.md) 下按功能域组织的设计文档。
