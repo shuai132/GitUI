@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, ref, watch, onUnmounted } from 'vue'
 import type { FileDiff, DiffLine } from '@/types/git'
 import { highlightLine } from '@/lib/highlight'
 
@@ -75,27 +75,55 @@ const alignedRows = computed((): AlignedRow[] => {
   return rows
 })
 
-// ── 双 pane：JS 同步 scrollTop + scrollLeft，左右完全联动 ────────────
-const leftPaneRef = ref<HTMLElement | null>(null)
-const rightPaneRef = ref<HTMLElement | null>(null)
-// 防止 A → B 同步后触发 B 的 scroll 事件再回写 A 造成循环
-let syncSource: 'left' | 'right' | null = null
+// ── 滚动架构 ────────────────────────────────────────────────────────
+// 垂直滚动：bodyRef 是唯一的 overflow-y:auto 容器，左右天然同步。
+// 水平滚动：每个 pane 的 .pane-scroll 独立 overflow-x:auto，JS 同步 scrollLeft。
+// 行号列（.pane-gutter）在 .pane-scroll 外面，不参与水平滚动，天然固定。
+// .pane-scroll 是 scroll container 会拦截垂直 wheel，
+// 通过 @wheel 把 deltaY 转发到 bodyRef。
+const bodyRef = ref<HTMLElement | null>(null)
+const leftScrollRef = ref<HTMLElement | null>(null)
+const rightScrollRef = ref<HTMLElement | null>(null)
 
-function onScroll(source: 'left' | 'right') {
-  if (syncSource && syncSource !== source) return
-  const src = source === 'left' ? leftPaneRef.value : rightPaneRef.value
-  const dst = source === 'left' ? rightPaneRef.value : leftPaneRef.value
-  if (!src || !dst) return
-  const topDiff = dst.scrollTop !== src.scrollTop
-  const leftDiff = dst.scrollLeft !== src.scrollLeft
-  if (!topDiff && !leftDiff) return
-  syncSource = source
-  if (topDiff) dst.scrollTop = src.scrollTop
-  if (leftDiff) dst.scrollLeft = src.scrollLeft
-  requestAnimationFrame(() => {
-    syncSource = null
-  })
+// ── wheel 转发：把 pane-scroll 拦截的垂直 wheel 转发到 bodyRef ──────
+function onWheel(e: WheelEvent) {
+  const body = bodyRef.value
+  if (!body) return
+  if (e.deltaY !== 0) body.scrollTop += e.deltaY
+  if (e.deltaX !== 0) (e.currentTarget as HTMLElement).scrollLeft += e.deltaX
+  e.preventDefault()
 }
+
+// ── 水平滚动同步（rAF 轮询） ───────────────────────────────────────
+let hSyncSrc: 'left' | 'right' | null = null
+let hRaf = 0
+let hIdle = 0
+
+function hSyncFrame() {
+  const src = hSyncSrc === 'left' ? leftScrollRef.value : rightScrollRef.value
+  const dst = hSyncSrc === 'left' ? rightScrollRef.value : leftScrollRef.value
+  if (src && dst && dst.scrollLeft !== src.scrollLeft) {
+    dst.scrollLeft = src.scrollLeft
+  }
+  hIdle++
+  if (hIdle < 10) {
+    hRaf = requestAnimationFrame(hSyncFrame)
+  } else {
+    hSyncSrc = null
+    hRaf = 0
+  }
+}
+
+function onHScroll(source: 'left' | 'right') {
+  if (hSyncSrc && hSyncSrc !== source) return
+  hSyncSrc = source
+  hIdle = 0
+  if (!hRaf) hRaf = requestAnimationFrame(hSyncFrame)
+}
+
+onUnmounted(() => {
+  if (hRaf) { cancelAnimationFrame(hRaf); hRaf = 0 }
+})
 
 // ── 变更跳转 ────────────────────────────────────────────────────────
 // 连续 del/add 行组的起始行索引列表；ctx/header 行充当分隔
@@ -126,15 +154,19 @@ watch(alignedRows, () => {
 })
 
 function scrollToRow(rowIndex: number) {
-  const pane = leftPaneRef.value
-  if (!pane) return
-  const el = pane.querySelector(
+  const body = bodyRef.value
+  const scroll = leftScrollRef.value
+  if (!body || !scroll) return
+  const el = scroll.querySelector(
     `[data-row="${rowIndex}"]`,
   ) as HTMLElement | null
   if (!el) return
-  const targetY =
-    el.offsetTop - pane.clientHeight / 2 + el.offsetHeight / 2
-  pane.scrollTo({ top: Math.max(0, targetY), behavior: 'smooth' })
+  // 用 getBoundingClientRect 计算精确位置，不依赖 offsetParent
+  const bodyRect = body.getBoundingClientRect()
+  const elRect = el.getBoundingClientRect()
+  const elTopInBody = elRect.top - bodyRect.top + body.scrollTop
+  const targetY = elTopInBody - body.clientHeight / 2 + el.offsetHeight / 2
+  body.scrollTo({ top: Math.max(0, targetY), behavior: 'smooth' })
 }
 
 function goNextChange() {
@@ -165,49 +197,78 @@ defineExpose({ goNextChange, goPrevChange })
     <div v-else-if="diff.is_binary" class="sbs-state">二进制文件</div>
     <div v-else-if="diff.hunks.length === 0" class="sbs-state">无内容变更</div>
 
-    <!-- Side-by-side content：左右两个独立可水平滚动的 pane，
-         行级对齐由 JS 同步 scrollTop 保证 -->
+    <!-- Side-by-side content：
+         bodyRef 统一垂直滚动；
+         每个 pane 分为 gutter（固定行号）+ scroll（水平滚动代码）-->
     <template v-else>
-      <div class="sbs-body">
-        <div
-          class="sbs-pane"
-          ref="leftPaneRef"
-          @scroll="onScroll('left')"
-        >
-          <div class="sbs-lines">
+      <div class="sbs-body" ref="bodyRef">
+        <div class="sbs-inner">
+          <!-- ─── 左侧 pane ─── -->
+          <div class="sbs-pane">
+            <div class="pane-gutter">
+              <div
+                v-for="(row, i) in alignedRows"
+                :key="'gl' + i"
+                class="gutter-row"
+                :class="'line-' + row.left.kind"
+              >
+                <span class="ln">{{ row.left.lineNo ?? '' }}</span>
+                <span class="sign">{{ row.left.kind === 'del' ? '-' : row.left.kind === 'ctx' ? ' ' : '' }}</span>
+              </div>
+            </div>
             <div
-              v-for="(row, i) in alignedRows"
-              :key="'l' + i"
-              class="sbs-line"
-              :class="'line-' + row.left.kind"
-              :data-row="i"
+              class="pane-scroll"
+              ref="leftScrollRef"
+              @scroll="onHScroll('left')"
+              @wheel="onWheel"
             >
-              <span class="ln">{{ row.left.lineNo ?? '' }}</span>
-              <span class="sign">{{ row.left.kind === 'del' ? '-' : row.left.kind === 'ctx' ? ' ' : '' }}</span>
-              <span v-if="syntaxLang" class="code" v-html="highlightLine(row.left.content, syntaxLang)" />
-              <span v-else class="code">{{ row.left.content }}</span>
+              <div class="sbs-lines">
+                <div
+                  v-for="(row, i) in alignedRows"
+                  :key="'l' + i"
+                  class="sbs-line"
+                  :class="'line-' + row.left.kind"
+                  :data-row="i"
+                >
+                  <span v-if="syntaxLang" class="code" v-html="highlightLine(row.left.content, syntaxLang)" />
+                  <span v-else class="code">{{ row.left.content }}</span>
+                </div>
+              </div>
             </div>
           </div>
-        </div>
 
-        <div class="sbs-divider" />
+          <div class="sbs-divider" />
 
-        <div
-          class="sbs-pane"
-          ref="rightPaneRef"
-          @scroll="onScroll('right')"
-        >
-          <div class="sbs-lines">
+          <!-- ─── 右侧 pane ─── -->
+          <div class="sbs-pane">
+            <div class="pane-gutter">
+              <div
+                v-for="(row, i) in alignedRows"
+                :key="'gr' + i"
+                class="gutter-row"
+                :class="'line-' + row.right.kind"
+              >
+                <span class="ln">{{ row.right.lineNo ?? '' }}</span>
+                <span class="sign">{{ row.right.kind === 'add' ? '+' : row.right.kind === 'ctx' ? ' ' : '' }}</span>
+              </div>
+            </div>
             <div
-              v-for="(row, i) in alignedRows"
-              :key="'r' + i"
-              class="sbs-line"
-              :class="'line-' + row.right.kind"
+              class="pane-scroll"
+              ref="rightScrollRef"
+              @scroll="onHScroll('right')"
+              @wheel="onWheel"
             >
-              <span class="ln">{{ row.right.lineNo ?? '' }}</span>
-              <span class="sign">{{ row.right.kind === 'add' ? '+' : row.right.kind === 'ctx' ? ' ' : '' }}</span>
-              <span v-if="syntaxLang" class="code" v-html="highlightLine(row.right.content, syntaxLang)" />
-              <span v-else class="code">{{ row.right.content }}</span>
+              <div class="sbs-lines">
+                <div
+                  v-for="(row, i) in alignedRows"
+                  :key="'r' + i"
+                  class="sbs-line"
+                  :class="'line-' + row.right.kind"
+                >
+                  <span v-if="syntaxLang" class="code" v-html="highlightLine(row.right.content, syntaxLang)" />
+                  <span v-else class="code">{{ row.right.content }}</span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -234,34 +295,55 @@ defineExpose({ goNextChange, goPrevChange })
   font-size: 13px;
 }
 
+/* bodyRef：唯一的垂直滚动容器，左右 pane 同处一个滚动上下文 */
 .sbs-body {
   flex: 1;
-  display: flex;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
   font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
   font-size: 12px;
   line-height: 18px;
 }
 
-/* Diff 正文允许文本选择（盖过全局 * { user-select: none }）。
-   .ln / .sign 在下面会被更高特异性覆写为 none。 */
+/* Diff 正文允许文本选择 */
 .sbs-body,
 .sbs-body * {
   user-select: text;
   -webkit-user-select: text;
 }
 
-/* 每个 pane 是独立滚动容器，水平 + 垂直都可滚；
-   垂直由 JS 同步另一侧以保持行级对齐 */
+.sbs-inner {
+  display: flex;
+}
+
+/* 每个 pane = gutter（固定）+ scroll（水平滚动） */
 .sbs-pane {
   flex: 1 1 0;
   min-width: 0;
-  overflow: auto;
+  display: flex;
 }
 
-/* inline-block 的 wrapper 让宽度 = max(最长行自然宽度, pane 的 clientWidth)。
-   每个 .sbs-line 作为 block child 会自动拉伸到 wrapper 宽度，
-   这样即使 pane 水平滚动时，行背景色也能一直铺满整行。 */
+/* 行号列：不参与水平滚动，不是 scroll container，
+   垂直 wheel 事件自然冒泡到 bodyRef */
+.pane-gutter {
+  flex-shrink: 0;
+}
+
+.gutter-row {
+  display: flex;
+  min-height: 18px;
+}
+
+/* 代码区：独立水平滚动 */
+.pane-scroll {
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+/* inline-block wrapper 让宽度 = max(最长行, pane 宽度)，
+   行背景色铺满整行 */
 .sbs-lines {
   display: inline-block;
   min-width: 100%;
@@ -297,9 +379,6 @@ defineExpose({ goNextChange, goPrevChange })
   user-select: none;
 }
 
-/* code 不使用 flex:1，按 content 自然宽度展开，让 .sbs-line 的
-   intrinsic width 能参与 wrapper 的 shrink-to-fit 计算，
-   从而让 wrapper 宽度能反映最长内容 */
 .code {
   flex-shrink: 0;
   padding-right: 8px;
@@ -328,9 +407,6 @@ defineExpose({ goNextChange, goPrevChange })
   background: var(--bg-surface);
   color: var(--text-muted);
   font-size: 11px;
-}
-.line-header .code {
-  padding-left: 4px;
 }
 
 .line-ctx {
