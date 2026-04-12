@@ -220,6 +220,40 @@ function onMessageKeydown(e: KeyboardEvent) {
   }
 }
 
+// ── 提交表单高度拖拽 ─────────────────────────────────────────────
+const COMMIT_FORM_H_KEY = 'wip-commit-form-height'
+const commitFormH = ref(parseInt(localStorage.getItem(COMMIT_FORM_H_KEY) || '0', 10) || 0)
+const wipPanelRef = ref<HTMLElement | null>(null)
+
+function startCommitResize(e: PointerEvent) {
+  e.preventDefault()
+  const startY = e.clientY
+  const panelEl = wipPanelRef.value
+  if (!panelEl) return
+  const formEl = panelEl.querySelector('.commit-form') as HTMLElement | null
+  if (!formEl) return
+  const startH = formEl.offsetHeight
+
+  const onMove = (ev: PointerEvent) => {
+    const delta = startY - ev.clientY
+    const maxH = panelEl.clientHeight - 80
+    commitFormH.value = Math.max(100, Math.min(maxH, startH + delta))
+  }
+  const onUp = () => {
+    window.removeEventListener('pointermove', onMove)
+    window.removeEventListener('pointerup', onUp)
+    document.body.style.cursor = ''
+    document.body.style.userSelect = ''
+    if (commitFormH.value > 0) {
+      localStorage.setItem(COMMIT_FORM_H_KEY, String(commitFormH.value))
+    }
+  }
+  window.addEventListener('pointermove', onMove)
+  window.addEventListener('pointerup', onUp)
+  document.body.style.cursor = 'row-resize'
+  document.body.style.userSelect = 'none'
+}
+
 // ── 键盘上下键导航 ──────────────────────────────────────────────
 function onListKeydown(e: KeyboardEvent) {
   if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return
@@ -263,7 +297,7 @@ watch(
 </script>
 
 <template>
-  <div class="wip-panel">
+  <div ref="wipPanelRef" class="wip-panel">
     <!-- Header -->
     <div class="panel-header">
       <button
@@ -328,8 +362,11 @@ watch(
       </FileChangeList>
     </div>
 
+    <!-- 拖拽分隔条 -->
+    <div class="commit-resize" @pointerdown="startCommitResize" />
+
     <!-- 提交表单 -->
-    <div class="commit-form">
+    <div class="commit-form" :style="commitFormH > 0 ? { height: commitFormH + 'px' } : {}">
       <label class="amend-row">
         <input
           type="checkbox"
@@ -472,6 +509,23 @@ watch(
   border-color: var(--accent-blue);
 }
 
+.commit-resize {
+  height: 6px;
+  margin-top: -3px;
+  margin-bottom: -3px;
+  cursor: row-resize;
+  background: transparent;
+  transition: background 0.15s;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 1;
+}
+
+.commit-resize:hover,
+.commit-resize:active {
+  background: rgba(138, 173, 244, 0.3);
+}
+
 .commit-form {
   display: flex;
   flex-direction: column;
@@ -480,6 +534,7 @@ watch(
   border-top: 1px solid var(--border);
   background: var(--bg-secondary);
   flex-shrink: 0;
+  overflow: hidden;
 }
 
 .amend-row {
@@ -517,6 +572,8 @@ watch(
   resize: none;
   outline: none;
   transition: border-color 0.15s;
+  flex: 1;
+  min-height: 0;
 }
 
 .message-input:focus {

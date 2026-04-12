@@ -91,6 +91,7 @@
 - **Cmd/Ctrl + Enter** 提交
 - `canCommit` 逻辑：普通提交要求 staged 非空；amend 要求 HEAD 存在
 - 提交成功后清空表单 + `historyStore.loadLog()` + `loadBranches()`
+- 提交表单与文件列表之间有一条可上下拖拽的分隔条，用于扩大提交信息输入区；高度持久化到 localStorage（key: `wip-commit-form-height`）
 
 ### 丢弃全部
 
