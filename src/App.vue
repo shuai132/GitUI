@@ -12,7 +12,9 @@ import { useSubmodulesStore } from '@/stores/submodules'
 import { useStashStore } from '@/stores/stash'
 import { useDiffStore } from '@/stores/diff'
 import { useUiStore } from '@/stores/ui'
+import { useDebugStore } from '@/stores/debug'
 import { useGitEvents } from '@/composables/useGitEvents'
+import { listen } from '@tauri-apps/api/event'
 
 const router = useRouter()
 const repoStore = useRepoStore()
@@ -22,12 +24,26 @@ const submodulesStore = useSubmodulesStore()
 const stashStore = useStashStore()
 const diffStore = useDiffStore()
 const uiStore = useUiStore()
+const debugStore = useDebugStore()
 const { onStatusChanged } = useGitEvents()
 
 // 启动时从持久化存储恢复仓库列表
 onMounted(() => {
   repoStore.loadPersisted()
 })
+
+// 监听 Rust 后端日志事件
+listen<{ level: string; target: string; message: string; ts: number }>(
+  'repo://log',
+  (event) => {
+    debugStore.pushLog(
+      event.payload.level,
+      event.payload.target,
+      event.payload.message,
+      event.payload.ts,
+    )
+  },
+)
 
 // ── Sidebar width (可拖动) ───────────────────────────────────────────
 // 持久化由 uiStore 托管，这里只负责拖动期间的响应式更新

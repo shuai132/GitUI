@@ -6,16 +6,20 @@ import { useUiStore } from '@/stores/ui'
 const debugStore = useDebugStore()
 const uiStore = useUiStore()
 
+type Tab = 'commands' | 'details' | 'logs'
+const activeTab = ref<Tab>('commands')
+
 const selectedId = ref<number | null>(null)
-const topPct = ref(50)
-const listEl = ref<HTMLElement | null>(null)
+const cmdListEl = ref<HTMLElement | null>(null)
+const logListEl = ref<HTMLElement | null>(null)
 
 const selected = computed<DebugEntry | null>(
   () => debugStore.entries.find((e) => e.id === selectedId.value) ?? null,
 )
 
 function selectEntry(entry: DebugEntry) {
-  selectedId.value = selectedId.value === entry.id ? null : entry.id
+  selectedId.value = entry.id
+  activeTab.value = 'details'
 }
 
 function formatTime(ts: number): string {
@@ -41,54 +45,65 @@ function statusClass(status: string): string {
   return 'status-pending'
 }
 
+function logLevelClass(level: string): string {
+  if (level === 'error') return 'log-error'
+  if (level === 'warn') return 'log-warn'
+  if (level === 'info') return 'log-info'
+  return 'log-debug'
+}
+
 function formatArgs(args?: Record<string, unknown>): string {
   if (!args) return '(no args)'
   return JSON.stringify(args, null, 2)
 }
 
-// Auto-scroll to top when new entry arrives
+function onClear() {
+  if (activeTab.value === 'logs') debugStore.clearLogs()
+  else debugStore.clear()
+}
+
+// Auto-scroll on new entries
 watch(
   () => debugStore.entries[0]?.id,
   () => {
-    nextTick(() => {
-      if (listEl.value) listEl.value.scrollTop = 0
-    })
+    if (activeTab.value === 'commands') {
+      nextTick(() => { if (cmdListEl.value) cmdListEl.value.scrollTop = 0 })
+    }
   },
 )
-
-// ── Resize handle ─────────────────────────────────────────────────
-function startResize(e: PointerEvent) {
-  e.preventDefault()
-  const container = (e.currentTarget as HTMLElement).parentElement!
-  const startY = e.clientY
-  const startPct = topPct.value
-  const containerH = container.getBoundingClientRect().height
-
-  const onMove = (ev: PointerEvent) => {
-    const delta = ev.clientY - startY
-    const deltaPct = (delta / containerH) * 100
-    topPct.value = Math.max(20, Math.min(80, startPct + deltaPct))
-  }
-  const onUp = () => {
-    window.removeEventListener('pointermove', onMove)
-    window.removeEventListener('pointerup', onUp)
-    document.body.style.cursor = ''
-    document.body.style.userSelect = ''
-  }
-  window.addEventListener('pointermove', onMove)
-  window.addEventListener('pointerup', onUp)
-  document.body.style.cursor = 'row-resize'
-  document.body.style.userSelect = 'none'
-}
+watch(
+  () => debugStore.logEntries[0]?.id,
+  () => {
+    if (activeTab.value === 'logs') {
+      nextTick(() => { if (logListEl.value) logListEl.value.scrollTop = 0 })
+    }
+  },
+)
 </script>
 
 <template>
   <div class="debug-panel">
     <!-- Header -->
     <div class="debug-header">
-      <span class="debug-title">Debug</span>
+      <div class="debug-tabs">
+        <button
+          class="debug-tab"
+          :class="{ 'debug-tab--active': activeTab === 'commands' }"
+          @click="activeTab = 'commands'"
+        >Commands</button>
+        <button
+          class="debug-tab"
+          :class="{ 'debug-tab--active': activeTab === 'details' }"
+          @click="activeTab = 'details'"
+        >Details</button>
+        <button
+          class="debug-tab"
+          :class="{ 'debug-tab--active': activeTab === 'logs' }"
+          @click="activeTab = 'logs'"
+        >Logs</button>
+      </div>
       <div class="debug-actions">
-        <button class="debug-btn" title="清空" @click="debugStore.clear()">
+        <button class="debug-btn" title="清空" @click="onClear">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <polyline points="3 6 5 6 21 6"/>
             <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
@@ -103,10 +118,9 @@ function startResize(e: PointerEvent) {
       </div>
     </div>
 
-    <!-- Top: Command list -->
-    <div class="debug-top" :style="{ flex: `0 0 ${topPct}%` }">
-      <div class="debug-section-label">Commands</div>
-      <div ref="listEl" class="debug-list">
+    <!-- Tab: Commands -->
+    <div v-show="activeTab === 'commands'" class="debug-body">
+      <div ref="cmdListEl" class="debug-list">
         <div
           v-for="entry in debugStore.entries"
           :key="entry.id"
@@ -123,22 +137,22 @@ function startResize(e: PointerEvent) {
           <span class="debug-status" :class="statusClass(entry.status)">{{ statusIcon(entry.status) }}</span>
         </div>
         <div v-if="debugStore.entries.length === 0" class="debug-empty">
-          暂无日志
+          暂无命令
         </div>
       </div>
     </div>
 
-    <!-- Resize handle -->
-    <div class="debug-split" @pointerdown="startResize" />
-
-    <!-- Bottom: Detail -->
-    <div class="debug-bottom">
-      <div class="debug-section-label">Detail</div>
+    <!-- Tab: Details -->
+    <div v-show="activeTab === 'details'" class="debug-body">
       <div class="debug-detail">
         <template v-if="selected">
           <div class="detail-section">
             <div class="detail-label">Command</div>
             <pre class="detail-value">{{ selected.op }}</pre>
+          </div>
+          <div class="detail-section">
+            <div class="detail-label">Status</div>
+            <pre class="detail-value">{{ selected.status }}{{ selected.duration != null ? ` (${formatDuration(selected.duration)})` : '' }}</pre>
           </div>
           <div class="detail-section">
             <div class="detail-label">Arguments</div>
@@ -150,7 +164,26 @@ function startResize(e: PointerEvent) {
           </div>
         </template>
         <div v-else class="debug-empty">
-          点击上方命令查看详情
+          在 Commands 中点击一条查看详情
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab: Logs -->
+    <div v-show="activeTab === 'logs'" class="debug-body">
+      <div ref="logListEl" class="debug-list">
+        <div
+          v-for="entry in debugStore.logEntries"
+          :key="entry.id"
+          class="log-row"
+          :class="logLevelClass(entry.level)"
+        >
+          <span class="debug-time">{{ formatTime(entry.ts) }}</span>
+          <span class="log-level">{{ entry.level.toUpperCase() }}</span>
+          <span class="log-msg">{{ entry.message }}</span>
+        </div>
+        <div v-if="debugStore.logEntries.length === 0" class="debug-empty">
+          暂无日志
         </div>
       </div>
     </div>
@@ -172,18 +205,36 @@ function startResize(e: PointerEvent) {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 4px 8px;
+  padding: 0 4px 0 0;
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
 
-.debug-title {
+.debug-tabs {
+  display: flex;
+  gap: 0;
+}
+
+.debug-tab {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-muted);
   font-size: 11px;
-  font-weight: 600;
+  font-family: inherit;
+  padding: 6px 10px;
+  border-bottom: 2px solid transparent;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.debug-tab:hover {
   color: var(--text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+}
+
+.debug-tab--active {
+  color: var(--text-primary);
+  border-bottom-color: var(--accent-blue);
 }
 
 .debug-actions {
@@ -208,21 +259,11 @@ function startResize(e: PointerEvent) {
   background: var(--bg-overlay);
 }
 
-.debug-section-label {
-  font-size: 10px;
-  font-weight: 600;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  padding: 4px 8px 2px;
-  flex-shrink: 0;
-}
-
-.debug-top {
+.debug-body {
+  flex: 1;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  min-height: 60px;
 }
 
 .debug-list {
@@ -231,6 +272,7 @@ function startResize(e: PointerEvent) {
   overflow-x: hidden;
 }
 
+/* ── Command rows ─────────────────────────────────────────── */
 .debug-row {
   display: flex;
   align-items: center;
@@ -291,31 +333,61 @@ function startResize(e: PointerEvent) {
 .status-error { color: var(--accent-red); }
 .status-pending { color: var(--accent-orange); }
 
-.debug-split {
-  height: 5px;
-  flex-shrink: 0;
-  cursor: row-resize;
-  background: var(--border);
-  transition: background 0.15s;
-}
-
-.debug-split:hover,
-.debug-split:active {
-  background: rgba(138, 173, 244, 0.4);
-}
-
-.debug-bottom {
-  flex: 1;
+/* ── Log rows ─────────────────────────────────────────────── */
+.log-row {
   display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  min-height: 60px;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-family: 'SF Mono', 'Menlo', 'Monaco', monospace;
+  line-height: 1.4;
 }
 
+.log-level {
+  flex-shrink: 0;
+  font-size: 9px;
+  font-weight: 700;
+  min-width: 36px;
+  text-align: center;
+  padding: 0 2px;
+  border-radius: 2px;
+  line-height: 1.6;
+}
+
+.log-msg {
+  flex: 1;
+  min-width: 0;
+  color: var(--text-secondary);
+  word-break: break-all;
+}
+
+.log-error .log-level {
+  color: var(--accent-red);
+  background: rgba(237, 135, 150, 0.12);
+}
+.log-error .log-msg { color: var(--accent-red); }
+
+.log-warn .log-level {
+  color: var(--accent-orange);
+  background: rgba(238, 212, 159, 0.12);
+}
+
+.log-info .log-level {
+  color: var(--accent-blue);
+  background: rgba(138, 173, 244, 0.12);
+}
+
+.log-debug .log-level {
+  color: var(--text-muted);
+  background: rgba(110, 115, 141, 0.12);
+}
+
+/* ── Detail pane ──────────────────────────────────────────── */
 .debug-detail {
   flex: 1;
   overflow-y: auto;
-  padding: 4px 8px;
+  padding: 8px;
 }
 
 .detail-section {

@@ -1,5 +1,6 @@
 mod commands;
 mod git;
+mod logger;
 mod repo_manager;
 mod tray;
 mod watcher;
@@ -75,9 +76,8 @@ pub fn run() {
             run_gc,
         ])
         .setup(|app| {
-            env_logger::Builder::from_default_env()
-                .filter_level(log::LevelFilter::Debug)
-                .init();
+            logger::init();
+            logger::set_app_handle(app.handle().clone());
             log::info!("GitUI started");
             tray::setup_tray(&app.handle())?;
             Ok(())

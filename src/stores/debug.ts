@@ -11,11 +11,22 @@ export interface DebugEntry {
   error?: string
 }
 
+export interface LogEntry {
+  id: number
+  ts: number
+  level: string
+  target: string
+  message: string
+}
+
 const MAX_ENTRIES = 200
+const MAX_LOGS = 500
 
 export const useDebugStore = defineStore('debug', () => {
   const entries = ref<DebugEntry[]>([])
+  const logEntries = ref<LogEntry[]>([])
   let nextId = 1
+  let nextLogId = 1
 
   function push(op: string, args?: Record<string, unknown>): DebugEntry {
     const entry: DebugEntry = {
@@ -49,9 +60,26 @@ export const useDebugStore = defineStore('debug', () => {
     }
   }
 
+  function pushLog(level: string, target: string, message: string, ts: number) {
+    logEntries.value.unshift({
+      id: nextLogId++,
+      ts,
+      level,
+      target,
+      message,
+    })
+    if (logEntries.value.length > MAX_LOGS) {
+      logEntries.value.length = MAX_LOGS
+    }
+  }
+
   function clear() {
     entries.value = []
   }
 
-  return { entries, push, resolve, reject, clear }
+  function clearLogs() {
+    logEntries.value = []
+  }
+
+  return { entries, logEntries, push, resolve, reject, pushLog, clear, clearLogs }
 })
