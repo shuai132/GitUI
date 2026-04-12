@@ -59,6 +59,11 @@ onStatusChanged((repoId) => {
     // WIP 模式下右侧 diff 也要跟着工作区内容自动刷新；
     // diffStore.refresh 在 currentPath === null 时是 no-op，非 WIP 场景安全。
     diffStore.refresh()
+    // 外部 git 操作（命令行 commit/push/fetch/switch/stash 等）也会触发此事件，
+    // 需要同步刷新 history、branches 和 stash
+    historyStore.loadLog()
+    historyStore.loadBranches()
+    stashStore.refresh()
   }
 })
 
