@@ -46,10 +46,16 @@ const stagedAll = computed<FileEntry[]>(() => workspaceStore.status?.staged ?? [
 
 // ── 文件选择 & diff 加载 ──────────────────────────────────────────
 const selectedPath = ref<string | null>(null)
+const panelListsRef = ref<HTMLElement | null>(null)
+
+/** 合并的文件列表（未暂存 + 已暂存），与视觉顺序一致 */
+const allFiles = computed<FileEntry[]>(() => [...unstagedAll.value, ...stagedAll.value])
 
 function onSelectFile(file: FileEntry) {
   selectedPath.value = file.path
   diffStore.loadFileDiff(file.path, file.staged)
+  // 选中文件后聚焦列表容器，使键盘导航可用
+  panelListsRef.value?.focus()
 }
 
 async function onToggleFile(file: FileEntry) {
@@ -210,6 +216,35 @@ function onSummaryKeydown(e: KeyboardEvent) {
   }
 }
 
+// ── 键盘上下键导航 ──────────────────────────────────────────────
+function onListKeydown(e: KeyboardEvent) {
+  if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return
+  e.preventDefault()
+  e.stopPropagation()
+
+  const list = allFiles.value
+  if (list.length === 0) return
+
+  const currentIdx = selectedPath.value
+    ? list.findIndex((f) => f.path === selectedPath.value)
+    : -1
+
+  let nextIdx: number
+  if (e.key === 'ArrowDown') {
+    nextIdx = currentIdx < 0 ? 0 : Math.min(currentIdx + 1, list.length - 1)
+  } else {
+    nextIdx = currentIdx < 0 ? 0 : Math.max(currentIdx - 1, 0)
+  }
+
+  const next = list[nextIdx]
+  selectedPath.value = next.path
+  diffStore.loadFileDiff(next.path, next.staged)
+
+  // 滚动选中项到可视区域
+  const entry = panelListsRef.value?.querySelectorAll('.file-entry')[nextIdx] as HTMLElement | undefined
+  entry?.scrollIntoView({ block: 'nearest' })
+}
+
 // ── 工作区刷新时清理失效的 selectedPath ─────────────────────────
 watch(
   () => workspaceStore.status,
@@ -245,7 +280,7 @@ watch(
     </div>
 
     <!-- 文件列表区 -->
-    <div class="panel-lists">
+    <div ref="panelListsRef" class="panel-lists" tabindex="-1" @keydown="onListKeydown">
       <FileChangeList
         :files="unstagedAll"
         title="未暂存"
@@ -426,6 +461,7 @@ watch(
   flex: 1;
   overflow-y: auto;
   min-height: 0;
+  outline: none;
 }
 
 .btn-section {
