@@ -23,7 +23,9 @@ const panelRoot = ref<HTMLElement | null>(null)
 const topSection = ref<HTMLElement | null>(null)
 
 const topSectionStyle = computed(() => {
-  return sizes.commitInfoTopH > 0 ? { height: sizes.commitInfoTopH + 'px' } : {}
+  return sizes.commitInfoTopH > 0
+    ? { height: sizes.commitInfoTopH + 'px' }
+    : { maxHeight: '65%' }
 })
 
 function startTopResize(e: PointerEvent) {
@@ -160,7 +162,7 @@ const bodyText = computed(() => {
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
-  overflow: hidden;
+  overflow-y: auto;
   min-height: 0;
 }
 
@@ -245,19 +247,15 @@ const bodyText = computed(() => {
 /* top-section 与 file-tabs 之间的可拖拽分隔条 */
 .top-resize {
   flex-shrink: 0;
-  height: 6px;
-  margin-top: -3px;
-  margin-bottom: -3px;
-  border-top: 1px solid var(--border);
+  height: 4px;
   cursor: row-resize;
   background: transparent;
-  transition: background 0.15s;
   position: relative;
   z-index: 2;
 }
 .top-resize:hover,
 .top-resize:active {
-  background: rgba(138, 173, 244, 0.3);
+  background: rgba(138, 173, 244, 0.15);
 }
 
 .mk {
