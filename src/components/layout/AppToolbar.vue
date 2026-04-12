@@ -349,7 +349,7 @@ const actionsMenuItems = computed<ContextMenuItem[]>(() => [
   {
     label:
       (uiStore.showUnreachableCommits ? '✓ ' : '   ') +
-      '显示丢失引用的提交',
+      '显示悬垂引用',
     action: 'toggle-unreachable',
     disabled: !hasRepo.value,
   },

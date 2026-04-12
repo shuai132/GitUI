@@ -523,9 +523,9 @@ onUnmounted(() => {
         <!-- Column headers -->
         <div class="col-header">
           <div class="col-graph" :style="{ width: graphColWidth + 'px' }"></div>
-          <div class="col-message">提交信息</div>
+          <div class="col-message">描述</div>
           <div class="col-hash header-col" :style="{ width: sizes.hashColW + 'px' }">
-            哈希
+            提交
             <div class="col-resize" @pointerdown="startColResize($event, 'hash')" />
           </div>
           <div class="col-author header-col" :style="{ width: sizes.authorColW + 'px' }">

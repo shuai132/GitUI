@@ -98,7 +98,7 @@ export const useUiStore = defineStore('ui', () => {
     loadString<HistoryLayoutMode>(KEYS.historyLayout, 'vertical', HISTORY_LAYOUT_VALUES),
   )
 
-  const showUnreachableCommits = ref<boolean>(loadBool(KEYS.showUnreachable, false))
+  const showUnreachableCommits = ref<boolean>(loadBool(KEYS.showUnreachable, true))
   const showStashCommits = ref<boolean>(loadBool(KEYS.showStashes, true))
 
   const historyPaneSizes = ref<HistoryPaneSizes>(

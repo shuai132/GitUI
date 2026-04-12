@@ -104,22 +104,21 @@ impl GitEngine {
         }
 
         // Get HEAD info
-        let (head_branch, head_commit, is_detached) = match repo.head() {
+        let (head_branch, head_commit, head_commit_message, is_detached) = match repo.head() {
             Ok(head) => {
-                let commit_oid = head
-                    .peel_to_commit()
-                    .ok()
-                    .map(|c| c.id().to_string());
+                let commit = head.peel_to_commit().ok();
+                let commit_oid = commit.as_ref().map(|c| c.id().to_string());
+                let commit_message = commit.as_ref().and_then(|c| c.message().map(|m| m.to_string()));
                 if head.is_branch() {
                     let branch_name = head
                         .shorthand()
                         .map(|s| s.to_string());
-                    (branch_name, commit_oid, false)
+                    (branch_name, commit_oid, commit_message, false)
                 } else {
-                    (None, commit_oid, true)
+                    (None, commit_oid, commit_message, true)
                 }
             }
-            Err(_) => (None, None, false),
+            Err(_) => (None, None, None, false),
         };
 
         Ok(WorkspaceStatus {
@@ -128,6 +127,7 @@ impl GitEngine {
             untracked,
             head_branch,
             head_commit,
+            head_commit_message,
             is_detached,
         })
     }
@@ -556,6 +556,12 @@ impl GitEngine {
             let (branch, branch_type) = branch_result?;
             let name = branch.name()?.unwrap_or("").to_string();
             let is_remote = branch_type == BranchType::Remote;
+
+            // 跳过远程 HEAD 符号引用（如 origin/HEAD），它在 UI 中没有实际用途
+            if is_remote && name.ends_with("/HEAD") {
+                continue;
+            }
+
             let is_head = !is_remote && head_name.as_deref() == Some(name.as_str());
 
             // 对本地分支尝试获取上游分支信息
