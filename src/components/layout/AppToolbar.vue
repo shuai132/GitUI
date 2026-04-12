@@ -704,6 +704,10 @@ async function handleDblClick(e: MouseEvent) {
             <span class="about-value">刘帅</span>
           </div>
           <div class="about-row">
+            <span class="about-label">版本：</span>
+            <span class="about-value">{{ appVersion }}</span>
+          </div>
+          <div class="about-row">
             <span class="about-label">项目：</span>
             <a
               class="about-link"
@@ -712,10 +716,6 @@ async function handleDblClick(e: MouseEvent) {
               rel="noopener"
               @click.prevent="openUrl('https://github.com/shuai132/GitUI')"
             >https://github.com/shuai132/GitUI</a>
-          </div>
-          <div class="about-row">
-            <span class="about-label">版本：</span>
-            <span class="about-value">{{ appVersion }}</span>
           </div>
         </div>
       </div>
