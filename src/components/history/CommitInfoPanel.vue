@@ -248,6 +248,7 @@ const bodyText = computed(() => {
   height: 4px;
   cursor: row-resize;
   background: transparent;
+  border-top: 1px solid var(--border);
   position: relative;
   z-index: 2;
 }
