@@ -217,20 +217,18 @@ const bodyText = computed(() => {
   font-size: 11px;
   color: var(--text-secondary);
   margin-top: 3px;
-  /* 多行 body 完整显示：保留原始换行；超长行水平滚动，超高内容垂直滚动 */
-  white-space: pre;
-  overflow: auto;
-  max-height: 160px;
+  /* 保留原始换行；长行自动折行；不独立滚动，由 top-section 统一处理 */
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow: visible;
 }
 
 /* 隐藏滚动条（内容仍可滚动，但不显示指示条） */
 .commit-summary,
-.commit-body,
 .mv {
   scrollbar-width: none;
 }
 .commit-summary::-webkit-scrollbar,
-.commit-body::-webkit-scrollbar,
 .mv::-webkit-scrollbar {
   display: none;
 }
