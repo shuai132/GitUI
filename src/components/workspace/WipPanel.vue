@@ -382,6 +382,8 @@ watch(
         class="message-input"
         rows="3"
         placeholder="提交信息（Cmd+Enter 提交）"
+        spellcheck="false"
+        autocomplete="off"
         @keydown="onMessageKeydown"
       />
 

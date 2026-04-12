@@ -109,7 +109,13 @@ function onCancel() {
 
     <div class="form-row">
       <label class="form-label">新的本地分支名称：</label>
-      <input v-model="localName" class="form-control" type="text" />
+      <input
+        v-model="localName"
+        class="form-control"
+        type="text"
+        spellcheck="false"
+        autocomplete="off"
+      />
     </div>
 
     <div class="form-row form-row--offset">

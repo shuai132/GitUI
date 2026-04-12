@@ -633,6 +633,8 @@ async function handleDblClick(e: MouseEvent) {
           v-model="uiStore.historySearchQuery"
           class="search-input"
           placeholder="搜索提交"
+          spellcheck="false"
+          autocomplete="off"
           @blur="onSearchBlur"
           @keydown="onSearchKeydown"
         />

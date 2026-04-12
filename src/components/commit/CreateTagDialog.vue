@@ -85,6 +85,8 @@ function onCancel() {
         class="form-control"
         type="text"
         placeholder="例如：v1.0.0"
+        spellcheck="false"
+        autocomplete="off"
         @keydown.enter="!annotated && onSubmit()"
       />
     </div>
@@ -96,6 +98,8 @@ function onCancel() {
         class="form-control form-textarea"
         rows="4"
         placeholder="描述此次发布的内容..."
+        spellcheck="false"
+        autocomplete="off"
       />
     </div>
 

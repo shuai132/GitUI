@@ -63,6 +63,8 @@ async function deleteBranch(name: string) {
         v-model="newBranchName"
         class="branch-input"
         placeholder="分支名称"
+        spellcheck="false"
+        autocomplete="off"
         @keydown.enter="createBranch"
       />
       <button class="btn-create" @click="createBranch">创建</button>

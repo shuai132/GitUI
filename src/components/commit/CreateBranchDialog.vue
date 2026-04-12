@@ -103,6 +103,8 @@ function onCancel() {
         class="form-control"
         type="text"
         placeholder="例如：feature/my-branch"
+        spellcheck="false"
+        autocomplete="off"
         @keydown.enter="onSubmit"
       />
     </div>

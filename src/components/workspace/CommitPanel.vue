@@ -45,6 +45,8 @@ function onKeydown(e: KeyboardEvent) {
       class="commit-message"
       placeholder="提交信息（Cmd+Enter 提交）"
       rows="4"
+      spellcheck="false"
+      autocomplete="off"
       @keydown="onKeydown"
     />
     <div v-if="error" class="error-msg">{{ error }}</div>

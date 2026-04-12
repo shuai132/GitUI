@@ -78,6 +78,8 @@ function onCancel() {
         class="form-control"
         type="text"
         placeholder="https://example.com/repo.git"
+        spellcheck="false"
+        autocomplete="off"
       />
     </div>
 
