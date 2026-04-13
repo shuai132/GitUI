@@ -7,7 +7,7 @@ mod watcher;
 
 use commands::{
     branch::*, commit::*, diff::*, log::*, remote::*, repo::*, stash::*, status::*, submodule::*,
-    system::*,
+    system::*, tag::*,
 };
 use repo_manager::RepoManager;
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
@@ -53,6 +53,9 @@ pub fn run() {
             switch_branch,
             delete_branch,
             checkout_remote_branch,
+            // Tag
+            list_tags,
+            delete_tag,
             // Remote
             fetch_remote,
             push_branch,

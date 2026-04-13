@@ -48,6 +48,15 @@ export interface BranchInfo {
   behind?: number
 }
 
+export interface TagInfo {
+  name: string
+  commit_oid: string
+  is_annotated: boolean
+  message?: string
+  tagger_name?: string
+  time?: number
+}
+
 export interface DiffLine {
   origin: string
   content: string

@@ -8,3 +8,4 @@ pub mod stash;
 pub mod status;
 pub mod submodule;
 pub mod system;
+pub mod tag;

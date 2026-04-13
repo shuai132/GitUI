@@ -7,7 +7,7 @@ import { useSubmodulesStore } from '@/stores/submodules'
 import { useStashStore } from '@/stores/stash'
 import { useUiStore } from '@/stores/ui'
 import { buildBranchTree } from '@/utils/branchTree'
-import type { BranchInfo, SubmoduleInfo, StashEntry } from '@/types/git'
+import type { BranchInfo, SubmoduleInfo, StashEntry, TagInfo } from '@/types/git'
 import BranchTreeNode from './BranchTreeNode.vue'
 import { useSidebarSectionState } from '@/composables/useSidebarSectionState'
 import ContextMenu, { type ContextMenuItem } from '@/components/common/ContextMenu.vue'
@@ -410,6 +410,62 @@ async function onSubmoduleClick(s: SubmoduleInfo) {
   }
 }
 
+// ── Tags ─────────────────────────────────────────────────────────────
+const tags = computed(() => historyStore.tags)
+
+const tagMenu = reactive({
+  visible: false,
+  x: 0,
+  y: 0,
+  target: null as TagInfo | null,
+})
+
+const tagMenuItems = computed<ContextMenuItem[]>(() => {
+  const t = tagMenu.target
+  if (!t) return []
+  return [
+    { label: '复制标签名', action: 'copy-name' },
+    { label: '复制 commit hash', action: 'copy-oid' },
+    { separator: true },
+    { label: '删除标签...', action: 'delete', danger: true },
+  ]
+})
+
+function openTagMenu(e: MouseEvent, t: TagInfo) {
+  e.preventDefault()
+  tagMenu.target = t
+  tagMenu.x = e.clientX
+  tagMenu.y = e.clientY
+  tagMenu.visible = true
+}
+
+function closeTagMenu() {
+  tagMenu.visible = false
+}
+
+async function onTagMenuAction(action: string) {
+  const t = tagMenu.target
+  if (!t) return
+  try {
+    switch (action) {
+      case 'copy-name':
+        await navigator.clipboard.writeText(t.name)
+        break
+      case 'copy-oid':
+        await navigator.clipboard.writeText(t.commit_oid)
+        break
+      case 'delete':
+        if (confirm(`确认删除标签 "${t.name}"？此操作不可撤销。`)) {
+          await historyStore.deleteTag(t.name)
+        }
+        break
+    }
+  } catch (err) {
+    console.error(err)
+    alert(`操作失败：${String(err)}`)
+  }
+}
+
 // ── Stash ────────────────────────────────────────────────────────────
 function onStashClick(commitOid: string) {
   jumpToBranchCommit(commitOid)
@@ -504,6 +560,46 @@ async function onStashMenuAction(action: string) {
               <span v-if="(b.ahead ?? 0) > 0" class="ab-ahead">↑{{ b.ahead }}</span>
               <span v-if="(b.behind ?? 0) > 0" class="ab-behind">↓{{ b.behind }}</span>
             </span>
+          </div>
+        </template>
+      </div>
+
+      <!-- TAGS section -->
+      <div class="section" v-if="tags.length > 0 && repoStore.activeRepoId">
+        <div class="section-title collapsible" @click="sectionState.toggle('tags')">
+          <svg class="chevron" :class="{ open: !sectionState.isCollapsed('tags') }"
+               width="10" height="10" viewBox="0 0 24 24"
+               fill="none" stroke="currentColor" stroke-width="2.5">
+            <polyline points="9 18 15 12 9 6" />
+          </svg>
+          <span class="section-label">TAGS</span>
+          <span class="section-count">{{ tags.length }}</span>
+        </div>
+        <template v-if="!sectionState.isCollapsed('tags')">
+          <div
+            v-for="t in tags"
+            :key="t.name"
+            class="branch-item tag-item"
+            :class="{ 'tag-item--lightweight': !t.is_annotated }"
+            :title="t.is_annotated && t.message ? `${t.name}\n\n${t.message}` : t.name"
+            @click="jumpToBranchCommit(t.commit_oid)"
+            @contextmenu="openTagMenu($event, t)"
+          >
+            <svg
+              class="tag-icon"
+              width="11"
+              height="11"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M20.59 13.41 13.42 20.58a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/>
+              <line x1="7" y1="7" x2="7.01" y2="7"/>
+            </svg>
+            <span class="branch-label">{{ t.name }}</span>
           </div>
         </template>
       </div>
@@ -719,6 +815,16 @@ async function onStashMenuAction(action: string) {
       @select="onStashMenuAction"
     />
 
+    <!-- Tag context menu -->
+    <ContextMenu
+      :visible="tagMenu.visible"
+      :x="tagMenu.x"
+      :y="tagMenu.y"
+      :items="tagMenuItems"
+      @close="closeTagMenu"
+      @select="onTagMenuAction"
+    />
+
     <!-- Edit submodule dialog -->
     <EditSubmoduleDialog
       :visible="editDialog.visible"
@@ -925,6 +1031,15 @@ async function onStashMenuAction(action: string) {
 .dot-remote {
   border-color: var(--accent-orange);
   opacity: 0.7;
+}
+
+.tag-icon {
+  color: var(--accent-orange);
+  flex-shrink: 0;
+}
+
+.tag-item--lightweight .tag-icon {
+  color: var(--text-muted);
 }
 
 .branch-label {

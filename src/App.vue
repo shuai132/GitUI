@@ -100,6 +100,7 @@ onStatusChanged((repoId) => {
     // 需要同步刷新 history、branches 和 stash
     historyStore.loadLog()
     historyStore.loadBranches()
+    historyStore.loadTags()
     stashStore.refresh()
   }
 })
@@ -113,6 +114,7 @@ watch(
       await workspaceStore.refresh(id)
       await historyStore.loadLog()
       await historyStore.loadBranches()
+      await historyStore.loadTags()
       await submodulesStore.loadSubmodules()
       await stashStore.refresh()
     } else {

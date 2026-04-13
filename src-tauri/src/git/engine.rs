@@ -673,6 +673,84 @@ impl GitEngine {
         Ok(())
     }
 
+    // ── Tags ────────────────────────────────────────────────────────────
+
+    /// 列出所有标签。
+    ///
+    /// 对每个 `refs/tags/*` 引用：
+    /// - 尝试 `find_tag(oid)` → 成功即为附注标签，可读到 message / tagger / time
+    /// - 失败则为轻量标签（ref 直接指向 commit）
+    ///
+    /// 返回结果按时间倒序（附注标签按 tagger time，轻量标签缺时间排到最后，
+    /// 同组内按名字字母序）。
+    pub fn list_tags(path: &str) -> GitResult<Vec<TagInfo>> {
+        let repo = Self::open(path)?;
+        let mut tags: Vec<TagInfo> = Vec::new();
+
+        // tag_foreach 回调里只能借用 &repo（不能持有 Repository），所以在闭包里
+        // 完成 find_tag / peel_to_commit，收集到局部 Vec 里。
+        repo.tag_foreach(|oid, name_bytes| {
+            let Ok(name_str) = std::str::from_utf8(name_bytes) else {
+                return true;
+            };
+            let short = name_str
+                .strip_prefix("refs/tags/")
+                .unwrap_or(name_str)
+                .to_string();
+
+            // 先尝试 annotated
+            if let Ok(tag_obj) = repo.find_tag(oid) {
+                // target_id 可能还是另一个 tag（链式 annotated tag，极少见），
+                // 统一再 peel 到 commit
+                let commit_oid = repo
+                    .find_object(tag_obj.target_id(), None)
+                    .and_then(|o| o.peel_to_commit())
+                    .map(|c| c.id().to_string())
+                    .unwrap_or_else(|_| tag_obj.target_id().to_string());
+                let tagger = tag_obj.tagger();
+                tags.push(TagInfo {
+                    name: short,
+                    commit_oid,
+                    is_annotated: true,
+                    message: tag_obj.message().map(|s| s.trim().to_string()),
+                    tagger_name: tagger.as_ref().and_then(|t| t.name().map(|s| s.to_string())),
+                    time: tagger.as_ref().map(|t| t.when().seconds()),
+                });
+            } else {
+                // 轻量标签：ref 直接指向 commit
+                let commit_oid = repo
+                    .find_object(oid, None)
+                    .and_then(|o| o.peel_to_commit())
+                    .map(|c| c.id().to_string())
+                    .unwrap_or_else(|_| oid.to_string());
+                tags.push(TagInfo {
+                    name: short,
+                    commit_oid,
+                    is_annotated: false,
+                    message: None,
+                    tagger_name: None,
+                    time: None,
+                });
+            }
+            true
+        })?;
+
+        tags.sort_by(|a, b| match (a.time, b.time) {
+            (Some(t1), Some(t2)) => t2.cmp(&t1),
+            (Some(_), None) => std::cmp::Ordering::Less,
+            (None, Some(_)) => std::cmp::Ordering::Greater,
+            (None, None) => a.name.cmp(&b.name),
+        });
+
+        Ok(tags)
+    }
+
+    pub fn delete_tag(path: &str, name: &str) -> GitResult<()> {
+        let repo = Self::open(path)?;
+        repo.tag_delete(name)?;
+        Ok(())
+    }
+
     // ── 提交级操作 ──────────────────────────────────────────────────────
 
     /// 检出指定提交（detached HEAD）

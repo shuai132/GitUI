@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import type { CommitInfo, BranchInfo, CommitDetail } from '@/types/git'
+import type { CommitInfo, BranchInfo, CommitDetail, TagInfo } from '@/types/git'
 import { useGitCommands } from '@/composables/useGitCommands'
 import { useRepoStore } from './repos'
 import { useUiStore } from './ui'
@@ -11,6 +11,7 @@ const PAGE_SIZE = 200
 export const useHistoryStore = defineStore('history', () => {
   const commits = ref<CommitInfo[]>([])
   const branches = ref<BranchInfo[]>([])
+  const tags = ref<TagInfo[]>([])
   const selectedCommit = ref<CommitDetail | null>(null)
   const graphRows = ref<GraphRow[]>([])
   const selectedFileDiffIndex = ref(0)
@@ -76,6 +77,17 @@ export const useHistoryStore = defineStore('history', () => {
 
     try {
       branches.value = await git.listBranches(repoStore.activeRepoId)
+    } catch (e: unknown) {
+      error.value = String(e)
+    }
+  }
+
+  async function loadTags() {
+    const repoStore = useRepoStore()
+    if (!repoStore.activeRepoId) return
+
+    try {
+      tags.value = await git.listTags(repoStore.activeRepoId)
     } catch (e: unknown) {
       error.value = String(e)
     }
@@ -169,12 +181,20 @@ export const useHistoryStore = defineStore('history', () => {
     const repoStore = useRepoStore()
     if (!repoStore.activeRepoId) return
     await git.createTag(repoStore.activeRepoId, name, oid, message)
-    // 标签列表暂未在 UI 展示，无需 refresh
+    await loadTags()
+  }
+
+  async function deleteTag(name: string) {
+    const repoStore = useRepoStore()
+    if (!repoStore.activeRepoId) return
+    await git.deleteTag(repoStore.activeRepoId, name)
+    await loadTags()
   }
 
   function reset() {
     commits.value = []
     branches.value = []
+    tags.value = []
     selectedCommit.value = null
     graphRows.value = []
     selectedFileDiffIndex.value = 0
@@ -184,6 +204,7 @@ export const useHistoryStore = defineStore('history', () => {
   return {
     commits,
     branches,
+    tags,
     selectedCommit,
     graphRows,
     selectedFileDiffIndex,
@@ -195,6 +216,7 @@ export const useHistoryStore = defineStore('history', () => {
     loadLog,
     loadMore,
     loadBranches,
+    loadTags,
     selectCommit,
     selectFileDiff,
     createBranch,
@@ -206,6 +228,7 @@ export const useHistoryStore = defineStore('history', () => {
     revertCommit,
     resetToCommit,
     createTag,
+    deleteTag,
     reset,
   }
 })

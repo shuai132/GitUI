@@ -9,6 +9,7 @@ import type {
   SubmoduleInfo,
   StashEntry,
   ReflogEntry,
+  TagInfo,
 } from '@/types/git'
 import { useErrorsStore } from '@/stores/errors'
 import { useDebugStore } from '@/stores/debug'
@@ -146,6 +147,13 @@ export function useGitCommands() {
       track,
     })
 
+  // ---- Tag ----
+  const listTags = (repoId: string) =>
+    call<TagInfo[]>('list_tags', { repoId })
+
+  const deleteTag = (repoId: string, name: string) =>
+    call<void>('delete_tag', { repoId, name })
+
   // ---- Remote ----
   const fetchRemote = (repoId: string, remoteName: string) =>
     call<void>('fetch_remote', { repoId, remoteName })
@@ -233,6 +241,8 @@ export function useGitCommands() {
     switchBranch,
     deleteBranch,
     checkoutRemoteBranch,
+    listTags,
+    deleteTag,
     fetchRemote,
     pushBranch,
     pullBranch,

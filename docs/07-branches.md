@@ -112,4 +112,12 @@ Tags 通过 `create_tag(path, name, oid, message)` 创建：
 - `message = None` 或 `""` → 轻量标签（`tag_lightweight`）
 - `message = Some(非空)` → 附注标签（`tag` 带 signature）
 
-UI 入口在 `HistoryView` 的提交右键菜单 "在此创建标签..." / "创建附注标签..."，目前尚未在任何 UI 列出已有 tag 列表——`historyStore.createTag` 之后不做 reload。
+UI 入口：
+
+- **创建**：`HistoryView` 的提交右键菜单 "在此创建标签..." / "创建附注标签..."
+- **浏览**：侧边栏 `AppSidebar.vue` 的 TAGS section 渲染 `historyStore.tags`（附注标签按 tagger time 倒序、轻量标签排尾按名字字母序），点击跳转到对应 commit，右键菜单可复制名字 / 复制 oid / 删除
+- **删除**：走 `delete_tag(path, name)` → `repo.tag_delete(name)`
+
+后端 `list_tags` 通过 `repo.tag_foreach` 遍历 `refs/tags/*`：用 `find_tag(oid)` 区分附注 vs 轻量，附注标签额外 peel 到 commit、读取 `message` / `tagger`。
+
+`historyStore.loadTags()` 在切换仓库、status-changed 事件、创建/删除标签后触发刷新；checkout / switch / reset 等不改变标签集合的操作不额外刷新。

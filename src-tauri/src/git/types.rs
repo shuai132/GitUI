@@ -69,6 +69,22 @@ pub struct BranchInfo {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TagInfo {
+    /// 标签短名（去掉 `refs/tags/` 前缀）
+    pub name: String,
+    /// 标签指向的 commit oid（附注标签会 peel 到 commit）
+    pub commit_oid: String,
+    /// 是否为附注标签（annotated），否则为轻量标签
+    pub is_annotated: bool,
+    /// 附注标签的 message；轻量标签为 None
+    pub message: Option<String>,
+    /// 附注标签的 tagger 名字；轻量标签为 None
+    pub tagger_name: Option<String>,
+    /// 附注标签的创建时间（秒，Unix epoch）；轻量标签为 None
+    pub time: Option<i64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DiffHunk {
     pub old_start: u32,
     pub old_lines: u32,

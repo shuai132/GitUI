@@ -67,6 +67,13 @@ GitUI 的前后端通过 Tauri v2 的 IPC 通道通信：
 | `delete_branch` | `repoId, name` | `void` |
 | `checkout_remote_branch` | `repoId, remoteBranch, localName, track` | `void` |
 
+### Tag
+
+| 命令 | 参数 | 返回 |
+|------|------|------|
+| `list_tags` | `repoId` | `TagInfo[]` |
+| `delete_tag` | `repoId, name` | `void` |
+
 ### Remote
 
 | 命令 | 参数 | 返回 |
@@ -117,6 +124,7 @@ GitUI 的前后端通过 Tauri v2 的 IPC 通道通信：
 | `WorkspaceStatus` | `WorkspaceStatus` |
 | `CommitInfo`（含 `is_unreachable`, `is_stash`） | `CommitInfo` |
 | `BranchInfo`（含 `ahead`, `behind`） | `BranchInfo` |
+| `TagInfo`（含 `is_annotated`, `message`, `tagger_name`, `time`） | `TagInfo` |
 | `DiffLine` | `DiffLine` |
 | `DiffHunk` | `DiffHunk` |
 | `FileDiff` | `FileDiff` |
