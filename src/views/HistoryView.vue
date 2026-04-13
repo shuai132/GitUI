@@ -145,12 +145,15 @@ function hideCommitTooltip() {
 // 把 wheel 的 deltaX 转发到外层 .commit-panel（横向滚动）
 // 原因：body 有 overflow-y: auto，部分浏览器会吞掉 deltaX 不冒泡到父元素
 function onBodyWheel(e: WheelEvent) {
-  if (e.deltaX === 0) return
+  // 纵向意图优先：deltaY 不小于 deltaX 时，完全交给浏览器原生纵向滚动，
+  // 不做任何处理也不 preventDefault。Windows 下鼠标滚轮常带轻微 deltaX 抖动，
+  // 若拦截会连同 deltaY 一起被 preventDefault 吞掉，导致列表滚不动。
+  if (Math.abs(e.deltaY) >= Math.abs(e.deltaX)) return
   const panel = scrollContainer.value?.closest('.commit-panel') as HTMLElement | null
   if (!panel) return
   const before = panel.scrollLeft
   panel.scrollLeft += e.deltaX
-  // 只有实际消费了横向滚动才 preventDefault，避免影响浏览器前进/后退或纵向滚动
+  // 只有实际消费了横向滚动才 preventDefault，避免影响浏览器前进/后退
   if (panel.scrollLeft !== before) e.preventDefault()
 }
 
