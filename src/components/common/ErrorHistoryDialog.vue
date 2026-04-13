@@ -126,7 +126,7 @@ function onCopy(entry: ErrorEntry) {
 
 .err-time {
   color: var(--text-muted);
-  font-family: 'SF Mono', monospace;
+  font-family: var(--code-font-family, 'SF Mono', monospace);
   font-size: 11px;
   flex-shrink: 0;
   width: 110px;
@@ -134,7 +134,7 @@ function onCopy(entry: ErrorEntry) {
 
 .err-op {
   color: var(--accent-blue);
-  font-family: 'SF Mono', monospace;
+  font-family: var(--code-font-family, 'SF Mono', monospace);
   font-size: 11px;
   flex-shrink: 0;
   width: 130px;
@@ -174,7 +174,7 @@ function onCopy(entry: ErrorEntry) {
   padding: 8px 16px 10px 128px;
   background: var(--bg-surface);
   color: var(--text-secondary);
-  font-family: 'SF Mono', monospace;
+  font-family: var(--code-font-family, 'SF Mono', monospace);
   font-size: 11px;
   white-space: pre-wrap;
   word-break: break-all;

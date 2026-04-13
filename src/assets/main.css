@@ -1,6 +1,9 @@
 @import "tailwindcss";
 
 @layer base {
+  /* 默认深色主题（Catppuccin Macchiato 变体）。
+     :root 继续作为深色默认，避免破坏所有未 opt-in 的存量组件。
+     浅色主题通过 [data-theme="light"] 覆盖。*/
   :root {
     --bg-primary: #13151f;
     --bg-secondary: #181b27;
@@ -15,6 +18,65 @@
     --accent-yellow: #eed49f;
     --accent-orange: #f5a97f;
     --border: #3a3e52;
+
+    /* 字体与字号（由 settings store 动态覆盖） */
+    --ui-font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', Menlo, monospace;
+    --ui-font-size: 13px;
+    --code-font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', Menlo, monospace;
+    --code-font-size: 12px;
+
+    /* DAG lane 调色板（CommitGraphRow 使用） */
+    --graph-lane-1: #8aadf4;
+    --graph-lane-2: #f5a97f;
+    --graph-lane-3: #a6da95;
+    --graph-lane-4: #eed49f;
+    --graph-lane-5: #c6a0f6;
+    --graph-lane-6: #ed8796;
+    --graph-lane-7: #7dc4e4;
+    --graph-lane-8: #f0c6c6;
+
+    /* 列表选中行（commit-row / branch-row 等）
+       两个主题都用「实心 accent-blue + 纯白字」对齐 SourceTree 风格 */
+    --row-selected-bg: var(--accent-blue);
+    --row-selected-fg: #ffffff;
+
+    /* Diff 增/删/空行底色 */
+    --diff-add-bg: rgba(166, 218, 149, 0.18);
+    --diff-del-bg: rgba(237, 135, 150, 0.18);
+    --diff-empty-bg: rgba(54, 58, 79, 0.4);
+  }
+
+  /* 浅色主题（GitHub Primer Light 风格：冷灰白 + 工程化配色） */
+  :root[data-theme="light"] {
+    --bg-primary: #ffffff;
+    --bg-secondary: #f6f8fa;
+    --bg-surface: #eaeef2;
+    --bg-overlay: #d8dee4;
+    /* 文本接近黑色，保留层级但避免过灰 */
+    --text-primary: #1d1d1f;
+    --text-secondary: #2c3138;
+    --text-muted: #4a5058;
+    --accent-blue: #0969da;
+    --accent-green: #1a7f37;
+    --accent-red: #cf222e;
+    --accent-yellow: #9a6700;
+    --accent-orange: #bc4c00;
+    --border: #d0d7de;
+
+    /* 浅色下 lane 用深饱和色（贴近 SourceTree / GitHub Desktop 观感） */
+    --graph-lane-1: #0969da;
+    --graph-lane-2: #bc4c00;
+    --graph-lane-3: #1a7f37;
+    --graph-lane-4: #9a6700;
+    --graph-lane-5: #8250df;
+    --graph-lane-6: #cf222e;
+    --graph-lane-7: #0550ae;
+    --graph-lane-8: #a81a76;
+
+    /* Diff 加减行用 GitHub Primer 浅色 diff 背景 */
+    --diff-add-bg: #dafbe1;
+    --diff-del-bg: #ffebe9;
+    --diff-empty-bg: #f6f8fa;
   }
 
   * {
@@ -46,10 +108,10 @@
     height: 100%;
     margin: 0;
     padding: 0;
-    font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', Menlo, monospace;
+    font-family: var(--ui-font-family);
     background-color: var(--bg-primary);
     color: var(--text-primary);
-    font-size: 13px;
+    font-size: var(--ui-font-size);
     -webkit-font-smoothing: antialiased;
     /* 禁用 WebView 整体的 overscroll / rubber-band 弹性回弹。
        内部可滚动区域依然正常滚动，但达到边界后不会反弹。 */

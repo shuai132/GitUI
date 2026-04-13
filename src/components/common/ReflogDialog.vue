@@ -144,7 +144,7 @@ function copyOid(oid: string) {
 }
 
 .oid {
-  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-family: var(--code-font-family, 'SF Mono', 'Fira Code', monospace);
   color: var(--accent-blue);
   cursor: pointer;
   user-select: text;

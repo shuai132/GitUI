@@ -219,8 +219,8 @@ defineExpose({ goNextChange, goPrevChange })
   height: 100%;
   overflow: hidden;
   background: var(--bg-primary);
-  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
-  font-size: 12px;
+  font-family: var(--code-font-family, 'SF Mono', 'Fira Code', 'Cascadia Code', monospace);
+  font-size: var(--code-font-size, 12px);
   line-height: 18px;
 }
 
@@ -285,14 +285,14 @@ defineExpose({ goNextChange, goPrevChange })
 }
 
 .line-del {
-  background: rgba(237, 135, 150, 0.18);
+  background: var(--diff-del-bg);
 }
 .line-del .sign {
   color: var(--accent-red);
 }
 
 .line-add {
-  background: rgba(166, 218, 149, 0.18);
+  background: var(--diff-add-bg);
 }
 .line-add .sign {
   color: var(--accent-green);

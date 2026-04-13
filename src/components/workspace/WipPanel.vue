@@ -629,7 +629,7 @@ watch(
   background: var(--bg-overlay);
   padding: 0 4px;
   border-radius: 3px;
-  font-family: 'SF Mono', monospace;
+  font-family: var(--code-font-family, 'SF Mono', monospace);
   font-size: 11px;
 }
 

@@ -75,7 +75,7 @@ function onScroll(e: Event) {
 }
 
 .commit-oid {
-  font-family: 'SF Mono', monospace;
+  font-family: var(--code-font-family, 'SF Mono', monospace);
   font-size: 11px;
   color: var(--accent-blue);
 }

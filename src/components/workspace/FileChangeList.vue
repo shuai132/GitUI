@@ -149,7 +149,7 @@ function onRowContext(e: MouseEvent, file: FileEntry) {
   font-weight: 700;
   width: 14px;
   flex-shrink: 0;
-  font-family: 'SF Mono', monospace;
+  font-family: var(--code-font-family, 'SF Mono', monospace);
 }
 
 .file-path {

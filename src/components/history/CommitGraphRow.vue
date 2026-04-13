@@ -22,6 +22,7 @@ function segStroke(segColor: string): string {
  *  - 普通：实心，背景色描边
  *  - stash：空心（背景色填充），分支色描边
  *  - unreachable：空心 + 灰色虚线描边
+ *  - 选中且普通：fill 换成 row-selected-fg（在选中蓝底上显眼的白圆点）
  */
 const circleAttrs = computed(() => {
   if (props.row.isUnreachable) {
@@ -40,10 +41,18 @@ const circleAttrs = computed(() => {
       strokeDasharray: '',
     }
   }
+  if (props.isSelected) {
+    return {
+      fill: 'var(--row-selected-fg)',
+      stroke: 'var(--row-selected-bg)',
+      strokeWidth: 2,
+      strokeDasharray: '',
+    }
+  }
   return {
     fill: props.row.color,
     stroke: 'var(--bg-secondary)',
-    strokeWidth: props.isSelected ? 2 : 1.5,
+    strokeWidth: 1.5,
     strokeDasharray: '',
   }
 })
@@ -82,13 +91,13 @@ function segmentPath(seg: { fromCol: number; toCol: number; upper: boolean; lowe
     xmlns="http://www.w3.org/2000/svg"
   >
     <!-- Pass-through and connection lines (drawn below the circle) -->
+    <!-- fill/stroke 通过 style 绑定，让 CSS var() 在主题切换时实时生效 -->
     <path
       v-for="(seg, i) in row.segments"
       :key="i"
       :d="segmentPath(seg)"
-      :stroke="segStroke(seg.color)"
+      :style="{ stroke: segStroke(seg.color), fill: 'none' }"
       stroke-width="1.5"
-      fill="none"
       stroke-linecap="round"
     />
 
@@ -96,9 +105,8 @@ function segmentPath(seg: { fromCol: number; toCol: number; upper: boolean; lowe
     <circle
       :cx="laneX(row.column)"
       :cy="midY"
-      :r="isSelected ? CIRCLE_R + 1 : CIRCLE_R"
-      :fill="circleAttrs.fill"
-      :stroke="circleAttrs.stroke"
+      :r="isSelected ? CIRCLE_R - 1 : CIRCLE_R"
+      :style="{ fill: circleAttrs.fill, stroke: circleAttrs.stroke }"
       :stroke-width="circleAttrs.strokeWidth"
       :stroke-dasharray="circleAttrs.strokeDasharray"
     />

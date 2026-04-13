@@ -22,6 +22,7 @@
 | [09-submodules.md](./09-submodules.md) | Submodule 列表、Init / Update / Edit / 完整 Deinit |
 | [10-stash-reflog.md](./10-stash-reflog.md) | Stash、Reflog、`git gc` 清理入口 |
 | [11-ipc.md](./11-ipc.md) | IPC 命令目录、Rust ↔ TypeScript 类型映射约定 |
+| [12-settings.md](./12-settings.md) | 设置模态：主题、字体、字号、accent 覆盖 |
 
 ## 阅读建议
 

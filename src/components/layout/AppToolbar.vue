@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { getCurrentWindow } from '@tauri-apps/api/window'
-import { getVersion } from '@tauri-apps/api/app'
 import { listen } from '@tauri-apps/api/event'
 import { useRepoStore } from '@/stores/repos'
 import { useHistoryStore } from '@/stores/history'
@@ -13,6 +12,8 @@ import ReflogDialog from '@/components/common/ReflogDialog.vue'
 import ErrorHistoryDialog from '@/components/common/ErrorHistoryDialog.vue'
 import Modal from '@/components/common/Modal.vue'
 import ContextMenu, { type ContextMenuItem } from '@/components/common/ContextMenu.vue'
+import SettingsModal from '@/components/settings/SettingsModal.vue'
+import AboutInfo from '@/components/common/AboutInfo.vue'
 
 const repoStore = useRepoStore()
 const historyStore = useHistoryStore()
@@ -123,12 +124,11 @@ function onPullModeSelect(action: string) {
 const showReflogDialog = ref(false)
 const showErrorHistoryDialog = ref(false)
 const showAboutDialog = ref(false)
-const appVersion = ref('')
+const showSettingsDialog = ref(false)
 const searchInputEl = ref<HTMLInputElement | null>(null)
 const searchExpanded = ref(false)
 
-onMounted(async () => {
-  appVersion.value = await getVersion()
+onMounted(() => {
   // 监听系统菜单栏的"关于"菜单
   listen('show-about', () => {
     showAboutDialog.value = true
@@ -665,6 +665,17 @@ async function handleDblClick(e: MouseEvent) {
       </button>
 
       <button
+        class="btn-icon-only"
+        title="设置"
+        @click="showSettingsDialog = true"
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+        </svg>
+      </button>
+
+      <button
         ref="actionsBtnRef"
         class="btn-icon-only"
         title="更多操作"
@@ -690,44 +701,18 @@ async function handleDblClick(e: MouseEvent) {
       @close="showErrorHistoryDialog = false"
     />
 
+    <SettingsModal
+      :visible="showSettingsDialog"
+      @close="showSettingsDialog = false"
+    />
+
     <Modal
       :visible="showAboutDialog"
       title="关于 GitUI"
       width="320px"
       @close="showAboutDialog = false"
     >
-      <div class="about-content">
-        <div class="about-icon">
-          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--accent-blue)" stroke-width="1.5">
-            <circle cx="12" cy="12" r="4"/>
-            <line x1="1.05" y1="12" x2="7" y2="12"/>
-            <line x1="17.01" y1="12" x2="22.96" y2="12"/>
-            <line x1="12" y1="1.05" x2="12" y2="7"/>
-            <line x1="12" y1="17.01" x2="12" y2="22.96"/>
-          </svg>
-        </div>
-        <div class="about-name">GitUI</div>
-        <div class="about-fields">
-          <div class="about-row">
-            <span class="about-label">作者：</span>
-            <span class="about-value">刘帅</span>
-          </div>
-          <div class="about-row">
-            <span class="about-label">版本：</span>
-            <span class="about-value">{{ appVersion }}</span>
-          </div>
-          <div class="about-row">
-            <span class="about-label">项目：</span>
-            <a
-              class="about-link"
-              href="https://github.com/shuai132/GitUI"
-              target="_blank"
-              rel="noopener"
-              @click.prevent="openUrl('https://github.com/shuai132/GitUI')"
-            >https://github.com/shuai132/GitUI</a>
-          </div>
-        </div>
-      </div>
+      <AboutInfo />
     </Modal>
 
     <ContextMenu
@@ -942,54 +927,6 @@ async function handleDblClick(e: MouseEvent) {
   cursor: not-allowed;
 }
 
-
-.about-content {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-}
-
-.about-icon {
-  margin-bottom: 4px;
-}
-
-.about-name {
-  font-size: 18px;
-  font-weight: 700;
-  color: var(--text-primary);
-}
-
-.about-fields {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-}
-
-.about-row {
-  display: flex;
-  align-items: center;
-  font-size: 12px;
-}
-
-.about-label {
-  color: var(--text-muted);
-}
-
-.about-value {
-  color: var(--text-primary);
-}
-
-.about-link {
-  color: var(--accent-blue);
-  text-decoration: none;
-  cursor: pointer;
-}
-
-.about-link:hover {
-  text-decoration: underline;
-}
 
 .toast-error {
   position: absolute;

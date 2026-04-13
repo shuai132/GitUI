@@ -1078,7 +1078,7 @@ async function onStashMenuAction(action: string) {
 }
 
 .stash-index {
-  font-family: 'SF Mono', monospace;
+  font-family: var(--code-font-family, 'SF Mono', monospace);
   font-size: 10px;
   color: var(--text-muted);
   flex-shrink: 0;

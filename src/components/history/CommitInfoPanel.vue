@@ -275,7 +275,7 @@ const bodyText = computed(() => {
 }
 
 .mv.oid {
-  font-family: 'SF Mono', monospace;
+  font-family: var(--code-font-family, 'SF Mono', monospace);
   font-size: 10px;
   color: var(--accent-blue);
 }
@@ -289,7 +289,7 @@ const bodyText = computed(() => {
   background: var(--bg-overlay);
   border-radius: 3px;
   padding: 1px 5px;
-  font-family: 'SF Mono', monospace;
+  font-family: var(--code-font-family, 'SF Mono', monospace);
   font-size: 10px;
   color: var(--accent-blue);
   margin-right: 4px;

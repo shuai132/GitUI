@@ -1,0 +1,144 @@
+/*
+ * 主题感知的 highlight.js token 颜色。
+ *
+ * 默认（深色）沿用 GitHub Dark 风格 —— 原本 main.ts 加载的是
+ * `highlight.js/styles/github-dark.css`，其 token 颜色（浅蓝 #79c0ff、
+ * 浅绿 #a5d6ff 等）是为深底设计的，铺在浅色底上对比度极差。
+ *
+ * 浅色主题（`:root[data-theme="light"]`）用 GitHub Light 风格覆盖所有
+ * token 为深色，使 diff 文字在浅色背景下清晰可读。
+ *
+ * 颜色参考：
+ * - Dark: https://github.com/highlightjs/highlight.js/blob/main/src/styles/github-dark.css
+ * - Light: https://github.com/highlightjs/highlight.js/blob/main/src/styles/github.css
+ */
+
+/* ── 基线文本色（容器） ─────────────────────────────────────────── */
+.hljs {
+  color: var(--text-primary);
+  background: transparent;
+}
+
+/* ── 深色主题 token（GitHub Dark） ─────────────────────────────── */
+.hljs-comment,
+.hljs-quote {
+  color: #8b949e;
+  font-style: italic;
+}
+
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-literal,
+.hljs-section,
+.hljs-link,
+.hljs-doctag,
+.hljs-meta,
+.hljs-meta-keyword,
+.hljs-tag {
+  color: #ff7b72;
+}
+
+.hljs-title,
+.hljs-title.class_,
+.hljs-title.function_,
+.hljs-name {
+  color: #d2a8ff;
+}
+
+.hljs-string,
+.hljs-regexp,
+.hljs-meta-string {
+  color: #a5d6ff;
+}
+
+.hljs-attr,
+.hljs-variable,
+.hljs-template-variable,
+.hljs-type,
+.hljs-selector-class,
+.hljs-selector-attr,
+.hljs-selector-pseudo,
+.hljs-template-tag {
+  color: #79c0ff;
+}
+
+.hljs-built_in,
+.hljs-symbol,
+.hljs-bullet,
+.hljs-number,
+.hljs-params {
+  color: #ffa657;
+}
+
+.hljs-addition {
+  color: #aff5b4;
+  background-color: rgba(56, 139, 253, 0.15);
+}
+
+.hljs-deletion {
+  color: #ffdcd7;
+  background-color: rgba(248, 81, 73, 0.15);
+}
+
+.hljs-emphasis { font-style: italic; }
+.hljs-strong { font-weight: 600; }
+
+/* ── 浅色主题 token 覆盖（GitHub Light） ───────────────────────── */
+:root[data-theme="light"] .hljs-comment,
+:root[data-theme="light"] .hljs-quote {
+  color: #6e7781;
+}
+
+:root[data-theme="light"] .hljs-keyword,
+:root[data-theme="light"] .hljs-selector-tag,
+:root[data-theme="light"] .hljs-literal,
+:root[data-theme="light"] .hljs-section,
+:root[data-theme="light"] .hljs-link,
+:root[data-theme="light"] .hljs-doctag,
+:root[data-theme="light"] .hljs-meta,
+:root[data-theme="light"] .hljs-meta-keyword,
+:root[data-theme="light"] .hljs-tag {
+  color: #cf222e;
+}
+
+:root[data-theme="light"] .hljs-title,
+:root[data-theme="light"] .hljs-title.class_,
+:root[data-theme="light"] .hljs-title.function_,
+:root[data-theme="light"] .hljs-name {
+  color: #8250df;
+}
+
+:root[data-theme="light"] .hljs-string,
+:root[data-theme="light"] .hljs-regexp,
+:root[data-theme="light"] .hljs-meta-string {
+  color: #0a3069;
+}
+
+:root[data-theme="light"] .hljs-attr,
+:root[data-theme="light"] .hljs-variable,
+:root[data-theme="light"] .hljs-template-variable,
+:root[data-theme="light"] .hljs-type,
+:root[data-theme="light"] .hljs-selector-class,
+:root[data-theme="light"] .hljs-selector-attr,
+:root[data-theme="light"] .hljs-selector-pseudo,
+:root[data-theme="light"] .hljs-template-tag {
+  color: #0550ae;
+}
+
+:root[data-theme="light"] .hljs-built_in,
+:root[data-theme="light"] .hljs-symbol,
+:root[data-theme="light"] .hljs-bullet,
+:root[data-theme="light"] .hljs-number,
+:root[data-theme="light"] .hljs-params {
+  color: #953800;
+}
+
+:root[data-theme="light"] .hljs-addition {
+  color: #1a7f37;
+  background-color: rgba(26, 127, 55, 0.12);
+}
+
+:root[data-theme="light"] .hljs-deletion {
+  color: #cf222e;
+  background-color: rgba(207, 34, 46, 0.12);
+}

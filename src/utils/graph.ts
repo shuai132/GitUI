@@ -1,14 +1,16 @@
 import type { CommitInfo } from '@/types/git'
 
+// Lane 颜色走 CSS 变量 (--graph-lane-1..8)，由 main.css 按主题提供具体值。
+// CommitGraphRow.vue 通过 style 绑定到 fill/stroke，浏览器解析 var() 以响应主题切换。
 export const GRAPH_COLORS = [
-  '#8aadf4', // blue
-  '#f5a97f', // orange
-  '#a6da95', // green
-  '#eed49f', // yellow
-  '#c6a0f6', // purple
-  '#ed8796', // red
-  '#7dc4e4', // sky
-  '#f0c6c6', // pink
+  'var(--graph-lane-1)',
+  'var(--graph-lane-2)',
+  'var(--graph-lane-3)',
+  'var(--graph-lane-4)',
+  'var(--graph-lane-5)',
+  'var(--graph-lane-6)',
+  'var(--graph-lane-7)',
+  'var(--graph-lane-8)',
 ]
 
 export const LANE_W = 14  // px per lane

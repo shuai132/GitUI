@@ -403,7 +403,7 @@ function startResize(e: PointerEvent) {
   gap: 6px;
   padding: 3px 8px;
   font-size: 11px;
-  font-family: 'SF Mono', 'Menlo', 'Monaco', monospace;
+  font-family: var(--code-font-family, 'SF Mono', 'Menlo', 'Monaco', monospace);
   cursor: pointer;
   transition: background 0.1s;
   border-left: 2px solid transparent;
@@ -462,7 +462,7 @@ function startResize(e: PointerEvent) {
   padding: 2px 8px 4px 12px;
   background: var(--bg-secondary);
   border-left: 2px solid var(--accent-blue);
-  font-family: 'SF Mono', 'Menlo', 'Monaco', monospace;
+  font-family: var(--code-font-family, 'SF Mono', 'Menlo', 'Monaco', monospace);
   font-size: 11px;
   overflow-x: auto;
 }
@@ -493,7 +493,7 @@ function startResize(e: PointerEvent) {
   gap: 4px;
   padding: 1px 8px;
   font-size: 11px;
-  font-family: 'SF Mono', 'Menlo', 'Monaco', monospace;
+  font-family: var(--code-font-family, 'SF Mono', 'Menlo', 'Monaco', monospace);
   white-space: nowrap;
 }
 

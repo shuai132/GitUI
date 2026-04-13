@@ -1179,7 +1179,25 @@ onUnmounted(() => {
 }
 
 .commit-row.selected {
-  background: rgba(138, 173, 244, 0.12);
+  background: var(--row-selected-bg);
+}
+
+.commit-row.selected .commit-msg,
+.commit-row.selected .col-hash,
+.commit-row.selected .col-author,
+.commit-row.selected .col-date {
+  color: var(--row-selected-fg);
+}
+
+/* 选中行里 chip 统一变为前景色：tag-chip 用 CSS 变量覆盖；
+   branch-tag 的 color/border-color 是内联 style，必须用 !important */
+.commit-row.selected .tag-chip {
+  color: var(--row-selected-fg);
+  border-color: var(--row-selected-fg);
+}
+.commit-row.selected .branch-tag {
+  color: var(--row-selected-fg) !important;
+  border-color: var(--row-selected-fg) !important;
 }
 
 .commit-row.wip-row {
@@ -1209,7 +1227,7 @@ onUnmounted(() => {
 
 .col-hash {
   flex-shrink: 0;
-  font-family: 'SF Mono', monospace;
+  font-family: var(--code-font-family, 'SF Mono', monospace);
   font-size: 11px;
   color: var(--accent-blue);
   padding: 0 6px;
@@ -1281,10 +1299,6 @@ onUnmounted(() => {
   white-space: nowrap;
 }
 
-.commit-row.selected .commit-msg {
-  color: var(--text-primary);
-}
-
 /* ── 提交悬停 tooltip（自定义，适配 Catppuccin 色彩） ─────────────── */
 .commit-tooltip {
   position: fixed;
@@ -1316,6 +1330,16 @@ onUnmounted(() => {
 .commit-row.commit-stash .commit-msg {
   color: var(--text-secondary);
   font-style: italic;
+}
+
+/* 选中时覆盖 dim / stash 的淡化规则：文字统一变白（保留斜体视觉标识） */
+.commit-row.selected.commit-dim .commit-msg,
+.commit-row.selected.commit-dim .col-hash,
+.commit-row.selected.commit-dim .col-author,
+.commit-row.selected.commit-dim .col-date,
+.commit-row.selected.commit-stash .commit-msg {
+  color: var(--row-selected-fg);
+  opacity: 1;
 }
 
 .branch-tag {

@@ -182,7 +182,7 @@ function onPrevChange() {
 
 .diff-file-path {
   color: var(--text-secondary);
-  font-family: 'SF Mono', monospace;
+  font-family: var(--code-font-family, 'SF Mono', monospace);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
