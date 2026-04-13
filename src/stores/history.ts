@@ -39,9 +39,20 @@ export const useHistoryStore = defineStore('history', () => {
         uiStore.showUnreachableCommits,
         uiStore.showStashCommits,
       )
-      commits.value = page.commits
-      hasMore.value = page.has_more
-      graphRows.value = computeGraphLayout(commits.value)
+      // 若 HEAD / 尾部 / 总数 / has_more 都没变，认为提交序列结构未改动，
+      // 跳过赋值避免触发响应式重渲染（watcher 在纯 worktree 变更时大量出现此情况）
+      const prev = commits.value
+      const next = page.commits
+      const unchanged =
+        next.length === prev.length &&
+        page.has_more === hasMore.value &&
+        next[0]?.oid === prev[0]?.oid &&
+        next[next.length - 1]?.oid === prev[prev.length - 1]?.oid
+      if (!unchanged) {
+        commits.value = next
+        hasMore.value = page.has_more
+        graphRows.value = computeGraphLayout(commits.value)
+      }
     } catch (e: unknown) {
       error.value = String(e)
     } finally {
@@ -76,7 +87,19 @@ export const useHistoryStore = defineStore('history', () => {
     if (!repoStore.activeRepoId) return
 
     try {
-      branches.value = await git.listBranches(repoStore.activeRepoId)
+      const next = await git.listBranches(repoStore.activeRepoId)
+      // 分支列表结构未变（数量、名称、指向的 oid、ahead/behind 都一样）时跳过
+      const prev = branches.value
+      const unchanged =
+        next.length === prev.length &&
+        next.every((b, i) =>
+          b.name === prev[i].name &&
+          b.commit_oid === prev[i].commit_oid &&
+          b.is_head === prev[i].is_head &&
+          b.ahead === prev[i].ahead &&
+          b.behind === prev[i].behind,
+        )
+      if (!unchanged) branches.value = next
     } catch (e: unknown) {
       error.value = String(e)
     }
@@ -87,7 +110,14 @@ export const useHistoryStore = defineStore('history', () => {
     if (!repoStore.activeRepoId) return
 
     try {
-      tags.value = await git.listTags(repoStore.activeRepoId)
+      const next = await git.listTags(repoStore.activeRepoId)
+      const prev = tags.value
+      const unchanged =
+        next.length === prev.length &&
+        next.every((t, i) =>
+          t.name === prev[i].name && t.commit_oid === prev[i].commit_oid,
+        )
+      if (!unchanged) tags.value = next
     } catch (e: unknown) {
       error.value = String(e)
     }

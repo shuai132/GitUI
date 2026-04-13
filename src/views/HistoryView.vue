@@ -739,7 +739,10 @@ onUnmounted(() => {
           @scroll="onScroll"
           @wheel="onBodyWheel"
         >
-          <div v-if="historyStore.loading" class="list-hint">加载中...</div>
+          <div
+            v-if="historyStore.loading && historyStore.commits.length === 0"
+            class="list-hint"
+          >加载中...</div>
           <div
             v-else
             :style="{ height: virtualizer.getTotalSize() + 'px', position: 'relative' }"
