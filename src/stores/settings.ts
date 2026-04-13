@@ -23,6 +23,14 @@ export type AccentOverrides = Partial<Record<AccentKey, string>>
  */
 export type ExternalTerminal = 'terminal' | 'iterm2' | 'warp' | 'ghostty' | 'custom'
 
+/**
+ * 提交图分叉 / 汇入样式：
+ * - `rounded`（默认）：控制点拉到行内对角的圆润 Z，两端紧贴 lane 竖直延伸、中段近似水平
+ * - `step`：orthogonal 直角布线 —— 竖直 → 圆角 → 水平 → 圆角 → 竖直（地铁 / 流程图风格）
+ * - `angular`：控制点退化的折线，分叉处呈锐角
+ */
+export type GraphStyle = 'rounded' | 'step' | 'angular'
+
 export interface ExternalTerminalPreset {
   value: ExternalTerminal
   label: string
@@ -47,6 +55,7 @@ export interface SettingsData {
   accentOverrides: AccentOverrides
   externalTerminal: ExternalTerminal
   externalTerminalCustom: string  // 当 externalTerminal === 'custom' 时使用的 app 名 / bundle id
+  graphStyle: GraphStyle
 }
 
 export const DEFAULT_SETTINGS: SettingsData = {
@@ -58,6 +67,7 @@ export const DEFAULT_SETTINGS: SettingsData = {
   accentOverrides: {},
   externalTerminal: 'terminal',
   externalTerminalCustom: '',
+  graphStyle: 'rounded',
 }
 
 /**
@@ -191,6 +201,7 @@ export const useSettingsStore = defineStore('settings', () => {
   const accentOverrides = ref<AccentOverrides>({ ...__initialData.accentOverrides })
   const externalTerminal = ref<ExternalTerminal>(__initialData.externalTerminal)
   const externalTerminalCustom = ref<string>(__initialData.externalTerminalCustom)
+  const graphStyle = ref<GraphStyle>(__initialData.graphStyle)
 
   function snapshot(): SettingsData {
     return {
@@ -202,6 +213,7 @@ export const useSettingsStore = defineStore('settings', () => {
       accentOverrides: { ...accentOverrides.value },
       externalTerminal: externalTerminal.value,
       externalTerminalCustom: externalTerminalCustom.value,
+      graphStyle: graphStyle.value,
     }
   }
 
@@ -226,6 +238,7 @@ export const useSettingsStore = defineStore('settings', () => {
       accentOverrides,
       externalTerminal,
       externalTerminalCustom,
+      graphStyle,
     ],
     () => {
       applySettingsToDom(snapshot())
@@ -251,6 +264,7 @@ export const useSettingsStore = defineStore('settings', () => {
   function resetAppearance() {
     themeMode.value = DEFAULT_SETTINGS.themeMode
     accentOverrides.value = {}
+    graphStyle.value = DEFAULT_SETTINGS.graphStyle
   }
 
   function resetUiFont() {
@@ -298,6 +312,7 @@ export const useSettingsStore = defineStore('settings', () => {
     accentOverrides,
     externalTerminal,
     externalTerminalCustom,
+    graphStyle,
     uiFontIsDefault,
     codeFontIsDefault,
     setAccentOverride,

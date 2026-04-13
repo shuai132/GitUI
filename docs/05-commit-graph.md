@@ -55,6 +55,14 @@
 - 下半段线从 `(laneX(fromCol), ROW_H/2)` 到 `(laneX(toCol), ROW_H)`
 - 圆点在 `(laneX(column), ROW_H/2)`，半径 `CIRCLE_R`
 
+斜向 segment 的形状由设置里的 `graphStyle` 控制（见 `src/stores/settings.ts::GraphStyle`）：
+
+- **`rounded`（默认）**：控制点拉到行内对角，两端紧贴各自 lane 的竖直段更长，中段近似水平 — 视觉上是「沿父 lane 竖直走 → 水平横移 → 沿子 lane 竖直走」的圆润 Z
+- **`step`**：orthogonal 直角布线 — 竖直 → 圆角 → 水平 → 圆角 → 竖直，横段贴本行半段最下沿（紧贴目标节点上方），圆角用 quadratic Bezier 模拟四分之一圆弧
+- **`angular`**：控制点退化（C1=P0、C2=P3）即直线，分叉处呈锐角折线
+
+三种风格共用相同的 segment 端点坐标，只是 `segmentPath` 输出不同的 path。同列直通的竖直线不受开关影响（始终走 `M…L`）。
+
 `HistoryView.vue` 里用 computed `graphColWidth` 根据所有行里出现的最大 `totalColumns` 决定图形列宽，上限 180px。
 
 ## 搜索与 WIP 行的处理

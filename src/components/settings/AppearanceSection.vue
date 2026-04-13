@@ -1,13 +1,19 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { useSettingsStore, type AccentKey, type ThemeMode } from '@/stores/settings'
+import { useSettingsStore, type AccentKey, type GraphStyle, type ThemeMode } from '@/stores/settings'
 
 const store = useSettingsStore()
 
-const themeOptions: Array<{ value: ThemeMode; label: string; hint: string }> = [
-  { value: 'auto', label: '跟随系统', hint: '根据系统深浅色自动切换' },
-  { value: 'light', label: '浅色', hint: '冷灰白 / GitHub 风' },
-  { value: 'dark', label: '深色', hint: '深蓝黑 / 默认主题' },
+const themeOptions: Array<{ value: ThemeMode; label: string }> = [
+  { value: 'auto', label: '跟随系统' },
+  { value: 'light', label: '浅色' },
+  { value: 'dark', label: '深色' },
+]
+
+const graphStyleOptions: Array<{ value: GraphStyle; label: string }> = [
+  { value: 'rounded', label: '圆润' },
+  { value: 'step', label: '直角' },
+  { value: 'angular', label: '锐角' },
 ]
 
 interface AccentRow {
@@ -86,10 +92,7 @@ const hasAnyOverride = computed(() => Object.keys(store.accentOverrides).length 
           :checked="store.themeMode === opt.value"
           @change="store.themeMode = opt.value"
         />
-        <div class="theme-card-body">
-          <div class="theme-card-label">{{ opt.label }}</div>
-          <div class="theme-card-hint">{{ opt.hint }}</div>
-        </div>
+        <span class="theme-card-label">{{ opt.label }}</span>
       </label>
     </div>
 
@@ -130,6 +133,25 @@ const hasAnyOverride = computed(() => Object.keys(store.accentOverrides).length 
     <div v-if="!hasAnyOverride" class="accent-empty-hint">
       当前未覆盖任何强调色，使用主题内置配色。
     </div>
+
+    <div class="section-title section-title--spaced">提交图</div>
+    <div class="theme-grid">
+      <label
+        v-for="opt in graphStyleOptions"
+        :key="opt.value"
+        class="theme-card"
+        :class="{ 'is-active': store.graphStyle === opt.value }"
+      >
+        <input
+          type="radio"
+          name="graph-style"
+          :value="opt.value"
+          :checked="store.graphStyle === opt.value"
+          @change="store.graphStyle = opt.value"
+        />
+        <span class="theme-card-label">{{ opt.label }}</span>
+      </label>
+    </div>
   </div>
 </template>
 
@@ -169,13 +191,15 @@ const hasAnyOverride = computed(() => Object.keys(store.accentOverrides).length 
 .theme-card {
   display: flex;
   align-items: center;
-  gap: 8px;
+  justify-content: center;
+  gap: 6px;
   border: 1px solid var(--border);
   border-radius: 6px;
-  padding: 10px 12px;
+  padding: 6px 8px;
   cursor: pointer;
   background: var(--bg-primary);
   transition: border-color 0.1s, background 0.1s;
+  min-width: 0;
 }
 
 .theme-card:hover {
@@ -192,22 +216,10 @@ const hasAnyOverride = computed(() => Object.keys(store.accentOverrides).length 
   margin: 0;
 }
 
-.theme-card-body {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-
 .theme-card-label {
   font-size: var(--font-md);
   font-weight: 500;
   color: var(--text-primary);
-}
-
-.theme-card-hint {
-  font-size: calc(10.5px * var(--font-scale));
-  color: var(--text-muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
