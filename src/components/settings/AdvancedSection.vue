@@ -1,7 +1,11 @@
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n'
 import { useUiStore } from '@/stores/ui'
+import { useSettingsStore } from '@/stores/settings'
 
 const uiStore = useUiStore()
+const settingsStore = useSettingsStore()
+const { t } = useI18n()
 
 interface ToggleRow {
   label: string
@@ -37,7 +41,6 @@ interface PlaceholderItem {
 }
 
 const placeholders: PlaceholderItem[] = [
-  { label: '界面语言', hint: '多语言支持即将推出' },
   { label: '快捷键', hint: '自定义键盘快捷键即将推出' },
   { label: 'Git 操作偏好', hint: '默认 pull 策略、自动 fetch 间隔即将推出' },
 ]
@@ -63,6 +66,16 @@ const placeholders: PlaceholderItem[] = [
           @change="row.toggle()"
         />
       </label>
+    </div>
+
+    <div class="section-title section-title--spaced">{{ t('settings.advanced.uiLanguageTitle') }}</div>
+    <div class="lang-row">
+      <select v-model="settingsStore.uiLanguage" class="lang-select">
+        <option value="auto">{{ t('settings.advanced.uiLanguageAuto') }}</option>
+        <option value="zh-CN">中文</option>
+        <option value="en">English</option>
+      </select>
+      <span class="lang-hint">{{ t('settings.advanced.uiLanguageHint') }}</span>
     </div>
 
     <div class="section-title section-title--spaced">即将推出</div>
@@ -143,6 +156,37 @@ const placeholders: PlaceholderItem[] = [
   accent-color: var(--accent-blue);
   cursor: pointer;
   margin: 0;
+}
+
+.lang-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+}
+
+.lang-select {
+  appearance: none;
+  background: var(--bg-overlay);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 4px 10px;
+  font-size: var(--font-md);
+  cursor: pointer;
+}
+
+.lang-select:focus {
+  outline: none;
+  border-color: var(--accent-blue);
+}
+
+.lang-hint {
+  font-size: var(--font-sm);
+  color: var(--text-muted);
 }
 
 .placeholder-list {

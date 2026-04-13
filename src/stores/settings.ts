@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { computed, ref, watch } from 'vue'
+import { applyAutoLocaleFromSystem, normalizeLocale, setLocale } from '@/i18n'
 
 /**
  * 用户设置：主题、字体、字号、accent 覆盖。
@@ -39,6 +40,13 @@ export type GraphStyle = 'rounded' | 'step' | 'angular'
  */
 export type RowSeparatorStyle = 'solid' | 'dashed' | 'dotted'
 
+/**
+ * UI 语言：
+ * - `auto`：跟随系统（启动时同步从 navigator.language / autoCache 猜测，挂载后异步调 plugin-os 校正）
+ * - `zh-CN` / `en`：用户显式指定
+ */
+export type UiLanguage = 'auto' | 'zh-CN' | 'en'
+
 /** 行分隔线强度档位数（0 = 无色，MAX = 最深） */
 export const ROW_SEPARATOR_MAX = 10
 /** 最高档对应的 alpha（保持与旧版 `rgba(54,58,79,0.4)` 一致） */
@@ -72,6 +80,8 @@ export interface SettingsData {
   /** 提交历史行分隔线强度 0..ROW_SEPARATOR_MAX，0 无色，MAX 最深；默认中档 */
   rowSeparatorStrength: number
   rowSeparatorStyle: RowSeparatorStyle
+  /** UI 语言；默认 'auto' 跟随系统 */
+  uiLanguage: UiLanguage
 }
 
 export const DEFAULT_SETTINGS: SettingsData = {
@@ -86,6 +96,7 @@ export const DEFAULT_SETTINGS: SettingsData = {
   graphStyle: 'rounded',
   rowSeparatorStrength: Math.round(ROW_SEPARATOR_MAX / 2),
   rowSeparatorStyle: 'solid',
+  uiLanguage: 'auto',
 }
 
 /**
@@ -228,6 +239,7 @@ export const useSettingsStore = defineStore('settings', () => {
   const graphStyle = ref<GraphStyle>(__initialData.graphStyle)
   const rowSeparatorStrength = ref<number>(clampSeparatorStrength(__initialData.rowSeparatorStrength))
   const rowSeparatorStyle = ref<RowSeparatorStyle>(__initialData.rowSeparatorStyle)
+  const uiLanguage = ref<UiLanguage>(normalizeUiLanguage(__initialData.uiLanguage))
 
   function snapshot(): SettingsData {
     return {
@@ -242,6 +254,7 @@ export const useSettingsStore = defineStore('settings', () => {
       graphStyle: graphStyle.value,
       rowSeparatorStrength: rowSeparatorStrength.value,
       rowSeparatorStyle: rowSeparatorStyle.value,
+      uiLanguage: uiLanguage.value,
     }
   }
 
@@ -269,12 +282,22 @@ export const useSettingsStore = defineStore('settings', () => {
       graphStyle,
       rowSeparatorStrength,
       rowSeparatorStyle,
+      uiLanguage,
     ],
     () => {
       applySettingsToDom(snapshot())
       schedulePersist()
     },
     { deep: true },
+  )
+
+  // 语言：store 实例化时立即 apply 一次，之后每次变更也 apply。i18n 实例创建时
+  // 已用 detectInitialLocale 同步猜出一个 locale；这里负责在 auto 档下异步用
+  // plugin-os 做精确校正，在用户手动切换时立即切。
+  watch(
+    uiLanguage,
+    (value) => { void applyLocaleFromSettings(value) },
+    { immediate: true },
   )
 
   // auto 档的系统主题订阅
@@ -347,6 +370,7 @@ export const useSettingsStore = defineStore('settings', () => {
     graphStyle,
     rowSeparatorStrength,
     rowSeparatorStyle,
+    uiLanguage,
     uiFontIsDefault,
     codeFontIsDefault,
     setAccentOverride,
@@ -367,6 +391,28 @@ function clampSize(n: number): number {
 export function clampSeparatorStrength(n: number): number {
   if (!Number.isFinite(n)) return DEFAULT_SETTINGS.rowSeparatorStrength
   return Math.max(0, Math.min(ROW_SEPARATOR_MAX, Math.round(n)))
+}
+
+function normalizeUiLanguage(v: unknown): UiLanguage {
+  return v === 'zh-CN' || v === 'en' || v === 'auto' ? v : 'auto'
+}
+
+/**
+ * 根据 uiLanguage 设置调整 i18n 的当前 locale：
+ * - `zh-CN` / `en`：同步切换
+ * - `auto`：先用 navigator.language 同步顶上（避免闪烁），再异步调 plugin-os 做精确校正
+ */
+async function applyLocaleFromSettings(value: UiLanguage) {
+  if (value === 'zh-CN' || value === 'en') {
+    setLocale(value)
+    return
+  }
+  // auto：i18n 实例初始化时 detectInitialLocale 已给过同步猜测；用户从 zh-CN/en
+  // 切回 auto 时也需要重新猜一下，再由 plugin-os 校正。
+  if (typeof navigator !== 'undefined' && navigator.language) {
+    setLocale(normalizeLocale(navigator.language))
+  }
+  await applyAutoLocaleFromSystem()
 }
 
 export { MIN_FONT_SIZE, MAX_FONT_SIZE }
