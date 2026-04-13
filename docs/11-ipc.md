@@ -88,6 +88,7 @@ GitUI 的前后端通过 Tauri v2 的 IPC 通道通信：
 |------|------|------|
 | `fetch_remote` | `repoId, remoteName` | `void` |
 | `push_branch` | `repoId, remoteName, branchName` | `void` |
+| `push_tag` | `repoId, remoteName, tagName` | `void` （refspec `refs/tags/<name>:refs/tags/<name>`；远端已存在同名 tag 会报 non-fast-forward，需回终端 `-f`） |
 | `pull_branch` | `repoId, remoteName, branchName` | `void` |
 | `list_remotes` | `repoId` | `string[]` |
 

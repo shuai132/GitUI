@@ -11,6 +11,7 @@ import ContextMenu from '@/components/common/ContextMenu.vue'
 import CloneRepoDialog from '@/components/repo/CloneRepoDialog.vue'
 import InitRepoDialog from '@/components/repo/InitRepoDialog.vue'
 import { useRepoCreation } from '@/composables/useRepoCreation'
+import { usePickRemote } from '@/composables/usePickRemote'
 import { useRepoStore } from '@/stores/repos'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useHistoryStore } from '@/stores/history'
@@ -51,6 +52,16 @@ const {
   closeCloneDialog,
   closeInitDialog,
 } = useRepoCreation()
+
+// 选 remote 的全局菜单：sidebar push tag 等场景复用
+const {
+  menuVisible: pickRemoteVisible,
+  menuX: pickRemoteX,
+  menuY: pickRemoteY,
+  menuItems: pickRemoteItems,
+  onMenuSelect: onPickRemoteSelect,
+  onMenuClose: onPickRemoteClose,
+} = usePickRemote()
 
 const repoCreationItems = computed(() => [
   { label: t('repo.menu.open'), action: 'open' },
@@ -226,6 +237,15 @@ watch(
     <InitRepoDialog
       :visible="initDialogVisible"
       @close="closeInitDialog"
+    />
+    <!-- 选 remote（多 remote 弹菜单） -->
+    <ContextMenu
+      :visible="pickRemoteVisible"
+      :x="pickRemoteX"
+      :y="pickRemoteY"
+      :items="pickRemoteItems"
+      @close="onPickRemoteClose"
+      @select="onPickRemoteSelect"
     />
   </div>
 </template>

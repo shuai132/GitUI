@@ -165,6 +165,7 @@ const messages = {
       menu: {
         copyName: 'Copy tag name',
         copyOid: 'Copy commit hash',
+        push: 'Push to remote…',
         delete: 'Delete tag...',
       },
       confirmDelete: 'Delete tag "{name}"? This cannot be undone.',

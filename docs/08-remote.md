@@ -63,7 +63,15 @@ let refspec = format!("refs/heads/{}:refs/heads/{}", branch, branch);
 remote.push(&[&refspec], Some(&mut push_opts))?;
 ```
 
-没有 `--force`、没有 `--set-upstream`，也没有推送 tags。上游未设置时首次 push 必须先手动 set upstream（或在终端 push）。
+没有 `--force`、没有 `--set-upstream`。上游未设置时首次 push 必须先手动 set upstream（或在终端 push）。
+
+### 推送 tag
+
+`GitEngine::push_tag(path, remote, tag_name)` 与分支 push 是同一套调用（`RemoteCallbacks` + 凭据回调），只是 refspec 换成 `refs/tags/<name>:refs/tags/<name>`。
+
+入口在侧栏 TAGS 列表的右键菜单里：`AppSidebar.vue::onTagMenuAction` 的 `'push'` case 调 `usePickRemote().pickRemote(repoId)` 选 remote，再 `git.pushTag(...)`。多 remote 时走全局 ContextMenu（挂在 `App.vue` 顶层，与 `useRepoCreation` 的菜单同级）。
+
+不带 `force`：远端已有同名 tag 会返回 non-fast-forward，由 `errors.push.nonFastForward` 给出中文提示，避免误覆盖别人的 release tag。需要覆盖的话回终端 `git push -f origin <tag>`——与 "合并必须手动处理" 同样的安全保守策略。
 
 ## 凭据回调链
 
@@ -104,4 +112,3 @@ pub fn credential_callback(url, username, allowed_types) -> Result<Cred, Error> 
 - `git push -u` 首次设置 upstream
 - Remote 选择下拉菜单（Pull 按钮上挂 chevron）
 - Force push with lease
-- Tag 推送

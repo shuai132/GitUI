@@ -165,6 +165,7 @@ const messages = {
       menu: {
         copyName: '复制标签名',
         copyOid: '复制 commit hash',
+        push: '推送到远程…',
         delete: '删除标签...',
       },
       confirmDelete: '确认删除标签 "{name}"？此操作不可撤销。',

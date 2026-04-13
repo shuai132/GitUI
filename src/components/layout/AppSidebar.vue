@@ -17,11 +17,13 @@ import CheckoutRemoteDialog from '@/components/branch/CheckoutRemoteDialog.vue'
 import EditSubmoduleDialog from '@/components/submodule/EditSubmoduleDialog.vue'
 import { useGitCommands } from '@/composables/useGitCommands'
 import { useRepoCreation } from '@/composables/useRepoCreation'
+import { usePickRemote } from '@/composables/usePickRemote'
 import { revealItemInDir } from '@tauri-apps/plugin-opener'
 import type { RepoMeta } from '@/types/git'
 
 const git = useGitCommands()
 const repoCreation = useRepoCreation()
+const { pickRemote } = usePickRemote()
 const { t } = useI18n()
 
 const router = useRouter()
@@ -473,6 +475,8 @@ const tagMenuItems = computed<ContextMenuItem[]>(() => {
     { label: t('sidebar.tag.menu.copyName'), action: 'copy-name' },
     { label: t('sidebar.tag.menu.copyOid'), action: 'copy-oid' },
     { separator: true },
+    { label: t('sidebar.tag.menu.push'), action: 'push' },
+    { separator: true },
     { label: t('sidebar.tag.menu.delete'), action: 'delete', danger: true },
   ]
 })
@@ -500,6 +504,16 @@ async function onTagMenuAction(action: string) {
       case 'copy-oid':
         await navigator.clipboard.writeText(tag.commit_oid)
         break
+      case 'push': {
+        const id = repoStore.activeRepoId
+        if (!id) break
+        // 多 remote 时弹菜单让用户选；无 remote / 用户取消则 no-op。
+        // 失败由 useGitCommands.call() 统一推到 errorsStore + 顶栏 toast。
+        const remote = await pickRemote(id)
+        if (!remote) break
+        await git.pushTag(id, remote, tag.name)
+        break
+      }
       case 'delete':
         if (confirm(t('sidebar.tag.confirmDelete', { name: tag.name }))) {
           await historyStore.deleteTag(tag.name)

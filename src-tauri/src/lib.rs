@@ -78,6 +78,7 @@ pub fn run() {
             // Remote
             fetch_remote,
             push_branch,
+            push_tag,
             pull_branch,
             list_remotes,
             // Submodule

@@ -179,6 +179,9 @@ export function useGitCommands() {
   const pushBranch = (repoId: string, remoteName: string, branchName: string) =>
     call<void>('push_branch', { repoId, remoteName, branchName })
 
+  const pushTag = (repoId: string, remoteName: string, tagName: string) =>
+    call<void>('push_tag', { repoId, remoteName, tagName })
+
   const pullBranch = (
     repoId: string,
     remoteName: string,
@@ -293,6 +296,7 @@ export function useGitCommands() {
     deleteTag,
     fetchRemote,
     pushBranch,
+    pushTag,
     pullBranch,
     listRemotes,
     listSubmodules,

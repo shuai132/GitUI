@@ -980,6 +980,22 @@ impl GitEngine {
         Ok(())
     }
 
+    /// 推送一个本地 tag 到远端。refspec `refs/tags/<name>:refs/tags/<name>`。
+    /// 不带 force：已存在同名远端 tag 时 git2 会返回 non-fast-forward 错误，
+    /// 由前端错误映射（`errors.push.nonFastForward`）给出中文提示。
+    pub fn push_tag(path: &str, remote_name: &str, tag_name: &str) -> GitResult<()> {
+        log::debug!("[engine::push_tag] remote={remote_name} tag={tag_name}");
+        let repo = Self::open(path)?;
+        let mut remote = repo.find_remote(remote_name)?;
+        let mut callbacks = git2::RemoteCallbacks::new();
+        callbacks.credentials(make_credentials_callback());
+        let mut push_opts = git2::PushOptions::new();
+        push_opts.remote_callbacks(callbacks);
+        let refspec = format!("refs/tags/{name}:refs/tags/{name}", name = tag_name);
+        remote.push(&[&refspec], Some(&mut push_opts))?;
+        Ok(())
+    }
+
     pub fn pull(path: &str, remote_name: &str, branch_name: &str, mode: &str) -> GitResult<()> {
         log::debug!("[engine::pull] mode={mode} remote={remote_name} branch={branch_name}");
         let repo = Self::open(path)?;
