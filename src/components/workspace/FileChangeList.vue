@@ -1,6 +1,9 @@
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n'
 import type { FileEntry } from '@/types/git'
 import { fileStatusLabel, fileStatusColor } from '@/utils/format'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   files: FileEntry[]
@@ -55,14 +58,14 @@ function onRowContext(e: MouseEvent, file: FileEntry) {
         <button
           v-if="showRowActions"
           class="row-action"
-          :title="file.staged ? '取消暂存此文件' : '暂存此文件'"
+          :title="file.staged ? t('workspace.fileList.rowAction.unstageTitle') : t('workspace.fileList.rowAction.stageTitle')"
           @click.stop="emit('toggle', file)"
         >
-          {{ file.staged ? '取消暂存' : '暂存' }}
+          {{ file.staged ? t('workspace.fileList.rowAction.unstage') : t('workspace.fileList.rowAction.stage') }}
         </button>
       </div>
       <div v-if="files.length === 0" class="empty-hint">
-        {{ emptyText ?? '无变更' }}
+        {{ emptyText ?? t('workspace.fileList.emptyDefault') }}
       </div>
     </div>
   </div>

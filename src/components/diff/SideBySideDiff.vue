@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import { computed, ref, watch, onUnmounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type { FileDiff, DiffLine } from '@/types/git'
 import { highlightLine } from '@/lib/highlight'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   diff: FileDiff | null
@@ -192,10 +195,10 @@ defineExpose({ goNextChange, goPrevChange })
 <template>
   <div class="sbs-diff">
     <!-- Loading / empty states -->
-    <div v-if="loading" class="sbs-state">加载中...</div>
-    <div v-else-if="!diff" class="sbs-state">选择提交查看文件变更</div>
-    <div v-else-if="diff.is_binary" class="sbs-state">二进制文件</div>
-    <div v-else-if="diff.hunks.length === 0" class="sbs-state">无内容变更</div>
+    <div v-if="loading" class="sbs-state">{{ t('diff.empty.loading') }}</div>
+    <div v-else-if="!diff" class="sbs-state">{{ t('diff.empty.selectCommit') }}</div>
+    <div v-else-if="diff.is_binary" class="sbs-state">{{ t('diff.empty.binaryFile') }}</div>
+    <div v-else-if="diff.hunks.length === 0" class="sbs-state">{{ t('diff.empty.noChanges') }}</div>
 
     <!-- Side-by-side content：
          bodyRef 统一垂直滚动；

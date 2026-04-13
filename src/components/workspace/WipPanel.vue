@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useHistoryStore } from '@/stores/history'
 import { useDiffStore } from '@/stores/diff'
@@ -9,6 +10,7 @@ import FileChangeList from '@/components/workspace/FileChangeList.vue'
 import Modal from '@/components/common/Modal.vue'
 import ContextMenu, { type ContextMenuItem } from '@/components/common/ContextMenu.vue'
 
+const { t } = useI18n()
 const workspaceStore = useWorkspaceStore()
 const historyStore = useHistoryStore()
 const diffStore = useDiffStore()
@@ -87,12 +89,12 @@ const fileMenuItems = computed<ContextMenuItem[]>(() => {
   if (!f) return []
   return [
     {
-      label: f.staged ? '取消暂存' : '暂存文件',
+      label: f.staged ? t('workspace.wip.menu.unstage') : t('workspace.wip.menu.stage'),
       action: 'toggle',
     },
     { separator: true },
     {
-      label: '丢弃此文件的变更',
+      label: t('workspace.wip.menu.discardFile'),
       action: 'discard',
       danger: true,
       disabled: f.staged,
@@ -115,7 +117,7 @@ async function onFileMenuAction(action: string) {
     if (action === 'toggle') {
       await onToggleFile(f)
     } else if (action === 'discard') {
-      if (!confirm(`丢弃 "${f.path}" 的工作区变更？`)) return
+      if (!confirm(t('workspace.confirmDiscard.file', { file: f.path }))) return
       await workspaceStore.discardFile(f.path)
       if (selectedPath.value === f.path) {
         selectedPath.value = null
@@ -177,10 +179,10 @@ const canCommit = computed(() => {
 })
 
 const commitButtonLabel = computed(() => {
-  if (committing.value) return '提交中...'
-  if (amendChecked.value) return '修补上次提交'
-  if (stagedAll.value.length === 0) return '暂存变更后提交'
-  return `提交 ${stagedAll.value.length} 个变更`
+  if (committing.value) return t('workspace.commit.button.committing')
+  if (amendChecked.value) return t('workspace.commit.button.amend')
+  if (stagedAll.value.length === 0) return t('workspace.commit.button.stageFirst')
+  return t('workspace.commit.button.commitCount', { count: stagedAll.value.length })
 })
 
 // amend 勾选时自动填充上次提交信息
@@ -308,7 +310,7 @@ watch(
       <button
         class="btn-trash"
         :disabled="totalCount === 0"
-        title="丢弃所有变更"
+        :title="t('workspace.wip.discardAllTitle')"
         @click="onTrashClick"
       >
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -317,8 +319,8 @@ watch(
         </svg>
       </button>
       <span class="header-title">
-        {{ totalCount }} 个文件变更
-        <span class="header-branch">on {{ branchLabel }}</span>
+        {{ t('workspace.wip.headerTitle', { count: totalCount }) }}
+        <span class="header-branch">{{ t('workspace.wip.onBranch', { branch: branchLabel }) }}</span>
       </span>
     </div>
 
@@ -326,8 +328,8 @@ watch(
     <div ref="panelListsRef" class="panel-lists" tabindex="-1" @keydown="onListKeydown">
       <FileChangeList
         :files="unstagedAll"
-        title="未暂存"
-        empty-text="无未暂存变更"
+        :title="t('workspace.wip.section.unstaged')"
+        :empty-text="t('workspace.wip.empty.unstaged')"
         :show-row-actions="true"
         :selected-path="selectedPath"
         @select="onSelectFile"
@@ -340,15 +342,15 @@ watch(
             class="btn-section"
             @click="onStageAll"
           >
-            全部暂存
+            {{ t('workspace.wip.stageAll') }}
           </button>
         </template>
       </FileChangeList>
 
       <FileChangeList
         :files="stagedAll"
-        title="已暂存"
-        empty-text="无暂存文件"
+        :title="t('workspace.wip.section.staged')"
+        :empty-text="t('workspace.wip.empty.staged')"
         :show-row-actions="true"
         :selected-path="selectedPath"
         @select="onSelectFile"
@@ -361,7 +363,7 @@ watch(
             class="btn-section"
             @click="onUnstageAll"
           >
-            全部取消暂存
+            {{ t('workspace.wip.unstageAll') }}
           </button>
         </template>
       </FileChangeList>
@@ -378,15 +380,15 @@ watch(
           v-model="amendChecked"
           :disabled="isUnborn"
         />
-        <span>修补上次提交 (Amend)</span>
-        <span v-if="isUnborn" class="amend-hint">（尚无历史提交）</span>
+        <span>{{ t('workspace.commit.amendLabel') }}</span>
+        <span v-if="isUnborn" class="amend-hint">{{ t('workspace.commit.amendUnbornHint') }}</span>
       </label>
 
       <textarea
         v-model="message"
         class="message-input"
         rows="3"
-        placeholder="提交信息（Cmd+Enter 提交）"
+        :placeholder="t('workspace.commit.messagePlaceholder')"
         spellcheck="false"
         autocomplete="off"
         @keydown="onMessageKeydown"
@@ -406,24 +408,26 @@ watch(
     <!-- 丢弃全部变更确认框 -->
     <Modal
       :visible="discardConfirmOpen"
-      title="丢弃所有变更？"
+      :title="t('workspace.confirmDiscard.allTitle')"
       width="400px"
       @close="discardConfirmOpen = false"
     >
       <div class="discard-body">
-        <p>将丢弃所有未暂存变更并删除未跟踪文件：</p>
+        <p>{{ t('workspace.confirmDiscard.intro') }}</p>
         <ul>
-          <li>未暂存：{{ (workspaceStore.status?.unstaged.length ?? 0) }} 个</li>
-          <li>未跟踪：{{ (workspaceStore.status?.untracked.length ?? 0) }} 个</li>
-          <li>已暂存：{{ stagedAll.length }} 个（将一并恢复）</li>
+          <li>{{ t('workspace.confirmDiscard.unstagedCount', { count: workspaceStore.status?.unstaged.length ?? 0 }) }}</li>
+          <li>{{ t('workspace.confirmDiscard.untrackedCount', { count: workspaceStore.status?.untracked.length ?? 0 }) }}</li>
+          <li>{{ t('workspace.confirmDiscard.stagedCount', { count: stagedAll.length }) }}</li>
         </ul>
         <p class="warn">
-          此操作不可撤销。<code>.gitignore</code> 里的文件不会被删除。
+          {{ t('workspace.confirmDiscard.warnIrreversible') }}
+          <code>.gitignore</code>
+          {{ t('workspace.confirmDiscard.warnIgnored') }}
         </p>
       </div>
       <template #footer>
-        <button class="btn btn-secondary" @click="discardConfirmOpen = false">取消</button>
-        <button class="btn btn-danger" @click="onConfirmDiscardAll">丢弃全部</button>
+        <button class="btn btn-secondary" @click="discardConfirmOpen = false">{{ t('common.cancel') }}</button>
+        <button class="btn btn-danger" @click="onConfirmDiscardAll">{{ t('workspace.confirmDiscard.confirmAll') }}</button>
       </template>
     </Modal>
 

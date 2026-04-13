@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type { FileDiff } from '@/types/git'
 import { highlightLine } from '@/lib/highlight'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   diff: FileDiff | null
@@ -138,10 +141,10 @@ defineExpose({ goNextChange, goPrevChange })
 
 <template>
   <div class="inline-diff">
-    <div v-if="loading" class="inline-state">加载中...</div>
-    <div v-else-if="!diff" class="inline-state">选择文件查看变更</div>
-    <div v-else-if="diff.is_binary" class="inline-state">二进制文件</div>
-    <div v-else-if="rows.length === 0" class="inline-state">无内容变更</div>
+    <div v-if="loading" class="inline-state">{{ t('diff.empty.loading') }}</div>
+    <div v-else-if="!diff" class="inline-state">{{ t('diff.empty.selectFile') }}</div>
+    <div v-else-if="diff.is_binary" class="inline-state">{{ t('diff.empty.binaryFile') }}</div>
+    <div v-else-if="rows.length === 0" class="inline-state">{{ t('diff.empty.noChanges') }}</div>
 
     <!-- 连续模式（所有 hunk 串联）-->
     <div

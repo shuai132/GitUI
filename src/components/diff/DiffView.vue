@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type { FileDiff } from '@/types/git'
 import SideBySideDiff from './SideBySideDiff.vue'
 import InlineDiff from './InlineDiff.vue'
@@ -7,6 +8,8 @@ import ImageDiff from './ImageDiff.vue'
 import { EXT_TO_LANG } from '@/lib/highlight'
 import { detectPreviewKind } from '@/lib/preview'
 import { useUiStore } from '@/stores/ui'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   diff: FileDiff | null
@@ -74,7 +77,7 @@ function onPrevChange() {
         <!-- 上 / 下变更跳转 -->
         <button
           class="btn-icon"
-          title="上一变更"
+          :title="t('diff.toolbar.prevChange')"
           @click="onPrevChange"
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -83,7 +86,7 @@ function onPrevChange() {
         </button>
         <button
           class="btn-icon"
-          title="下一变更"
+          :title="t('diff.toolbar.nextChange')"
           @click="onNextChange"
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -97,7 +100,7 @@ function onPrevChange() {
         <button
           class="btn-icon"
           :class="{ active: uiStore.diffHighlightEnabled }"
-          title="语法高亮"
+          :title="t('diff.toolbar.syntaxHighlight')"
           @click="uiStore.toggleDiffHighlight()"
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -112,7 +115,7 @@ function onPrevChange() {
         <button
           class="btn-icon"
           :class="{ active: uiStore.diffViewMode === 'by-hunk' }"
-          title="按 hunk 分块"
+          :title="t('diff.mode.byHunk')"
           @click="uiStore.setDiffViewMode('by-hunk')"
         >
           <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -123,7 +126,7 @@ function onPrevChange() {
         <button
           class="btn-icon"
           :class="{ active: uiStore.diffViewMode === 'inline' }"
-          title="单列连续"
+          :title="t('diff.mode.inline')"
           @click="uiStore.setDiffViewMode('inline')"
         >
           <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -135,7 +138,7 @@ function onPrevChange() {
         <button
           class="btn-icon"
           :class="{ active: uiStore.diffViewMode === 'side-by-side' }"
-          title="左右分栏"
+          :title="t('diff.mode.sideBySide')"
           @click="uiStore.setDiffViewMode('side-by-side')"
         >
           <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -152,7 +155,7 @@ function onPrevChange() {
         <button
           class="btn-icon"
           :class="{ active: !svgTextMode }"
-          title="图片预览"
+          :title="t('diff.toolbar.imagePreview')"
           @click="svgTextMode = false"
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -164,7 +167,7 @@ function onPrevChange() {
         <button
           class="btn-icon"
           :class="{ active: svgTextMode }"
-          title="文本 diff"
+          :title="t('diff.toolbar.textDiff')"
           @click="svgTextMode = true"
         >
           <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -177,7 +180,7 @@ function onPrevChange() {
       </template>
 
       <!-- 关闭 diff 面板 -->
-      <button class="btn-icon" title="关闭" @click="emit('close')">
+      <button class="btn-icon" :title="t('diff.toolbar.close')" @click="emit('close')">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
           <line x1="18" y1="6" x2="6" y2="18" />
           <line x1="6" y1="6" x2="18" y2="18" />

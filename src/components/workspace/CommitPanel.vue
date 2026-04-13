@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useHistoryStore } from '@/stores/history'
 
+const { t } = useI18n()
 const workspaceStore = useWorkspaceStore()
 const historyStore = useHistoryStore()
 
@@ -43,7 +45,7 @@ function onKeydown(e: KeyboardEvent) {
     <textarea
       v-model="message"
       class="commit-message"
-      placeholder="提交信息（Cmd+Enter 提交）"
+      :placeholder="t('workspace.commit.messagePlaceholder')"
       rows="4"
       spellcheck="false"
       autocomplete="off"
@@ -52,14 +54,14 @@ function onKeydown(e: KeyboardEvent) {
     <div v-if="error" class="error-msg">{{ error }}</div>
     <div class="commit-actions">
       <span class="staged-hint">
-        {{ workspaceStore.status?.staged.length ?? 0 }} 个文件已暂存
+        {{ t('workspace.commit.stagedCount', { count: workspaceStore.status?.staged.length ?? 0 }) }}
       </span>
       <button
         class="btn-commit"
         :disabled="!canCommit"
         @click="doCommit"
       >
-        {{ committing ? '提交中...' : '提交' }}
+        {{ committing ? t('workspace.commit.button.committing') : t('workspace.commit.button.commit') }}
       </button>
     </div>
   </div>

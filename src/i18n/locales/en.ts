@@ -3,6 +3,7 @@ const messages = {
   common: {
     aboutTitle: 'About GitUI',
     operationFailed: 'Operation failed: {detail}',
+    cancel: 'Cancel',
   },
   toolbar: {
     opFailed: '{label} failed: {message}',
@@ -212,6 +213,91 @@ const messages = {
   },
   branches: {
     noRepo: 'Open a Git repository first',
+  },
+  workspace: {
+    wip: {
+      headerTitle: '{count} file(s) changed',
+      onBranch: 'on {branch}',
+      discardAllTitle: 'Discard all changes',
+      stageAll: 'Stage all',
+      unstageAll: 'Unstage all',
+      section: {
+        unstaged: 'Unstaged',
+        staged: 'Staged',
+      },
+      empty: {
+        unstaged: 'No unstaged changes',
+        staged: 'No staged files',
+      },
+      menu: {
+        stage: 'Stage file',
+        unstage: 'Unstage',
+        discardFile: 'Discard changes to this file',
+      },
+    },
+    commit: {
+      messagePlaceholder: 'Commit message (Cmd+Enter to commit)',
+      amendLabel: 'Amend previous commit',
+      amendUnbornHint: ' (no previous commit)',
+      stagedCount: '{count} file(s) staged',
+      button: {
+        commit: 'Commit',
+        committing: 'Committing...',
+        amend: 'Amend previous commit',
+        stageFirst: 'Stage changes to commit',
+        commitCount: 'Commit {count} change(s)',
+      },
+    },
+    fileList: {
+      emptyDefault: 'No changes',
+      rowAction: {
+        stage: 'Stage',
+        unstage: 'Unstage',
+        stageTitle: 'Stage this file',
+        unstageTitle: 'Unstage this file',
+      },
+    },
+    confirmDiscard: {
+      file: 'Discard working-tree changes to "{file}"?',
+      allTitle: 'Discard all changes?',
+      intro: 'All unstaged changes will be reverted and untracked files deleted:',
+      unstagedCount: 'Unstaged: {count}',
+      untrackedCount: 'Untracked: {count}',
+      stagedCount: 'Staged: {count} (will be restored as well)',
+      warnIrreversible: 'This cannot be undone.',
+      warnIgnored: 'files are not affected.',
+      confirmAll: 'Discard all',
+    },
+  },
+  diff: {
+    mode: {
+      sideBySide: 'Side-by-side',
+      inline: 'Unified',
+      byHunk: 'Grouped by hunk',
+    },
+    toolbar: {
+      prevChange: 'Previous change',
+      nextChange: 'Next change',
+      syntaxHighlight: 'Syntax highlighting',
+      imagePreview: 'Image preview',
+      textDiff: 'Text diff',
+      close: 'Close',
+    },
+    empty: {
+      loading: 'Loading...',
+      selectCommit: 'Select a commit to view file changes',
+      selectFile: 'Select a file to view changes',
+      binaryFile: 'Binary file',
+      noChanges: 'No content changes',
+    },
+    image: {
+      oldSide: 'Before',
+      newSide: 'After',
+      added: '(added)',
+      deleted: '(deleted)',
+      tooLarge: 'File too large ({size}), preview unavailable',
+      loadFailed: 'Load failed: {detail}',
+    },
   },
   settings: {
     advanced: {

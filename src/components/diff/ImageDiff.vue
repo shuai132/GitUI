@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import { ref, watch, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type { FileDiff } from '@/types/git'
 import { useGitCommands } from '@/composables/useGitCommands'
 import { mimeFor } from '@/lib/preview'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   diff: FileDiff
@@ -111,21 +114,21 @@ defineExpose({
 <template>
   <div class="img-diff">
     <div class="img-pane">
-      <div class="pane-header">旧版</div>
+      <div class="pane-header">{{ t('diff.image.oldSide') }}</div>
       <div class="pane-body">
         <template v-if="oldSide.state === 'loading'">
-          <div class="pane-state">加载中...</div>
+          <div class="pane-state">{{ t('diff.empty.loading') }}</div>
         </template>
         <template v-else-if="oldSide.state === 'missing'">
-          <div class="pane-state empty">（新增）</div>
+          <div class="pane-state empty">{{ t('diff.image.added') }}</div>
         </template>
         <template v-else-if="oldSide.state === 'too-large'">
           <div class="pane-state warn">
-            文件过大（{{ formatSize(oldSide.size) }}），无法预览
+            {{ t('diff.image.tooLarge', { size: formatSize(oldSide.size) }) }}
           </div>
         </template>
         <template v-else-if="oldSide.state === 'error'">
-          <div class="pane-state error">加载失败：{{ oldSide.error }}</div>
+          <div class="pane-state error">{{ t('diff.image.loadFailed', { detail: oldSide.error }) }}</div>
         </template>
         <template v-else-if="oldSide.state === 'loaded'">
           <img :src="oldSide.dataUri" @load="onImgLoad('old', $event)" />
@@ -139,21 +142,21 @@ defineExpose({
     <div class="img-divider" />
 
     <div class="img-pane">
-      <div class="pane-header">新版</div>
+      <div class="pane-header">{{ t('diff.image.newSide') }}</div>
       <div class="pane-body">
         <template v-if="newSide.state === 'loading'">
-          <div class="pane-state">加载中...</div>
+          <div class="pane-state">{{ t('diff.empty.loading') }}</div>
         </template>
         <template v-else-if="newSide.state === 'missing'">
-          <div class="pane-state empty">（已删除）</div>
+          <div class="pane-state empty">{{ t('diff.image.deleted') }}</div>
         </template>
         <template v-else-if="newSide.state === 'too-large'">
           <div class="pane-state warn">
-            文件过大（{{ formatSize(newSide.size) }}），无法预览
+            {{ t('diff.image.tooLarge', { size: formatSize(newSide.size) }) }}
           </div>
         </template>
         <template v-else-if="newSide.state === 'error'">
-          <div class="pane-state error">加载失败：{{ newSide.error }}</div>
+          <div class="pane-state error">{{ t('diff.image.loadFailed', { detail: newSide.error }) }}</div>
         </template>
         <template v-else-if="newSide.state === 'loaded'">
           <img :src="newSide.dataUri" @load="onImgLoad('new', $event)" />

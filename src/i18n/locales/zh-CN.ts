@@ -5,6 +5,7 @@ const messages = {
   common: {
     aboutTitle: '关于 GitUI',
     operationFailed: '操作失败：{detail}',
+    cancel: '取消',
   },
   toolbar: {
     opFailed: '{label} 失败：{message}',
@@ -214,6 +215,91 @@ const messages = {
   },
   branches: {
     noRepo: '请先打开一个 Git 仓库',
+  },
+  workspace: {
+    wip: {
+      headerTitle: '{count} 个文件变更',
+      onBranch: 'on {branch}',
+      discardAllTitle: '丢弃所有变更',
+      stageAll: '全部暂存',
+      unstageAll: '全部取消暂存',
+      section: {
+        unstaged: '未暂存',
+        staged: '已暂存',
+      },
+      empty: {
+        unstaged: '无未暂存变更',
+        staged: '无暂存文件',
+      },
+      menu: {
+        stage: '暂存文件',
+        unstage: '取消暂存',
+        discardFile: '丢弃此文件的变更',
+      },
+    },
+    commit: {
+      messagePlaceholder: '提交信息（Cmd+Enter 提交）',
+      amendLabel: '修补上次提交 (Amend)',
+      amendUnbornHint: '（尚无历史提交）',
+      stagedCount: '{count} 个文件已暂存',
+      button: {
+        commit: '提交',
+        committing: '提交中...',
+        amend: '修补上次提交',
+        stageFirst: '暂存变更后提交',
+        commitCount: '提交 {count} 个变更',
+      },
+    },
+    fileList: {
+      emptyDefault: '无变更',
+      rowAction: {
+        stage: '暂存',
+        unstage: '取消暂存',
+        stageTitle: '暂存此文件',
+        unstageTitle: '取消暂存此文件',
+      },
+    },
+    confirmDiscard: {
+      file: '丢弃 "{file}" 的工作区变更？',
+      allTitle: '丢弃所有变更？',
+      intro: '将丢弃所有未暂存变更并删除未跟踪文件：',
+      unstagedCount: '未暂存：{count} 个',
+      untrackedCount: '未跟踪：{count} 个',
+      stagedCount: '已暂存：{count} 个（将一并恢复）',
+      warnIrreversible: '此操作不可撤销。',
+      warnIgnored: '里的文件不会被删除。',
+      confirmAll: '丢弃全部',
+    },
+  },
+  diff: {
+    mode: {
+      sideBySide: '左右分栏',
+      inline: '单列连续',
+      byHunk: '按 hunk 分块',
+    },
+    toolbar: {
+      prevChange: '上一变更',
+      nextChange: '下一变更',
+      syntaxHighlight: '语法高亮',
+      imagePreview: '图片预览',
+      textDiff: '文本 diff',
+      close: '关闭',
+    },
+    empty: {
+      loading: '加载中...',
+      selectCommit: '选择提交查看文件变更',
+      selectFile: '选择文件查看变更',
+      binaryFile: '二进制文件',
+      noChanges: '无内容变更',
+    },
+    image: {
+      oldSide: '旧版',
+      newSide: '新版',
+      added: '（新增）',
+      deleted: '（已删除）',
+      tooLarge: '文件过大（{size}），无法预览',
+      loadFailed: '加载失败：{detail}',
+    },
   },
   settings: {
     advanced: {
