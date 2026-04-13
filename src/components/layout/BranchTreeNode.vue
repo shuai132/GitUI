@@ -37,8 +37,9 @@ function onBranchContextMenu(e: MouseEvent) {
   emit('branchContextMenu', e, props.node.branch)
 }
 
-// 缩进：folder 和 branch 每层 12px
-const indentPx = (level: number) => 10 + level * 12 + 'px'
+// 缩进：level=0 与 section-title 的 padding-left (12px) 对齐，
+// 之后每层再缩进 12px
+const indentPx = (level: number) => 12 + level * 12 + 'px'
 </script>
 
 <template>
