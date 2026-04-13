@@ -22,6 +22,7 @@ const messages = {
       pullModeSelect: '选择 Pull 模式',
       push: 'Push 当前分支',
       stash: 'Stash 当前工作区',
+      stashEmpty: '没有可 stash 的变更',
       popWithCount: 'Pop 最新 stash (共 {count} 条)',
       popEmpty: '没有 stash',
       terminalInApp: '打开应用内终端',

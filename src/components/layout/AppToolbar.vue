@@ -214,6 +214,13 @@ const currentBranch = computed(
 )
 
 const canRemoteOp = computed(() => hasRepo.value && currentBranch.value !== null)
+const canStash = computed(() => {
+  if (!hasRepo.value) return false
+  const s = workspaceStore.status
+  if (!s) return false
+  // 后端 stash_push 用的是 INCLUDE_UNTRACKED，untracked 也会被 stash
+  return s.staged.length + s.unstaged.length + s.untracked.length > 0
+})
 const canStashPop = computed(() => hasRepo.value && stashStore.entries.length > 0)
 
 // ── 工具栏全局错误展示（浮层） ─────────────────────────────────────
@@ -346,7 +353,7 @@ async function onPush(e: MouseEvent) {
 
 // ── Stash / Pop ─────────────────────────────────────────────────────
 async function onStash() {
-  if (!hasRepo.value) return
+  if (!canStash.value) return
   busy.stash = true
   try {
     // 用 WipPanel 输入框里的提交信息当 stash message；空则回退到 libgit2 默认 "WIP on..."
@@ -621,8 +628,8 @@ async function handleDblClick(e: MouseEvent) {
       <!-- Stash -->
       <button
         class="btn-tool"
-        :title="t('toolbar.title.stash')"
-        :disabled="!hasRepo || busy.stash"
+        :title="canStash ? t('toolbar.title.stash') : t('toolbar.title.stashEmpty')"
+        :disabled="!canStash || busy.stash"
         @click="onStash"
       >
         <span v-if="busy.stash" class="spinner" />

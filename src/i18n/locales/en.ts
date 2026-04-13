@@ -22,6 +22,7 @@ const messages = {
       pullModeSelect: 'Choose Pull mode',
       push: 'Push current branch',
       stash: 'Stash current working tree',
+      stashEmpty: 'Nothing to stash',
       popWithCount: 'Pop latest stash ({count} total)',
       popEmpty: 'No stash',
       terminalInApp: 'Open in-app terminal',
