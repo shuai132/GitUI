@@ -5,6 +5,7 @@ import { listen } from '@tauri-apps/api/event'
 import { useRepoStore } from '@/stores/repos'
 import { useHistoryStore } from '@/stores/history'
 import { useStashStore } from '@/stores/stash'
+import { useWorkspaceStore } from '@/stores/workspace'
 import { useUiStore } from '@/stores/ui'
 import { useErrorsStore } from '@/stores/errors'
 import { resolveExternalTerminalApp, useSettingsStore } from '@/stores/settings'
@@ -19,6 +20,7 @@ import AboutInfo from '@/components/common/AboutInfo.vue'
 const repoStore = useRepoStore()
 const historyStore = useHistoryStore()
 const stashStore = useStashStore()
+const workspaceStore = useWorkspaceStore()
 const uiStore = useUiStore()
 const errorsStore = useErrorsStore()
 const settingsStore = useSettingsStore()
@@ -345,7 +347,11 @@ async function onStash() {
   if (!hasRepo.value) return
   busy.stash = true
   try {
-    await stashStore.push()
+    // 用 WipPanel 输入框里的提交信息当 stash message；空则回退到 libgit2 默认 "WIP on..."
+    const draft = workspaceStore.commitDraft.trim()
+    await stashStore.push(draft || undefined)
+    // 变更已搬到 stash 里，message 也跟过去了，清空草稿
+    if (draft) workspaceStore.commitDraft = ''
   } catch {
     /* toast 由 errorsStore watch 统一处理 */
   } finally {

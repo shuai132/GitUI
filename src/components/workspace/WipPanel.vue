@@ -159,7 +159,12 @@ watch(() => uiStore.shouldOpenDiscardAll, checkDiscardAllRequest)
 
 // ── 提交表单 ──────────────────────────────────────────────────────
 const amendChecked = ref(false)
-const message = ref('')
+const message = computed({
+  get: () => workspaceStore.commitDraft,
+  set: (v: string) => {
+    workspaceStore.commitDraft = v
+  },
+})
 const committing = ref(false)
 const commitError = ref<string | null>(null)
 

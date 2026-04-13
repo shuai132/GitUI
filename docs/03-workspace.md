@@ -83,7 +83,7 @@
 
 ### 提交表单
 
-- **单个多行 textarea**：直接编辑完整提交信息（首行做摘要、空行后做正文是 git 的习惯，不由 UI 强制拆分）
+- **单个多行 textarea**：直接编辑完整提交信息（首行做摘要、空行后做正文是 git 的习惯，不由 UI 强制拆分）。绑定到 `workspaceStore.commitDraft`（按仓库切换自动重置），便于工具栏 Stash 复用为 stash message（见 [10-stash-reflog.md](./10-stash-reflog.md)）
 - **Amend 勾选**：
   - `isUnborn`（HEAD 不存在）时禁用
   - 勾上后即使没有暂存变更也可提交，只改 message

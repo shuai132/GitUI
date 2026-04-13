@@ -26,7 +26,7 @@
 
 **工具栏**：
 
-- `Stash` 按钮：不带 message（使用时间戳 / 默认 message），只要仓库存在就可用
+- `Stash` 按钮：仓库存在即可用。message 优先取 WipPanel 提交信息输入框里当前的内容（`workspaceStore.commitDraft`），用作 stash 描述；输入框为空则回退到 libgit2 默认的 "WIP on \<branch\>: ..."。stash 成功后清空草稿（变更和 message 都已转移到 stash 里）
 - `Pop` 按钮：有至少一条 stash 才启用
 
 **侧边栏 STASH section**：

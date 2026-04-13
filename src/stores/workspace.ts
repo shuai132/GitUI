@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import type { WorkspaceStatus, FileEntry } from '@/types/git'
 import { useGitCommands } from '@/composables/useGitCommands'
 import { useRepoStore } from './repos'
@@ -10,7 +10,18 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   const loading = ref(false)
   const error = ref<string | null>(null)
 
+  // 当前提交信息草稿（WipPanel 输入框 ↔ 工具栏 Stash 共享）
+  const commitDraft = ref('')
+
   const git = useGitCommands()
+
+  // 切仓库时清空草稿，避免上一个仓库的提交信息泄漏到下一个仓库
+  watch(
+    () => useRepoStore().activeRepoId,
+    () => {
+      commitDraft.value = ''
+    },
+  )
 
   async function refresh(repoId?: string) {
     const repoStore = useRepoStore()
@@ -106,6 +117,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     selectedFile,
     loading,
     error,
+    commitDraft,
     refresh,
     stageFile,
     unstageFile,
