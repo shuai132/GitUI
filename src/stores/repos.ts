@@ -105,6 +105,29 @@ export const useRepoStore = defineStore('repos', () => {
     }
   }
 
+  /**
+   * 克隆远程仓库。完成后统一走 openRepo 注册到后端 + 加入侧栏 + 激活，
+   * 不在后端的 clone_repo 里直接注册 watcher，保持职责单一。
+   */
+  async function cloneRepo(opts: {
+    url: string
+    parentDir: string
+    name?: string
+    depth?: number
+    recurseSubmodules: boolean
+  }): Promise<RepoMeta> {
+    const workdir = await git.cloneRepo(opts)
+    return await openRepo(workdir)
+  }
+
+  /**
+   * 在 path 下 `git init`，完成后 openRepo 激活。
+   */
+  async function initRepo(path: string): Promise<RepoMeta> {
+    const workdir = await git.initRepo(path)
+    return await openRepo(workdir)
+  }
+
   async function closeRepo(repoId: string) {
     await git.closeRepo(repoId)
     repos.value = repos.value.filter((r) => r.id !== repoId)
@@ -142,6 +165,8 @@ export const useRepoStore = defineStore('repos', () => {
     error,
     loadPersisted,
     openRepo,
+    cloneRepo,
+    initRepo,
     closeRepo,
     setActive,
     reorderRepos,

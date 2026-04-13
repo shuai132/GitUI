@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, watch } from 'vue'
+import { computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import AppSidebar from '@/components/layout/AppSidebar.vue'
@@ -7,6 +7,10 @@ import AppToolbar from '@/components/layout/AppToolbar.vue'
 import AppStatusBar from '@/components/layout/AppStatusBar.vue'
 import DebugPanel from '@/components/debug/DebugPanel.vue'
 import TerminalPanel from '@/components/terminal/TerminalPanel.vue'
+import ContextMenu from '@/components/common/ContextMenu.vue'
+import CloneRepoDialog from '@/components/repo/CloneRepoDialog.vue'
+import InitRepoDialog from '@/components/repo/InitRepoDialog.vue'
+import { useRepoCreation } from '@/composables/useRepoCreation'
 import { useRepoStore } from '@/stores/repos'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useHistoryStore } from '@/stores/history'
@@ -31,6 +35,46 @@ const uiStore = useUiStore()
 const debugStore = useDebugStore()
 const { onStatusChanged } = useGitEvents()
 const git = useGitCommands()
+
+// 「添加仓库」下拉菜单 + clone/init 对话框：菜单和对话框都挂在 App 顶层，
+// AppToolbar/AppSidebar 通过 useRepoCreation() 触发显示。
+// destructure 出顶级 ref，让模板自动 unwrap，避免嵌套 ref.value 的响应式坑
+const {
+  menuVisible: repoMenuVisible,
+  menuX: repoMenuX,
+  menuY: repoMenuY,
+  cloneDialogVisible,
+  initDialogVisible,
+  hideMenu: repoHideMenu,
+  openCloneDialog,
+  openInitDialog,
+  closeCloneDialog,
+  closeInitDialog,
+} = useRepoCreation()
+
+const repoCreationItems = computed(() => [
+  { label: t('repo.menu.open'), action: 'open' },
+  { label: t('repo.menu.clone'), action: 'clone' },
+  { label: t('repo.menu.init'), action: 'init' },
+])
+
+async function onRepoCreationSelect(action: string) {
+  if (action === 'open') {
+    try {
+      const { open: openDialog } = await import('@tauri-apps/plugin-dialog')
+      const selected = await openDialog({ directory: true })
+      if (typeof selected === 'string') {
+        await repoStore.openRepo(selected)
+      }
+    } catch (e) {
+      console.error(e)
+    }
+  } else if (action === 'clone') {
+    openCloneDialog()
+  } else if (action === 'init') {
+    openInitDialog()
+  }
+}
 
 // 启动时从持久化存储恢复仓库列表；之后取一次由父进程通过 `--open-repo`
 // 注入的启动仓库路径（在新窗口中打开某仓库的场景），存在则 openRepo 激活它。
@@ -165,6 +209,24 @@ watch(
       <DebugPanel v-if="uiStore.debugPanelVisible" />
     </div>
     <AppStatusBar />
+
+    <!-- 全局：添加仓库菜单 + clone/init 对话框 -->
+    <ContextMenu
+      :visible="repoMenuVisible"
+      :x="repoMenuX"
+      :y="repoMenuY"
+      :items="repoCreationItems"
+      @close="repoHideMenu"
+      @select="onRepoCreationSelect"
+    />
+    <CloneRepoDialog
+      :visible="cloneDialogVisible"
+      @close="closeCloneDialog"
+    />
+    <InitRepoDialog
+      :visible="initDialogVisible"
+      @close="closeInitDialog"
+    />
   </div>
 </template>
 

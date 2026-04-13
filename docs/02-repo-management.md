@@ -42,6 +42,50 @@ pub struct RepoManager {
 
 `WatcherService` 内部的 `HashMap<repo_id, Debouncer>` 也用 `parking_lot::Mutex`，同样的理由。
 
+## 创建仓库（clone / init）
+
+「添加仓库」有三个入口，均统一收敛到同一套 menu + dialog：
+
+- **工具栏**：`AppToolbar.vue` 的「打开」按钮是 split-button——主按钮保留旧行为（直接选目录 → `open_repo`），右侧 chevron 弹「添加仓库」菜单
+- **侧栏**：`AppSidebar.vue` 的 `+` 按钮直接弹同一菜单（侧栏空间紧张，不再保留默认动作；菜单的「打开」即原行为）
+- **菜单项**：打开本地仓库 / 克隆远程仓库 / 新建本地仓库
+
+菜单和 `CloneRepoDialog` / `InitRepoDialog` 都挂在 `App.vue` 顶层。状态由 `composables/useRepoCreation.ts` 用模块级 `ref` 持有（单例），各入口只调用 `showMenuAt(anchor)` / `openCloneDialog()` / `openInitDialog()`。
+
+```
+点击 + 或 chevron
+  → useRepoCreation.showMenuAt(anchor)
+  → 用户在 ContextMenu 中选 "克隆" / "新建"
+    ├─ "克隆" → CloneRepoDialog
+    │    → repoStore.cloneRepo({ url, parentDir, name?, depth?, recurseSubmodules })
+    │    → invoke("clone_repo")
+    │    → Rust 端 tokio::task::spawn_blocking（git2 是阻塞 C 库）：
+    │        1. RepoBuilder + 凭据回调（复用 make_credentials_callback）
+    │        2. transfer_progress / sideband_progress / checkout 回调
+    │           节流后 emit "repo://operation-progress"（op="clone"）
+    │        3. depth.is_some() 时 fetch_options.depth(N)
+    │        4. recurse_submodules 时遍历 submodules 调 init+update
+    │        5. 返回 workdir 绝对路径
+    │    → repoStore.cloneRepo 内部再调 openRepo(workdir)（共用注册流程）
+    └─ "新建" → InitRepoDialog
+         → repoStore.initRepo(finalPath)
+         → invoke("init_repo")
+         → Rust 端 spawn_blocking：
+             1. 路径不存在则 create_dir_all
+             2. 已是 git 仓库则报错（避免覆盖）
+             3. Repository::init(path)（非 bare）
+             4. 返回 path
+         → repoStore.initRepo 内部再调 openRepo(path)
+```
+
+**为什么 clone/init 不在后端直接注册到 RepoManager**：保持单一入口——所有"加入侧栏 + 启动 watcher + 持久化"的逻辑只在 `open_repo` 一处。clone/init 后端命令只负责"产出 workdir"，注册职责留给前端 store 委托给 `openRepo`，避免两份"添加仓库"代码漂移。
+
+**进度事件节流**：`transfer_progress` 在大仓库里一秒可被回调几百次，无节流会让 IPC 风暴拖慢 UI。`commands/repo.rs::clone_repo` 在闭包内做"距上次 emit ≥100ms 或 stage 切换或 progress 跨 1% 才放行"的节流；`sideband_progress`（远端文本）稀疏不节流。
+
+**bare 仓库**：`open_repo` 当前不支持 bare（`workdir().ok_or(...)`），`init_repo` 也不暴露 bare 选项。
+
+**shallow 限制**：libgit2 的浅克隆支持有限——若日后某些远端表现出兼容问题，再考虑回退到 fork `git clone`（与现有 `git gc` 同等性质，作为唯一允许的外部 git 调用）。
+
 ## 打开流程
 
 ```

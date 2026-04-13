@@ -16,10 +16,12 @@ import ContextMenu, { type ContextMenuItem } from '@/components/common/ContextMe
 import CheckoutRemoteDialog from '@/components/branch/CheckoutRemoteDialog.vue'
 import EditSubmoduleDialog from '@/components/submodule/EditSubmoduleDialog.vue'
 import { useGitCommands } from '@/composables/useGitCommands'
+import { useRepoCreation } from '@/composables/useRepoCreation'
 import { revealItemInDir } from '@tauri-apps/plugin-opener'
 import type { RepoMeta } from '@/types/git'
 
 const git = useGitCommands()
+const repoCreation = useRepoCreation()
 const { t } = useI18n()
 
 const router = useRouter()
@@ -41,16 +43,10 @@ const remoteTree = computed(() =>
   buildBranchTree(historyStore.branches.filter((b) => b.is_remote))
 )
 
-async function openRepo() {
-  try {
-    const { open: openDialog } = await import('@tauri-apps/plugin-dialog')
-    const selected = await openDialog({ directory: true })
-    if (selected) {
-      await repoStore.openRepo(selected as string)
-    }
-  } catch (e) {
-    console.error(e)
-  }
+// 侧栏空间紧张，+ 按钮直接弹「添加仓库」菜单（打开 / 克隆 / 新建），
+// 不再保留默认动作；菜单中的「打开」对应原行为。
+function showAddRepoMenu(e: MouseEvent) {
+  repoCreation.showMenuAt(e.currentTarget as HTMLElement)
 }
 
 async function removeRepo(repoId: string) {
@@ -576,7 +572,12 @@ async function onStashMenuAction(action: string) {
       <div class="repo-name" :title="repoStore.activeRepo()?.path">
         {{ repoStore.activeRepo()?.name ?? t('sidebar.repo.noRepo') }}
       </div>
-      <button class="btn-add" :title="t('sidebar.repo.addRepo')" @click="openRepo">+</button>
+      <button
+        class="btn-add"
+        :title="t('repo.menu.title')"
+        data-menu-anchor
+        @click="showAddRepoMenu($event)"
+      >+</button>
     </div>
 
     <div class="sidebar-scroll">

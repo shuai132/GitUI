@@ -54,6 +54,17 @@ export function useGitCommands() {
   const validateRepoPath = (path: string) =>
     call<boolean>('validate_repo_path', { path })
 
+  const cloneRepo = (opts: {
+    url: string
+    parentDir: string
+    name?: string
+    depth?: number
+    recurseSubmodules: boolean
+  }) => call<string>('clone_repo', { opts })
+
+  const initRepo = (path: string) =>
+    call<string>('init_repo', { path })
+
   // ---- Status ----
   const getStatus = (repoId: string) =>
     call<WorkspaceStatus>('get_status', { repoId })
@@ -254,6 +265,8 @@ export function useGitCommands() {
     closeRepo,
     listRepos,
     validateRepoPath,
+    cloneRepo,
+    initRepo,
     getStatus,
     stageFile,
     unstageFile,

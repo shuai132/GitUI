@@ -11,6 +11,7 @@ import { useUiStore } from '@/stores/ui'
 import { useErrorsStore } from '@/stores/errors'
 import { resolveExternalTerminalApp, useSettingsStore } from '@/stores/settings'
 import { useGitCommands } from '@/composables/useGitCommands'
+import { useRepoCreation } from '@/composables/useRepoCreation'
 import ReflogDialog from '@/components/common/ReflogDialog.vue'
 import ErrorHistoryDialog from '@/components/common/ErrorHistoryDialog.vue'
 import Modal from '@/components/common/Modal.vue'
@@ -26,6 +27,7 @@ const uiStore = useUiStore()
 const errorsStore = useErrorsStore()
 const settingsStore = useSettingsStore()
 const git = useGitCommands()
+const repoCreation = useRepoCreation()
 const appWindow = getCurrentWindow()
 const { t } = useI18n()
 
@@ -290,17 +292,11 @@ function onRemoteMenuClose() {
   fn?.(null)
 }
 
-// ── 打开仓库 ────────────────────────────────────────────────────────
-async function openFolder() {
-  try {
-    const { open: openDialog } = await import('@tauri-apps/plugin-dialog')
-    const selected = await openDialog({ directory: true })
-    if (selected) {
-      await repoStore.openRepo(selected as string)
-    }
-  } catch (e) {
-    console.error(e)
-  }
+// ── 添加仓库 ────────────────────────────────────────────────────────
+// 单按钮「新建」，点击直接弹菜单（打开 / 克隆 / 新建），
+// 与侧栏 + 按钮行为一致。
+function showAddRepoMenu(e: MouseEvent) {
+  repoCreation.showMenuAt(e.currentTarget as HTMLElement)
 }
 
 // ── Pull ────────────────────────────────────────────────────────────
@@ -571,11 +567,17 @@ async function handleDblClick(e: MouseEvent) {
   >
 
     <div class="toolbar-actions">
-      <button class="btn-tool" :title="t('toolbar.title.openRepo')" @click="openFolder">
+      <button
+        class="btn-tool"
+        :title="t('repo.menu.title')"
+        data-menu-anchor
+        @click="showAddRepoMenu($event)"
+      >
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+          <line x1="12" y1="5" x2="12" y2="19" />
+          <line x1="5" y1="12" x2="19" y2="12" />
         </svg>
-        <span>{{ t('toolbar.button.open') }}</span>
+        <span>{{ t('toolbar.button.new') }}</span>
       </button>
 
       <div class="toolbar-sep" />

@@ -13,9 +13,14 @@ export function useGitEvents() {
   }
 
   const onOperationProgress = (
-    handler: (payload: { op: string; progress: number; message?: string }) => void
+    handler: (payload: {
+      op: string
+      stage: string
+      progress: number
+      message?: string
+    }) => void
   ) => {
-    listen<{ op: string; progress: number; message?: string }>(
+    listen<{ op: string; stage: string; progress: number; message?: string }>(
       'repo://operation-progress',
       (event) => {
         handler(event.payload)

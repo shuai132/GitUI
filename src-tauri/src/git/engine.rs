@@ -1088,6 +1088,136 @@ impl GitEngine {
         Ok(())
     }
 
+    // ── Clone / Init ────────────────────────────────────────────────────
+
+    /// 克隆远程仓库到 `target_path`。
+    ///
+    /// - 凭据回调复用 `make_credentials_callback`（SSH agent / ed25519 / rsa / git helper）
+    /// - `depth` 传 `Some(n>0)` 走浅克隆（libgit2 0.19+ 支持）
+    /// - `recurse_submodules=true` 则在主仓库克隆完成后遍历 submodule 逐个 init+update
+    /// - `on_progress(stage, percent, sideband_msg)`：
+    ///     - stage = "receiving" / "indexing" / "checkout" / "sideband"
+    ///     - "sideband" 的 percent 恒为 0，message 是服务器端原始文本
+    ///
+    /// 注意 transfer_progress 在大仓库里一秒会调几百次，节流应由调用方做（见
+    /// `commands/repo.rs::clone_repo`），这里不节流以保持通用性。
+    pub fn clone_repo(
+        url: &str,
+        target_path: &str,
+        depth: Option<i32>,
+        recurse_submodules: bool,
+        on_progress: impl Fn(&str, u32, Option<String>) + Send + Sync + 'static,
+    ) -> GitResult<String> {
+        use std::sync::Arc;
+
+        let on_progress: Arc<dyn Fn(&str, u32, Option<String>) + Send + Sync> =
+            Arc::new(on_progress);
+
+        let mut callbacks = git2::RemoteCallbacks::new();
+        callbacks.credentials(make_credentials_callback());
+
+        {
+            let op = on_progress.clone();
+            callbacks.transfer_progress(move |stats: git2::Progress<'_>| -> bool {
+                let total = stats.total_objects();
+                if total == 0 {
+                    return true;
+                }
+                let received = stats.received_objects();
+                if received < total {
+                    let pct = ((received as u64) * 100 / (total as u64).max(1)) as u32;
+                    op("receiving", pct, None);
+                } else {
+                    let indexed = stats.indexed_objects();
+                    let pct = ((indexed as u64) * 100 / (total as u64).max(1)) as u32;
+                    op("indexing", pct, None);
+                }
+                true
+            });
+        }
+
+        {
+            let op = on_progress.clone();
+            callbacks.sideband_progress(move |data: &[u8]| -> bool {
+                if let Ok(msg) = std::str::from_utf8(data) {
+                    let trimmed = msg.trim();
+                    if !trimmed.is_empty() {
+                        op("sideband", 0, Some(trimmed.to_string()));
+                    }
+                }
+                true
+            });
+        }
+
+        let mut fetch_opts = git2::FetchOptions::new();
+        fetch_opts.remote_callbacks(callbacks);
+        if let Some(d) = depth {
+            if d > 0 {
+                fetch_opts.depth(d);
+            }
+        }
+
+        let mut checkout = git2::build::CheckoutBuilder::new();
+        {
+            let op = on_progress.clone();
+            checkout.progress(move |_path, completed, total| {
+                if total == 0 {
+                    return;
+                }
+                let pct = ((completed as u64) * 100 / (total as u64).max(1)) as u32;
+                op("checkout", pct, None);
+            });
+        }
+
+        let mut builder = git2::build::RepoBuilder::new();
+        builder.fetch_options(fetch_opts);
+        builder.with_checkout(checkout);
+
+        let target = Path::new(target_path);
+        let repo = builder.clone(url, target)?;
+
+        let workdir = repo
+            .workdir()
+            .ok_or_else(|| GitError::OperationFailed("cloned repo has no workdir".to_string()))?
+            .to_path_buf();
+
+        if recurse_submodules {
+            // 先收集 name 列表，避免持有 submodule iterator 再调 Self::... 时的借用冲突
+            let names: Vec<String> = repo
+                .submodules()?
+                .iter()
+                .filter_map(|s| s.name().map(|n| n.to_string()))
+                .collect();
+            drop(repo);
+            for name in names {
+                Self::init_submodule(target_path, &name)?;
+                Self::update_submodule(target_path, &name)?;
+            }
+        }
+
+        Ok(workdir.to_string_lossy().to_string())
+    }
+
+    /// 在 `path` 上执行 `git init`（非 bare）。
+    ///
+    /// - 若路径不存在则先 `create_dir_all`
+    /// - 若已经是 git 仓库则报错（避免静默覆盖用户现有仓库）
+    /// - 不暴露 bare 选项：`open_repo` 当前不支持 bare，保持一致
+    pub fn init_repo(path: &str) -> GitResult<()> {
+        let p = Path::new(path);
+        if p.exists() {
+            if Repository::open(p).is_ok() {
+                return Err(GitError::OperationFailed(
+                    "already a git repository".to_string(),
+                ));
+            }
+        } else {
+            std::fs::create_dir_all(p)?;
+        }
+        Repository::init(p)?;
+        Ok(())
+    }
+
     pub fn list_remotes(path: &str) -> GitResult<Vec<String>> {
         let repo = Self::open(path)?;
         let remotes = repo.remotes()?;

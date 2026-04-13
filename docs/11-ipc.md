@@ -26,6 +26,12 @@ GitUI 的前后端通过 Tauri v2 的 IPC 通道通信：
 | `close_repo` | `repoId: string` | `void` |
 | `list_repos` | — | `RepoMeta[]` |
 | `validate_repo_path` | `path: string` | `boolean` |
+| `clone_repo` | `opts: { url, parentDir, name?, depth?, recurseSubmodules }` | `string` (workdir 绝对路径，前端拿到后再走 `open_repo`) |
+| `init_repo` | `path: string` | `string` (同 `path`，便于链式调用 `open_repo`) |
+
+`clone_repo` 在后端 `tokio::task::spawn_blocking` 内执行（git2 是阻塞 C 库），过程中通过 `repo://operation-progress` 事件推送进度（见下文事件通道）。完成后命令本身只返回 workdir 路径，**不**自动注册到 `RepoManager`——前端 `repoStore.cloneRepo` 收到路径后统一走 `openRepo` 完成注册 + 启动 watcher + 持久化，避免在两条路径上各写一份"添加仓库"逻辑。
+
+`init_repo` 同样仅创建非 bare 仓库并返回路径，注册由 `openRepo` 完成。`bare` 选项不暴露——`open_repo` 当前不支持 bare。
 
 ### Status / Index
 
@@ -159,7 +165,7 @@ GitUI 的前后端通过 Tauri v2 的 IPC 通道通信：
 | 事件 | payload | 触发点 | 订阅方 |
 |------|---------|--------|--------|
 | `repo://status-changed` | `repoId: string` | `WatcherService` 检测到工作目录变化（300ms 防抖） | `useGitEvents.onStatusChanged` → `workspaceStore.refresh + submodulesStore.loadSubmodules`（仅当 repoId === activeRepoId） |
-| `repo://operation-progress` | `{ op, progress, message? }` | 目前未使用，接口留给长时间操作（大 clone / fetch 进度） | `useGitEvents.onOperationProgress` |
+| `repo://operation-progress` | `{ op, stage, progress, message? }` | `clone_repo` 在 `transfer_progress` / `sideband_progress` / checkout 回调里推送（节流为最多每 100ms 或跨 1% 一次，sideband 不节流）。`op="clone"`，`stage` ∈ `receiving / indexing / checkout / sideband` | `useGitEvents.onOperationProgress`，`CloneRepoDialog` 据此渲染进度条与远端日志 |
 | `repo://error` | `{ repoId, msg }` | 目前未使用 | `useGitEvents.onError` |
 | `terminal://data` | `{ session_id: string, data: string (base64) }` | `TerminalManager` 读循环每次拿到 PTY 输出时推送 | `TerminalPanel.vue` 按 `sessionId` 过滤后 `term.write(bytes)` |
 | `terminal://exit` | `{ session_id: string }` | PTY 子进程退出时推送 | `TerminalPanel.vue` 标记 session 结束、显示 `[shell exited]` |

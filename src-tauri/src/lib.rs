@@ -43,6 +43,8 @@ pub fn run() {
             close_repo,
             list_repos,
             validate_repo_path,
+            clone_repo,
+            init_repo,
             // Status
             get_status,
             stage_file,
