@@ -179,34 +179,36 @@ defineExpose({ goNextChange, goPrevChange })
       ref="scrollEl"
       class="inline-scroll"
     >
-      <div
-        v-for="(group, gi) in hunkGroups"
-        :key="gi"
-        class="hunk-block"
-      >
-        <template v-for="(row, i) in group" :key="i">
-          <div
-            v-if="row.kind === 'header'"
-            class="hunk-header"
-            :data-row="rows.indexOf(row)"
-          >
-            {{ row.content }}
-          </div>
-          <div
-            v-else
-            class="inline-line"
-            :class="'line-' + row.kind"
-            :data-row="rows.indexOf(row)"
-          >
-            <span class="ln">{{ row.oldLineNo ?? '' }}</span>
-            <span class="ln">{{ row.newLineNo ?? '' }}</span>
-            <span class="sign">{{
-              row.kind === 'del' ? '-' : row.kind === 'add' ? '+' : ' '
-            }}</span>
-            <span v-if="syntaxLang" class="code" v-html="highlightLine(row.content, syntaxLang)" />
-            <span v-else class="code">{{ row.content }}</span>
-          </div>
-        </template>
+      <div class="inline-lines">
+        <div
+          v-for="(group, gi) in hunkGroups"
+          :key="gi"
+          class="hunk-block"
+        >
+          <template v-for="(row, i) in group" :key="i">
+            <div
+              v-if="row.kind === 'header'"
+              class="hunk-header"
+              :data-row="rows.indexOf(row)"
+            >
+              {{ row.content }}
+            </div>
+            <div
+              v-else
+              class="inline-line"
+              :class="'line-' + row.kind"
+              :data-row="rows.indexOf(row)"
+            >
+              <span class="ln">{{ row.oldLineNo ?? '' }}</span>
+              <span class="ln">{{ row.newLineNo ?? '' }}</span>
+              <span class="sign">{{
+                row.kind === 'del' ? '-' : row.kind === 'add' ? '+' : ' '
+              }}</span>
+              <span v-if="syntaxLang" class="code" v-html="highlightLine(row.content, syntaxLang)" />
+              <span v-else class="code">{{ row.content }}</span>
+            </div>
+          </template>
+        </div>
       </div>
     </div>
   </div>
@@ -248,11 +250,19 @@ defineExpose({ goNextChange, goPrevChange })
   margin-bottom: 14px;
   border: 1px solid var(--border);
   border-radius: 4px;
-  overflow: hidden;
   background: var(--bg-primary);
 }
 .hunk-block:last-child {
   margin-bottom: 0;
+}
+/* 用首尾子元素自身圆角替代 overflow:hidden，避免横向裁剪导致无法滚动 */
+.hunk-block > :first-child {
+  border-top-left-radius: 4px;
+  border-top-right-radius: 4px;
+}
+.hunk-block > :last-child {
+  border-bottom-left-radius: 4px;
+  border-bottom-right-radius: 4px;
 }
 
 .hunk-header {
