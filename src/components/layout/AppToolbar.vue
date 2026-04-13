@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { listen } from '@tauri-apps/api/event'
 import { useRepoStore } from '@/stores/repos'
@@ -26,35 +27,36 @@ const errorsStore = useErrorsStore()
 const settingsStore = useSettingsStore()
 const git = useGitCommands()
 const appWindow = getCurrentWindow()
+const { t } = useI18n()
 
 // ── IPC 错误自动弹 toast ─────────────────────────────────────────
 // errorsStore 由 useGitCommands.call() 统一 push。watch latestId 即可。
-const OP_LABELS: Record<string, string> = {
-  pull_branch: 'Pull',
-  push_branch: 'Push',
-  fetch_remote: 'Fetch',
-  stash_push: 'Stash',
-  stash_pop: 'Stash pop',
-  run_gc: 'git gc',
-  open_repo: '打开仓库',
-  checkout_commit: '检出提交',
-  cherry_pick_commit: 'Cherry pick',
-  revert_commit: 'Revert',
-  reset_to_commit: 'Reset',
-  create_branch: '创建分支',
-  switch_branch: '切换分支',
-  delete_branch: '删除分支',
-  checkout_remote_branch: '检出远程分支',
-  create_commit: '提交',
-  amend_commit: 'Amend',
-  create_tag: '创建标签',
-  discard_all_changes: '丢弃全部',
-  discard_file: '丢弃文件',
-  open_terminal: '打开终端',
-  init_submodule: 'Init submodule',
-  update_submodule: 'Update submodule',
-  set_submodule_url: '修改 submodule URL',
-  deinit_submodule: '删除 submodule',
+const OP_LABELS: Record<string, () => string> = {
+  pull_branch: () => t('toolbar.opLabels.pull'),
+  push_branch: () => t('toolbar.opLabels.push'),
+  fetch_remote: () => t('toolbar.opLabels.fetch'),
+  stash_push: () => t('toolbar.opLabels.stash'),
+  stash_pop: () => t('toolbar.opLabels.stashPop'),
+  run_gc: () => t('toolbar.opLabels.gc'),
+  open_repo: () => t('toolbar.opLabels.openRepo'),
+  checkout_commit: () => t('toolbar.opLabels.checkoutCommit'),
+  cherry_pick_commit: () => t('toolbar.opLabels.cherryPick'),
+  revert_commit: () => t('toolbar.opLabels.revert'),
+  reset_to_commit: () => t('toolbar.opLabels.reset'),
+  create_branch: () => t('toolbar.opLabels.createBranch'),
+  switch_branch: () => t('toolbar.opLabels.switchBranch'),
+  delete_branch: () => t('toolbar.opLabels.deleteBranch'),
+  checkout_remote_branch: () => t('toolbar.opLabels.checkoutRemoteBranch'),
+  create_commit: () => t('toolbar.opLabels.commit'),
+  amend_commit: () => t('toolbar.opLabels.amend'),
+  create_tag: () => t('toolbar.opLabels.createTag'),
+  discard_all_changes: () => t('toolbar.opLabels.discardAll'),
+  discard_file: () => t('toolbar.opLabels.discardFile'),
+  open_terminal: () => t('toolbar.opLabels.openTerminal'),
+  init_submodule: () => t('toolbar.opLabels.initSubmodule'),
+  update_submodule: () => t('toolbar.opLabels.updateSubmodule'),
+  set_submodule_url: () => t('toolbar.opLabels.setSubmoduleUrl'),
+  deinit_submodule: () => t('toolbar.opLabels.deinitSubmodule'),
 }
 
 watch(
@@ -63,8 +65,8 @@ watch(
     if (!id) return
     const entry = errorsStore.entries[0]
     if (!entry) return
-    const label = OP_LABELS[entry.op]
-    showError(label ? `${label} 失败：${entry.friendly}` : entry.friendly)
+    const label = OP_LABELS[entry.op]?.()
+    showError(label ? t('toolbar.opFailed', { label, message: entry.friendly }) : entry.friendly)
   },
 )
 
@@ -98,15 +100,15 @@ const pullModeMenu = reactive({
 
 const pullModeMenuItems = computed<ContextMenuItem[]>(() => [
   {
-    label: `${pullMode.value === 'ff' ? '● ' : '○ '}Pull (fast-forward if possible)`,
+    label: `${pullMode.value === 'ff' ? '● ' : '○ '}${t('toolbar.pullMode.ff')}`,
     action: 'ff',
   },
   {
-    label: `${pullMode.value === 'ff_only' ? '● ' : '○ '}Pull (fast-forward only)`,
+    label: `${pullMode.value === 'ff_only' ? '● ' : '○ '}${t('toolbar.pullMode.ffOnly')}`,
     action: 'ff_only',
   },
   {
-    label: `${pullMode.value === 'rebase' ? '● ' : '○ '}Pull (rebase)`,
+    label: `${pullMode.value === 'rebase' ? '● ' : '○ '}${t('toolbar.pullMode.rebase')}`,
     action: 'rebase',
   },
 ])
@@ -139,11 +141,11 @@ const terminalMenu = reactive({
 
 const terminalMenuItems = computed<ContextMenuItem[]>(() => [
   {
-    label: `${uiStore.terminalMode === 'in-app' ? '● ' : '○ '}在应用内打开`,
+    label: `${uiStore.terminalMode === 'in-app' ? '● ' : '○ '}${t('toolbar.terminalMode.inApp')}`,
     action: 'in-app',
   },
   {
-    label: `${uiStore.terminalMode === 'system' ? '● ' : '○ '}在系统终端打开`,
+    label: `${uiStore.terminalMode === 'system' ? '● ' : '○ '}${t('toolbar.terminalMode.system')}`,
     action: 'system',
   },
 ])
@@ -305,7 +307,7 @@ async function onPull(e: MouseEvent) {
     // 区分 "没配 remote" 与 "用户取消选择"：只有 remotes 为空时才显示错误。
     // 这里简单处理：listRemotes 返回 0 时 showError；取消不提示。
     const remotes = await git.listRemotes(id).catch(() => [])
-    if (remotes.length === 0) showError('当前仓库没有配置 remote')
+    if (remotes.length === 0) showError(t('toolbar.noRemoteConfigured'))
     return
   }
   busy.pull = true
@@ -328,7 +330,7 @@ async function onPush(e: MouseEvent) {
   const remote = await pickRemote(rect)
   if (!remote) {
     const remotes = await git.listRemotes(id).catch(() => [])
-    if (remotes.length === 0) showError('当前仓库没有配置 remote')
+    if (remotes.length === 0) showError(t('toolbar.noRemoteConfigured'))
     return
   }
   busy.push = true
@@ -396,7 +398,7 @@ const actionsBtnRef = ref<HTMLButtonElement | null>(null)
 
 const actionsMenuItems = computed<ContextMenuItem[]>(() => [
   {
-    label: busy.fetch ? '抓取中...' : '抓取 (Fetch)',
+    label: busy.fetch ? t('toolbar.actionsMenu.fetching') : t('toolbar.actionsMenu.fetch'),
     action: 'fetch',
     disabled: !hasRepo.value || busy.fetch,
   },
@@ -404,47 +406,47 @@ const actionsMenuItems = computed<ContextMenuItem[]>(() => [
   {
     label:
       (uiStore.showUnreachableCommits ? '✓ ' : '   ') +
-      '显示悬垂引用',
+      t('toolbar.actionsMenu.showUnreachable'),
     action: 'toggle-unreachable',
     disabled: !hasRepo.value,
   },
   {
-    label: (uiStore.showStashCommits ? '✓ ' : '   ') + '显示贮藏',
+    label: (uiStore.showStashCommits ? '✓ ' : '   ') + t('toolbar.actionsMenu.showStashes'),
     action: 'toggle-stashes',
     disabled: !hasRepo.value,
   },
   {
-    label: (uiStore.debugPanelVisible ? '✓ ' : '   ') + '调试日志',
+    label: (uiStore.debugPanelVisible ? '✓ ' : '   ') + t('toolbar.actionsMenu.debugLog'),
     action: 'toggle-debug',
   },
   { separator: true },
   {
-    label: '显示Reflog',
+    label: t('toolbar.actionsMenu.reflog'),
     action: 'reflog',
     disabled: !hasRepo.value,
   },
   {
     label:
       errorsStore.entries.length > 0
-        ? `最近错误 (${errorsStore.entries.length})...`
-        : '最近错误...',
+        ? t('toolbar.actionsMenu.recentErrorsWithCount', { count: errorsStore.entries.length })
+        : t('toolbar.actionsMenu.recentErrors'),
     action: 'error-history',
     disabled: errorsStore.entries.length === 0,
   },
   {
-    label: busy.gc ? '清理中...' : '清理仓库 (git gc)',
+    label: busy.gc ? t('toolbar.actionsMenu.gcCleaning') : t('toolbar.actionsMenu.gc'),
     action: 'gc',
     disabled: !hasRepo.value || busy.gc,
   },
   { separator: true },
   {
-    label: '丢弃所有变更',
+    label: t('toolbar.actionsMenu.discardAll'),
     action: 'discard-all',
     disabled: !hasRepo.value,
   },
   { separator: true },
   {
-    label: '关于 GitUI',
+    label: t('toolbar.actionsMenu.about'),
     action: 'about',
   },
 ])
@@ -472,7 +474,7 @@ async function onActionsSelect(action: string) {
       const remote = await pickRemote(rect)
       if (!remote) {
         const remotes = await git.listRemotes(id).catch(() => [])
-        if (remotes.length === 0) showError('当前仓库没有配置 remote')
+        if (remotes.length === 0) showError(t('toolbar.noRemoteConfigured'))
         return
       }
       busy.fetch = true
@@ -562,11 +564,11 @@ async function handleDblClick(e: MouseEvent) {
   >
 
     <div class="toolbar-actions">
-      <button class="btn-tool" title="打开仓库" @click="openFolder">
+      <button class="btn-tool" :title="t('toolbar.title.openRepo')" @click="openFolder">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
         </svg>
-        <span>打开</span>
+        <span>{{ t('toolbar.button.open') }}</span>
       </button>
 
       <div class="toolbar-sep" />
@@ -575,7 +577,7 @@ async function handleDblClick(e: MouseEvent) {
       <div class="btn-tool-group">
         <button
           class="btn-tool btn-tool--main"
-          title="Pull (fetch + merge)"
+          :title="t('toolbar.title.pull')"
           :disabled="!canRemoteOp || busy.pull"
           @click="onPull($event)"
         >
@@ -589,7 +591,7 @@ async function handleDblClick(e: MouseEvent) {
         </button>
         <button
           class="btn-tool btn-tool--chevron"
-          title="选择 Pull 模式"
+          :title="t('toolbar.title.pullModeSelect')"
           data-menu-anchor
           :disabled="!canRemoteOp || busy.pull"
           @click="onPullChevronClick($event)"
@@ -603,7 +605,7 @@ async function handleDblClick(e: MouseEvent) {
       <!-- Push -->
       <button
         class="btn-tool"
-        title="Push 当前分支"
+        :title="t('toolbar.title.push')"
         :disabled="!canRemoteOp || busy.push"
         @click="onPush($event)"
       >
@@ -619,7 +621,7 @@ async function handleDblClick(e: MouseEvent) {
       <!-- Stash -->
       <button
         class="btn-tool"
-        title="Stash 当前工作区"
+        :title="t('toolbar.title.stash')"
         :disabled="!hasRepo || busy.stash"
         @click="onStash"
       >
@@ -634,7 +636,7 @@ async function handleDblClick(e: MouseEvent) {
       <!-- Pop -->
       <button
         class="btn-tool"
-        :title="canStashPop ? `Pop 最新 stash (共 ${stashStore.entries.length} 条)` : '没有 stash'"
+        :title="canStashPop ? t('toolbar.title.popWithCount', { count: stashStore.entries.length }) : t('toolbar.title.popEmpty')"
         :disabled="!canStashPop || busy.pop"
         @click="onPop"
       >
@@ -652,7 +654,7 @@ async function handleDblClick(e: MouseEvent) {
       <div class="btn-tool-group">
         <button
           class="btn-tool btn-tool--main"
-          :title="uiStore.terminalMode === 'in-app' ? '打开应用内终端' : '在系统终端打开仓库'"
+          :title="uiStore.terminalMode === 'in-app' ? t('toolbar.title.terminalInApp') : t('toolbar.title.terminalSystem')"
           :disabled="!hasRepo"
           @click="onTerminal"
         >
@@ -664,7 +666,7 @@ async function handleDblClick(e: MouseEvent) {
         </button>
         <button
           class="btn-tool btn-tool--chevron"
-          title="选择终端打开方式"
+          :title="t('toolbar.title.terminalModeSelect')"
           data-menu-anchor
           :disabled="!hasRepo"
           @click="onTerminalChevronClick($event)"
@@ -701,7 +703,7 @@ async function handleDblClick(e: MouseEvent) {
           ref="searchInputEl"
           v-model="uiStore.historySearchQuery"
           class="search-input"
-          placeholder="搜索提交"
+          :placeholder="t('toolbar.search.placeholder')"
           spellcheck="false"
           autocomplete="off"
           @blur="onSearchBlur"
@@ -712,7 +714,7 @@ async function handleDblClick(e: MouseEvent) {
       <button
         v-if="hasRepo"
         class="btn-icon-only"
-        :title="{ custom: '自定义布局 → 切换为上下', vertical: '上下布局 → 切换为左右', horizontal: '左右布局 → 切换为自定义' }[uiStore.layoutPreset]"
+        :title="{ custom: t('toolbar.title.layoutCustom'), vertical: t('toolbar.title.layoutVertical'), horizontal: t('toolbar.title.layoutHorizontal') }[uiStore.layoutPreset]"
         @click="uiStore.toggleHistoryLayout()"
       >
         <!-- 自定义布局：田字格图标 -->
@@ -735,7 +737,7 @@ async function handleDblClick(e: MouseEvent) {
 
       <button
         class="btn-icon-only"
-        title="设置"
+        :title="t('toolbar.title.settings')"
         @click="showSettingsDialog = true"
       >
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -747,7 +749,7 @@ async function handleDblClick(e: MouseEvent) {
       <button
         ref="actionsBtnRef"
         class="btn-icon-only"
-        title="更多操作"
+        :title="t('toolbar.title.actions')"
         :disabled="!hasRepo"
         @mousedown.stop
         @click="onActions"
@@ -777,7 +779,7 @@ async function handleDblClick(e: MouseEvent) {
 
     <Modal
       :visible="showAboutDialog"
-      title="关于 GitUI"
+      :title="t('common.aboutTitle')"
       width="320px"
       @close="showAboutDialog = false"
     >

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { useRepoStore } from '@/stores/repos'
 import { useHistoryStore } from '@/stores/history'
@@ -19,6 +20,7 @@ import { revealItemInDir } from '@tauri-apps/plugin-opener'
 import type { RepoMeta } from '@/types/git'
 
 const git = useGitCommands()
+const { t } = useI18n()
 
 const router = useRouter()
 const repoStore = useRepoStore()
@@ -258,17 +260,17 @@ const contextMenuItems = computed<ContextMenuItem[]>(() => {
   const items: ContextMenuItem[] = []
 
   if (b.is_remote) {
-    items.push({ label: '检出...', action: 'checkout-remote' })
+    items.push({ label: t('sidebar.branch.menu.checkoutRemote'), action: 'checkout-remote' })
   } else if (!b.is_head) {
-    items.push({ label: '切换到此分支', action: 'switch' })
+    items.push({ label: t('sidebar.branch.menu.switchTo'), action: 'switch' })
   }
 
-  items.push({ label: '复制分支名字', action: 'copy-name' })
+  items.push({ label: t('sidebar.branch.menu.copyName'), action: 'copy-name' })
 
   // 只有非当前分支可以删除（当前分支 / 远程分支暂不开放删除）
   if (!b.is_remote && !b.is_head) {
     items.push({ separator: true })
-    items.push({ label: '删除...', action: 'delete', danger: true })
+    items.push({ label: t('sidebar.branch.menu.delete'), action: 'delete', danger: true })
   }
 
   return items
@@ -302,7 +304,7 @@ async function onContextAction(action: string) {
         await navigator.clipboard.writeText(b.name)
         break
       case 'delete':
-        if (confirm(`确认删除分支 "${b.name}"？此操作无法撤销。`)) {
+        if (confirm(t('sidebar.branch.confirmDelete', { name: b.name }))) {
           await historyStore.deleteBranch(b.name)
         }
         break
@@ -320,11 +322,11 @@ const repoMenu = reactive({
   target: null as RepoMeta | null,
 })
 
-const repoMenuItems: ContextMenuItem[] = [
-  { label: '在新窗口打开', action: 'new-window' },
-  { label: '在 Finder 中显示', action: 'reveal' },
-  { label: '在终端中打开', action: 'terminal' },
-]
+const repoMenuItems = computed<ContextMenuItem[]>(() => [
+  { label: t('sidebar.repo.menu.newWindow'), action: 'new-window' },
+  { label: t('sidebar.repo.menu.reveal'), action: 'reveal' },
+  { label: t('sidebar.repo.menu.openTerminal'), action: 'terminal' },
+])
 
 function openRepoMenu(e: MouseEvent, repo: RepoMeta) {
   e.preventDefault()
@@ -380,15 +382,15 @@ const submoduleMenuItems = computed<ContextMenuItem[]>(() => {
   const isInitialized = s.state !== 'uninitialized'
   return [
     {
-      label: `Initialize ${s.path}`,
+      label: t('sidebar.submodule.menu.init', { path: s.path }),
       action: 'init',
       disabled: isInitialized,
     },
-    { label: `Update ${s.path}`, action: 'update' },
+    { label: t('sidebar.submodule.menu.update', { path: s.path }), action: 'update' },
     { separator: true },
-    { label: `Edit ${s.path}`, action: 'edit' },
+    { label: t('sidebar.submodule.menu.edit', { path: s.path }), action: 'edit' },
     { separator: true },
-    { label: 'Delete this submodule', action: 'delete', danger: true },
+    { label: t('sidebar.submodule.menu.delete'), action: 'delete', danger: true },
   ]
 })
 
@@ -431,13 +433,7 @@ async function onSubmoduleMenuAction(action: string) {
       case 'delete':
         if (
           confirm(
-            `确认删除 submodule "${s.path}"？\n\n` +
-              `这将删除：\n` +
-              `  • 工作区目录 ${s.path}/\n` +
-              `  • .git/modules/${s.name}/\n` +
-              `  • .gitmodules 中对应条目\n` +
-              `  • .git/config 中对应条目\n\n` +
-              `操作完成后请手动 commit 这次变更。`,
+            t('sidebar.submodule.confirmDelete', { path: s.path, name: s.name }),
           )
         ) {
           await submodulesStore.deinit(s.name)
@@ -446,7 +442,7 @@ async function onSubmoduleMenuAction(action: string) {
     }
   } catch (err) {
     console.error(err)
-    alert(`操作失败：${String(err)}`)
+    alert(t('common.operationFailed', { detail: String(err) }))
   }
 }
 
@@ -460,7 +456,7 @@ async function onSubmoduleClick(s: SubmoduleInfo) {
     await repoStore.openRepo(absPath)
   } catch (err) {
     console.error(err)
-    alert(`打开 submodule 失败：${String(err)}`)
+    alert(t('sidebar.submodule.openFailed', { detail: String(err) }))
   }
 }
 
@@ -475,19 +471,19 @@ const tagMenu = reactive({
 })
 
 const tagMenuItems = computed<ContextMenuItem[]>(() => {
-  const t = tagMenu.target
-  if (!t) return []
+  const tag = tagMenu.target
+  if (!tag) return []
   return [
-    { label: '复制标签名', action: 'copy-name' },
-    { label: '复制 commit hash', action: 'copy-oid' },
+    { label: t('sidebar.tag.menu.copyName'), action: 'copy-name' },
+    { label: t('sidebar.tag.menu.copyOid'), action: 'copy-oid' },
     { separator: true },
-    { label: '删除标签...', action: 'delete', danger: true },
+    { label: t('sidebar.tag.menu.delete'), action: 'delete', danger: true },
   ]
 })
 
-function openTagMenu(e: MouseEvent, t: TagInfo) {
+function openTagMenu(e: MouseEvent, tag: TagInfo) {
   e.preventDefault()
-  tagMenu.target = t
+  tagMenu.target = tag
   tagMenu.x = e.clientX
   tagMenu.y = e.clientY
   tagMenu.visible = true
@@ -498,25 +494,25 @@ function closeTagMenu() {
 }
 
 async function onTagMenuAction(action: string) {
-  const t = tagMenu.target
-  if (!t) return
+  const tag = tagMenu.target
+  if (!tag) return
   try {
     switch (action) {
       case 'copy-name':
-        await navigator.clipboard.writeText(t.name)
+        await navigator.clipboard.writeText(tag.name)
         break
       case 'copy-oid':
-        await navigator.clipboard.writeText(t.commit_oid)
+        await navigator.clipboard.writeText(tag.commit_oid)
         break
       case 'delete':
-        if (confirm(`确认删除标签 "${t.name}"？此操作不可撤销。`)) {
-          await historyStore.deleteTag(t.name)
+        if (confirm(t('sidebar.tag.confirmDelete', { name: tag.name }))) {
+          await historyStore.deleteTag(tag.name)
         }
         break
     }
   } catch (err) {
     console.error(err)
-    alert(`操作失败：${String(err)}`)
+    alert(t('common.operationFailed', { detail: String(err) }))
   }
 }
 
@@ -536,8 +532,8 @@ const stashMenuItems = computed<ContextMenuItem[]>(() => {
   const s = stashMenu.target
   if (!s) return []
   return [
-    { label: `Pop stash@{${s.index}}（最新）`, action: 'pop', disabled: s.index !== 0 },
-    { label: '复制 commit hash', action: 'copy-oid' },
+    { label: t('sidebar.stash.menu.popLatest', { index: s.index }), action: 'pop', disabled: s.index !== 0 },
+    { label: t('sidebar.stash.menu.copyOid'), action: 'copy-oid' },
   ]
 })
 
@@ -568,7 +564,7 @@ async function onStashMenuAction(action: string) {
     }
   } catch (err) {
     console.error(err)
-    alert(`操作失败：${String(err)}`)
+    alert(t('common.operationFailed', { detail: String(err) }))
   }
 }
 </script>
@@ -578,9 +574,9 @@ async function onStashMenuAction(action: string) {
     <!-- Repo header -->
     <div class="repo-header">
       <div class="repo-name" :title="repoStore.activeRepo()?.path">
-        {{ repoStore.activeRepo()?.name ?? '无仓库' }}
+        {{ repoStore.activeRepo()?.name ?? t('sidebar.repo.noRepo') }}
       </div>
-      <button class="btn-add" title="添加仓库" @click="openRepo">+</button>
+      <button class="btn-add" :title="t('sidebar.repo.addRepo')" @click="openRepo">+</button>
     </div>
 
     <div class="sidebar-scroll">
@@ -746,10 +742,10 @@ async function onStashMenuAction(action: string) {
             <line x1="12" y1="22.08" x2="12" y2="12"/>
           </svg>
           <span class="submodule-label">{{ s.path }}</span>
-          <span v-if="s.has_workdir_modifications" class="sub-dot" title="有未提交修改" />
+          <span v-if="s.has_workdir_modifications" class="sub-dot" :title="t('sidebar.submodule.hasChanges')" />
           <button
             class="submodule-kebab"
-            title="Submodule 操作"
+            :title="t('sidebar.submodule.menuTitle')"
             @click="openSubmoduleMenu($event, s)"
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
@@ -794,7 +790,7 @@ async function onStashMenuAction(action: string) {
       :style="{ height: uiStore.reposHeight + 'px' }"
     >
       <div class="repos-resize" @pointerdown="startReposResize" />
-      <div class="section-title">所有仓库</div>
+      <div class="section-title">{{ t('sidebar.repo.allRepos') }}</div>
       <div class="repos-list" ref="reposListRef">
         <div
           v-if="dropIndicatorTop !== null"
@@ -820,7 +816,7 @@ async function onStashMenuAction(action: string) {
           <span class="repo-item-name">{{ repo.name }}</span>
           <button
             class="repo-item-remove"
-            title="移除仓库"
+            :title="t('sidebar.repo.removeRepo')"
             @click.stop="removeRepo(repo.id)"
           >
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
