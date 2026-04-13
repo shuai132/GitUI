@@ -97,6 +97,8 @@ export interface HistoryPaneSizes {
   authorColW: number
   /** commit 列表 - date 列宽 */
   dateColW: number
+  /** commit 列表 - date2 列宽 */
+  dateCol2W: number
   /** CommitInfoPanel 头部区（summary + body + meta-grid）高度（px）；0 = 自适应 */
   commitInfoTopH: number
 }
@@ -110,6 +112,7 @@ const DEFAULT_HISTORY_SIZES: HistoryPaneSizes = {
   hashColW: 64,
   authorColW: 240,
   dateColW: 170,
+  dateCol2W: 170,
   commitInfoTopH: 0,
 }
 

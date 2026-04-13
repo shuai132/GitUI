@@ -196,7 +196,7 @@ const graphColWidth = computed(() => {
 // 面板窄于此时会出现横向滚动条，描述优先、右三列通过滑动查看
 // descColW 可由用户拖动"提交"列左边缘调整（整体移动右三列组）
 const commitListMinWidth = computed(() => {
-  return graphColWidth.value + sizes.descColW + sizes.hashColW + sizes.authorColW + sizes.dateColW
+  return graphColWidth.value + sizes.descColW + sizes.hashColW + sizes.authorColW + sizes.dateColW + sizes.dateCol2W
 })
 
 // ── Row selection ────────────────────────────────────────────────────
@@ -729,6 +729,10 @@ onUnmounted(() => {
             日期
             <div class="col-resize" @pointerdown="startColResize($event, 'author')" title="拖动调整「日期」距离「作者」的位置" />
           </div>
+          <div class="col-date header-col" :style="{ width: sizes.dateCol2W + 'px' }">
+            <span style="visibility: hidden">占位</span>
+            <div class="col-resize" @pointerdown="startColResize($event, 'date')" title="拖动调整「日期」列宽度" />
+          </div>
         </div>
 
         <!-- Virtual list body -->
@@ -773,6 +777,7 @@ onUnmounted(() => {
                 <div class="col-hash" :style="{ width: sizes.hashColW + 'px' }">—</div>
                 <div class="col-author" :style="{ width: sizes.authorColW + 'px' }">—</div>
                 <div class="col-date" :style="{ width: sizes.dateColW + 'px' }">—</div>
+                <div class="col-date" :style="{ width: sizes.dateCol2W + 'px' }"></div>
               </div>
 
               <!-- Regular commit row -->
@@ -848,6 +853,9 @@ onUnmounted(() => {
 
                 <!-- Date column -->
                 <div class="col-date" :style="{ width: sizes.dateColW + 'px' }">{{ formatHistoryTime(filteredCommits[toRealIdx(vRow.index)]?.time ?? 0) }}</div>
+
+                <!-- Date2 column (空白，仅用于承载日期列右侧拖拽 handle) -->
+                <div class="col-date" :style="{ width: sizes.dateCol2W + 'px' }"></div>
               </div>
             </template>
           </div>
@@ -1260,6 +1268,12 @@ onUnmounted(() => {
 .header-col {
   position: relative;
   overflow: visible;
+}
+
+/* 列头之间的垂直分隔线（每个列头左侧）。col-resize 拖拽手柄浮在 border 之上，不影响操作。 */
+.col-header > .col-message,
+.col-header > .header-col {
+  border-left: 1px solid var(--border);
 }
 
 /* Header 单元格：不继承数据行列的字体/颜色（如 hash 的蓝 monospace），
