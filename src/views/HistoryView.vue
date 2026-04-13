@@ -18,7 +18,7 @@ import CreateBranchDialog from '@/components/commit/CreateBranchDialog.vue'
 import CreateTagDialog from '@/components/commit/CreateTagDialog.vue'
 import { usePanelDock } from '@/composables/usePanelDock'
 import type { PanelId } from '@/stores/ui'
-import type { BranchInfo, CommitInfo } from '@/types/git'
+import type { BranchInfo, CommitInfo, TagInfo } from '@/types/git'
 
 const historyStore = useHistoryStore()
 const repoStore = useRepoStore()
@@ -168,6 +168,21 @@ function branchTagColor(b: BranchInfo): string {
   if (b.is_head) return 'var(--accent-blue)'
   if (b.is_remote) return 'var(--accent-orange)'
   return 'var(--accent-green)'
+}
+
+// ── Tag chip map (oid → tags pointing to this commit) ──────────────
+const tagsByCommit = computed(() => {
+  const map = new Map<string, TagInfo[]>()
+  for (const t of historyStore.tags) {
+    if (!map.has(t.commit_oid)) map.set(t.commit_oid, [])
+    map.get(t.commit_oid)!.push(t)
+  }
+  return map
+})
+
+function tagChipTitle(t: TagInfo): string {
+  const head = t.is_annotated ? `🏷 ${t.name} (annotated)` : `🏷 ${t.name}`
+  return t.message ? `${head}\n\n${t.message}` : head
 }
 
 // ── Graph column width ───────────────────────────────────────────────
@@ -793,6 +808,27 @@ onUnmounted(() => {
                   @mouseleave="hideCommitTooltip"
                 >
                   <span
+                    v-for="t in tagsByCommit.get(filteredCommits[toRealIdx(vRow.index)]?.oid ?? '')"
+                    :key="'tag:' + t.name"
+                    class="tag-chip"
+                    :title="tagChipTitle(t)"
+                  >
+                    <svg
+                      width="9"
+                      height="9"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2.5"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M20.59 13.41 13.42 20.58a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/>
+                      <line x1="7" y1="7" x2="7.01" y2="7"/>
+                    </svg>
+                    {{ t.name }}
+                  </span>
+                  <span
                     v-for="tag in branchTagMap.get(filteredCommits[toRealIdx(vRow.index)]?.oid ?? '')"
                     :key="tag.name"
                     class="branch-tag"
@@ -1283,6 +1319,21 @@ onUnmounted(() => {
   display: inline-block;
   font-size: 10px;
   border: 1px solid;
+  border-radius: 3px;
+  padding: 0 4px;
+  line-height: 14px;
+  flex-shrink: 0;
+  white-space: nowrap;
+  opacity: 0.9;
+}
+
+.tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  border: 1px solid var(--accent-yellow);
+  color: var(--accent-yellow);
   border-radius: 3px;
   padding: 0 4px;
   line-height: 14px;
