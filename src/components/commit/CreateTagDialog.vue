@@ -116,7 +116,7 @@ function onCancel() {
 
 <style scoped>
 .commit-hint {
-  font-size: 12px;
+  font-size: var(--font-md);
   color: var(--text-secondary);
   margin-bottom: 14px;
   padding: 8px 10px;
@@ -150,7 +150,7 @@ function onCancel() {
 }
 
 .form-label {
-  font-size: 12px;
+  font-size: var(--font-md);
   color: var(--text-secondary);
   text-align: right;
   padding-top: 5px;
@@ -162,7 +162,7 @@ function onCancel() {
   border-radius: 4px;
   color: var(--text-primary);
   font-family: inherit;
-  font-size: 12px;
+  font-size: var(--font-md);
   padding: 5px 8px;
   outline: none;
   width: 100%;
@@ -180,7 +180,7 @@ function onCancel() {
 
 .form-error {
   color: var(--accent-red);
-  font-size: 11px;
+  font-size: var(--font-sm);
   margin-top: -4px;
   margin-bottom: 8px;
   padding-left: 110px;
@@ -190,7 +190,7 @@ function onCancel() {
   padding: 6px 18px;
   border-radius: 5px;
   font-family: inherit;
-  font-size: 12px;
+  font-size: var(--font-md);
   font-weight: 500;
   cursor: pointer;
   border: 1px solid transparent;

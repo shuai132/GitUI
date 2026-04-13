@@ -107,7 +107,7 @@ function onCodeSize(e: Event) {
 }
 
 .section-title {
-  font-size: 12px;
+  font-size: var(--font-md);
   font-weight: 600;
   color: var(--text-secondary);
   margin-bottom: 4px;
@@ -128,7 +128,7 @@ function onCodeSize(e: Event) {
   border-radius: 4px;
   color: var(--text-muted);
   font-family: inherit;
-  font-size: 11px;
+  font-size: var(--font-sm);
   font-weight: 400;
   padding: 2px 8px;
   cursor: pointer;
@@ -154,7 +154,7 @@ function onCodeSize(e: Event) {
 }
 
 .form-label {
-  font-size: 12px;
+  font-size: var(--font-md);
   color: var(--text-secondary);
   text-align: right;
 }
@@ -165,7 +165,7 @@ function onCodeSize(e: Event) {
   border-radius: 4px;
   color: var(--text-primary);
   font-family: inherit;
-  font-size: 12px;
+  font-size: var(--font-md);
   padding: 5px 8px;
   outline: none;
   width: 100%;
@@ -186,13 +186,13 @@ function onCodeSize(e: Event) {
 }
 
 .size-unit {
-  font-size: 11px;
+  font-size: var(--font-sm);
   color: var(--text-muted);
 }
 
 .hint {
   margin-top: 12px;
-  font-size: 11px;
+  font-size: var(--font-sm);
   color: var(--text-muted);
   line-height: 1.6;
 }

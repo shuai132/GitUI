@@ -230,7 +230,7 @@ defineExpose({ goNextChange, goPrevChange })
   align-items: center;
   justify-content: center;
   color: var(--text-muted);
-  font-size: 13px;
+  font-size: var(--font-base);
 }
 
 .inline-scroll {
@@ -260,7 +260,7 @@ defineExpose({ goNextChange, goPrevChange })
   background: var(--bg-surface);
   border-bottom: 1px solid var(--border);
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: var(--font-sm);
   white-space: pre;
 }
 
@@ -275,7 +275,7 @@ defineExpose({ goNextChange, goPrevChange })
 .inline-line.line-header {
   background: var(--bg-surface);
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: var(--font-sm);
   padding: 2px 12px;
 }
 
@@ -304,7 +304,7 @@ defineExpose({ goNextChange, goPrevChange })
   padding-right: 10px;
   color: var(--text-muted);
   flex-shrink: 0;
-  font-size: 11px;
+  font-size: var(--font-sm);
   /* 行号不可选（覆盖全局 diff 允许选择规则） */
   user-select: none;
   -webkit-user-select: none;

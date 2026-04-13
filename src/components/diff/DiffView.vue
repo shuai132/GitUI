@@ -176,7 +176,7 @@ function onPrevChange() {
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
-  font-size: 11px;
+  font-size: var(--font-sm);
   min-height: 28px;
 }
 

@@ -141,7 +141,7 @@ const hasAnyOverride = computed(() => Object.keys(store.accentOverrides).length 
 }
 
 .section-title {
-  font-size: 12px;
+  font-size: var(--font-md);
   font-weight: 600;
   color: var(--text-secondary);
   margin-top: 2px;
@@ -157,7 +157,7 @@ const hasAnyOverride = computed(() => Object.keys(store.accentOverrides).length 
   font-weight: 400;
   color: var(--text-muted);
   margin-left: 6px;
-  font-size: 11px;
+  font-size: var(--font-sm);
 }
 
 .theme-grid {
@@ -200,13 +200,13 @@ const hasAnyOverride = computed(() => Object.keys(store.accentOverrides).length 
 }
 
 .theme-card-label {
-  font-size: 12px;
+  font-size: var(--font-md);
   font-weight: 500;
   color: var(--text-primary);
 }
 
 .theme-card-hint {
-  font-size: 10.5px;
+  font-size: calc(10.5px * var(--font-scale));
   color: var(--text-muted);
   white-space: nowrap;
   overflow: hidden;
@@ -227,7 +227,7 @@ const hasAnyOverride = computed(() => Object.keys(store.accentOverrides).length 
 }
 
 .accent-label {
-  font-size: 12px;
+  font-size: var(--font-md);
   color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
@@ -250,7 +250,7 @@ const hasAnyOverride = computed(() => Object.keys(store.accentOverrides).length 
   border-radius: 4px;
   color: var(--text-primary);
   font-family: var(--code-font-family);
-  font-size: 11.5px;
+  font-size: calc(11.5px * var(--font-scale));
   padding: 4px 8px;
   outline: none;
 }
@@ -268,7 +268,7 @@ const hasAnyOverride = computed(() => Object.keys(store.accentOverrides).length 
   border: 1px solid var(--border);
   border-radius: 4px;
   cursor: pointer;
-  font-size: 14px;
+  font-size: var(--font-lg);
   line-height: 1;
 }
 
@@ -284,7 +284,7 @@ const hasAnyOverride = computed(() => Object.keys(store.accentOverrides).length 
 
 .accent-empty-hint {
   margin-top: 6px;
-  font-size: 11px;
+  font-size: var(--font-sm);
   color: var(--text-muted);
 }
 </style>

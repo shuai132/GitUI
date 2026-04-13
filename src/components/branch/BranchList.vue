@@ -126,7 +126,7 @@ async function deleteBranch(name: string) {
   border-radius: 4px;
   color: var(--text-secondary);
   padding: 4px 10px;
-  font-size: 12px;
+  font-size: var(--font-md);
   font-family: inherit;
   cursor: pointer;
   transition: all 0.15s;
@@ -151,7 +151,7 @@ async function deleteBranch(name: string) {
   border-radius: 4px;
   color: var(--text-primary);
   font-family: inherit;
-  font-size: 12px;
+  font-size: var(--font-md);
   padding: 4px 8px;
   outline: none;
 }
@@ -166,7 +166,7 @@ async function deleteBranch(name: string) {
   border-radius: 4px;
   color: var(--bg-primary);
   padding: 4px 10px;
-  font-size: 12px;
+  font-size: var(--font-md);
   font-family: inherit;
   cursor: pointer;
   font-weight: 600;
@@ -175,7 +175,7 @@ async function deleteBranch(name: string) {
 .error-msg {
   padding: 8px 12px;
   color: var(--accent-red);
-  font-size: 11px;
+  font-size: var(--font-sm);
 }
 
 .branch-section {
@@ -184,7 +184,7 @@ async function deleteBranch(name: string) {
 
 .section-title {
   padding: 4px 12px 6px;
-  font-size: 11px;
+  font-size: var(--font-sm);
   font-weight: 600;
   text-transform: uppercase;
   color: var(--text-muted);
@@ -214,7 +214,7 @@ async function deleteBranch(name: string) {
 
 .branch-name {
   flex: 1;
-  font-size: 12px;
+  font-size: var(--font-md);
   cursor: pointer;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -232,7 +232,7 @@ async function deleteBranch(name: string) {
 }
 
 .switching {
-  font-size: 10px;
+  font-size: var(--font-xs);
   color: var(--text-muted);
   margin-left: 6px;
 }
@@ -242,7 +242,7 @@ async function deleteBranch(name: string) {
   border: none;
   color: var(--text-muted);
   cursor: pointer;
-  font-size: 14px;
+  font-size: var(--font-lg);
   padding: 0 4px;
   opacity: 0;
   transition: opacity 0.1s, color 0.1s;

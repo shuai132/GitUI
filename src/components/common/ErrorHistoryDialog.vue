@@ -98,7 +98,7 @@ function onCopy(entry: ErrorEntry) {
   justify-content: center;
   height: 120px;
   color: var(--text-muted);
-  font-size: 13px;
+  font-size: var(--font-base);
 }
 
 .err-list {
@@ -116,7 +116,7 @@ function onCopy(entry: ErrorEntry) {
   gap: 8px;
   padding: 6px 10px;
   cursor: pointer;
-  font-size: 12px;
+  font-size: var(--font-md);
   transition: background 0.1s;
 }
 
@@ -127,7 +127,7 @@ function onCopy(entry: ErrorEntry) {
 .err-time {
   color: var(--text-muted);
   font-family: var(--code-font-family, 'SF Mono', monospace);
-  font-size: 11px;
+  font-size: var(--font-sm);
   flex-shrink: 0;
   width: 110px;
 }
@@ -135,7 +135,7 @@ function onCopy(entry: ErrorEntry) {
 .err-op {
   color: var(--accent-blue);
   font-family: var(--code-font-family, 'SF Mono', monospace);
-  font-size: 11px;
+  font-size: var(--font-sm);
   flex-shrink: 0;
   width: 130px;
   overflow: hidden;
@@ -175,7 +175,7 @@ function onCopy(entry: ErrorEntry) {
   background: var(--bg-surface);
   color: var(--text-secondary);
   font-family: var(--code-font-family, 'SF Mono', monospace);
-  font-size: 11px;
+  font-size: var(--font-sm);
   white-space: pre-wrap;
   word-break: break-all;
   border-top: 1px solid var(--border);
@@ -188,7 +188,7 @@ function onCopy(entry: ErrorEntry) {
   border: 1px solid var(--border);
   background: transparent;
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: var(--font-md);
   cursor: pointer;
 }
 

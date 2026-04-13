@@ -75,7 +75,7 @@ const isMac = typeof navigator !== 'undefined' && /Mac/i.test(navigator.platform
 }
 
 .section-title {
-  font-size: 12px;
+  font-size: var(--font-md);
   font-weight: 600;
   color: var(--text-secondary);
   margin-bottom: 2px;
@@ -90,7 +90,7 @@ const isMac = typeof navigator !== 'undefined' && /Mac/i.test(navigator.platform
 }
 
 .tool-label {
-  font-size: 12px;
+  font-size: var(--font-md);
   color: var(--text-primary);
 }
 
@@ -101,7 +101,7 @@ const isMac = typeof navigator !== 'undefined' && /Mac/i.test(navigator.platform
   border-radius: 5px;
   color: var(--text-primary);
   font-family: inherit;
-  font-size: 12px;
+  font-size: var(--font-md);
   padding: 5px 8px;
   outline: none;
   width: 100%;
@@ -114,7 +114,7 @@ const isMac = typeof navigator !== 'undefined' && /Mac/i.test(navigator.platform
 
 .section-hint {
   margin-top: 2px;
-  font-size: 11px;
+  font-size: var(--font-sm);
   color: var(--text-muted);
 }
 
@@ -123,6 +123,6 @@ const isMac = typeof navigator !== 'undefined' && /Mac/i.test(navigator.platform
   background: var(--bg-overlay);
   padding: 1px 4px;
   border-radius: 3px;
-  font-size: 10.5px;
+  font-size: calc(10.5px * var(--font-scale));
 }
 </style>

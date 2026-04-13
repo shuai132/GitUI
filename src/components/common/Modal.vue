@@ -83,7 +83,7 @@ function onOverlayClick() {
 }
 
 .modal-title {
-  font-size: 14px;
+  font-size: var(--font-lg);
   font-weight: 600;
   color: var(--text-primary);
 }

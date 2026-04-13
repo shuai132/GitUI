@@ -192,7 +192,7 @@ const bodyText = computed(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 13px;
+  font-size: var(--font-base);
   font-weight: 700;
   color: var(--bg-primary);
   flex-shrink: 0;
@@ -204,7 +204,7 @@ const bodyText = computed(() => {
 }
 
 .commit-summary {
-  font-size: 13px;
+  font-size: var(--font-base);
   font-weight: 600;
   color: var(--text-primary);
   /* 超长标题改为水平滚动而非截断 */
@@ -214,7 +214,7 @@ const bodyText = computed(() => {
 }
 
 .commit-body {
-  font-size: 11px;
+  font-size: var(--font-sm);
   color: var(--text-secondary);
   margin-top: 3px;
   /* 保留原始换行；长行自动折行；不独立滚动，由 top-section 统一处理 */
@@ -238,7 +238,7 @@ const bodyText = computed(() => {
   grid-template-columns: 40px minmax(0, 1fr);
   gap: 2px 8px;
   padding: 6px 12px;
-  font-size: 11px;
+  font-size: var(--font-sm);
   flex-shrink: 0;
 }
 
@@ -276,7 +276,7 @@ const bodyText = computed(() => {
 
 .mv.oid {
   font-family: var(--code-font-family, 'SF Mono', monospace);
-  font-size: 10px;
+  font-size: var(--font-xs);
   color: var(--accent-blue);
 }
 
@@ -290,7 +290,7 @@ const bodyText = computed(() => {
   border-radius: 3px;
   padding: 1px 5px;
   font-family: var(--code-font-family, 'SF Mono', monospace);
-  font-size: 10px;
+  font-size: var(--font-xs);
   color: var(--accent-blue);
   margin-right: 4px;
   cursor: pointer;
@@ -311,7 +311,7 @@ const bodyText = computed(() => {
   justify-content: space-between;
   padding: 3px 12px;
   cursor: pointer;
-  font-size: 11px;
+  font-size: var(--font-sm);
   transition: background 0.1s;
 }
 
@@ -351,7 +351,7 @@ const bodyText = computed(() => {
   justify-content: center;
   height: 100%;
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: var(--font-md);
   background: var(--bg-secondary);
   border-top: 1px solid var(--border);
 }

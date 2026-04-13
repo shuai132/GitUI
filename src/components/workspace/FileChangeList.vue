@@ -86,7 +86,7 @@ function onRowContext(e: MouseEvent, file: FileEntry) {
 }
 
 .section-title {
-  font-size: 11px;
+  font-size: var(--font-sm);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -94,7 +94,7 @@ function onRowContext(e: MouseEvent, file: FileEntry) {
 }
 
 .section-count {
-  font-size: 11px;
+  font-size: var(--font-sm);
   color: var(--text-muted);
   background: var(--bg-overlay);
   padding: 1px 6px;
@@ -126,7 +126,7 @@ function onRowContext(e: MouseEvent, file: FileEntry) {
   color: var(--text-secondary);
   cursor: pointer;
   font-family: inherit;
-  font-size: 10px;
+  font-size: var(--font-xs);
   padding: 2px 6px;
   margin-left: auto;
   opacity: 0;
@@ -145,7 +145,7 @@ function onRowContext(e: MouseEvent, file: FileEntry) {
 }
 
 .status-badge {
-  font-size: 11px;
+  font-size: var(--font-sm);
   font-weight: 700;
   width: 14px;
   flex-shrink: 0;
@@ -153,7 +153,7 @@ function onRowContext(e: MouseEvent, file: FileEntry) {
 }
 
 .file-path {
-  font-size: 12px;
+  font-size: var(--font-md);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -162,13 +162,13 @@ function onRowContext(e: MouseEvent, file: FileEntry) {
 
 .file-dir {
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: var(--font-sm);
 }
 
 .empty-hint {
   padding: 8px 10px;
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: var(--font-sm);
   font-style: italic;
 }
 </style>

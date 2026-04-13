@@ -105,7 +105,7 @@ const resetDisabled = computed(() =>
   background: transparent;
   color: var(--text-secondary);
   font-family: inherit;
-  font-size: 12px;
+  font-size: var(--font-md);
   border-radius: 5px;
   cursor: pointer;
   transition: background 0.1s, color 0.1s;
@@ -140,7 +140,7 @@ const resetDisabled = computed(() =>
   padding: 6px 18px;
   border-radius: 5px;
   font-family: inherit;
-  font-size: 12px;
+  font-size: var(--font-md);
   font-weight: 500;
   cursor: pointer;
   border: 1px solid transparent;

@@ -66,7 +66,7 @@ async function openUrl(url: string) {
 }
 
 .about-name {
-  font-size: 18px;
+  font-size: var(--font-xl);
   font-weight: 700;
   color: var(--text-primary);
 }
@@ -81,7 +81,7 @@ async function openUrl(url: string) {
 .about-row {
   display: flex;
   align-items: center;
-  font-size: 12px;
+  font-size: var(--font-md);
 }
 
 .about-label {

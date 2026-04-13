@@ -156,7 +156,7 @@ function onCancel() {
 }
 
 .form-label {
-  font-size: 12px;
+  font-size: var(--font-md);
   color: var(--text-secondary);
   text-align: right;
 }
@@ -167,7 +167,7 @@ function onCancel() {
   border-radius: 4px;
   color: var(--text-primary);
   font-family: inherit;
-  font-size: 12px;
+  font-size: var(--font-md);
   padding: 5px 8px;
   outline: none;
   width: 100%;
@@ -181,7 +181,7 @@ function onCancel() {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
+  font-size: var(--font-md);
   color: var(--text-secondary);
   cursor: pointer;
   grid-column: 2;
@@ -194,7 +194,7 @@ function onCancel() {
 
 .form-error {
   color: var(--accent-red);
-  font-size: 11px;
+  font-size: var(--font-sm);
   margin-top: -4px;
   margin-bottom: 8px;
   grid-column: 2;
@@ -204,7 +204,7 @@ function onCancel() {
   padding: 6px 18px;
   border-radius: 5px;
   font-family: inherit;
-  font-size: 12px;
+  font-size: var(--font-md);
   font-weight: 500;
   cursor: pointer;
   border: 1px solid transparent;

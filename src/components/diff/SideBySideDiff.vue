@@ -292,7 +292,7 @@ defineExpose({ goNextChange, goPrevChange })
   align-items: center;
   justify-content: center;
   color: var(--text-muted);
-  font-size: 13px;
+  font-size: var(--font-base);
 }
 
 /* bodyRef：唯一的垂直滚动容器，左右 pane 同处一个滚动上下文 */
@@ -369,7 +369,7 @@ defineExpose({ goNextChange, goPrevChange })
   color: var(--text-muted);
   flex-shrink: 0;
   user-select: none;
-  font-size: 11px;
+  font-size: var(--font-sm);
 }
 
 .sign {
@@ -406,7 +406,7 @@ defineExpose({ goNextChange, goPrevChange })
 .line-header {
   background: var(--bg-surface);
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: var(--font-sm);
 }
 
 .line-ctx {

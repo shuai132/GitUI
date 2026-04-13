@@ -31,7 +31,7 @@ const items: Item[] = [
 }
 
 .section-title {
-  font-size: 12px;
+  font-size: var(--font-md);
   font-weight: 600;
   color: var(--text-secondary);
   margin-bottom: 4px;
@@ -57,12 +57,12 @@ const items: Item[] = [
 }
 
 .placeholder-label {
-  font-size: 12px;
+  font-size: var(--font-md);
   color: var(--text-primary);
 }
 
 .placeholder-hint {
-  font-size: 11px;
+  font-size: var(--font-sm);
   color: var(--text-muted);
 }
 </style>

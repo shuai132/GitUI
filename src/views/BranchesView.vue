@@ -28,6 +28,6 @@ const repoStore = useRepoStore()
   align-items: center;
   justify-content: center;
   color: var(--text-muted);
-  font-size: 13px;
+  font-size: var(--font-base);
 }
 </style>

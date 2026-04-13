@@ -921,7 +921,7 @@ async function onStashMenuAction(action: string) {
 }
 
 .repo-name {
-  font-size: 13px;
+  font-size: var(--font-base);
   font-weight: 600;
   color: var(--text-primary);
   overflow: hidden;
@@ -934,7 +934,7 @@ async function onStashMenuAction(action: string) {
   border: none;
   cursor: pointer;
   color: var(--text-muted);
-  font-size: 18px;
+  font-size: var(--font-xl);
   line-height: 1;
   padding: 0 4px;
   border-radius: 3px;
@@ -962,7 +962,7 @@ async function onStashMenuAction(action: string) {
   align-items: center;
   justify-content: space-between;
   padding: 3px 12px;
-  font-size: 10px;
+  font-size: var(--font-xs);
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -1007,7 +1007,7 @@ async function onStashMenuAction(action: string) {
   align-items: center;
   gap: 7px;
   padding: 5px 12px;
-  font-size: 12px;
+  font-size: var(--font-md);
   color: var(--text-secondary);
   cursor: pointer;
   text-decoration: none;
@@ -1030,7 +1030,7 @@ async function onStashMenuAction(action: string) {
   margin-left: auto;
   background: var(--bg-overlay);
   color: var(--text-muted);
-  font-size: 10px;
+  font-size: var(--font-xs);
   border-radius: 8px;
   padding: 1px 6px;
 }
@@ -1041,7 +1041,7 @@ async function onStashMenuAction(action: string) {
   align-items: center;
   gap: 7px;
   padding: 3px 12px 3px 16px;
-  font-size: 12px;
+  font-size: var(--font-md);
   color: var(--text-secondary);
   cursor: pointer;
   transition: background 0.1s;
@@ -1081,7 +1081,7 @@ async function onStashMenuAction(action: string) {
 
 .stash-index {
   font-family: var(--code-font-family, 'SF Mono', monospace);
-  font-size: 10px;
+  font-size: var(--font-xs);
   color: var(--text-muted);
   flex-shrink: 0;
 }
@@ -1119,7 +1119,7 @@ async function onStashMenuAction(action: string) {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: 10px;
+  font-size: var(--font-xs);
   font-variant-numeric: tabular-nums;
   flex-shrink: 0;
   background: var(--bg-overlay);
@@ -1139,7 +1139,7 @@ async function onStashMenuAction(action: string) {
 /* ── Submodules section ──────────────────────────────────────────── */
 
 .section-count {
-  font-size: 10px;
+  font-size: var(--font-xs);
   font-weight: 600;
   color: var(--accent-blue);
   letter-spacing: 0;
@@ -1151,7 +1151,7 @@ async function onStashMenuAction(action: string) {
   align-items: center;
   gap: 6px;
   padding: 3px 6px 3px 16px;
-  font-size: 12px;
+  font-size: var(--font-md);
   color: var(--text-secondary);
   cursor: pointer;
   transition: background 0.1s;
@@ -1270,7 +1270,7 @@ async function onStashMenuAction(action: string) {
   align-items: center;
   gap: 6px;
   padding: 4px 8px 4px 12px;
-  font-size: 11px;
+  font-size: var(--font-sm);
   color: var(--text-secondary);
   cursor: pointer;
   transition: background 0.1s;

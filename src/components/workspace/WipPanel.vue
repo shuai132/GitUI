@@ -475,7 +475,7 @@ watch(
 }
 
 .header-title {
-  font-size: 12px;
+  font-size: var(--font-md);
   color: var(--text-primary);
   font-weight: 600;
 }
@@ -500,7 +500,7 @@ watch(
   color: var(--text-secondary);
   cursor: pointer;
   font-family: inherit;
-  font-size: 10px;
+  font-size: var(--font-xs);
   padding: 2px 8px;
   transition: background 0.1s, color 0.1s, border-color 0.1s;
 }
@@ -543,7 +543,7 @@ watch(
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 11px;
+  font-size: var(--font-sm);
   color: var(--text-secondary);
   cursor: pointer;
   user-select: none;
@@ -560,7 +560,7 @@ watch(
 
 .amend-hint {
   color: var(--text-muted);
-  font-size: 10px;
+  font-size: var(--font-xs);
 }
 
 .message-input {
@@ -569,7 +569,7 @@ watch(
   border-radius: 4px;
   color: var(--text-primary);
   font-family: inherit;
-  font-size: 12px;
+  font-size: var(--font-md);
   padding: 6px 8px;
   resize: none;
   outline: none;
@@ -583,7 +583,7 @@ watch(
 }
 
 .commit-error {
-  font-size: 11px;
+  font-size: var(--font-sm);
   color: var(--accent-red);
 }
 
@@ -593,7 +593,7 @@ watch(
   border: none;
   border-radius: 4px;
   padding: 7px 16px;
-  font-size: 12px;
+  font-size: var(--font-md);
   font-family: inherit;
   font-weight: 600;
   cursor: pointer;
@@ -610,7 +610,7 @@ watch(
 }
 
 .discard-body {
-  font-size: 12px;
+  font-size: var(--font-md);
   color: var(--text-secondary);
   line-height: 1.6;
 }
@@ -630,14 +630,14 @@ watch(
   padding: 0 4px;
   border-radius: 3px;
   font-family: var(--code-font-family, 'SF Mono', monospace);
-  font-size: 11px;
+  font-size: var(--font-sm);
 }
 
 .btn {
   padding: 6px 18px;
   border-radius: 5px;
   font-family: inherit;
-  font-size: 12px;
+  font-size: var(--font-md);
   font-weight: 500;
   cursor: pointer;
   border: 1px solid transparent;

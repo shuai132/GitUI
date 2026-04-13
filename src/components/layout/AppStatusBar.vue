@@ -41,7 +41,7 @@ const unstagedCount = computed(() => workspaceStore.status?.unstaged.length ?? 0
   padding: 0 12px;
   background: var(--bg-secondary);
   border-top: 1px solid var(--border);
-  font-size: 11px;
+  font-size: var(--font-sm);
   color: var(--text-muted);
   flex-shrink: 0;
 }
@@ -64,7 +64,7 @@ const unstagedCount = computed(() => workspaceStore.status?.unstaged.length ?? 0
 }
 
 .status-indicator {
-  font-size: 10px;
+  font-size: var(--font-xs);
 }
 
 .staged {

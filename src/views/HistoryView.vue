@@ -973,7 +973,7 @@ onUnmounted(() => {
   justify-content: center;
   height: 100%;
   color: var(--text-muted);
-  font-size: 13px;
+  font-size: var(--font-base);
 }
 
 /* ── Content area ────────────────────────────────────────────────── */
@@ -1046,7 +1046,7 @@ onUnmounted(() => {
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
-  font-size: 11px;
+  font-size: var(--font-sm);
   font-weight: 600;
   color: var(--text-muted);
   text-transform: uppercase;
@@ -1138,7 +1138,7 @@ onUnmounted(() => {
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
-  font-size: 11px;
+  font-size: var(--font-sm);
   font-weight: 600;
   color: var(--text-muted);
   text-transform: uppercase;
@@ -1228,7 +1228,7 @@ onUnmounted(() => {
 .col-hash {
   flex-shrink: 0;
   font-family: var(--code-font-family, 'SF Mono', monospace);
-  font-size: 11px;
+  font-size: var(--font-sm);
   color: var(--accent-blue);
   padding: 0 6px;
   overflow: hidden;
@@ -1238,7 +1238,7 @@ onUnmounted(() => {
 
 .col-author {
   flex-shrink: 0;
-  font-size: 11px;
+  font-size: var(--font-sm);
   color: var(--text-secondary);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1248,7 +1248,7 @@ onUnmounted(() => {
 
 .col-date {
   flex-shrink: 0;
-  font-size: 11px;
+  font-size: var(--font-sm);
   color: var(--text-muted);
   padding: 0 8px;
   white-space: nowrap;
@@ -1292,7 +1292,7 @@ onUnmounted(() => {
 }
 
 .commit-msg {
-  font-size: 12px;
+  font-size: var(--font-md);
   color: var(--text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1309,7 +1309,7 @@ onUnmounted(() => {
   color: var(--text-primary);
   border: 1px solid var(--border);
   border-radius: 6px;
-  font-size: 11px;
+  font-size: var(--font-sm);
   line-height: 1.5;
   white-space: pre-wrap;
   pointer-events: none;
@@ -1344,7 +1344,7 @@ onUnmounted(() => {
 
 .branch-tag {
   display: inline-block;
-  font-size: 10px;
+  font-size: var(--font-xs);
   border: 1px solid;
   border-radius: 3px;
   padding: 0 4px;
@@ -1358,7 +1358,7 @@ onUnmounted(() => {
   display: inline-flex;
   align-items: center;
   gap: 3px;
-  font-size: 10px;
+  font-size: var(--font-xs);
   border: 1px solid var(--accent-yellow);
   color: var(--accent-yellow);
   border-radius: 3px;
@@ -1373,7 +1373,7 @@ onUnmounted(() => {
 .list-hint {
   text-align: center;
   padding: 10px;
-  font-size: 11px;
+  font-size: var(--font-sm);
   color: var(--text-muted);
 }
 

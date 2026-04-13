@@ -322,7 +322,7 @@ function startResize(e: PointerEvent) {
 }
 
 .debug-title {
-  font-size: 11px;
+  font-size: var(--font-sm);
   font-weight: 600;
   color: var(--text-secondary);
   text-transform: uppercase;
@@ -369,7 +369,7 @@ function startResize(e: PointerEvent) {
 }
 
 .section-label {
-  font-size: 10px;
+  font-size: var(--font-xs);
   font-weight: 600;
   color: var(--text-muted);
   text-transform: uppercase;
@@ -402,7 +402,7 @@ function startResize(e: PointerEvent) {
   align-items: center;
   gap: 6px;
   padding: 3px 8px;
-  font-size: 11px;
+  font-size: var(--font-sm);
   font-family: var(--code-font-family, 'SF Mono', 'Menlo', 'Monaco', monospace);
   cursor: pointer;
   transition: background 0.1s;
@@ -425,7 +425,7 @@ function startResize(e: PointerEvent) {
 
 .debug-time {
   color: var(--text-muted);
-  font-size: 10px;
+  font-size: var(--font-xs);
   flex-shrink: 0;
 }
 
@@ -440,7 +440,7 @@ function startResize(e: PointerEvent) {
 
 .debug-dur {
   color: var(--text-muted);
-  font-size: 10px;
+  font-size: var(--font-xs);
   flex-shrink: 0;
   text-align: right;
   min-width: 36px;
@@ -448,7 +448,7 @@ function startResize(e: PointerEvent) {
 
 .debug-status {
   flex-shrink: 0;
-  font-size: 11px;
+  font-size: var(--font-sm);
   width: 14px;
   text-align: center;
 }
@@ -463,7 +463,7 @@ function startResize(e: PointerEvent) {
   background: var(--bg-secondary);
   border-left: 2px solid var(--accent-blue);
   font-family: var(--code-font-family, 'SF Mono', 'Menlo', 'Monaco', monospace);
-  font-size: 11px;
+  font-size: var(--font-sm);
   overflow-x: auto;
 }
 
@@ -479,7 +479,7 @@ function startResize(e: PointerEvent) {
 
 .detail-args {
   color: var(--text-muted);
-  font-size: 10px;
+  font-size: var(--font-xs);
 }
 
 .detail-error {
@@ -492,14 +492,14 @@ function startResize(e: PointerEvent) {
   align-items: baseline;
   gap: 4px;
   padding: 1px 8px;
-  font-size: 11px;
+  font-size: var(--font-sm);
   font-family: var(--code-font-family, 'SF Mono', 'Menlo', 'Monaco', monospace);
   white-space: nowrap;
 }
 
 .log-level {
   flex-shrink: 0;
-  font-size: 10px;
+  font-size: var(--font-xs);
   font-weight: 700;
   width: 12px;
   text-align: center;
@@ -521,7 +521,7 @@ function startResize(e: PointerEvent) {
   padding: 12px 8px;
   text-align: center;
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: var(--font-sm);
   white-space: nowrap;
 }
 </style>

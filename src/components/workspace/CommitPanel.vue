@@ -81,7 +81,7 @@ function onKeydown(e: KeyboardEvent) {
   border-radius: 4px;
   color: var(--text-primary);
   font-family: inherit;
-  font-size: 12px;
+  font-size: var(--font-md);
   padding: 8px;
   resize: none;
   outline: none;
@@ -94,7 +94,7 @@ function onKeydown(e: KeyboardEvent) {
 
 .error-msg {
   color: var(--accent-red);
-  font-size: 11px;
+  font-size: var(--font-sm);
 }
 
 .commit-actions {
@@ -104,7 +104,7 @@ function onKeydown(e: KeyboardEvent) {
 }
 
 .staged-hint {
-  font-size: 11px;
+  font-size: var(--font-sm);
   color: var(--text-muted);
 }
 
@@ -114,7 +114,7 @@ function onKeydown(e: KeyboardEvent) {
   border: none;
   border-radius: 4px;
   padding: 5px 16px;
-  font-size: 12px;
+  font-size: var(--font-md);
   font-family: inherit;
   font-weight: 600;
   cursor: pointer;

@@ -91,10 +91,14 @@ function onItemClick(item: ContextMenuItem) {
   emit('close')
 }
 
-// 点击 / Esc 关闭
-function onDocumentMouseDown(e: MouseEvent) {
-  const target = e.target as HTMLElement
+// 点击 / Esc 关闭。用 pointerdown + capture：
+// - capture 阶段触发，不会被触发点的 stopPropagation 绕过；
+// - 跳过菜单自身和带 [data-menu-anchor] 的触发按钮（让按钮自行 toggle）。
+function onDocumentPointerDown(e: PointerEvent) {
+  const target = e.target as HTMLElement | null
+  if (!target) return
   if (target.closest('.context-menu')) return
+  if (target.closest('[data-menu-anchor]')) return
   emit('close')
 }
 function onKey(e: KeyboardEvent) {
@@ -105,13 +109,13 @@ watch(
   () => props.visible,
   (v) => {
     if (v) {
-      // 下一轮事件循环注册，避免同一次 right-click 立刻被关闭
+      // 下一轮事件循环注册，避免同一次 right-click / click 立刻被关闭
       setTimeout(() => {
-        document.addEventListener('mousedown', onDocumentMouseDown)
+        document.addEventListener('pointerdown', onDocumentPointerDown, true)
         document.addEventListener('keydown', onKey)
       }, 0)
     } else {
-      document.removeEventListener('mousedown', onDocumentMouseDown)
+      document.removeEventListener('pointerdown', onDocumentPointerDown, true)
       document.removeEventListener('keydown', onKey)
       // 关闭时重置子菜单状态
       clearSubmenuCloseTimer()
@@ -121,7 +125,7 @@ watch(
 )
 
 onBeforeUnmount(() => {
-  document.removeEventListener('mousedown', onDocumentMouseDown)
+  document.removeEventListener('pointerdown', onDocumentPointerDown, true)
   document.removeEventListener('keydown', onKey)
   clearSubmenuCloseTimer()
 })
@@ -194,7 +198,7 @@ onBeforeUnmount(() => {
   padding: 4px 0;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
   z-index: 1000;
-  font-size: 12px;
+  font-size: var(--font-md);
   user-select: none;
 }
 
@@ -221,7 +225,7 @@ onBeforeUnmount(() => {
 
 .submenu-arrow {
   opacity: 0.6;
-  font-size: 13px;
+  font-size: var(--font-base);
   line-height: 1;
 }
 

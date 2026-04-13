@@ -76,17 +76,17 @@ function onScroll(e: Event) {
 
 .commit-oid {
   font-family: var(--code-font-family, 'SF Mono', monospace);
-  font-size: 11px;
+  font-size: var(--font-sm);
   color: var(--accent-blue);
 }
 
 .commit-time {
-  font-size: 11px;
+  font-size: var(--font-sm);
   color: var(--text-muted);
 }
 
 .commit-summary {
-  font-size: 12px;
+  font-size: var(--font-md);
   color: var(--text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -95,7 +95,7 @@ function onScroll(e: Event) {
 }
 
 .commit-author {
-  font-size: 11px;
+  font-size: var(--font-sm);
   color: var(--text-muted);
 }
 
@@ -103,6 +103,6 @@ function onScroll(e: Event) {
   padding: 12px;
   text-align: center;
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: var(--font-sm);
 }
 </style>

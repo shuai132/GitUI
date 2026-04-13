@@ -113,7 +113,7 @@ const indentPx = (level: number) => 12 + level * 12 + 'px'
   padding-right: 10px;
   padding-top: 3px;
   padding-bottom: 3px;
-  font-size: 12px;
+  font-size: var(--font-md);
   color: var(--text-secondary);
   cursor: pointer;
   transition: background 0.1s;

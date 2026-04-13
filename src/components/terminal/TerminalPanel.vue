@@ -445,7 +445,7 @@ async function onCtxSelect(action: string) {
   padding: 4px 8px;
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border);
-  font-size: 11px;
+  font-size: var(--font-sm);
   color: var(--text-secondary);
   flex-shrink: 0;
 }

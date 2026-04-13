@@ -93,7 +93,7 @@ function copyOid(oid: string) {
   justify-content: center;
   height: 120px;
   color: var(--text-muted);
-  font-size: 13px;
+  font-size: var(--font-base);
 }
 
 .reflog-error {
@@ -103,7 +103,7 @@ function copyOid(oid: string) {
 .reflog-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 12px;
+  font-size: var(--font-md);
 }
 
 .reflog-table th {
@@ -160,7 +160,7 @@ function copyOid(oid: string) {
   border: 1px solid var(--border);
   background: transparent;
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: var(--font-md);
   cursor: pointer;
 }
 

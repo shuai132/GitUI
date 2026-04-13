@@ -96,7 +96,7 @@ const totalCount = computed(() =>
 }
 
 .wip-label {
-  font-size: 12px;
+  font-size: var(--font-md);
   font-family: var(--code-font-family, 'SF Mono', monospace);
   color: var(--text-muted);
   font-style: italic;
@@ -107,7 +107,7 @@ const totalCount = computed(() =>
   display: inline-flex;
   align-items: center;
   gap: 3px;
-  font-size: 11px;
+  font-size: var(--font-sm);
   color: var(--accent-orange);
   background: rgba(245, 169, 127, 0.12);
   border: 1px solid rgba(245, 169, 127, 0.3);
@@ -125,7 +125,7 @@ const totalCount = computed(() =>
 }
 
 .wip-hint {
-  font-size: 11px;
+  font-size: var(--font-sm);
   color: var(--text-muted);
   margin-left: 4px;
   overflow: hidden;

@@ -25,6 +25,17 @@
     --code-font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', Menlo, monospace;
     --code-font-size: 12px;
 
+    /* 衍生字号：相对 --ui-font-size (基准 13px) 等比缩放。
+       组件内用 var(--font-xs/sm/md/base/lg/xl) 代替硬编码 px，
+       这样调节 UI 字号时整体按比例放大/缩小。 */
+    --font-scale: calc(var(--ui-font-size) / 13);
+    --font-xs: calc(10px * var(--font-scale));
+    --font-sm: calc(11px * var(--font-scale));
+    --font-md: calc(12px * var(--font-scale));
+    --font-base: var(--ui-font-size);
+    --font-lg: calc(14px * var(--font-scale));
+    --font-xl: calc(18px * var(--font-scale));
+
     /* DAG lane 调色板（CommitGraphRow 使用） */
     --graph-lane-1: #8aadf4;
     --graph-lane-2: #f5a97f;

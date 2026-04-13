@@ -111,6 +111,10 @@ const pullModeMenuItems = computed<ContextMenuItem[]>(() => [
 
 function onPullChevronClick(e: MouseEvent) {
   e.stopPropagation()
+  if (pullModeMenu.visible) {
+    pullModeMenu.visible = false
+    return
+  }
   const el = e.currentTarget as HTMLElement
   const rect = el.getBoundingClientRect()
   pullModeMenu.x = rect.left
@@ -144,6 +148,10 @@ const terminalMenuItems = computed<ContextMenuItem[]>(() => [
 
 function onTerminalChevronClick(e: MouseEvent) {
   e.stopPropagation()
+  if (terminalMenu.visible) {
+    terminalMenu.visible = false
+    return
+  }
   const el = e.currentTarget as HTMLElement
   const rect = el.getBoundingClientRect()
   terminalMenu.x = rect.left
@@ -576,6 +584,7 @@ async function handleDblClick(e: MouseEvent) {
         <button
           class="btn-tool btn-tool--chevron"
           title="选择 Pull 模式"
+          data-menu-anchor
           :disabled="!canRemoteOp || busy.pull"
           @click="onPullChevronClick($event)"
         >
@@ -650,6 +659,7 @@ async function handleDblClick(e: MouseEvent) {
         <button
           class="btn-tool btn-tool--chevron"
           title="选择终端打开方式"
+          data-menu-anchor
           :disabled="!hasRepo"
           @click="onTerminalChevronClick($event)"
         >
@@ -898,7 +908,7 @@ async function handleDblClick(e: MouseEvent) {
   background: none;
   border: none;
   color: var(--text-primary);
-  font-size: 11px;
+  font-size: var(--font-sm);
   font-family: inherit;
   outline: none;
 }
@@ -917,7 +927,7 @@ async function handleDblClick(e: MouseEvent) {
   display: flex;
   align-items: center;
   gap: 4px;
-  font-size: 11px;
+  font-size: var(--font-sm);
   font-family: inherit;
   transition: background 0.15s, color 0.15s, border-color 0.15s;
   white-space: nowrap;
@@ -1000,7 +1010,7 @@ async function handleDblClick(e: MouseEvent) {
   border: 1px solid var(--accent-red);
   border-radius: 6px;
   padding: 6px 10px;
-  font-size: 11px;
+  font-size: var(--font-sm);
   color: var(--accent-red);
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
   white-space: nowrap;
