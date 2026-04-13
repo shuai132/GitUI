@@ -23,6 +23,7 @@
 | [10-stash-reflog.md](./10-stash-reflog.md) | Stash、Reflog、`git gc` 清理入口 |
 | [11-ipc.md](./11-ipc.md) | IPC 命令目录、Rust ↔ TypeScript 类型映射约定 |
 | [12-settings.md](./12-settings.md) | 设置模态：主题、字体、字号、accent 覆盖 |
+| [13-i18n.md](./13-i18n.md) | 国际化：vue-i18n 接入、auto 模式 locale 解析、key 命名、errorMap 集成 |
 
 ## 阅读建议
 
