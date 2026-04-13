@@ -131,6 +131,90 @@ const messages = {
       menuTitle: 'Submodule 操作',
     },
   },
+  history: {
+    loading: '加载中...',
+    loadingMore: '加载更多...',
+    totalCount: '共 {count} 条',
+    empty: {
+      noActiveRepo: '请从左侧打开一个 Git 仓库',
+      noCommits: '暂无提交历史',
+    },
+    search: {
+      foundOf: '找到 {found} 条（已加载 {loaded} 条）',
+    },
+    columns: {
+      description: '描述',
+      commit: '提交',
+      author: '作者',
+      date: '日期',
+      resizeGroup: '拖动整体移动提交/作者/日期列组',
+      resizeAuthor: '拖动调整「作者」距离「提交」的位置',
+      resizeDate: '拖动调整「日期」距离「作者」的位置',
+      resizeDateWidth: '拖动调整「日期」列宽度',
+    },
+    tooltip: {
+      author: '作者',
+      date: '时间',
+      commit: '提交',
+    },
+    tag: {
+      annotated: '附注标签',
+    },
+    dock: {
+      dragToMove: '拖拽停靠',
+    },
+    detailsPanel: {
+      title: '详情',
+      commit: '提交',
+      author: '作者',
+      date: '日期',
+      email: '邮箱',
+      parents: '父提交',
+      empty: '选择提交查看详情',
+    },
+    wipRow: {
+      unstagedTitle: '未暂存修改',
+      untrackedTitle: '未跟踪文件',
+      stagedTitle: '已暂存',
+      pendingHint: '{count} 个文件待提交到 {branch}',
+    },
+    contextMenu: {
+      checkout: '检出此提交',
+      createBranch: '在此创建分支...',
+      cherryPick: 'Cherry pick 此提交',
+      resetTo: '将 {branch} 重置到此提交',
+      resetSoft: 'Soft（保留工作区与暂存区）',
+      resetMixed: 'Mixed（保留工作区，清空暂存区）',
+      resetHard: 'Hard（丢弃所有变更）',
+      revert: 'Revert 此提交',
+      copySha: '复制提交 SHA',
+      createTag: '在此创建标签...',
+      createAnnotatedTag: '创建附注标签...',
+    },
+    dialog: {
+      confirmCheckout: {
+        body: '检出到提交 {shortOid} 将进入 detached HEAD 状态，确认？',
+      },
+      confirmCherryPick: {
+        body: 'Cherry pick 提交 "{summary}"？',
+      },
+      confirmRevert: {
+        body: 'Revert 提交 "{summary}"？将创建一条新提交撤销该改动',
+      },
+      confirmReset: {
+        body: '将 {branch} {mode} reset 到 {shortOid}？',
+        hardBody: 'Hard reset 将丢弃所有未提交变更，确认把 {branch} 重置到 {shortOid}？',
+        mode: {
+          soft: 'soft',
+          mixed: 'mixed',
+          hard: 'hard',
+        },
+      },
+    },
+  },
+  branches: {
+    noRepo: '请先打开一个 Git 仓库',
+  },
   settings: {
     advanced: {
       uiLanguageTitle: '界面语言',

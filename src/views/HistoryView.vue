@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useVirtualizer } from '@tanstack/vue-virtual'
 import { useHistoryStore } from '@/stores/history'
 import { useRepoStore } from '@/stores/repos'
@@ -20,6 +21,7 @@ import { usePanelDock } from '@/composables/usePanelDock'
 import type { PanelId } from '@/stores/ui'
 import type { BranchInfo, CommitInfo, TagInfo } from '@/types/git'
 
+const { t } = useI18n()
 const historyStore = useHistoryStore()
 const repoStore = useRepoStore()
 const workspaceStore = useWorkspaceStore()
@@ -108,9 +110,9 @@ function commitPreview(c: CommitInfo | undefined): string {
   return [
     c.message.trim(),
     '',
-    `作者: ${c.author_name} <${c.author_email}>`,
-    `时间: ${formatAbsoluteTime(c.time)}`,
-    `提交: ${c.short_oid}`,
+    `${t('history.tooltip.author')}: ${c.author_name} <${c.author_email}>`,
+    `${t('history.tooltip.date')}: ${formatAbsoluteTime(c.time)}`,
+    `${t('history.tooltip.commit')}: ${c.short_oid}`,
   ].join('\n')
 }
 
@@ -180,9 +182,11 @@ const tagsByCommit = computed(() => {
   return map
 })
 
-function tagChipTitle(t: TagInfo): string {
-  const head = t.is_annotated ? `🏷 ${t.name} (annotated)` : `🏷 ${t.name}`
-  return t.message ? `${head}\n\n${t.message}` : head
+function tagChipTitle(tag: TagInfo): string {
+  const head = tag.is_annotated
+    ? `🏷 ${tag.name} (${t('history.tag.annotated')})`
+    : `🏷 ${tag.name}`
+  return tag.message ? `${head}\n\n${tag.message}` : head
 }
 
 // ── Graph column width ───────────────────────────────────────────────
@@ -509,24 +513,24 @@ const currentBranchName = computed(
 const commitMenuItems = computed<ContextMenuItem[]>(() => {
   if (!commitMenu.commit) return []
   return [
-    { label: '检出此提交', action: 'checkout' },
+    { label: t('history.contextMenu.checkout'), action: 'checkout' },
     { separator: true },
-    { label: '在此创建分支...', action: 'create-branch' },
-    { label: 'Cherry pick 此提交', action: 'cherry-pick' },
+    { label: t('history.contextMenu.createBranch'), action: 'create-branch' },
+    { label: t('history.contextMenu.cherryPick'), action: 'cherry-pick' },
     {
-      label: `将 ${currentBranchName.value} 重置到此提交`,
+      label: t('history.contextMenu.resetTo', { branch: currentBranchName.value }),
       children: [
-        { label: 'Soft（保留工作区与暂存区）', action: 'reset-soft' },
-        { label: 'Mixed（保留工作区，清空暂存区）', action: 'reset-mixed' },
-        { label: 'Hard（丢弃所有变更）', action: 'reset-hard' },
+        { label: t('history.contextMenu.resetSoft'), action: 'reset-soft' },
+        { label: t('history.contextMenu.resetMixed'), action: 'reset-mixed' },
+        { label: t('history.contextMenu.resetHard'), action: 'reset-hard' },
       ],
     },
-    { label: 'Revert 此提交', action: 'revert' },
+    { label: t('history.contextMenu.revert'), action: 'revert' },
     { separator: true },
-    { label: '复制提交 SHA', action: 'copy-sha' },
+    { label: t('history.contextMenu.copySha'), action: 'copy-sha' },
     { separator: true },
-    { label: '在此创建标签...', action: 'create-tag' },
-    { label: '创建附注标签...', action: 'create-annotated-tag' },
+    { label: t('history.contextMenu.createTag'), action: 'create-tag' },
+    { label: t('history.contextMenu.createAnnotatedTag'), action: 'create-annotated-tag' },
   ]
 })
 
@@ -556,7 +560,7 @@ async function onCommitMenuAction(action: string) {
       case 'checkout':
         if (
           confirm(
-            `检出到提交 ${c.short_oid} 将进入 detached HEAD 状态，确认？`,
+            t('history.dialog.confirmCheckout.body', { shortOid: c.short_oid }),
           )
         ) {
           await historyStore.checkoutCommit(c.oid)
@@ -567,14 +571,14 @@ async function onCommitMenuAction(action: string) {
         showCreateBranchDialog.value = true
         break
       case 'cherry-pick':
-        if (confirm(`Cherry pick 提交 "${c.summary}"？`)) {
+        if (confirm(t('history.dialog.confirmCherryPick.body', { summary: c.summary }))) {
           await historyStore.cherryPickCommit(c.oid)
         }
         break
       case 'revert':
         if (
           confirm(
-            `Revert 提交 "${c.summary}"？将创建一条新提交撤销该改动`,
+            t('history.dialog.confirmRevert.body', { summary: c.summary }),
           )
         ) {
           await historyStore.revertCommit(c.oid)
@@ -584,10 +588,18 @@ async function onCommitMenuAction(action: string) {
       case 'reset-mixed':
       case 'reset-hard': {
         const mode = action.slice(6) as 'soft' | 'mixed' | 'hard'
+        const modeLabel = t(`history.dialog.confirmReset.mode.${mode}`)
         const warn =
           mode === 'hard'
-            ? `Hard reset 将丢弃所有未提交变更，确认把 ${currentBranchName.value} 重置到 ${c.short_oid}？`
-            : `将 ${currentBranchName.value} ${mode} reset 到 ${c.short_oid}？`
+            ? t('history.dialog.confirmReset.hardBody', {
+                branch: currentBranchName.value,
+                shortOid: c.short_oid,
+              })
+            : t('history.dialog.confirmReset.body', {
+                branch: currentBranchName.value,
+                mode: modeLabel,
+                shortOid: c.short_oid,
+              })
         if (confirm(warn)) await historyStore.resetToCommit(c.oid, mode)
         break
       }
@@ -712,26 +724,26 @@ onUnmounted(() => {
       <div class="commit-panel" :style="panelBorders['commits']" data-panel-id="commits">
         <!-- Column headers -->
         <div class="col-header" :style="{ minWidth: commitListMinWidth + 'px' }" @wheel="onBodyWheel">
-          <div class="dock-handle" @pointerdown="onDragHandlePointerDown('commits', $event)" title="拖拽停靠">
+          <div class="dock-handle" @pointerdown="onDragHandlePointerDown('commits', $event)" :title="t('history.dock.dragToMove')">
             <svg width="8" height="14" viewBox="0 0 8 14"><circle cx="2" cy="2" r="1" fill="currentColor"/><circle cx="6" cy="2" r="1" fill="currentColor"/><circle cx="2" cy="7" r="1" fill="currentColor"/><circle cx="6" cy="7" r="1" fill="currentColor"/><circle cx="2" cy="12" r="1" fill="currentColor"/><circle cx="6" cy="12" r="1" fill="currentColor"/></svg>
           </div>
           <div class="col-graph" :style="{ width: graphColWidth + 'px' }"></div>
-          <div class="col-message" :style="{ width: sizes.descColW + 'px' }">描述</div>
+          <div class="col-message" :style="{ width: sizes.descColW + 'px' }">{{ t('history.columns.description') }}</div>
           <div class="col-hash header-col" :style="{ width: sizes.hashColW + 'px' }">
-            提交
-            <div class="col-resize" @pointerdown="startColResize($event, 'desc')" title="拖动整体移动提交/作者/日期列组" />
+            {{ t('history.columns.commit') }}
+            <div class="col-resize" @pointerdown="startColResize($event, 'desc')" :title="t('history.columns.resizeGroup')" />
           </div>
           <div class="col-author header-col" :style="{ width: sizes.authorColW + 'px' }">
-            作者
-            <div class="col-resize" @pointerdown="startColResize($event, 'hash')" title="拖动调整「作者」距离「提交」的位置" />
+            {{ t('history.columns.author') }}
+            <div class="col-resize" @pointerdown="startColResize($event, 'hash')" :title="t('history.columns.resizeAuthor')" />
           </div>
           <div class="col-date header-col" :style="{ width: sizes.dateColW + 'px' }">
-            日期
-            <div class="col-resize" @pointerdown="startColResize($event, 'author')" title="拖动调整「日期」距离「作者」的位置" />
+            {{ t('history.columns.date') }}
+            <div class="col-resize" @pointerdown="startColResize($event, 'author')" :title="t('history.columns.resizeDate')" />
           </div>
           <div class="col-date header-col" :style="{ width: sizes.dateCol2W + 'px' }">
-            <span style="visibility: hidden">占位</span>
-            <div class="col-resize" @pointerdown="startColResize($event, 'date')" title="拖动调整「日期」列宽度" />
+            <span style="visibility: hidden">&nbsp;</span>
+            <div class="col-resize" @pointerdown="startColResize($event, 'date')" :title="t('history.columns.resizeDateWidth')" />
           </div>
         </div>
 
@@ -746,7 +758,7 @@ onUnmounted(() => {
           <div
             v-if="historyStore.loading && historyStore.commits.length === 0"
             class="list-hint"
-          >加载中...</div>
+          >{{ t('history.loading') }}</div>
           <div
             v-else
             :style="{ height: virtualizer.getTotalSize() + 'px', position: 'relative' }"
@@ -816,10 +828,10 @@ onUnmounted(() => {
                   @mouseleave="hideCommitTooltip"
                 >
                   <span
-                    v-for="t in tagsByCommit.get(filteredCommits[toRealIdx(vRow.index)]?.oid ?? '')"
-                    :key="'tag:' + t.name"
+                    v-for="tagItem in tagsByCommit.get(filteredCommits[toRealIdx(vRow.index)]?.oid ?? '')"
+                    :key="'tag:' + tagItem.name"
                     class="tag-chip"
-                    :title="tagChipTitle(t)"
+                    :title="tagChipTitle(tagItem)"
                   >
                     <svg
                       width="9"
@@ -834,7 +846,7 @@ onUnmounted(() => {
                       <path d="M20.59 13.41 13.42 20.58a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/>
                       <line x1="7" y1="7" x2="7.01" y2="7"/>
                     </svg>
-                    {{ t.name }}
+                    {{ tagItem.name }}
                   </span>
                   <span
                     v-for="tag in branchTagMap.get(filteredCommits[toRealIdx(vRow.index)]?.oid ?? '')"
@@ -861,19 +873,19 @@ onUnmounted(() => {
           </div>
 
           <!-- Load more indicators -->
-          <div v-if="historyStore.loadingMore" class="list-hint">加载更多...</div>
+          <div v-if="historyStore.loadingMore" class="list-hint">{{ t('history.loadingMore') }}</div>
           <div v-if="uiStore.historySearchQuery.trim()" class="list-hint dim">
-            找到 {{ filteredCommits.length }} 条（已加载 {{ historyStore.commits.length }} 条）
+            {{ t('history.search.foundOf', { found: filteredCommits.length, loaded: historyStore.commits.length }) }}
           </div>
           <div v-else-if="!historyStore.hasMore && historyStore.commits.length > 0" class="list-hint dim">
-            共 {{ historyStore.commits.length }} 条
+            {{ t('history.totalCount', { count: historyStore.commits.length }) }}
           </div>
         </div>
       </div>
 
       <!-- Diff (三种模式由 DiffView 内部切换) -->
       <div class="diff-area" v-if="showDetail" :style="panelBorders['diff']" data-panel-id="diff">
-        <div class="dock-handle dock-handle-float" @pointerdown="onDragHandlePointerDown('diff', $event)" title="拖拽停靠">
+        <div class="dock-handle dock-handle-float" @pointerdown="onDragHandlePointerDown('diff', $event)" :title="t('history.dock.dragToMove')">
           <svg width="8" height="14" viewBox="0 0 8 14"><circle cx="2" cy="2" r="1" fill="currentColor"/><circle cx="6" cy="2" r="1" fill="currentColor"/><circle cx="2" cy="7" r="1" fill="currentColor"/><circle cx="6" cy="7" r="1" fill="currentColor"/><circle cx="2" cy="12" r="1" fill="currentColor"/><circle cx="6" cy="12" r="1" fill="currentColor"/></svg>
         </div>
         <DiffView
@@ -887,10 +899,10 @@ onUnmounted(() => {
       <!-- Info panel: WipPanel when WIP row selected, else CommitInfoPanel -->
       <div class="info-pane" v-if="showDetail" :style="panelBorders['info']" data-panel-id="info">
         <div class="pane-header">
-          <div class="dock-handle" @pointerdown="onDragHandlePointerDown('info', $event)" title="拖拽停靠">
+          <div class="dock-handle" @pointerdown="onDragHandlePointerDown('info', $event)" :title="t('history.dock.dragToMove')">
             <svg width="8" height="14" viewBox="0 0 8 14"><circle cx="2" cy="2" r="1" fill="currentColor"/><circle cx="6" cy="2" r="1" fill="currentColor"/><circle cx="2" cy="7" r="1" fill="currentColor"/><circle cx="6" cy="7" r="1" fill="currentColor"/><circle cx="2" cy="12" r="1" fill="currentColor"/><circle cx="6" cy="12" r="1" fill="currentColor"/></svg>
           </div>
-          <span class="pane-header-title">详情</span>
+          <span class="pane-header-title">{{ t('history.detailsPanel.title') }}</span>
         </div>
         <WipPanel v-if="selectedWip" />
         <CommitInfoPanel
@@ -936,7 +948,7 @@ onUnmounted(() => {
   </div>
 
   <div v-else class="no-repo">
-    请从左侧打开一个 Git 仓库
+    {{ t('history.empty.noActiveRepo') }}
   </div>
 
   <!-- Commit context menu -->

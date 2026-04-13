@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type { CommitDetail } from '@/types/git'
 import { formatAbsoluteTime } from '@/utils/format'
 import { GRAPH_COLORS } from '@/utils/graph'
 import { useUiStore } from '@/stores/ui'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   commit: CommitDetail | null
@@ -93,20 +96,20 @@ const bodyText = computed(() => {
 
       <!-- Metadata grid -->
       <div class="meta-grid">
-        <span class="mk">提交</span>
+        <span class="mk">{{ t('history.detailsPanel.commit') }}</span>
         <span class="mv oid">{{ commit.info.oid.slice(0, 16) }}</span>
 
-        <span class="mk">作者</span>
+        <span class="mk">{{ t('history.detailsPanel.author') }}</span>
         <span class="mv">{{ commit.info.author_name }}</span>
 
-        <span class="mk">日期</span>
+        <span class="mk">{{ t('history.detailsPanel.date') }}</span>
         <span class="mv">{{ formatAbsoluteTime(commit.info.time) }}</span>
 
-        <span class="mk">邮箱</span>
+        <span class="mk">{{ t('history.detailsPanel.email') }}</span>
         <span class="mv dim">{{ commit.info.author_email }}</span>
 
         <template v-if="commit.info.parent_oids.length">
-          <span class="mk">父提交</span>
+          <span class="mk">{{ t('history.detailsPanel.parents') }}</span>
           <span class="mv">
             <span
               v-for="p in commit.info.parent_oids"
@@ -144,7 +147,7 @@ const bodyText = computed(() => {
     </div>
   </div>
 
-  <div v-else class="panel-empty">选择提交查看详情</div>
+  <div v-else class="panel-empty">{{ t('history.detailsPanel.empty') }}</div>
 </template>
 
 <style scoped>

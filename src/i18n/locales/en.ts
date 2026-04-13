@@ -129,6 +129,90 @@ const messages = {
       menuTitle: 'Submodule actions',
     },
   },
+  history: {
+    loading: 'Loading...',
+    loadingMore: 'Loading more...',
+    totalCount: '{count} commits total',
+    empty: {
+      noActiveRepo: 'Open a Git repository from the sidebar to get started',
+      noCommits: 'No commit history',
+    },
+    search: {
+      foundOf: '{found} match(es) in {loaded} loaded commits',
+    },
+    columns: {
+      description: 'Description',
+      commit: 'Commit',
+      author: 'Author',
+      date: 'Date',
+      resizeGroup: 'Drag to move the Commit / Author / Date column group',
+      resizeAuthor: 'Drag to adjust the gap between Author and Commit',
+      resizeDate: 'Drag to adjust the gap between Date and Author',
+      resizeDateWidth: 'Drag to resize the Date column',
+    },
+    tooltip: {
+      author: 'Author',
+      date: 'Date',
+      commit: 'Commit',
+    },
+    tag: {
+      annotated: 'annotated',
+    },
+    dock: {
+      dragToMove: 'Drag to dock',
+    },
+    detailsPanel: {
+      title: 'Details',
+      commit: 'Commit',
+      author: 'Author',
+      date: 'Date',
+      email: 'Email',
+      parents: 'Parents',
+      empty: 'Select a commit to see details',
+    },
+    wipRow: {
+      unstagedTitle: 'Unstaged changes',
+      untrackedTitle: 'Untracked files',
+      stagedTitle: 'Staged',
+      pendingHint: '{count} file(s) pending commit to {branch}',
+    },
+    contextMenu: {
+      checkout: 'Checkout this commit',
+      createBranch: 'Create branch here...',
+      cherryPick: 'Cherry pick this commit',
+      resetTo: 'Reset {branch} to this commit',
+      resetSoft: 'Soft (keep working tree and index)',
+      resetMixed: 'Mixed (keep working tree, clear index)',
+      resetHard: 'Hard (discard all changes)',
+      revert: 'Revert this commit',
+      copySha: 'Copy commit SHA',
+      createTag: 'Create tag here...',
+      createAnnotatedTag: 'Create annotated tag...',
+    },
+    dialog: {
+      confirmCheckout: {
+        body: 'Checking out commit {shortOid} will leave HEAD detached. Continue?',
+      },
+      confirmCherryPick: {
+        body: 'Cherry pick commit "{summary}"?',
+      },
+      confirmRevert: {
+        body: 'Revert commit "{summary}"? A new commit will be created to undo the change.',
+      },
+      confirmReset: {
+        body: 'Reset {branch} ({mode}) to {shortOid}?',
+        hardBody: 'Hard reset will discard all uncommitted changes. Reset {branch} to {shortOid}?',
+        mode: {
+          soft: 'soft',
+          mixed: 'mixed',
+          hard: 'hard',
+        },
+      },
+    },
+  },
+  branches: {
+    noRepo: 'Open a Git repository first',
+  },
   settings: {
     advanced: {
       uiLanguageTitle: 'Interface language',

@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { LANE_W, ROW_H, CIRCLE_R, laneX } from '@/utils/graph'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   unstagedCount: number
@@ -46,27 +49,27 @@ const totalCount = computed(() =>
   <!-- Message 列：// WIP 文本 + 计数徽章 -->
   <div class="col-message" :style="{ width: descColWidth + 'px' }">
     <span class="wip-label">// WIP</span>
-    <span v-if="unstagedCount > 0" class="wip-badge" title="未暂存修改">
+    <span v-if="unstagedCount > 0" class="wip-badge" :title="t('history.wipRow.unstagedTitle')">
       <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <path d="M12 20h9"/>
         <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
       </svg>
       <span>{{ unstagedCount }}</span>
     </span>
-    <span v-if="untrackedCount > 0" class="wip-badge" title="未跟踪文件">
+    <span v-if="untrackedCount > 0" class="wip-badge" :title="t('history.wipRow.untrackedTitle')">
       <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <line x1="12" y1="5" x2="12" y2="19"/>
         <line x1="5" y1="12" x2="19" y2="12"/>
       </svg>
       <span>{{ untrackedCount }}</span>
     </span>
-    <span v-if="stagedCount > 0" class="wip-badge staged" title="已暂存">
+    <span v-if="stagedCount > 0" class="wip-badge staged" :title="t('history.wipRow.stagedTitle')">
       <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <polyline points="20 6 9 17 4 12"/>
       </svg>
       <span>{{ stagedCount }}</span>
     </span>
-    <span class="wip-hint">{{ totalCount }} 个文件待提交到 {{ branchName }}</span>
+    <span class="wip-hint">{{ t('history.wipRow.pendingHint', { count: totalCount, branch: branchName }) }}</span>
   </div>
 
   <!-- 占位的 hash / author / date 列（保持和 commit-row 对齐） -->

@@ -1,14 +1,16 @@
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n'
 import { useRepoStore } from '@/stores/repos'
 import BranchList from '@/components/branch/BranchList.vue'
 
+const { t } = useI18n()
 const repoStore = useRepoStore()
 </script>
 
 <template>
   <div class="branches-view">
     <div v-if="!repoStore.activeRepoId" class="no-repo">
-      请先打开一个 Git 仓库
+      {{ t('branches.noRepo') }}
     </div>
     <BranchList v-else />
   </div>

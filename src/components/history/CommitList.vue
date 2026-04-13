@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useHistoryStore } from '@/stores/history'
 import { formatTime } from '@/utils/format'
 
+const { t } = useI18n()
 const historyStore = useHistoryStore()
 
 const listEl = ref<HTMLElement | null>(null)
@@ -17,7 +19,7 @@ function onScroll(e: Event) {
 
 <template>
   <div class="commit-list" ref="listEl" @scroll="onScroll">
-    <div v-if="historyStore.loading" class="loading-hint">加载中...</div>
+    <div v-if="historyStore.loading" class="loading-hint">{{ t('history.loading') }}</div>
     <div
       v-for="commit in historyStore.commits"
       :key="commit.oid"
@@ -33,12 +35,12 @@ function onScroll(e: Event) {
       <div class="commit-author">{{ commit.author_name }}</div>
     </div>
 
-    <div v-if="historyStore.loadingMore" class="loading-hint">加载更多...</div>
+    <div v-if="historyStore.loadingMore" class="loading-hint">{{ t('history.loadingMore') }}</div>
     <div v-if="!historyStore.hasMore && historyStore.commits.length > 0" class="end-hint">
-      共 {{ historyStore.commits.length }} 条提交
+      {{ t('history.totalCount', { count: historyStore.commits.length }) }}
     </div>
     <div v-if="!historyStore.loading && historyStore.commits.length === 0" class="empty-hint">
-      暂无提交历史
+      {{ t('history.empty.noCommits') }}
     </div>
   </div>
 </template>
