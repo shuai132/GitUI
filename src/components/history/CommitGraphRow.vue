@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { LANE_W, ROW_H, CIRCLE_R, laneX, type GraphRow } from '@/utils/graph'
+import { LANE_W, ROW_H, CIRCLE_R, laneX, type GraphRow, type GraphSegment } from '@/utils/graph'
 
 const props = defineProps<{
   row: GraphRow
@@ -12,9 +12,19 @@ const midY = ROW_H / 2
 
 const UNREACHABLE_COLOR = 'var(--text-muted)'
 
-/** segment 描边色：unreachable 行整体走灰色 */
-function segStroke(segColor: string): string {
-  return props.row.isUnreachable ? UNREACHABLE_COLOR : segColor
+/**
+ * segment 描边色：
+ * unreachable 行里，只有连接到该 commit 自身列（row.column）的 segment 走灰色；
+ * 纯粹"路过"的 lane 保留原色，避免主干颜色在 unreachable 行被错误冲刷。
+ */
+function segStroke(seg: GraphSegment): string {
+  if (
+    props.row.isUnreachable &&
+    (seg.fromCol === props.row.column || seg.toCol === props.row.column)
+  ) {
+    return UNREACHABLE_COLOR
+  }
+  return seg.color
 }
 
 /**
@@ -96,7 +106,7 @@ function segmentPath(seg: { fromCol: number; toCol: number; upper: boolean; lowe
       v-for="(seg, i) in row.segments"
       :key="i"
       :d="segmentPath(seg)"
-      :style="{ stroke: segStroke(seg.color), fill: 'none' }"
+      :style="{ stroke: segStroke(seg), fill: 'none' }"
       stroke-width="1.5"
       stroke-linecap="round"
     />
