@@ -1,6 +1,6 @@
 # 12. 设置
 
-用户可调整的外观偏好：主题（跟随系统 / 浅色 / 深色）、UI 与代码字体字号、五个 accent 强调色覆盖、提交历史行分隔线强度与样式、提交图分叉样式。纯前端功能，不涉及 IPC。
+用户可调整的外观偏好：主题（跟随系统 / 浅色 / 深色）、UI 与代码字体字号、五个 accent 强调色覆盖、提交历史行分隔线透明度与样式、提交图分叉样式。纯前端功能，不涉及 IPC。
 
 ## 涉及模块
 
@@ -26,7 +26,7 @@
 - `codeFontFamily: string`
 - `codeFontSize: number`（px）
 - `accentOverrides: Partial<Record<'blue'|'green'|'red'|'yellow'|'orange', string>>`（HEX）
-- `rowSeparatorStrength: number`（0..`ROW_SEPARATOR_MAX`，默认中档；0 = 无色，最高档保持历史观感）
+- `rowSeparatorStrength: number`（0..`ROW_SEPARATOR_MAX`，直接代表 alpha 百分比；默认 20 = 20% 不透明度；0 = 无色，100 = 完全不透明）
 - `rowSeparatorStyle: 'solid' | 'dashed' | 'dotted'`（行分隔线样式）
 
 字体的预设下拉候选见 `UI_FONT_PRESETS` / `CODE_FONT_PRESETS`（同文件），每项 `value` 是完整 `font-family` fallback 串。
@@ -51,7 +51,7 @@ Accent 覆盖：store 对每个 accent 键调用 `setProperty('--accent-<key>', 
 
 ## 行分隔线
 
-提交历史 `.commit-row` 的 `border-bottom` 抽成三个 CSS 变量：`--row-separator-rgb`（基础色，主题相关，在 `main.css` 里由 `:root` / `[data-theme="light"]` 分别定义）、`--row-separator-alpha`（由 store 按 `strength / ROW_SEPARATOR_MAX * ROW_SEPARATOR_ALPHA_PEAK` 写入）、`--row-separator-style`（直接写字符串）。最高档的 alpha 对齐旧版观感；0 档 alpha 为 0，border 虽透明但仍占 1px，保持布局稳定。
+提交历史 `.commit-row` 的 `border-bottom` 抽成三个 CSS 变量：`--row-separator-rgb`（基础色，主题相关，在 `main.css` 里由 `:root` / `[data-theme="light"]` 分别定义）、`--row-separator-alpha`（由 store 按 `strength / ROW_SEPARATOR_MAX * ROW_SEPARATOR_ALPHA_PEAK` 写入，当前配置下就是 `strength / 100`）、`--row-separator-style`（直接写字符串）。0 档 alpha 为 0，border 虽透明但仍占 1px，保持布局稳定。旧版持久化值（0..10 档位）在 `loadSync` 里 ×4 迁移到新尺度，保留视觉观感。
 
 ## 持久化与启动
 

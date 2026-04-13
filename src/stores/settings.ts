@@ -47,10 +47,12 @@ export type RowSeparatorStyle = 'solid' | 'dashed' | 'dotted'
  */
 export type UiLanguage = 'auto' | 'zh-CN' | 'en'
 
-/** 行分隔线强度档位数（0 = 无色，MAX = 最深） */
-export const ROW_SEPARATOR_MAX = 10
-/** 最高档对应的 alpha（保持与旧版 `rgba(54,58,79,0.4)` 一致） */
-export const ROW_SEPARATOR_ALPHA_PEAK = 0.4
+/** 行分隔线透明度上限（0 = 无色，100 = 完全不透明） */
+export const ROW_SEPARATOR_MAX = 100
+/** 最高档对应的 alpha（100% = 完全不透明） */
+export const ROW_SEPARATOR_ALPHA_PEAK = 1.0
+/** 旧版（0..10 档位、peak=0.4）持久化值迁移到新尺度的缩放因子：old × 4 = new */
+const ROW_SEPARATOR_LEGACY_SCALE = 4
 
 export interface ExternalTerminalPreset {
   value: ExternalTerminal
@@ -77,7 +79,7 @@ export interface SettingsData {
   externalTerminal: ExternalTerminal
   externalTerminalCustom: string  // 当 externalTerminal === 'custom' 时使用的 app 名 / bundle id
   graphStyle: GraphStyle
-  /** 提交历史行分隔线强度 0..ROW_SEPARATOR_MAX，0 无色，MAX 最深；默认中档 */
+  /** 提交历史行分隔线透明度百分比 0..ROW_SEPARATOR_MAX，直接作为 alpha（%） */
   rowSeparatorStrength: number
   rowSeparatorStyle: RowSeparatorStyle
   /** UI 语言；默认 'auto' 跟随系统 */
@@ -94,7 +96,7 @@ export const DEFAULT_SETTINGS: SettingsData = {
   externalTerminal: 'terminal',
   externalTerminalCustom: '',
   graphStyle: 'rounded',
-  rowSeparatorStrength: Math.round(ROW_SEPARATOR_MAX / 2),
+  rowSeparatorStrength: 30,
   rowSeparatorStyle: 'solid',
   uiLanguage: 'auto',
 }
@@ -143,11 +145,20 @@ function loadSync(): SettingsData {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (!raw) return { ...DEFAULT_SETTINGS, accentOverrides: {} }
     const parsed = JSON.parse(raw)
-    return {
+    const merged: SettingsData = {
       ...DEFAULT_SETTINGS,
       ...parsed,
       accentOverrides: { ...(parsed?.accentOverrides ?? {}) },
     }
+    // 迁移：旧版 rowSeparatorStrength 是 0..10 档位（peak 0.4），新版是 0..100 直接
+    // 代表 alpha 百分比。凡是持久化值 ≤ 10 的视为旧数据，× 4 换算保持视觉等价。
+    if (
+      typeof parsed?.rowSeparatorStrength === 'number'
+      && parsed.rowSeparatorStrength <= 10
+    ) {
+      merged.rowSeparatorStrength = Math.round(parsed.rowSeparatorStrength * ROW_SEPARATOR_LEGACY_SCALE)
+    }
+    return merged
   } catch {
     return { ...DEFAULT_SETTINGS, accentOverrides: {} }
   }

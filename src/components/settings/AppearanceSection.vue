@@ -2,7 +2,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
-  ROW_SEPARATOR_ALPHA_PEAK,
+  DEFAULT_SETTINGS,
   ROW_SEPARATOR_MAX,
   clampSeparatorStrength,
   useSettingsStore,
@@ -48,14 +48,20 @@ function onSeparatorStrengthInput(e: Event) {
 
 const separatorOpacityText = computed(() => {
   const s = store.rowSeparatorStrength
-  if (s === 0) return '无'
-  const alpha = (s / ROW_SEPARATOR_MAX) * ROW_SEPARATOR_ALPHA_PEAK
-  return `${Math.round(alpha * 100)}%`
+  return s === 0 ? '无' : `${s}%`
 })
 
 const separatorFillPercent = computed(
   () => `${(store.rowSeparatorStrength / ROW_SEPARATOR_MAX) * 100}%`,
 )
+
+const separatorStrengthIsDefault = computed(
+  () => store.rowSeparatorStrength === DEFAULT_SETTINGS.rowSeparatorStrength,
+)
+
+function resetSeparatorStrength() {
+  store.rowSeparatorStrength = DEFAULT_SETTINGS.rowSeparatorStrength
+}
 
 interface AccentRow {
   key: AccentKey
@@ -211,6 +217,14 @@ const hasAnyOverride = computed(() => Object.keys(store.accentOverrides).length 
         @input="onSeparatorStrengthInput"
       />
       <span class="separator-value">{{ separatorOpacityText }}</span>
+      <button
+        class="accent-reset"
+        :disabled="separatorStrengthIsDefault"
+        :title="separatorStrengthIsDefault ? '已是默认值' : `恢复默认（${DEFAULT_SETTINGS.rowSeparatorStrength}%）`"
+        @click="resetSeparatorStrength"
+      >
+        ×
+      </button>
     </div>
     <div class="theme-grid separator-style-grid">
       <label
@@ -398,7 +412,7 @@ const hasAnyOverride = computed(() => Object.keys(store.accentOverrides).length 
 
 .separator-row {
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: auto 1fr auto auto;
   align-items: center;
   gap: 10px;
 }
