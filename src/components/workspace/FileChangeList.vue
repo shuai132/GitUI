@@ -40,7 +40,6 @@ function onRowContext(e: MouseEvent, file: FileEntry) {
         class="file-entry"
         :class="{ selected: selectedPath === file.path }"
         @click="emit('select', file)"
-        @dblclick="emit('toggle', file)"
         @contextmenu="onRowContext($event, file)"
       >
         <span

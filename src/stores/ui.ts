@@ -98,8 +98,8 @@ const DEFAULT_HISTORY_SIZES: HistoryPaneSizes = {
   commitRowPct: 55,
   descColW: 400,
   hashColW: 64,
-  authorColW: 96,
-  dateColW: 80,
+  authorColW: 240,
+  dateColW: 170,
   commitInfoTopH: 0,
 }
 

@@ -6,7 +6,7 @@ import { useRepoStore } from '@/stores/repos'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useDiffStore } from '@/stores/diff'
 import { useUiStore } from '@/stores/ui'
-import { formatTime, formatAbsoluteTime } from '@/utils/format'
+import { formatAbsoluteTime, formatAuthor, formatHistoryTime } from '@/utils/format'
 import { LANE_W, ROW_H } from '@/utils/graph'
 import CommitGraphRow from '@/components/history/CommitGraphRow.vue'
 import WipRow from '@/components/history/WipRow.vue'
@@ -413,8 +413,8 @@ type ColKey = 'desc' | 'hash' | 'author' | 'date'
 const COL_LIMITS: Record<ColKey, [number, number]> = {
   desc: [200, 1200],
   hash: [48, 240],
-  author: [60, 240],
-  date: [60, 240],
+  author: [60, 420],
+  date: [60, 300],
 }
 const COL_KEY_MAP: Record<ColKey, 'descColW' | 'hashColW' | 'authorColW' | 'dateColW'> = {
   desc: 'descColW',
@@ -844,10 +844,10 @@ onUnmounted(() => {
                 <div class="col-hash" :style="{ width: sizes.hashColW + 'px' }">{{ filteredCommits[toRealIdx(vRow.index)]?.short_oid }}</div>
 
                 <!-- Author column -->
-                <div class="col-author" :style="{ width: sizes.authorColW + 'px' }">{{ filteredCommits[toRealIdx(vRow.index)]?.author_name }}</div>
+                <div class="col-author" :style="{ width: sizes.authorColW + 'px' }">{{ formatAuthor(filteredCommits[toRealIdx(vRow.index)]?.author_name ?? '', filteredCommits[toRealIdx(vRow.index)]?.author_email) }}</div>
 
                 <!-- Date column -->
-                <div class="col-date" :style="{ width: sizes.dateColW + 'px' }">{{ formatTime(filteredCommits[toRealIdx(vRow.index)]?.time ?? 0) }}</div>
+                <div class="col-date" :style="{ width: sizes.dateColW + 'px' }">{{ formatHistoryTime(filteredCommits[toRealIdx(vRow.index)]?.time ?? 0) }}</div>
               </div>
             </template>
           </div>

@@ -20,6 +20,32 @@ export function formatAbsoluteTime(seconds: number): string {
   return date.toLocaleString('zh-CN')
 }
 
+/**
+ * 历史列表日期格式：今天显示 "今天 HH:MM"，其他显示 "YYYY年M月D日 HH:MM"。
+ */
+export function formatHistoryTime(seconds: number): string {
+  const d = new Date(seconds * 1000)
+  const now = new Date()
+  const hh = String(d.getHours()).padStart(2, '0')
+  const mm = String(d.getMinutes()).padStart(2, '0')
+  const sameDay =
+    d.getFullYear() === now.getFullYear() &&
+    d.getMonth() === now.getMonth() &&
+    d.getDate() === now.getDate()
+  if (sameDay) return `今天 ${hh}:${mm}`
+  return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日 ${hh}:${mm}`
+}
+
+/**
+ * 作者格式："name <email>"；email 缺失时仅返回 name。
+ */
+export function formatAuthor(name: string, email?: string | null): string {
+  const n = (name ?? '').trim()
+  const e = (email ?? '').trim()
+  if (!e) return n
+  return `${n} <${e}>`
+}
+
 export function shortOid(oid: string): string {
   return oid.slice(0, 7)
 }
