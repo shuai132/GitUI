@@ -56,17 +56,18 @@ const ROW_SEPARATOR_LEGACY_SCALE = 4
 
 export interface ExternalTerminalPreset {
   value: ExternalTerminal
-  label: string
+  /** i18n 消息 key；消费方在 UI 侧用 t() 渲染 */
+  labelKey: string
   /** macOS 下传给 `open -a` 的 app 名；custom 项留空 */
   appName: string
 }
 
 export const EXTERNAL_TERMINAL_PRESETS: ExternalTerminalPreset[] = [
-  { value: 'terminal', label: 'Terminal（系统默认）', appName: 'Terminal' },
-  { value: 'iterm2', label: 'iTerm2', appName: 'iTerm' },
-  { value: 'warp', label: 'Warp', appName: 'Warp' },
-  { value: 'ghostty', label: 'Ghostty', appName: 'Ghostty' },
-  { value: 'custom', label: '自定义…', appName: '' },
+  { value: 'terminal', labelKey: 'settings.externalTools.preset.terminal', appName: 'Terminal' },
+  { value: 'iterm2', labelKey: 'settings.externalTools.preset.iterm2', appName: 'iTerm' },
+  { value: 'warp', labelKey: 'settings.externalTools.preset.warp', appName: 'Warp' },
+  { value: 'ghostty', labelKey: 'settings.externalTools.preset.ghostty', appName: 'Ghostty' },
+  { value: 'custom', labelKey: 'settings.externalTools.preset.custom', appName: '' },
 ]
 
 export interface SettingsData {
@@ -115,24 +116,24 @@ export function resolveExternalTerminalApp(data: Pick<SettingsData, 'externalTer
 }
 
 // ── 预设字体（下拉候选） ──────────────────────────────────────────────
-// 每项 label 给用户看，value 是完整 font-family fallback 串
-export const UI_FONT_PRESETS: Array<{ label: string; value: string }> = [
-  { label: '默认', value: '' },
-  { label: '系统界面', value: "system-ui, -apple-system, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif" },
-  { label: 'SF Pro', value: "'SF Pro Text', -apple-system, sans-serif" },
-  { label: 'Inter', value: "'Inter', system-ui, sans-serif" },
-  { label: 'Segoe UI', value: "'Segoe UI', system-ui, sans-serif" },
-  { label: 'SF Mono（等宽）', value: "'SF Mono', 'Fira Code', 'Cascadia Code', Menlo, monospace" },
+// 每项 labelKey 是 i18n key，消费方在 UI 用 t() 渲染；value 是完整 font-family fallback 串
+export const UI_FONT_PRESETS: Array<{ labelKey: string; value: string }> = [
+  { labelKey: 'settings.font.preset.default', value: '' },
+  { labelKey: 'settings.font.preset.systemUi', value: "system-ui, -apple-system, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif" },
+  { labelKey: 'settings.font.preset.sfPro', value: "'SF Pro Text', -apple-system, sans-serif" },
+  { labelKey: 'settings.font.preset.inter', value: "'Inter', system-ui, sans-serif" },
+  { labelKey: 'settings.font.preset.segoeUi', value: "'Segoe UI', system-ui, sans-serif" },
+  { labelKey: 'settings.font.preset.sfMonoMono', value: "'SF Mono', 'Fira Code', 'Cascadia Code', Menlo, monospace" },
 ]
 
-export const CODE_FONT_PRESETS: Array<{ label: string; value: string }> = [
-  { label: '默认', value: '' },
-  { label: 'SF Mono', value: "'SF Mono', Menlo, monospace" },
-  { label: 'Menlo', value: "Menlo, 'SF Mono', monospace" },
-  { label: 'Consolas', value: "Consolas, 'SF Mono', monospace" },
-  { label: 'Fira Code', value: "'Fira Code', 'SF Mono', monospace" },
-  { label: 'JetBrains Mono', value: "'JetBrains Mono', 'SF Mono', monospace" },
-  { label: 'Cascadia Code', value: "'Cascadia Code', 'SF Mono', monospace" },
+export const CODE_FONT_PRESETS: Array<{ labelKey: string; value: string }> = [
+  { labelKey: 'settings.font.preset.default', value: '' },
+  { labelKey: 'settings.font.preset.sfMono', value: "'SF Mono', Menlo, monospace" },
+  { labelKey: 'settings.font.preset.menlo', value: "Menlo, 'SF Mono', monospace" },
+  { labelKey: 'settings.font.preset.consolas', value: "Consolas, 'SF Mono', monospace" },
+  { labelKey: 'settings.font.preset.firaCode', value: "'Fira Code', 'SF Mono', monospace" },
+  { labelKey: 'settings.font.preset.jetbrainsMono', value: "'JetBrains Mono', 'SF Mono', monospace" },
+  { labelKey: 'settings.font.preset.cascadiaCode', value: "'Cascadia Code', 'SF Mono', monospace" },
 ]
 
 const STORAGE_KEY = 'gitui.settings.v1'

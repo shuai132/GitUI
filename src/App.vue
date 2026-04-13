@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import AppSidebar from '@/components/layout/AppSidebar.vue'
 import AppToolbar from '@/components/layout/AppToolbar.vue'
@@ -18,6 +19,7 @@ import { useGitEvents } from '@/composables/useGitEvents'
 import { useGitCommands } from '@/composables/useGitCommands'
 import { listen } from '@tauri-apps/api/event'
 
+const { t } = useI18n()
 const router = useRouter()
 const repoStore = useRepoStore()
 const workspaceStore = useWorkspaceStore()
@@ -145,7 +147,7 @@ watch(
       <div
         class="sidebar-resize"
         :class="{ 'sidebar-resize-collapsed': uiStore.sidebarWidth === 0 }"
-        :title="uiStore.sidebarWidth === 0 ? '双击展开侧边栏' : '拖动调整宽度 / 双击隐藏'"
+        :title="uiStore.sidebarWidth === 0 ? t('app.sidebar.expandHint') : t('app.sidebar.resizeHint')"
         @pointerdown="startSidebarResize"
         @dblclick="toggleSidebar"
       />

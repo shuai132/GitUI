@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { ref, nextTick, watch, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useDebugStore, type DebugEntry } from '@/stores/debug'
 import { useUiStore } from '@/stores/ui'
 
+const { t } = useI18n()
 const debugStore = useDebugStore()
 const uiStore = useUiStore()
 
@@ -167,7 +169,7 @@ function truncate(s: string, max: number): string {
 }
 
 function formatArgs(args?: Record<string, unknown>): string {
-  if (!args) return '(no args)'
+  if (!args) return t('debug.noArgs')
   return JSON.stringify(args, null, 2)
 }
 
@@ -218,7 +220,7 @@ function startResize(e: PointerEvent) {
     <!-- Header -->
     <div class="debug-header">
       <span class="debug-title">Debug</span>
-      <button class="debug-btn" title="关闭" @click="uiStore.toggleDebugPanel()">
+      <button class="debug-btn" :title="t('debug.close')" @click="uiStore.toggleDebugPanel()">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <line x1="18" y1="6" x2="6" y2="18"/>
           <line x1="6" y1="6" x2="18" y2="18"/>
@@ -230,7 +232,7 @@ function startResize(e: PointerEvent) {
     <div class="debug-section" :style="{ flex: `0 0 ${topPct}%` }">
       <div class="section-bar">
         <span class="section-label">Commands</span>
-        <button class="debug-btn" title="清空命令" @click="onClearCmds">
+        <button class="debug-btn" :title="t('debug.clearCommands')" @click="onClearCmds">
           <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <polyline points="3 6 5 6 21 6"/>
             <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
@@ -264,7 +266,7 @@ function startResize(e: PointerEvent) {
             <pre v-if="entry.error" class="detail-pre detail-error">{{ entry.error }}</pre>
           </div>
         </template>
-        <div v-if="debugStore.entries.length === 0" class="debug-empty">暂无命令</div>
+        <div v-if="debugStore.entries.length === 0" class="debug-empty">{{ t('debug.emptyCommands') }}</div>
       </div>
     </div>
 
@@ -275,7 +277,7 @@ function startResize(e: PointerEvent) {
     <div class="debug-section debug-section--bottom">
       <div class="section-bar">
         <span class="section-label">Logs</span>
-        <button class="debug-btn" title="清空日志" @click="onClearLogs">
+        <button class="debug-btn" :title="t('debug.clearLogs')" @click="onClearLogs">
           <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <polyline points="3 6 5 6 21 6"/>
             <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
@@ -292,7 +294,7 @@ function startResize(e: PointerEvent) {
           <span class="log-level">{{ entry.level.charAt(0).toUpperCase() }}</span>
           <span class="log-msg">{{ entry.message }}</span>
         </div>
-        <div v-if="debugStore.logEntries.length === 0" class="debug-empty">暂无日志</div>
+        <div v-if="debugStore.logEntries.length === 0" class="debug-empty">{{ t('debug.emptyLogs') }}</div>
       </div>
     </div>
   </div>

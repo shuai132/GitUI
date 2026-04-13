@@ -1,54 +1,62 @@
 <script setup lang="ts">
+import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useUiStore } from '@/stores/ui'
 
 const uiStore = useUiStore()
+const { t } = useI18n()
 
 interface ToggleRow {
+  key: string
   label: string
   hint: string
   get: () => boolean
   toggle: () => void
 }
 
-const viewToggles: ToggleRow[] = [
+const viewToggles = computed<ToggleRow[]>(() => [
   {
-    label: '显示悬垂引用',
-    hint: '在历史图中绘制 HEAD reflog 中不可达的提交',
+    key: 'showUnreachable',
+    label: t('settings.advanced.showUnreachable'),
+    hint: t('settings.advanced.showUnreachableHint'),
     get: () => uiStore.showUnreachableCommits,
     toggle: () => uiStore.toggleShowUnreachable(),
   },
   {
-    label: '显示贮藏',
-    hint: '在历史图中绘制 stash 节点',
+    key: 'showStashes',
+    label: t('settings.advanced.showStashes'),
+    hint: t('settings.advanced.showStashesHint'),
     get: () => uiStore.showStashCommits,
     toggle: () => uiStore.toggleShowStashes(),
   },
   {
-    label: '调试日志',
-    hint: '在主界面底部展示调试日志面板',
+    key: 'debugLog',
+    label: t('settings.advanced.debugLog'),
+    hint: t('settings.advanced.debugLogHint'),
     get: () => uiStore.debugPanelVisible,
     toggle: () => uiStore.toggleDebugPanel(),
   },
-]
+])
 
 interface PlaceholderItem {
+  key: string
   label: string
   hint: string
 }
 
-const placeholders: PlaceholderItem[] = [
-  { label: '快捷键', hint: '自定义键盘快捷键即将推出' },
-  { label: 'Git 操作偏好', hint: '默认 pull 策略、自动 fetch 间隔即将推出' },
-]
+const placeholders = computed<PlaceholderItem[]>(() => [
+  { key: 'shortcuts', label: t('settings.advanced.shortcuts'), hint: t('settings.advanced.shortcutsHint') },
+  { key: 'gitPrefs', label: t('settings.advanced.gitPrefs'), hint: t('settings.advanced.gitPrefsHint') },
+])
 </script>
 
 <template>
   <div class="section">
-    <div class="section-title">视图</div>
+    <div class="section-title">{{ t('settings.advanced.viewTitle') }}</div>
     <div class="toggle-list">
       <label
         v-for="row in viewToggles"
-        :key="row.label"
+        :key="row.key"
         class="toggle-row"
       >
         <div class="toggle-text">
@@ -64,9 +72,9 @@ const placeholders: PlaceholderItem[] = [
       </label>
     </div>
 
-    <div class="section-title section-title--spaced">即将推出</div>
+    <div class="section-title section-title--spaced">{{ t('settings.advanced.upcomingTitle') }}</div>
     <div class="placeholder-list">
-      <div v-for="item in placeholders" :key="item.label" class="placeholder-row">
+      <div v-for="item in placeholders" :key="item.key" class="placeholder-row">
         <div class="placeholder-label">{{ item.label }}</div>
         <div class="placeholder-hint">{{ item.hint }}</div>
       </div>

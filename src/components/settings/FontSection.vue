@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n'
 import {
   useSettingsStore,
   UI_FONT_PRESETS,
@@ -8,6 +9,7 @@ import {
 } from '@/stores/settings'
 
 const store = useSettingsStore()
+const { t } = useI18n()
 
 function clampSize(n: number): number {
   if (!Number.isFinite(n)) return 13
@@ -26,26 +28,26 @@ function onCodeSize(e: Event) {
 <template>
   <div class="section">
     <div class="section-title">
-      <span>UI 字体</span>
+      <span>{{ t('settings.font.uiTitle') }}</span>
       <button
         class="reset-btn"
         :disabled="store.uiFontIsDefault"
-        title="恢复 UI 字体和字号默认"
+        :title="t('settings.font.resetUi')"
         @click="store.resetUiFont()"
       >
-        恢复默认
+        {{ t('settings.font.resetDefault') }}
       </button>
     </div>
     <div class="form-row">
-      <label class="form-label">字体：</label>
+      <label class="form-label">{{ t('settings.font.familyLabel') }}</label>
       <select v-model="store.uiFontFamily" class="form-control">
-        <option v-for="p in UI_FONT_PRESETS" :key="p.label" :value="p.value">
-          {{ p.label }}
+        <option v-for="p in UI_FONT_PRESETS" :key="p.labelKey" :value="p.value">
+          {{ t(p.labelKey) }}
         </option>
       </select>
     </div>
     <div class="form-row">
-      <label class="form-label">字号：</label>
+      <label class="form-label">{{ t('settings.font.sizeLabel') }}</label>
       <div class="size-group">
         <input
           type="number"
@@ -60,26 +62,26 @@ function onCodeSize(e: Event) {
     </div>
 
     <div class="section-title section-title--spaced">
-      <span>代码字体（diff / hash）</span>
+      <span>{{ t('settings.font.codeTitle') }}</span>
       <button
         class="reset-btn"
         :disabled="store.codeFontIsDefault"
-        title="恢复代码字体和字号默认"
+        :title="t('settings.font.resetCode')"
         @click="store.resetCodeFont()"
       >
-        恢复默认
+        {{ t('settings.font.resetDefault') }}
       </button>
     </div>
     <div class="form-row">
-      <label class="form-label">字体：</label>
+      <label class="form-label">{{ t('settings.font.familyLabel') }}</label>
       <select v-model="store.codeFontFamily" class="form-control">
-        <option v-for="p in CODE_FONT_PRESETS" :key="p.label" :value="p.value">
-          {{ p.label }}
+        <option v-for="p in CODE_FONT_PRESETS" :key="p.labelKey" :value="p.value">
+          {{ t(p.labelKey) }}
         </option>
       </select>
     </div>
     <div class="form-row">
-      <label class="form-label">字号：</label>
+      <label class="form-label">{{ t('settings.font.sizeLabel') }}</label>
       <div class="size-group">
         <input
           type="number"
@@ -94,7 +96,7 @@ function onCodeSize(e: Event) {
     </div>
 
     <div class="hint">
-      提示：若系统未安装所选字体，会自动回退到下一个候选。UI 字号仅影响根级别文本，部分面板/工具栏使用固定字号。
+      {{ t('settings.font.hint') }}
     </div>
   </div>
 </template>

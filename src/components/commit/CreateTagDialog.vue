@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import { ref, watch, computed, nextTick } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type { CommitInfo } from '@/types/git'
 import Modal from '@/components/common/Modal.vue'
 import { useHistoryStore } from '@/stores/history'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   visible: boolean
@@ -23,7 +26,7 @@ const error = ref<string | null>(null)
 const nameInputEl = ref<HTMLInputElement | null>(null)
 
 const title = computed(() =>
-  props.annotated ? '创建附注标签' : '创建标签',
+  props.annotated ? t('tag.create.titleAnnotated') : t('tag.create.title'),
 )
 
 const canSubmit = computed(() => {
@@ -71,20 +74,20 @@ function onCancel() {
 <template>
   <Modal :visible="visible" :title="title" width="480px" @close="onCancel">
     <div v-if="commit" class="commit-hint">
-      在提交
+      {{ t('tag.create.hintOnCommitPrefix') }}
       <span class="hint-sha">{{ commit.short_oid }}</span>
       <span class="hint-summary">{{ commit.summary }}</span>
-      上创建标签
+      {{ t('tag.create.hintOnCommitSuffix') }}
     </div>
 
     <div class="form-row">
-      <label class="form-label">标签名称：</label>
+      <label class="form-label">{{ t('tag.create.nameLabel') }}</label>
       <input
         ref="nameInputEl"
         v-model="tagName"
         class="form-control"
         type="text"
-        placeholder="例如：v1.0.0"
+        :placeholder="t('tag.create.namePlaceholder')"
         spellcheck="false"
         autocomplete="off"
         @keydown.enter="!annotated && onSubmit()"
@@ -92,12 +95,12 @@ function onCancel() {
     </div>
 
     <div v-if="annotated" class="form-row form-row--top">
-      <label class="form-label">标签消息：</label>
+      <label class="form-label">{{ t('tag.create.messageLabel') }}</label>
       <textarea
         v-model="tagMessage"
         class="form-control form-textarea"
         rows="4"
-        placeholder="描述此次发布的内容..."
+        :placeholder="t('tag.create.messagePlaceholder')"
         spellcheck="false"
         autocomplete="off"
       />
@@ -106,9 +109,9 @@ function onCancel() {
     <div v-if="error" class="form-error">{{ error }}</div>
 
     <template #footer>
-      <button class="btn btn-secondary" @click="onCancel">取消</button>
+      <button class="btn btn-secondary" @click="onCancel">{{ t('common.cancel') }}</button>
       <button class="btn btn-primary" :disabled="!canSubmit" @click="onSubmit">
-        {{ submitting ? '创建中...' : '创建' }}
+        {{ submitting ? t('tag.create.submitting') : t('tag.create.submit') }}
       </button>
     </template>
   </Modal>

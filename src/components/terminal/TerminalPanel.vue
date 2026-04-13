@@ -4,11 +4,13 @@ import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 import '@xterm/xterm/css/xterm.css'
+import { useI18n } from 'vue-i18n'
 import { useUiStore } from '@/stores/ui'
 import { useRepoStore } from '@/stores/repos'
 import { useGitCommands } from '@/composables/useGitCommands'
 import ContextMenu, { type ContextMenuItem } from '@/components/common/ContextMenu.vue'
 
+const { t } = useI18n()
 const uiStore = useUiStore()
 const repoStore = useRepoStore()
 const git = useGitCommands()
@@ -34,13 +36,13 @@ const ctxMenu = reactive({
 const hasSelection = ref(false)
 
 const ctxMenuItems = computed<ContextMenuItem[]>(() => [
-  { label: '复制', action: 'copy', disabled: !hasSelection.value },
-  { label: '粘贴', action: 'paste' },
+  { label: t('terminal.menu.copy'), action: 'copy', disabled: !hasSelection.value },
+  { label: t('terminal.menu.paste'), action: 'paste' },
   { separator: true },
-  { label: '全选', action: 'select-all' },
-  { label: '清屏', action: 'clear' },
+  { label: t('terminal.menu.selectAll'), action: 'select-all' },
+  { label: t('terminal.menu.clear'), action: 'clear' },
   { separator: true },
-  { label: '关闭终端', action: 'close', danger: true },
+  { label: t('terminal.menu.close'), action: 'close', danger: true },
 ])
 
 // ── base64 编解码 ────────────────────────────────────────────────────
@@ -140,7 +142,7 @@ async function spawnSession() {
   try {
     sessionId = await git.terminalSpawn(repoId, cols, rows)
   } catch (e) {
-    term.write(`\r\n[spawn 失败] ${(e as Error).message}\r\n`)
+    term.write(`\r\n[${t('terminal.spawnFailed')}] ${(e as Error).message}\r\n`)
   }
 }
 
@@ -354,7 +356,7 @@ async function onCtxSelect(action: string) {
       <div class="terminal-actions">
         <button
           class="term-btn"
-          :title="uiStore.terminalDock === 'bottom' ? '停靠到右侧' : '停靠到底部'"
+          :title="uiStore.terminalDock === 'bottom' ? t('terminal.dockRight') : t('terminal.dockBottom')"
           @click="onToggleDock"
         >
           <svg v-if="uiStore.terminalDock === 'bottom'" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -366,7 +368,7 @@ async function onCtxSelect(action: string) {
             <line x1="3" y1="15" x2="21" y2="15"/>
           </svg>
         </button>
-        <button class="term-btn" title="关闭终端" @click="onClose">
+        <button class="term-btn" :title="t('terminal.close')" @click="onClose">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <line x1="18" y1="6" x2="6" y2="18"/>
             <line x1="6" y1="6" x2="18" y2="18"/>

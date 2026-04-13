@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import {
   EXTERNAL_TERMINAL_PRESETS,
   useSettingsStore,
@@ -7,6 +8,7 @@ import {
 } from '@/stores/settings'
 
 const store = useSettingsStore()
+const { t } = useI18n()
 
 const options = EXTERNAL_TERMINAL_PRESETS
 
@@ -27,9 +29,9 @@ const isMac = typeof navigator !== 'undefined' && /Mac/i.test(navigator.platform
 
 <template>
   <div class="section">
-    <div class="section-title">终端</div>
+    <div class="section-title">{{ t('settings.externalTools.sectionTitle') }}</div>
     <div class="tool-row">
-      <label class="tool-label" for="external-terminal-select">外部终端</label>
+      <label class="tool-label" for="external-terminal-select">{{ t('settings.externalTools.terminalTitle') }}</label>
       <select
         id="external-terminal-select"
         class="tool-select"
@@ -37,20 +39,20 @@ const isMac = typeof navigator !== 'undefined' && /Mac/i.test(navigator.platform
         @change="onSelect"
       >
         <option v-for="opt in options" :key="opt.value" :value="opt.value">
-          {{ opt.label }}
+          {{ t(opt.labelKey) }}
         </option>
       </select>
     </div>
 
     <div v-if="isCustom" class="tool-row tool-row--custom">
-      <label class="tool-label" for="external-terminal-custom">应用名 / Bundle ID</label>
+      <label class="tool-label" for="external-terminal-custom">{{ t('settings.externalTools.customLabel') }}</label>
       <input
         id="external-terminal-custom"
         class="tool-input"
         type="text"
         spellcheck="false"
         autocomplete="off"
-        placeholder="例如：Alacritty、Hyper、com.mitchellh.ghostty"
+        :placeholder="t('settings.externalTools.customPlaceholder')"
         :value="store.externalTerminalCustom"
         @input="onCustomInput"
       />
@@ -58,10 +60,12 @@ const isMac = typeof navigator !== 'undefined' && /Mac/i.test(navigator.platform
 
     <div class="section-hint">
       <template v-if="isMac">
-        通过 <code>open -a</code> 启动所选应用，须先安装对应程序。
+        <i18n-t keypath="settings.externalTools.hintMac" tag="span">
+          <template #cmd><code>open -a</code></template>
+        </i18n-t>
       </template>
       <template v-else>
-        当前平台不使用该设置，将自动探测可用终端。
+        {{ t('settings.externalTools.hintOther') }}
       </template>
     </div>
   </div>

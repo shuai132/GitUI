@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useHistoryStore } from '@/stores/history'
 import { useWorkspaceStore } from '@/stores/workspace'
 
+const { t } = useI18n()
 const historyStore = useHistoryStore()
 const workspaceStore = useWorkspaceStore()
 
@@ -44,7 +46,7 @@ async function createBranch() {
 }
 
 async function deleteBranch(name: string) {
-  if (confirm(`确认删除分支 "${name}"？`)) {
+  if (confirm(t('branchList.confirmDelete', { name }))) {
     await historyStore.deleteBranch(name)
   }
 }
@@ -54,7 +56,7 @@ async function deleteBranch(name: string) {
   <div class="branch-list">
     <div class="branch-actions">
       <button class="btn-new" @click="showNewBranch = !showNewBranch">
-        + 新建分支
+        {{ t('branchList.newBranch') }}
       </button>
     </div>
 
@@ -62,18 +64,18 @@ async function deleteBranch(name: string) {
       <input
         v-model="newBranchName"
         class="branch-input"
-        placeholder="分支名称"
+        :placeholder="t('branchList.namePlaceholder')"
         spellcheck="false"
         autocomplete="off"
         @keydown.enter="createBranch"
       />
-      <button class="btn-create" @click="createBranch">创建</button>
+      <button class="btn-create" @click="createBranch">{{ t('branchList.create') }}</button>
     </div>
 
     <div v-if="error" class="error-msg">{{ error }}</div>
 
     <div class="branch-section">
-      <div class="section-title">本地分支</div>
+      <div class="section-title">{{ t('branchList.sectionLocal') }}</div>
       <div
         v-for="branch in localBranches"
         :key="branch.name"
@@ -83,19 +85,19 @@ async function deleteBranch(name: string) {
         <span class="branch-indicator" v-if="branch.is_head">*</span>
         <span class="branch-name" @click="!branch.is_head && switchBranch(branch.name)">
           {{ branch.name }}
-          <span v-if="switchingTo === branch.name" class="switching">切换中...</span>
+          <span v-if="switchingTo === branch.name" class="switching">{{ t('branchList.switching') }}</span>
         </span>
         <button
           v-if="!branch.is_head"
           class="btn-delete"
           @click.stop="deleteBranch(branch.name)"
-          title="删除分支"
+          :title="t('branchList.deleteTitle')"
         >×</button>
       </div>
     </div>
 
     <div class="branch-section" v-if="remoteBranches.length > 0">
-      <div class="section-title">远程分支</div>
+      <div class="section-title">{{ t('branchList.sectionRemote') }}</div>
       <div
         v-for="branch in remoteBranches"
         :key="branch.name"

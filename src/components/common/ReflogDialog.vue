@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import Modal from '@/components/common/Modal.vue'
 import { useGitCommands } from '@/composables/useGitCommands'
 import { useRepoStore } from '@/stores/repos'
 import type { ReflogEntry } from '@/types/git'
+
+const { t } = useI18n()
 
 const props = defineProps<{ visible: boolean }>()
 const emit = defineEmits<{ close: [] }>()
@@ -48,17 +51,17 @@ function copyOid(oid: string) {
 </script>
 
 <template>
-  <Modal :visible="visible" title="Reflog — HEAD 历史" width="680px" @close="emit('close')">
+  <Modal :visible="visible" :title="t('reflog.title')" width="680px" @close="emit('close')">
     <div class="reflog-body">
-      <div v-if="loading" class="reflog-hint">加载中...</div>
+      <div v-if="loading" class="reflog-hint">{{ t('reflog.loading') }}</div>
       <div v-else-if="error" class="reflog-hint reflog-error">{{ error }}</div>
-      <div v-else-if="entries.length === 0" class="reflog-hint">暂无 reflog 记录</div>
+      <div v-else-if="entries.length === 0" class="reflog-hint">{{ t('reflog.empty') }}</div>
       <table v-else class="reflog-table">
         <thead>
           <tr>
-            <th>Hash</th>
-            <th>时间</th>
-            <th>操作</th>
+            <th>{{ t('reflog.columnHash') }}</th>
+            <th>{{ t('reflog.columnTime') }}</th>
+            <th>{{ t('reflog.columnOperation') }}</th>
           </tr>
         </thead>
         <tbody>
@@ -75,7 +78,7 @@ function copyOid(oid: string) {
       </table>
     </div>
     <template #footer>
-      <button class="btn-close" @click="emit('close')">关闭</button>
+      <button class="btn-close" @click="emit('close')">{{ t('reflog.close') }}</button>
     </template>
   </Modal>
 </template>

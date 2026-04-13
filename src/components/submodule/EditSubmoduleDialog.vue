@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import { ref, watch, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type { SubmoduleInfo } from '@/types/git'
 import Modal from '@/components/common/Modal.vue'
 import { useSubmodulesStore } from '@/stores/submodules'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   visible: boolean
@@ -60,40 +63,39 @@ function onCancel() {
 </script>
 
 <template>
-  <Modal :visible="visible" title="编辑 Submodule" width="520px" @close="onCancel">
+  <Modal :visible="visible" :title="t('submodule.edit.title')" width="520px" @close="onCancel">
     <div v-if="submodule" class="form-row">
-      <label class="form-label">名称：</label>
+      <label class="form-label">{{ t('submodule.edit.nameLabel') }}</label>
       <div class="readonly-value">{{ submodule.name }}</div>
     </div>
 
     <div v-if="submodule" class="form-row">
-      <label class="form-label">路径：</label>
+      <label class="form-label">{{ t('submodule.edit.pathLabel') }}</label>
       <div class="readonly-value">{{ submodule.path }}</div>
     </div>
 
     <div class="form-row">
-      <label class="form-label">URL：</label>
+      <label class="form-label">{{ t('submodule.edit.urlLabel') }}</label>
       <input
         v-model="url"
         class="form-control"
         type="text"
-        placeholder="https://example.com/repo.git"
+        :placeholder="t('submodule.edit.urlPlaceholder')"
         spellcheck="false"
         autocomplete="off"
       />
     </div>
 
     <div class="hint">
-      修改后会写入 <code>.gitmodules</code>，已 init 的 submodule 会同步到
-      <code>.git/config</code>。
+      {{ t('submodule.edit.hintPart1') }}<code>.gitmodules</code>{{ t('submodule.edit.hintPart2') }}<code>.git/config</code>{{ t('submodule.edit.hintPart3') }}
     </div>
 
     <div v-if="error" class="form-error">{{ error }}</div>
 
     <template #footer>
-      <button class="btn btn-secondary" @click="onCancel">取消</button>
+      <button class="btn btn-secondary" @click="onCancel">{{ t('common.cancel') }}</button>
       <button class="btn btn-primary" :disabled="!canSubmit" @click="onSave">
-        {{ submitting ? '保存中...' : '保存' }}
+        {{ submitting ? t('submodule.edit.submitting') : t('submodule.edit.submit') }}
       </button>
     </template>
   </Modal>

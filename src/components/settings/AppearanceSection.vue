@@ -16,11 +16,11 @@ import {
 const store = useSettingsStore()
 const { t } = useI18n()
 
-const themeOptions: Array<{ value: ThemeMode; label: string }> = [
-  { value: 'auto', label: '跟随系统' },
-  { value: 'light', label: '浅色' },
-  { value: 'dark', label: '深色' },
-]
+const themeOptions = computed<Array<{ value: ThemeMode; label: string }>>(() => [
+  { value: 'auto', label: t('settings.appearance.themeAuto') },
+  { value: 'light', label: t('settings.appearance.themeLight') },
+  { value: 'dark', label: t('settings.appearance.themeDark') },
+])
 
 // 语言卡片：`auto` 走 i18n 跟随当前 locale，`zh-CN` / `en` 用原生名固定
 const languageOptions = computed<Array<{ value: UiLanguage; label: string }>>(() => [
@@ -29,17 +29,17 @@ const languageOptions = computed<Array<{ value: UiLanguage; label: string }>>(()
   { value: 'en', label: 'English' },
 ])
 
-const graphStyleOptions: Array<{ value: GraphStyle; label: string }> = [
-  { value: 'rounded', label: '圆润' },
-  { value: 'step', label: '直角' },
-  { value: 'angular', label: '锐角' },
-]
+const graphStyleOptions = computed<Array<{ value: GraphStyle; label: string }>>(() => [
+  { value: 'rounded', label: t('settings.appearance.graphRounded') },
+  { value: 'step', label: t('settings.appearance.graphStep') },
+  { value: 'angular', label: t('settings.appearance.graphAngular') },
+])
 
-const separatorStyleOptions: Array<{ value: RowSeparatorStyle; label: string }> = [
-  { value: 'solid', label: '实线' },
-  { value: 'dashed', label: '虚线' },
-  { value: 'dotted', label: '点线' },
-]
+const separatorStyleOptions = computed<Array<{ value: RowSeparatorStyle; label: string }>>(() => [
+  { value: 'solid', label: t('settings.appearance.separatorStyleSolid') },
+  { value: 'dashed', label: t('settings.appearance.separatorStyleDashed') },
+  { value: 'dotted', label: t('settings.appearance.separatorStyleDotted') },
+])
 
 function onSeparatorStrengthInput(e: Event) {
   const v = Number((e.target as HTMLInputElement).value)
@@ -48,7 +48,7 @@ function onSeparatorStrengthInput(e: Event) {
 
 const separatorOpacityText = computed(() => {
   const s = store.rowSeparatorStrength
-  return s === 0 ? '无' : `${s}%`
+  return s === 0 ? t('settings.appearance.separatorOpacityNone') : `${s}%`
 })
 
 const separatorFillPercent = computed(
@@ -69,13 +69,13 @@ interface AccentRow {
   /** 当前默认值（未覆盖时页面使用的值），仅用于颜色拾取器的初始值 */
 }
 
-const accentRows: AccentRow[] = [
-  { key: 'blue', label: '主强调（链接 / hash）' },
-  { key: 'green', label: '增加 / 成功' },
-  { key: 'red', label: '删除 / 危险' },
-  { key: 'yellow', label: '警告' },
-  { key: 'orange', label: '次要强调' },
-]
+const accentRows = computed<AccentRow[]>(() => [
+  { key: 'blue', label: t('settings.appearance.accentLabel.blue') },
+  { key: 'green', label: t('settings.appearance.accentLabel.green') },
+  { key: 'red', label: t('settings.appearance.accentLabel.red') },
+  { key: 'yellow', label: t('settings.appearance.accentLabel.yellow') },
+  { key: 'orange', label: t('settings.appearance.accentLabel.orange') },
+])
 
 function overrideValue(key: AccentKey): string {
   return store.accentOverrides[key] ?? ''
@@ -143,7 +143,7 @@ const hasAnyOverride = computed(() => Object.keys(store.accentOverrides).length 
       </label>
     </div>
 
-    <div class="section-title section-title--spaced">主题</div>
+    <div class="section-title section-title--spaced">{{ t('settings.appearance.themeTitle') }}</div>
     <div class="theme-grid">
       <label
         v-for="opt in themeOptions"
@@ -163,8 +163,8 @@ const hasAnyOverride = computed(() => Object.keys(store.accentOverrides).length 
     </div>
 
     <div class="section-title section-title--spaced">
-      强调色覆盖
-      <span class="section-title-hint">（留空使用主题默认）</span>
+      {{ t('settings.appearance.accentTitle') }}
+      <span class="section-title-hint">{{ t('settings.appearance.accentHint') }}</span>
     </div>
     <div class="accent-list">
       <div v-for="row in accentRows" :key="row.key" class="accent-row">
@@ -188,7 +188,7 @@ const hasAnyOverride = computed(() => Object.keys(store.accentOverrides).length 
         <button
           class="accent-reset"
           :disabled="!store.accentOverrides[row.key]"
-          :title="store.accentOverrides[row.key] ? '清除覆盖' : '未覆盖'"
+          :title="store.accentOverrides[row.key] ? t('settings.appearance.accentClearTitle') : t('settings.appearance.accentClearDisabledTitle')"
           @click="clearOverride(row.key)"
         >
           ×
@@ -197,15 +197,15 @@ const hasAnyOverride = computed(() => Object.keys(store.accentOverrides).length 
     </div>
 
     <div v-if="!hasAnyOverride" class="accent-empty-hint">
-      当前未覆盖任何强调色，使用主题内置配色。
+      {{ t('settings.appearance.accentEmpty') }}
     </div>
 
     <div class="section-title section-title--spaced">
-      行分隔线
-      <span class="section-title-hint">（提交历史每行之间）</span>
+      {{ t('settings.appearance.separatorTitle') }}
+      <span class="section-title-hint">{{ t('settings.appearance.separatorHint') }}</span>
     </div>
     <div class="separator-row">
-      <span class="separator-label">透明度</span>
+      <span class="separator-label">{{ t('settings.appearance.separatorOpacity') }}</span>
       <input
         type="range"
         class="separator-range"
@@ -220,7 +220,7 @@ const hasAnyOverride = computed(() => Object.keys(store.accentOverrides).length 
       <button
         class="accent-reset"
         :disabled="separatorStrengthIsDefault"
-        :title="separatorStrengthIsDefault ? '已是默认值' : `恢复默认（${DEFAULT_SETTINGS.rowSeparatorStrength}%）`"
+        :title="separatorStrengthIsDefault ? t('settings.appearance.separatorResetAlready') : t('settings.appearance.separatorResetHint', { value: DEFAULT_SETTINGS.rowSeparatorStrength })"
         @click="resetSeparatorStrength"
       >
         ×
@@ -244,7 +244,7 @@ const hasAnyOverride = computed(() => Object.keys(store.accentOverrides).length 
       </label>
     </div>
 
-    <div class="section-title section-title--spaced">提交图</div>
+    <div class="section-title section-title--spaced">{{ t('settings.appearance.graphTitle') }}</div>
     <div class="theme-grid">
       <label
         v-for="opt in graphStyleOptions"

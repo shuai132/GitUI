@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import Modal from '@/components/common/Modal.vue'
 import AppearanceSection from './AppearanceSection.vue'
 import FontSection from './FontSection.vue'
@@ -12,24 +13,25 @@ defineProps<{ visible: boolean }>()
 const emit = defineEmits<{ close: [] }>()
 
 const store = useSettingsStore()
+const { t } = useI18n()
 
 type Tab = 'appearance' | 'font' | 'tools' | 'advanced' | 'about'
 const activeTab = ref<Tab>('appearance')
 
-const tabs: Array<{ id: Tab; label: string }> = [
-  { id: 'appearance', label: '外观' },
-  { id: 'font', label: '字体' },
-  { id: 'tools', label: '外部工具' },
-  { id: 'advanced', label: '高级' },
-  { id: 'about', label: '关于' },
-]
+const tabs = computed<Array<{ id: Tab; label: string }>>(() => [
+  { id: 'appearance', label: t('settings.tabs.appearance') },
+  { id: 'font', label: t('settings.tabs.font') },
+  { id: 'tools', label: t('settings.tabs.externalTools') },
+  { id: 'advanced', label: t('settings.tabs.advanced') },
+  { id: 'about', label: t('settings.tabs.about') },
+])
 
 const resetLabel = computed(() => {
   switch (activeTab.value) {
-    case 'appearance': return '恢复外观默认'
-    case 'font': return '恢复字体默认'
-    case 'tools': return '恢复外部工具默认'
-    default: return '恢复默认'
+    case 'appearance': return t('settings.resetAppearance')
+    case 'font': return t('settings.resetFont')
+    case 'tools': return t('settings.resetExternalTools')
+    default: return t('settings.resetDefault')
   }
 })
 
@@ -45,17 +47,17 @@ const resetDisabled = computed(() =>
 </script>
 
 <template>
-  <Modal :visible="visible" title="设置" width="720px" @close="emit('close')">
+  <Modal :visible="visible" :title="t('settings.title')" width="720px" @close="emit('close')">
     <div class="settings-layout">
       <nav class="settings-tabs">
         <button
-          v-for="t in tabs"
-          :key="t.id"
+          v-for="tab in tabs"
+          :key="tab.id"
           class="tab-btn"
-          :class="{ 'is-active': activeTab === t.id }"
-          @click="activeTab = t.id"
+          :class="{ 'is-active': activeTab === tab.id }"
+          @click="activeTab = tab.id"
         >
-          {{ t.label }}
+          {{ tab.label }}
         </button>
       </nav>
       <div class="settings-content">
@@ -77,7 +79,7 @@ const resetDisabled = computed(() =>
       >
         {{ resetLabel }}
       </button>
-      <button class="btn btn-primary" @click="emit('close')">完成</button>
+      <button class="btn btn-primary" @click="emit('close')">{{ t('settings.done') }}</button>
     </template>
   </Modal>
 </template>

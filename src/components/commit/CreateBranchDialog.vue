@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import { ref, watch, computed, nextTick } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type { CommitInfo } from '@/types/git'
 import Modal from '@/components/common/Modal.vue'
 import { useHistoryStore } from '@/stores/history'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   visible: boolean
@@ -81,28 +84,28 @@ function onCancel() {
 <template>
   <Modal
     :visible="visible"
-    :title="commit ? '在此提交上创建分支' : '基于 HEAD 创建分支'"
+    :title="commit ? t('branch.create.titleOnCommit') : t('branch.create.titleFromHead')"
     width="460px"
     @close="onCancel"
   >
     <div v-if="commit" class="commit-hint">
-      在提交
+      {{ t('branch.create.hintOnCommitPrefix') }}
       <span class="hint-sha">{{ commit.short_oid }}</span>
       <span class="hint-summary">{{ commit.summary }}</span>
-      上创建新分支
+      {{ t('branch.create.hintOnCommitSuffix') }}
     </div>
     <div v-else class="commit-hint">
-      基于当前 HEAD 创建新分支
+      {{ t('branch.create.hintFromHead') }}
     </div>
 
     <div class="form-row">
-      <label class="form-label">分支名称：</label>
+      <label class="form-label">{{ t('branch.create.nameLabel') }}</label>
       <input
         ref="inputEl"
         v-model="branchName"
         class="form-control"
         type="text"
-        placeholder="例如：feature/my-branch"
+        :placeholder="t('branch.create.namePlaceholder')"
         spellcheck="false"
         autocomplete="off"
         @keydown.enter="onSubmit"
@@ -112,19 +115,19 @@ function onCancel() {
     <div class="form-row form-row--offset">
       <label class="checkbox-label">
         <input v-model="switchAfterCreate" type="checkbox" />
-        <span>创建后立即切换到此分支</span>
+        <span>{{ t('branch.create.switchAfter') }}</span>
       </label>
     </div>
 
     <div v-if="nameConflict" class="form-error">
-      本地已存在同名分支 "{{ branchName.trim() }}"
+      {{ t('branch.create.errorNameConflict', { name: branchName.trim() }) }}
     </div>
     <div v-if="error" class="form-error">{{ error }}</div>
 
     <template #footer>
-      <button class="btn btn-secondary" @click="onCancel">取消</button>
+      <button class="btn btn-secondary" @click="onCancel">{{ t('common.cancel') }}</button>
       <button class="btn btn-primary" :disabled="!canSubmit" @click="onSubmit">
-        {{ submitting ? '创建中...' : '创建' }}
+        {{ submitting ? t('branch.create.submitting') : t('branch.create.submit') }}
       </button>
     </template>
   </Modal>

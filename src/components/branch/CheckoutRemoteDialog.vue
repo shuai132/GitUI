@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import { ref, watch, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type { BranchInfo } from '@/types/git'
 import Modal from '@/components/common/Modal.vue'
 import { useHistoryStore } from '@/stores/history'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   visible: boolean
@@ -92,9 +95,9 @@ function onCancel() {
 </script>
 
 <template>
-  <Modal :visible="visible" title="检出远程分支" width="480px" @close="onCancel">
+  <Modal :visible="visible" :title="t('branch.checkoutRemote.title')" width="480px" @close="onCancel">
     <div class="form-row">
-      <label class="form-label">检出远程分支：</label>
+      <label class="form-label">{{ t('branch.checkoutRemote.remoteLabel') }}</label>
       <select v-model="selectedRemote" class="form-control">
         <option
           v-for="b in remoteBranches"
@@ -108,7 +111,7 @@ function onCancel() {
     </div>
 
     <div class="form-row">
-      <label class="form-label">新的本地分支名称：</label>
+      <label class="form-label">{{ t('branch.checkoutRemote.localNameLabel') }}</label>
       <input
         v-model="localName"
         class="form-control"
@@ -121,7 +124,7 @@ function onCancel() {
     <div class="form-row form-row--offset">
       <label class="checkbox-label">
         <input v-model="track" type="checkbox" />
-        <span>本地分支应跟踪远程分支</span>
+        <span>{{ t('branch.checkoutRemote.track') }}</span>
       </label>
     </div>
 
@@ -129,14 +132,14 @@ function onCancel() {
       v-if="localName && existingLocalNames.has(localName.trim())"
       class="form-error"
     >
-      本地已存在同名分支 "{{ localName }}"
+      {{ t('branch.checkoutRemote.errorNameConflict', { name: localName }) }}
     </div>
     <div v-if="error" class="form-error">{{ error }}</div>
 
     <template #footer>
-      <button class="btn btn-secondary" @click="onCancel">取消</button>
+      <button class="btn btn-secondary" @click="onCancel">{{ t('common.cancel') }}</button>
       <button class="btn btn-primary" :disabled="!canSubmit" @click="onCheckout">
-        {{ submitting ? '检出中...' : '检出' }}
+        {{ submitting ? t('branch.checkoutRemote.submitting') : t('branch.checkoutRemote.submit') }}
       </button>
     </template>
   </Modal>

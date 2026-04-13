@@ -1,21 +1,21 @@
-// 中文（简体）翻译资源。按域组织（common / app / toolbar / sidebar / history /
-// workspace / diff / branch / settings / terminal / errors / misc），内容由后续
-// commit 分批填充。
+// 中文（简体）翻译资源。按域组织。新增文案时请同步在 en.ts 加对应 key。
 const messages = {
   common: {
     aboutTitle: '关于 GitUI',
     operationFailed: '操作失败：{detail}',
     cancel: '取消',
   },
+  app: {
+    sidebar: {
+      expandHint: '双击展开侧边栏',
+      resizeHint: '拖动调整宽度 / 双击隐藏',
+    },
+  },
   toolbar: {
     opFailed: '{label} 失败：{message}',
     noRemoteConfigured: '当前仓库没有配置 remote',
-    button: {
-      open: '打开',
-    },
-    search: {
-      placeholder: '搜索提交',
-    },
+    button: { open: '打开' },
+    search: { placeholder: '搜索提交' },
     title: {
       openRepo: '打开仓库',
       pull: 'Pull (fetch + merge)',
@@ -140,9 +140,7 @@ const messages = {
       noActiveRepo: '请从左侧打开一个 Git 仓库',
       noCommits: '暂无提交历史',
     },
-    search: {
-      foundOf: '找到 {found} 条（已加载 {loaded} 条）',
-    },
+    search: { foundOf: '找到 {found} 条（已加载 {loaded} 条）' },
     columns: {
       description: '描述',
       commit: '提交',
@@ -153,17 +151,9 @@ const messages = {
       resizeDate: '拖动调整「日期」距离「作者」的位置',
       resizeDateWidth: '拖动调整「日期」列宽度',
     },
-    tooltip: {
-      author: '作者',
-      date: '时间',
-      commit: '提交',
-    },
-    tag: {
-      annotated: '附注标签',
-    },
-    dock: {
-      dragToMove: '拖拽停靠',
-    },
+    tooltip: { author: '作者', date: '时间', commit: '提交' },
+    tag: { annotated: '附注标签' },
+    dock: { dragToMove: '拖拽停靠' },
     detailsPanel: {
       title: '详情',
       commit: '提交',
@@ -193,28 +183,98 @@ const messages = {
       createAnnotatedTag: '创建附注标签...',
     },
     dialog: {
-      confirmCheckout: {
-        body: '检出到提交 {shortOid} 将进入 detached HEAD 状态，确认？',
-      },
-      confirmCherryPick: {
-        body: 'Cherry pick 提交 "{summary}"？',
-      },
-      confirmRevert: {
-        body: 'Revert 提交 "{summary}"？将创建一条新提交撤销该改动',
-      },
+      confirmCheckout: { body: '检出到提交 {shortOid} 将进入 detached HEAD 状态，确认？' },
+      confirmCherryPick: { body: 'Cherry pick 提交 "{summary}"？' },
+      confirmRevert: { body: 'Revert 提交 "{summary}"？将创建一条新提交撤销该改动' },
       confirmReset: {
         body: '将 {branch} {mode} reset 到 {shortOid}？',
         hardBody: 'Hard reset 将丢弃所有未提交变更，确认把 {branch} 重置到 {shortOid}？',
-        mode: {
-          soft: 'soft',
-          mixed: 'mixed',
-          hard: 'hard',
-        },
+        mode: { soft: 'soft', mixed: 'mixed', hard: 'hard' },
       },
     },
   },
   branches: {
     noRepo: '请先打开一个 Git 仓库',
+  },
+  branch: {
+    create: {
+      titleOnCommit: '在此提交上创建分支',
+      titleFromHead: '基于 HEAD 创建分支',
+      hintOnCommitPrefix: '在提交',
+      hintOnCommitSuffix: '上创建新分支',
+      hintFromHead: '基于当前 HEAD 创建新分支',
+      nameLabel: '分支名称：',
+      namePlaceholder: '例如：feature/my-branch',
+      switchAfter: '创建后立即切换到此分支',
+      errorNameConflict: '本地已存在同名分支 "{name}"',
+      submit: '创建',
+      submitting: '创建中...',
+    },
+    checkoutRemote: {
+      title: '检出远程分支',
+      remoteLabel: '检出远程分支：',
+      localNameLabel: '新的本地分支名称：',
+      track: '本地分支应跟踪远程分支',
+      errorNameConflict: '本地已存在同名分支 "{name}"',
+      submit: '检出',
+      submitting: '检出中...',
+    },
+  },
+  branchList: {
+    newBranch: '+ 新建分支',
+    namePlaceholder: '分支名称',
+    create: '创建',
+    sectionLocal: '本地分支',
+    sectionRemote: '远程分支',
+    switching: '切换中...',
+    deleteTitle: '删除分支',
+    confirmDelete: '确认删除分支 "{name}"？',
+  },
+  tag: {
+    create: {
+      title: '创建标签',
+      titleAnnotated: '创建附注标签',
+      hintOnCommitPrefix: '在提交',
+      hintOnCommitSuffix: '上创建标签',
+      nameLabel: '标签名称：',
+      namePlaceholder: '例如：v1.0.0',
+      messageLabel: '标签消息：',
+      messagePlaceholder: '描述此次发布的内容...',
+      submit: '创建',
+      submitting: '创建中...',
+    },
+  },
+  submodule: {
+    edit: {
+      title: '编辑 Submodule',
+      nameLabel: '名称：',
+      pathLabel: '路径：',
+      urlLabel: 'URL：',
+      urlPlaceholder: 'https://example.com/repo.git',
+      hintPart1: '修改后会写入 ',
+      hintPart2: '，已 init 的 submodule 会同步到 ',
+      hintPart3: '。',
+      submit: '保存',
+      submitting: '保存中...',
+    },
+  },
+  reflog: {
+    title: 'Reflog — HEAD 历史',
+    loading: '加载中...',
+    empty: '暂无 reflog 记录',
+    columnHash: 'Hash',
+    columnTime: '时间',
+    columnOperation: '操作',
+    close: '关闭',
+  },
+  errorHistory: {
+    title: '最近错误',
+    empty: '暂无错误记录',
+    copyTitle: '复制',
+    clear: '清空',
+    close: '关闭',
+    confirmClear: '清空所有错误记录？',
+    rawErrorLabel: '原始错误：',
   },
   workspace: {
     wip: {
@@ -223,19 +283,9 @@ const messages = {
       discardAllTitle: '丢弃所有变更',
       stageAll: '全部暂存',
       unstageAll: '全部取消暂存',
-      section: {
-        unstaged: '未暂存',
-        staged: '已暂存',
-      },
-      empty: {
-        unstaged: '无未暂存变更',
-        staged: '无暂存文件',
-      },
-      menu: {
-        stage: '暂存文件',
-        unstage: '取消暂存',
-        discardFile: '丢弃此文件的变更',
-      },
+      section: { unstaged: '未暂存', staged: '已暂存' },
+      empty: { unstaged: '无未暂存变更', staged: '无暂存文件' },
+      menu: { stage: '暂存文件', unstage: '取消暂存', discardFile: '丢弃此文件的变更' },
     },
     commit: {
       messagePlaceholder: '提交信息（Cmd+Enter 提交）',
@@ -272,11 +322,7 @@ const messages = {
     },
   },
   diff: {
-    mode: {
-      sideBySide: '左右分栏',
-      inline: '单列连续',
-      byHunk: '按 hunk 分块',
-    },
+    mode: { sideBySide: '左右分栏', inline: '单列连续', byHunk: '按 hunk 分块' },
     toolbar: {
       prevChange: '上一变更',
       nextChange: '下一变更',
@@ -301,11 +347,133 @@ const messages = {
       loadFailed: '加载失败：{detail}',
     },
   },
+  terminal: {
+    close: '关闭终端',
+    dockRight: '停靠到右侧',
+    dockBottom: '停靠到底部',
+    spawnFailed: 'spawn 失败',
+    menu: {
+      copy: '复制',
+      paste: '粘贴',
+      selectAll: '全选',
+      clear: '清屏',
+      close: '关闭终端',
+    },
+  },
+  debug: {
+    close: '关闭',
+    clearCommands: '清空命令',
+    clearLogs: '清空日志',
+    emptyCommands: '暂无命令',
+    emptyLogs: '暂无日志',
+    noArgs: '(no args)',
+  },
   settings: {
+    title: '设置',
+    done: '完成',
+    resetDefault: '恢复默认',
+    resetAppearance: '恢复外观默认',
+    resetFont: '恢复字体默认',
+    resetExternalTools: '恢复外部工具默认',
+    tabs: {
+      appearance: '外观',
+      font: '字体',
+      externalTools: '外部工具',
+      advanced: '高级',
+      about: '关于',
+    },
+    appearance: {
+      themeTitle: '主题',
+      themeAuto: '跟随系统',
+      themeLight: '浅色',
+      themeDark: '深色',
+      accentTitle: '强调色覆盖',
+      accentHint: '（留空使用主题默认）',
+      accentEmpty: '当前未覆盖任何强调色，使用主题内置配色。',
+      accentClearTitle: '清除覆盖',
+      accentClearDisabledTitle: '未覆盖',
+      accentLabel: {
+        blue: '主强调（链接 / hash）',
+        green: '增加 / 成功',
+        red: '删除 / 危险',
+        yellow: '警告',
+        orange: '次要强调',
+      },
+      separatorTitle: '行分隔线',
+      separatorHint: '（提交历史每行之间）',
+      separatorOpacity: '透明度',
+      separatorOpacityNone: '无',
+      separatorResetAlready: '已是默认值',
+      separatorResetHint: '恢复默认（{value}%）',
+      separatorStyleSolid: '实线',
+      separatorStyleDashed: '虚线',
+      separatorStyleDotted: '点线',
+      graphTitle: '提交图',
+      graphRounded: '圆润',
+      graphStep: '直角',
+      graphAngular: '锐角',
+    },
+    font: {
+      uiTitle: 'UI 字体',
+      codeTitle: '代码字体（diff / hash）',
+      familyLabel: '字体：',
+      sizeLabel: '字号：',
+      resetDefault: '恢复默认',
+      resetUi: '恢复 UI 字体和字号默认',
+      resetCode: '恢复代码字体和字号默认',
+      hint: '提示：若系统未安装所选字体，会自动回退到下一个候选。UI 字号仅影响根级别文本，部分面板/工具栏使用固定字号。',
+      preset: {
+        default: '默认',
+        systemUi: '系统界面',
+        sfPro: 'SF Pro',
+        inter: 'Inter',
+        segoeUi: 'Segoe UI',
+        sfMonoMono: 'SF Mono（等宽）',
+        sfMono: 'SF Mono',
+        menlo: 'Menlo',
+        consolas: 'Consolas',
+        firaCode: 'Fira Code',
+        jetbrainsMono: 'JetBrains Mono',
+        cascadiaCode: 'Cascadia Code',
+      },
+    },
+    externalTools: {
+      sectionTitle: '终端',
+      terminalTitle: '外部终端',
+      customLabel: '应用名 / Bundle ID',
+      customPlaceholder: '例如：Alacritty、Hyper、com.mitchellh.ghostty',
+      customHint: '当外部终端选择「自定义」时，此处填写 app 名或 macOS bundle ID。',
+      hintMac: '通过 {cmd} 启动所选应用，须先安装对应程序。',
+      hintOther: '当前平台不使用该设置，将自动探测可用终端。',
+      preset: {
+        terminal: 'Terminal（系统默认）',
+        iterm2: 'iTerm2',
+        warp: 'Warp',
+        ghostty: 'Ghostty',
+        custom: '自定义…',
+      },
+    },
     advanced: {
+      viewTitle: '视图',
+      showUnreachable: '显示悬垂引用',
+      showUnreachableHint: '在历史图中绘制 HEAD reflog 中不可达的提交',
+      showStashes: '显示贮藏',
+      showStashesHint: '在历史图中绘制 stash 节点',
+      debugLog: '调试日志',
+      debugLogHint: '在主界面底部展示调试日志面板',
+      upcomingTitle: '即将推出',
+      shortcuts: '快捷键',
+      shortcutsHint: '自定义键盘快捷键即将推出',
+      gitPrefs: 'Git 操作偏好',
+      gitPrefsHint: '默认 pull 策略、自动 fetch 间隔即将推出',
       uiLanguageTitle: '界面语言',
       uiLanguageAuto: '跟随系统',
       uiLanguageHint: '切换后立即生效，无需重启',
+    },
+    about: {
+      authorLabel: '作者：',
+      authorValue: '刘帅',
+      versionLabel: '版本：',
     },
   },
   errors: {
@@ -316,19 +484,13 @@ const messages = {
       io: '文件系统错误：{detail}',
       unknown: '{detail}',
     },
-    auth: {
-      failed: '认证失败：检查 SSH key 是否在 agent 中、或 HTTPS 凭据是否有效',
-    },
-    remote: {
-      notFound: '远端仓库不存在或未配置',
-    },
+    auth: { failed: '认证失败：检查 SSH key 是否在 agent 中、或 HTTPS 凭据是否有效' },
+    remote: { notFound: '远端仓库不存在或未配置' },
     ref: {
       alreadyExists: '目标已存在（分支 / 标签 / 引用名重复）',
       notFound: '找不到指定的分支或引用',
     },
-    push: {
-      nonFastForward: '不是 fast-forward：远端有新的 commit，需要先 pull / merge',
-    },
+    push: { nonFastForward: '不是 fast-forward：远端有新的 commit，需要先 pull / merge' },
     pull: {
       mergeRequired: 'Pull 需要合并（非 fast-forward），当前版本尚未支持——请在终端手动 merge',
       diverged: 'Pull 失败：远端分支已分叉，无法 fast-forward。请使用 merge 或 rebase 模式',
@@ -337,24 +499,12 @@ const messages = {
       conflict: 'Rebase 出现冲突，请在终端手动解决',
       dirtyWorktree: '工作区有未提交的变更，请先 commit 或 stash 后再 rebase',
     },
-    merge: {
-      conflict: '发生冲突，请在工作区手动解决后再提交',
-    },
-    worktree: {
-      dirty: '工作区有未提交的变更，请先 commit / stash / discard',
-    },
-    cherrypick: {
-      conflict: '{type} 出现冲突，请在工作区手动解决',
-    },
-    config: {
-      missingUser: '当前 git config 缺少 user.name / user.email，请先在终端设置',
-    },
-    repo: {
-      invalid: '不是 Git 仓库，或仓库已失效',
-    },
-    network: {
-      failed: '网络错误：无法连接到远端',
-    },
+    merge: { conflict: '发生冲突，请在工作区手动解决后再提交' },
+    worktree: { dirty: '工作区有未提交的变更，请先 commit / stash / discard' },
+    cherrypick: { conflict: '{type} 出现冲突，请在工作区手动解决' },
+    config: { missingUser: '当前 git config 缺少 user.name / user.email，请先在终端设置' },
+    repo: { invalid: '不是 Git 仓库，或仓库已失效' },
+    network: { failed: '网络错误：无法连接到远端' },
   },
 } as const
 

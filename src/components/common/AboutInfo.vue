@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { getVersion } from '@tauri-apps/api/app'
 
+const { t } = useI18n()
 const appVersion = ref('')
 
 onMounted(async () => {
@@ -32,11 +34,11 @@ async function openUrl(url: string) {
     <div class="about-name">GitUI</div>
     <div class="about-fields">
       <div class="about-row">
-        <span class="about-label">作者：</span>
-        <span class="about-value">刘帅</span>
+        <span class="about-label">{{ t('settings.about.authorLabel') }}</span>
+        <span class="about-value">{{ t('settings.about.authorValue') }}</span>
       </div>
       <div class="about-row">
-        <span class="about-label">版本：</span>
+        <span class="about-label">{{ t('settings.about.versionLabel') }}</span>
         <span class="about-value">{{ appVersion }}</span>
       </div>
       <div class="about-row about-row-project">

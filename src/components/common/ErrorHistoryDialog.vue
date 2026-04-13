@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import Modal from '@/components/common/Modal.vue'
 import { useErrorsStore } from '@/stores/errors'
 import type { ErrorEntry } from '@/stores/errors'
@@ -7,6 +8,7 @@ import type { ErrorEntry } from '@/stores/errors'
 defineProps<{ visible: boolean }>()
 const emit = defineEmits<{ close: [] }>()
 
+const { t } = useI18n()
 const errorsStore = useErrorsStore()
 
 // 展开查看原始错误的条目 id 集合
@@ -31,21 +33,21 @@ function formatTime(ts: number): string {
 }
 
 function onClear() {
-  if (!confirm('清空所有错误记录？')) return
+  if (!confirm(t('errorHistory.confirmClear'))) return
   errorsStore.clear()
 }
 
 function onCopy(entry: ErrorEntry) {
-  const text = `[${entry.op}] ${entry.friendly}\n\n原始错误：\n${entry.raw}`
+  const text = `[${entry.op}] ${entry.friendly}\n\n${t('errorHistory.rawErrorLabel')}\n${entry.raw}`
   navigator.clipboard.writeText(text)
 }
 </script>
 
 <template>
-  <Modal :visible="visible" title="最近错误" width="640px" @close="emit('close')">
+  <Modal :visible="visible" :title="t('errorHistory.title')" width="640px" @close="emit('close')">
     <div class="err-body">
       <div v-if="errorsStore.entries.length === 0" class="err-hint">
-        暂无错误记录
+        {{ t('errorHistory.empty') }}
       </div>
       <div v-else class="err-list">
         <div
@@ -59,7 +61,7 @@ function onCopy(entry: ErrorEntry) {
             <span class="err-friendly">{{ entry.friendly }}</span>
             <button
               class="err-copy"
-              title="复制"
+              :title="t('errorHistory.copyTitle')"
               @click.stop="onCopy(entry)"
             >
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -78,9 +80,9 @@ function onCopy(entry: ErrorEntry) {
         :disabled="errorsStore.entries.length === 0"
         @click="onClear"
       >
-        清空
+        {{ t('errorHistory.clear') }}
       </button>
-      <button class="btn-close" @click="emit('close')">关闭</button>
+      <button class="btn-close" @click="emit('close')">{{ t('errorHistory.close') }}</button>
     </template>
   </Modal>
 </template>
