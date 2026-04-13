@@ -503,7 +503,7 @@ const commitMenuItems = computed<ContextMenuItem[]>(() => {
       children: [
         { label: 'Soft（保留工作区与暂存区）', action: 'reset-soft' },
         { label: 'Mixed（保留工作区，清空暂存区）', action: 'reset-mixed' },
-        { label: 'Hard（丢弃所有变更）', action: 'reset-hard', danger: true },
+        { label: 'Hard（丢弃所有变更）', action: 'reset-hard' },
       ],
     },
     { label: 'Revert 此提交', action: 'revert' },

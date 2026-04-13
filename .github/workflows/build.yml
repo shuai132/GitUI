@@ -89,6 +89,6 @@ jobs:
         if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
         uses: actions/upload-artifact@v4
         with:
-          name: GitUI-${{ matrix.label }}-${{ steps.version.outputs.version }}
+          name: ${{ matrix.label }}-${{ steps.version.outputs.version }}
           path: src-tauri/target/${{ matrix.target }}/release/bundle/**/*
           retention-days: 7
