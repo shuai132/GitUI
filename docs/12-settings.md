@@ -8,7 +8,7 @@
 - `components/settings/SettingsModal.vue`：模态壳，左侧 tab 导航 + 右侧内容
   - `AppearanceSection.vue`：主题三档 + accent 覆盖
   - `FontSection.vue`：UI / 代码 两组 `font-family` + `font-size`
-  - `AdvancedSection.vue`：语言 / 快捷键 / Git 偏好 —— 占位灰显，未实现
+  - `AdvancedSection.vue`：「视图」分组三个真实开关（显示悬垂引用 / 显示贮藏 / 调试日志），下方语言 / 快捷键 / Git 偏好仍是占位
 - `components/layout/AppToolbar.vue`：右上角齿轮按钮触发 Modal
 - `assets/main.css`：主题变量与 `[data-theme="light"]` 覆盖，四个字体相关变量
 
@@ -56,5 +56,5 @@ Accent 覆盖：store 对每个 accent 键调用 `setProperty('--accent-<key>', 
 
 - 不做多配色家族下拉（Mocha / Frappé 等）。当前只深浅两档基调；如后续要扩展，加一层 `colorScheme` 字段即可，不影响 `themeMode` 语义
 - UI 字号**不**批量替换子组件硬编码 px。如要做整屏 rem 化，属于另一次重构
-- 高级 tab 的三项（语言 / 快捷键 / Git 偏好）仅占位，不提供真实开关
+- 高级 tab 的语言 / 快捷键 / Git 偏好三项仅占位，不提供真实开关（视图开关已落地，与 `AppToolbar` Actions 菜单共享 `uiStore` 状态）
 - 不支持设置项的导入导出、跨设备同步
