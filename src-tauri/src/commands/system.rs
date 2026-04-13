@@ -13,12 +13,13 @@ use crate::{
 pub struct StartupRepo(pub Mutex<Option<String>>);
 
 /// 在仓库目录打开系统默认终端。
-/// - macOS: `open -a Terminal <path>`
-/// - Linux: 依次尝试 x-terminal-emulator / gnome-terminal / konsole / xterm
-/// - Windows: `cmd /C start cmd /K cd /D <path>`
+/// - macOS: `open -a <terminal_app> <path>`，`terminal_app` 由前端从设置传入（默认 `Terminal`）
+/// - Linux: 依次尝试 x-terminal-emulator / gnome-terminal / konsole / xterm（忽略 `terminal_app`）
+/// - Windows: `cmd /C start cmd /K cd /D <path>`（忽略 `terminal_app`）
 #[tauri::command]
 pub async fn open_terminal(
     repo_id: String,
+    terminal_app: Option<String>,
     repo_manager: State<'_, RepoManager>,
 ) -> Result<(), GitError> {
     let meta = repo_manager
@@ -28,12 +29,21 @@ pub async fn open_terminal(
 
     #[cfg(target_os = "macos")]
     {
+        let app = terminal_app
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .unwrap_or("Terminal");
         Command::new("open")
-            .args(["-a", "Terminal", &path])
+            .args(["-a", app, &path])
             .spawn()
             .map_err(|e| GitError::OperationFailed(format!("打开终端失败: {}", e)))?;
         return Ok(());
     }
+
+    // 非 macOS 平台忽略 terminal_app，走原自动探测逻辑
+    #[cfg(not(target_os = "macos"))]
+    let _ = terminal_app;
 
     #[cfg(target_os = "linux")]
     {

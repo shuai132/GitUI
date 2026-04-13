@@ -201,8 +201,12 @@ export function useGitCommands() {
     call<StashEntry[]>('stash_list', { repoId })
 
   // ---- System ----
-  const openTerminal = (repoId: string) =>
-    call<void>('open_terminal', { repoId })
+  /**
+   * 打开外部终端。`terminalApp` 仅在 macOS 下生效（作为 `open -a` 的 app 名），
+   * 其它平台后端会忽略该参数，走自动探测逻辑。
+   */
+  const openTerminal = (repoId: string, terminalApp?: string | null) =>
+    call<void>('open_terminal', { repoId, terminalApp: terminalApp ?? null })
 
   const openInNewWindow = (repoId: string) =>
     call<void>('open_in_new_window', { repoId })

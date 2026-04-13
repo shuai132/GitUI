@@ -6,6 +6,7 @@ import { useHistoryStore } from '@/stores/history'
 import { useSubmodulesStore } from '@/stores/submodules'
 import { useStashStore } from '@/stores/stash'
 import { useUiStore } from '@/stores/ui'
+import { resolveExternalTerminalApp, useSettingsStore } from '@/stores/settings'
 import { buildBranchTree } from '@/utils/branchTree'
 import type { BranchInfo, SubmoduleInfo, StashEntry, TagInfo } from '@/types/git'
 import BranchTreeNode from './BranchTreeNode.vue'
@@ -25,6 +26,7 @@ const historyStore = useHistoryStore()
 const submodulesStore = useSubmodulesStore()
 const stashStore = useStashStore()
 const uiStore = useUiStore()
+const settingsStore = useSettingsStore()
 const sectionState = useSidebarSectionState()
 
 // Local branches
@@ -349,7 +351,7 @@ async function onRepoMenuAction(action: string) {
         await revealItemInDir(r.path)
         break
       case 'terminal':
-        await git.openTerminal(r.id)
+        await git.openTerminal(r.id, resolveExternalTerminalApp(settingsStore))
         break
     }
   } catch (err) {

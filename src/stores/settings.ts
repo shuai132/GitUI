@@ -16,6 +16,28 @@ export type ThemeMode = 'auto' | 'light' | 'dark'
 export type AccentKey = 'blue' | 'green' | 'red' | 'yellow' | 'orange'
 export type AccentOverrides = Partial<Record<AccentKey, string>>
 
+/**
+ * 外部终端选项（仅 macOS 使用；其它平台保持自动探测逻辑）
+ * - 预设项对应 macOS 下 `open -a <app>` 的 app 名
+ * - `custom` 时使用 `externalTerminalCustom` 字段里的值
+ */
+export type ExternalTerminal = 'terminal' | 'iterm2' | 'warp' | 'ghostty' | 'custom'
+
+export interface ExternalTerminalPreset {
+  value: ExternalTerminal
+  label: string
+  /** macOS 下传给 `open -a` 的 app 名；custom 项留空 */
+  appName: string
+}
+
+export const EXTERNAL_TERMINAL_PRESETS: ExternalTerminalPreset[] = [
+  { value: 'terminal', label: 'Terminal（系统默认）', appName: 'Terminal' },
+  { value: 'iterm2', label: 'iTerm2', appName: 'iTerm' },
+  { value: 'warp', label: 'Warp', appName: 'Warp' },
+  { value: 'ghostty', label: 'Ghostty', appName: 'Ghostty' },
+  { value: 'custom', label: '自定义…', appName: '' },
+]
+
 export interface SettingsData {
   themeMode: ThemeMode
   uiFontFamily: string      // '' = 默认栈
@@ -23,6 +45,8 @@ export interface SettingsData {
   codeFontFamily: string    // '' = 默认栈
   codeFontSize: number      // px
   accentOverrides: AccentOverrides
+  externalTerminal: ExternalTerminal
+  externalTerminalCustom: string  // 当 externalTerminal === 'custom' 时使用的 app 名 / bundle id
 }
 
 export const DEFAULT_SETTINGS: SettingsData = {
@@ -32,6 +56,21 @@ export const DEFAULT_SETTINGS: SettingsData = {
   codeFontFamily: '',
   codeFontSize: 12,
   accentOverrides: {},
+  externalTerminal: 'terminal',
+  externalTerminalCustom: '',
+}
+
+/**
+ * 根据当前设置解析出要传给后端 `open_terminal` 的 app 名。
+ * 返回 null 表示保持后端默认（自动探测）。
+ */
+export function resolveExternalTerminalApp(data: Pick<SettingsData, 'externalTerminal' | 'externalTerminalCustom'>): string | null {
+  if (data.externalTerminal === 'custom') {
+    const name = data.externalTerminalCustom.trim()
+    return name || null
+  }
+  const preset = EXTERNAL_TERMINAL_PRESETS.find(p => p.value === data.externalTerminal)
+  return preset?.appName || null
 }
 
 // ── 预设字体（下拉候选） ──────────────────────────────────────────────
@@ -150,6 +189,8 @@ export const useSettingsStore = defineStore('settings', () => {
   const codeFontFamily = ref<string>(__initialData.codeFontFamily)
   const codeFontSize = ref<number>(clampSize(__initialData.codeFontSize))
   const accentOverrides = ref<AccentOverrides>({ ...__initialData.accentOverrides })
+  const externalTerminal = ref<ExternalTerminal>(__initialData.externalTerminal)
+  const externalTerminalCustom = ref<string>(__initialData.externalTerminalCustom)
 
   function snapshot(): SettingsData {
     return {
@@ -159,6 +200,8 @@ export const useSettingsStore = defineStore('settings', () => {
       codeFontFamily: codeFontFamily.value,
       codeFontSize: codeFontSize.value,
       accentOverrides: { ...accentOverrides.value },
+      externalTerminal: externalTerminal.value,
+      externalTerminalCustom: externalTerminalCustom.value,
     }
   }
 
@@ -174,7 +217,16 @@ export const useSettingsStore = defineStore('settings', () => {
 
   // ── deep watch：实时 apply + debounce 持久化 ─────────────────────────
   watch(
-    [themeMode, uiFontFamily, uiFontSize, codeFontFamily, codeFontSize, accentOverrides],
+    [
+      themeMode,
+      uiFontFamily,
+      uiFontSize,
+      codeFontFamily,
+      codeFontSize,
+      accentOverrides,
+      externalTerminal,
+      externalTerminalCustom,
+    ],
     () => {
       applySettingsToDom(snapshot())
       schedulePersist()
@@ -216,9 +268,15 @@ export const useSettingsStore = defineStore('settings', () => {
     resetCodeFont()
   }
 
+  function resetExternalTools() {
+    externalTerminal.value = DEFAULT_SETTINGS.externalTerminal
+    externalTerminalCustom.value = DEFAULT_SETTINGS.externalTerminalCustom
+  }
+
   function resetAll() {
     resetAppearance()
     resetFont()
+    resetExternalTools()
   }
 
   // ── 判断某组是否处于非默认状态（供 UI 禁用恢复按钮） ───────────
@@ -238,6 +296,8 @@ export const useSettingsStore = defineStore('settings', () => {
     codeFontFamily,
     codeFontSize,
     accentOverrides,
+    externalTerminal,
+    externalTerminalCustom,
     uiFontIsDefault,
     codeFontIsDefault,
     setAccentOverride,
@@ -245,6 +305,7 @@ export const useSettingsStore = defineStore('settings', () => {
     resetUiFont,
     resetCodeFont,
     resetFont,
+    resetExternalTools,
     resetAll,
   }
 })

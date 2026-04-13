@@ -7,6 +7,7 @@ import { useHistoryStore } from '@/stores/history'
 import { useStashStore } from '@/stores/stash'
 import { useUiStore } from '@/stores/ui'
 import { useErrorsStore } from '@/stores/errors'
+import { resolveExternalTerminalApp, useSettingsStore } from '@/stores/settings'
 import { useGitCommands } from '@/composables/useGitCommands'
 import ReflogDialog from '@/components/common/ReflogDialog.vue'
 import ErrorHistoryDialog from '@/components/common/ErrorHistoryDialog.vue'
@@ -20,6 +21,7 @@ const historyStore = useHistoryStore()
 const stashStore = useStashStore()
 const uiStore = useUiStore()
 const errorsStore = useErrorsStore()
+const settingsStore = useSettingsStore()
 const git = useGitCommands()
 const appWindow = getCurrentWindow()
 
@@ -364,7 +366,7 @@ async function onTerminal() {
     return
   }
   try {
-    await git.openTerminal(id)
+    await git.openTerminal(id, resolveExternalTerminalApp(settingsStore))
   } catch {
     /* toast 由 errorsStore watch 统一处理 */
   }

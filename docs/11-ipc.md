@@ -106,7 +106,7 @@ GitUI 的前后端通过 Tauri v2 的 IPC 通道通信：
 
 | 命令 | 参数 | 返回 |
 |------|------|------|
-| `open_terminal` | `repoId` | `void` |
+| `open_terminal` | `repoId, terminalApp?: string \| null` | `void`（`terminalApp` 仅 macOS 生效，对应 `open -a <app>`，空值回退到 `Terminal`） |
 | `open_in_new_window` | `repoId` | `void` （以新进程打开仓库，macOS 走 `open -n -a`） |
 | `reveal_in_file_manager` | `repoId` | `void` |
 | `consume_startup_repo` | — | `string \| null`（取走 `--open-repo` 注入的路径，只生效一次） |

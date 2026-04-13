@@ -3,6 +3,7 @@ import { ref, computed } from 'vue'
 import Modal from '@/components/common/Modal.vue'
 import AppearanceSection from './AppearanceSection.vue'
 import FontSection from './FontSection.vue'
+import ExternalToolsSection from './ExternalToolsSection.vue'
 import AdvancedSection from './AdvancedSection.vue'
 import AboutInfo from '@/components/common/AboutInfo.vue'
 import { useSettingsStore } from '@/stores/settings'
@@ -12,12 +13,13 @@ const emit = defineEmits<{ close: [] }>()
 
 const store = useSettingsStore()
 
-type Tab = 'appearance' | 'font' | 'advanced' | 'about'
+type Tab = 'appearance' | 'font' | 'tools' | 'advanced' | 'about'
 const activeTab = ref<Tab>('appearance')
 
 const tabs: Array<{ id: Tab; label: string }> = [
   { id: 'appearance', label: '外观' },
   { id: 'font', label: '字体' },
+  { id: 'tools', label: '外部工具' },
   { id: 'advanced', label: '高级' },
   { id: 'about', label: '关于' },
 ]
@@ -26,6 +28,7 @@ const resetLabel = computed(() => {
   switch (activeTab.value) {
     case 'appearance': return '恢复外观默认'
     case 'font': return '恢复字体默认'
+    case 'tools': return '恢复外部工具默认'
     default: return '恢复默认'
   }
 })
@@ -33,6 +36,7 @@ const resetLabel = computed(() => {
 function onReset() {
   if (activeTab.value === 'appearance') store.resetAppearance()
   else if (activeTab.value === 'font') store.resetFont()
+  else if (activeTab.value === 'tools') store.resetExternalTools()
 }
 
 const resetDisabled = computed(() =>
@@ -57,6 +61,7 @@ const resetDisabled = computed(() =>
       <div class="settings-content">
         <AppearanceSection v-if="activeTab === 'appearance'" />
         <FontSection v-else-if="activeTab === 'font'" />
+        <ExternalToolsSection v-else-if="activeTab === 'tools'" />
         <AdvancedSection v-else-if="activeTab === 'advanced'" />
         <div v-else class="about-wrap">
           <AboutInfo />
