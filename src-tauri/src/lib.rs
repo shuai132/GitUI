@@ -9,6 +9,7 @@ use commands::{
     branch::*, commit::*, diff::*, log::*, remote::*, repo::*, stash::*, status::*, submodule::*,
     system::*, tag::*,
 };
+use commands::system::StartupRepo;
 use repo_manager::RepoManager;
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::{Emitter, Manager, WindowEvent};
@@ -16,12 +17,22 @@ use watcher::WatcherService;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // 解析 `--open-repo <path>`：由新窗口子进程启动时注入，前端在 loadPersisted
+    // 之后会调 consume_startup_repo 取走该值并激活对应仓库。
+    let startup_repo = {
+        let args: Vec<String> = std::env::args().collect();
+        args.windows(2)
+            .find(|w| w[0] == "--open-repo")
+            .map(|w| w[1].clone())
+    };
+
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_store::Builder::new().build())
         .manage(RepoManager::new())
         .manage(WatcherService::new())
+        .manage(StartupRepo(std::sync::Mutex::new(startup_repo)))
         .invoke_handler(tauri::generate_handler![
             // Repo
             open_repo,
@@ -74,6 +85,9 @@ pub fn run() {
             stash_list,
             // System
             open_terminal,
+            open_in_new_window,
+            reveal_in_file_manager,
+            consume_startup_repo,
             discard_all_changes,
             discard_file,
             get_reflog,

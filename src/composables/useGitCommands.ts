@@ -204,6 +204,15 @@ export function useGitCommands() {
   const openTerminal = (repoId: string) =>
     call<void>('open_terminal', { repoId })
 
+  const openInNewWindow = (repoId: string) =>
+    call<void>('open_in_new_window', { repoId })
+
+  const revealInFileManager = (repoId: string) =>
+    call<void>('reveal_in_file_manager', { repoId })
+
+  const consumeStartupRepo = () =>
+    call<string | null>('consume_startup_repo')
+
   const discardAllChanges = (repoId: string) =>
     call<void>('discard_all_changes', { repoId })
 
@@ -257,6 +266,9 @@ export function useGitCommands() {
     stashPop,
     stashList,
     openTerminal,
+    openInNewWindow,
+    revealInFileManager,
+    consumeStartupRepo,
     discardAllChanges,
     discardFile,
     getReflog,

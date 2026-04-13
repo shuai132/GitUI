@@ -82,7 +82,7 @@ pub struct RepoManager {
 
 ## 切换仓库
 
-侧边栏"其他仓库"区域点击任一项 → `reposStore.setActive(repoId)`：
+侧边栏"所有仓库"区域点击任一项 → `reposStore.setActive(repoId)`：
 
 - 只改 `activeRepoId`，不调用任何后端命令
 - `App.vue` 的 `watch(() => repoStore.activeRepoId)` 自动触发刷新链
@@ -91,14 +91,32 @@ pub struct RepoManager {
 
 ## 侧边栏拖动排序
 
-`AppSidebar.vue` 的"其他仓库"列表支持拖动重排。**不用 HTML5 DnD**：Tauri WKWebView 下 drag image / dropEffect / hit testing 都不稳定，改用 pointer events 自己实现：
+`AppSidebar.vue` 的"所有仓库"列表支持拖动重排。**不用 HTML5 DnD**：Tauri WKWebView 下 drag image / dropEffect / hit testing 都不稳定，改用 pointer events 自己实现：
 
 - `pointerdown` 记录 `fromIndex`，移动超过 `DRAG_THRESHOLD = 4px` 才算拖动
 - 拖动时按当前 Y 计算 `dragOverIndex` 和 `dragInsertBefore`，显示蓝色插入指示线
 - `pointerup` 把 `(from, target)` 传给 `reposStore.reorderRepos`
 - 拖动结束后 300ms 抑制 click，避免触发 `setActive`
 
-"其他仓库"区域的高度本身也可拖动调整，持久化通过 `uiStore`（见下）。
+"所有仓库"区域的高度本身也可拖动调整，持久化通过 `uiStore`（见下）。
+
+## 仓库右键菜单
+
+"所有仓库"列表里每一项支持右键，命令层见 `commands/system.rs`：
+
+| 菜单项 | 命令 | 做了什么 |
+|---|---|---|
+| 在新窗口打开 | `open_in_new_window` | 启动一个**新的 GitUI 进程**（macOS: `open -n -a <bundle> --args --open-repo <path>`），新进程 `RepoManager`/watcher 独立 |
+| 在 Finder 中显示 | — | 前端直接调 `@tauri-apps/plugin-opener` 的 `revealItemInDir(path)` |
+| 在终端中打开 | `open_terminal` | 已存在命令，macOS 下 `open -a Terminal <path>` |
+
+新进程 + `--open-repo` 的握手流程：
+
+1. 父进程命令 `open_in_new_window` 用 `std::process::Command::spawn` 拉起同一可执行文件，传入 `--open-repo <path>`
+2. 子进程 `lib.rs::run` 解析 `argv`，命中 `--open-repo` 时把 path 放进 `StartupRepo(Mutex<Option<String>>)` managed state
+3. 子进程前端 `App.vue::onMounted` 先走 `loadPersisted()`，再调 `consume_startup_repo` 取走该 path，命中则 `repoStore.openRepo(path)` 激活
+
+取走后状态清空，保证只生效一次。已知限制：当前没做 single-instance 抑制，第二个进程会再注册一个 tray 图标。
 
 ## UI 偏好持久化
 

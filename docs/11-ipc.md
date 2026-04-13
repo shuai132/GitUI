@@ -107,6 +107,9 @@ GitUI 的前后端通过 Tauri v2 的 IPC 通道通信：
 | 命令 | 参数 | 返回 |
 |------|------|------|
 | `open_terminal` | `repoId` | `void` |
+| `open_in_new_window` | `repoId` | `void` （以新进程打开仓库，macOS 走 `open -n -a`） |
+| `reveal_in_file_manager` | `repoId` | `void` |
+| `consume_startup_repo` | — | `string \| null`（取走 `--open-repo` 注入的路径，只生效一次） |
 | `discard_all_changes` | `repoId` | `void` |
 | `discard_file` | `repoId, filePath` | `void` |
 | `get_reflog` | `repoId` | `ReflogEntry[]` （最近 500 条） |

@@ -13,6 +13,11 @@ import { useSidebarSectionState } from '@/composables/useSidebarSectionState'
 import ContextMenu, { type ContextMenuItem } from '@/components/common/ContextMenu.vue'
 import CheckoutRemoteDialog from '@/components/branch/CheckoutRemoteDialog.vue'
 import EditSubmoduleDialog from '@/components/submodule/EditSubmoduleDialog.vue'
+import { useGitCommands } from '@/composables/useGitCommands'
+import { revealItemInDir } from '@tauri-apps/plugin-opener'
+import type { RepoMeta } from '@/types/git'
+
+const git = useGitCommands()
 
 const router = useRouter()
 const repoStore = useRepoStore()
@@ -52,7 +57,7 @@ async function removeRepo(repoId: string) {
   }
 }
 
-// ── 其他仓库列表：可拖动高度 ─────────────────────────────────────────
+// ── 所有仓库列表：可拖动高度 ─────────────────────────────────────────
 // 持久化由 uiStore 管理，组件只负责 clamp + 拖动期间的响应式更新
 const REPOS_MIN_HEIGHT = 40
 
@@ -86,7 +91,7 @@ function startReposResize(e: PointerEvent) {
   document.body.style.userSelect = 'none'
 }
 
-// ── 其他仓库列表：基于 pointer events 的拖动排序 ────────────────────
+// ── 所有仓库列表：基于 pointer events 的拖动排序 ────────────────────
 // 不用 HTML5 DnD 是因为 Tauri WKWebView 下 drag image / dropEffect / hit
 // testing 都不稳；自实现更可控，也能完全去掉浏览器的 drag cursor。
 interface RepoDragState {
@@ -298,6 +303,53 @@ async function onContextAction(action: string) {
         if (confirm(`确认删除分支 "${b.name}"？此操作无法撤销。`)) {
           await historyStore.deleteBranch(b.name)
         }
+        break
+    }
+  } catch (err) {
+    console.error(err)
+  }
+}
+
+// ── 所有仓库右键菜单 ────────────────────────────────────────────────
+const repoMenu = reactive({
+  visible: false,
+  x: 0,
+  y: 0,
+  target: null as RepoMeta | null,
+})
+
+const repoMenuItems: ContextMenuItem[] = [
+  { label: '在新窗口打开', action: 'new-window' },
+  { label: '在 Finder 中显示', action: 'reveal' },
+  { label: '在终端中打开', action: 'terminal' },
+]
+
+function openRepoMenu(e: MouseEvent, repo: RepoMeta) {
+  e.preventDefault()
+  e.stopPropagation()
+  repoMenu.target = repo
+  repoMenu.x = e.clientX
+  repoMenu.y = e.clientY
+  repoMenu.visible = true
+}
+
+function closeRepoMenu() {
+  repoMenu.visible = false
+}
+
+async function onRepoMenuAction(action: string) {
+  const r = repoMenu.target
+  if (!r) return
+  try {
+    switch (action) {
+      case 'new-window':
+        await git.openInNewWindow(r.id)
+        break
+      case 'reveal':
+        await revealItemInDir(r.path)
+        break
+      case 'terminal':
+        await git.openTerminal(r.id)
         break
     }
   } catch (err) {
@@ -740,7 +792,7 @@ async function onStashMenuAction(action: string) {
       :style="{ height: uiStore.reposHeight + 'px' }"
     >
       <div class="repos-resize" @pointerdown="startReposResize" />
-      <div class="section-title">其他仓库</div>
+      <div class="section-title">所有仓库</div>
       <div class="repos-list" ref="reposListRef">
         <div
           v-if="dropIndicatorTop !== null"
@@ -758,6 +810,7 @@ async function onStashMenuAction(action: string) {
           :title="repo.path"
           @pointerdown="onRepoPointerDown($event, idx)"
           @click="onRepoClick($event, repo.id)"
+          @contextmenu="openRepoMenu($event, repo)"
         >
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
@@ -823,6 +876,16 @@ async function onStashMenuAction(action: string) {
       :items="tagMenuItems"
       @close="closeTagMenu"
       @select="onTagMenuAction"
+    />
+
+    <!-- Repo item context menu -->
+    <ContextMenu
+      :visible="repoMenu.visible"
+      :x="repoMenu.x"
+      :y="repoMenu.y"
+      :items="repoMenuItems"
+      @close="closeRepoMenu"
+      @select="onRepoMenuAction"
     />
 
     <!-- Edit submodule dialog -->

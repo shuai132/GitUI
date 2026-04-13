@@ -14,6 +14,7 @@ import { useDiffStore } from '@/stores/diff'
 import { useUiStore } from '@/stores/ui'
 import { useDebugStore } from '@/stores/debug'
 import { useGitEvents } from '@/composables/useGitEvents'
+import { useGitCommands } from '@/composables/useGitCommands'
 import { listen } from '@tauri-apps/api/event'
 
 const router = useRouter()
@@ -26,10 +27,20 @@ const diffStore = useDiffStore()
 const uiStore = useUiStore()
 const debugStore = useDebugStore()
 const { onStatusChanged } = useGitEvents()
+const git = useGitCommands()
 
-// 启动时从持久化存储恢复仓库列表
-onMounted(() => {
-  repoStore.loadPersisted()
+// 启动时从持久化存储恢复仓库列表；之后取一次由父进程通过 `--open-repo`
+// 注入的启动仓库路径（在新窗口中打开某仓库的场景），存在则 openRepo 激活它。
+onMounted(async () => {
+  await repoStore.loadPersisted()
+  try {
+    const path = await git.consumeStartupRepo()
+    if (path) {
+      await repoStore.openRepo(path)
+    }
+  } catch (e) {
+    console.error(e)
+  }
 })
 
 // 监听 Rust 后端日志事件
