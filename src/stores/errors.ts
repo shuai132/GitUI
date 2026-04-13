@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { mapGitError } from '@/lib/errorMap'
+import { i18n } from '@/i18n'
 
 export interface ErrorEntry {
   /** 递增 id，用作列表 key */
@@ -28,7 +29,7 @@ export const useErrorsStore = defineStore('errors', () => {
       id: nextId++,
       ts: Date.now(),
       op,
-      friendly: mapGitError(op, raw),
+      friendly: formatFriendly(op, raw),
       raw: rawToString(raw),
     }
     entries.value.unshift(entry)
@@ -50,6 +51,17 @@ export const useErrorsStore = defineStore('errors', () => {
     clear,
   }
 })
+
+/**
+ * 把 mapGitError 产出的 i18n key 翻译成当前 locale 下的字符串。
+ * key 缺失翻译时回退到 fallbackText（通常是原始 message）。
+ */
+function formatFriendly(op: string, raw: unknown): string {
+  const fe = mapGitError(op, raw)
+  const translated = i18n.global.t(fe.key, fe.params ?? {})
+  if (translated && translated !== fe.key) return translated
+  return fe.fallbackText ?? translated
+}
 
 function rawToString(raw: unknown): string {
   if (typeof raw === 'string') return raw
