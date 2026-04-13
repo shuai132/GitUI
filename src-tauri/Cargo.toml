@@ -30,3 +30,4 @@ uuid = { version = "1", features = ["v4"] }
 log = "0.4"
 portable-pty = "0.8"
 base64 = "0.22"
+tauri-plugin-os = "2"
