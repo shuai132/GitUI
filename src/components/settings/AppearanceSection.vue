@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import {
+  ROW_SEPARATOR_ALPHA_PEAK,
   ROW_SEPARATOR_MAX,
   clampSeparatorStrength,
   useSettingsStore,
@@ -8,15 +10,24 @@ import {
   type GraphStyle,
   type RowSeparatorStyle,
   type ThemeMode,
+  type UiLanguage,
 } from '@/stores/settings'
 
 const store = useSettingsStore()
+const { t } = useI18n()
 
 const themeOptions: Array<{ value: ThemeMode; label: string }> = [
   { value: 'auto', label: '跟随系统' },
   { value: 'light', label: '浅色' },
   { value: 'dark', label: '深色' },
 ]
+
+// 语言卡片：`auto` 走 i18n 跟随当前 locale，`zh-CN` / `en` 用原生名固定
+const languageOptions = computed<Array<{ value: UiLanguage; label: string }>>(() => [
+  { value: 'auto', label: t('settings.advanced.uiLanguageAuto') },
+  { value: 'zh-CN', label: '中文' },
+  { value: 'en', label: 'English' },
+])
 
 const graphStyleOptions: Array<{ value: GraphStyle; label: string }> = [
   { value: 'rounded', label: '圆润' },
@@ -34,6 +45,17 @@ function onSeparatorStrengthInput(e: Event) {
   const v = Number((e.target as HTMLInputElement).value)
   store.rowSeparatorStrength = clampSeparatorStrength(v)
 }
+
+const separatorOpacityText = computed(() => {
+  const s = store.rowSeparatorStrength
+  if (s === 0) return '无'
+  const alpha = (s / ROW_SEPARATOR_MAX) * ROW_SEPARATOR_ALPHA_PEAK
+  return `${Math.round(alpha * 100)}%`
+})
+
+const separatorFillPercent = computed(
+  () => `${(store.rowSeparatorStrength / ROW_SEPARATOR_MAX) * 100}%`,
+)
 
 interface AccentRow {
   key: AccentKey
@@ -96,7 +118,26 @@ const hasAnyOverride = computed(() => Object.keys(store.accentOverrides).length 
 
 <template>
   <div class="section">
-    <div class="section-title">主题</div>
+    <div class="section-title">{{ t('settings.advanced.uiLanguageTitle') }}</div>
+    <div class="theme-grid">
+      <label
+        v-for="opt in languageOptions"
+        :key="opt.value"
+        class="theme-card"
+        :class="{ 'is-active': store.uiLanguage === opt.value }"
+      >
+        <input
+          type="radio"
+          name="ui-language"
+          :value="opt.value"
+          :checked="store.uiLanguage === opt.value"
+          @change="store.uiLanguage = opt.value"
+        />
+        <span class="theme-card-label">{{ opt.label }}</span>
+      </label>
+    </div>
+
+    <div class="section-title section-title--spaced">主题</div>
     <div class="theme-grid">
       <label
         v-for="opt in themeOptions"
@@ -158,19 +199,18 @@ const hasAnyOverride = computed(() => Object.keys(store.accentOverrides).length 
       <span class="section-title-hint">（提交历史每行之间）</span>
     </div>
     <div class="separator-row">
-      <span class="separator-label">强度</span>
+      <span class="separator-label">透明度</span>
       <input
         type="range"
         class="separator-range"
+        :style="{ '--fill': separatorFillPercent }"
         :min="0"
         :max="ROW_SEPARATOR_MAX"
         :step="1"
         :value="store.rowSeparatorStrength"
         @input="onSeparatorStrengthInput"
       />
-      <span class="separator-value">
-        {{ store.rowSeparatorStrength === 0 ? '无' : `${store.rowSeparatorStrength} / ${ROW_SEPARATOR_MAX}` }}
-      </span>
+      <span class="separator-value">{{ separatorOpacityText }}</span>
     </div>
     <div class="theme-grid separator-style-grid">
       <label
@@ -369,15 +409,52 @@ const hasAnyOverride = computed(() => Object.keys(store.accentOverrides).length 
 }
 
 .separator-range {
-  accent-color: var(--accent-blue);
+  -webkit-appearance: none;
+  appearance: none;
   width: 100%;
+  height: 4px;
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+  background: linear-gradient(
+    to right,
+    var(--accent-blue) 0%,
+    var(--accent-blue) var(--fill, 0%),
+    var(--border) var(--fill, 0%),
+    var(--border) 100%
+  );
+}
+
+.separator-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--bg-primary);
+  border: 2px solid var(--accent-blue);
+  cursor: pointer;
+  transition: transform 0.1s;
+}
+
+.separator-range::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+}
+
+.separator-range::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--bg-primary);
+  border: 2px solid var(--accent-blue);
+  cursor: pointer;
 }
 
 .separator-value {
   font-size: var(--font-sm);
   color: var(--text-muted);
   font-family: var(--code-font-family);
-  min-width: 48px;
+  min-width: 40px;
   text-align: right;
 }
 
