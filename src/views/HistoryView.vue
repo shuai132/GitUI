@@ -1183,7 +1183,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   cursor: pointer;
-  border-bottom: 1px solid rgba(54, 58, 79, 0.4);
+  border-bottom: 1px var(--row-separator-style) rgba(var(--row-separator-rgb), var(--row-separator-alpha));
   transition: background 0.08s;
 }
 

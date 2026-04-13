@@ -55,6 +55,12 @@
     --diff-add-bg: rgba(166, 218, 149, 0.18);
     --diff-del-bg: rgba(237, 135, 150, 0.18);
     --diff-empty-bg: rgba(54, 58, 79, 0.4);
+
+    /* 提交历史行分隔线（由 settings store 动态覆盖 alpha / style）
+       rgb 随主题走，alpha 默认 0.2（中档），最高档 0.4，最低档 0 = 无色 */
+    --row-separator-rgb: 54, 58, 79;
+    --row-separator-alpha: 0.2;
+    --row-separator-style: solid;
   }
 
   /* 浅色主题（GitHub Primer Light 风格：冷灰白 + 工程化配色） */
@@ -88,6 +94,9 @@
     --diff-add-bg: #dafbe1;
     --diff-del-bg: #ffebe9;
     --diff-empty-bg: #f6f8fa;
+
+    /* 行分隔线：浅色主题下用 --border (#d0d7de) 的 rgb 基调 */
+    --row-separator-rgb: 208, 215, 222;
   }
 
   * {

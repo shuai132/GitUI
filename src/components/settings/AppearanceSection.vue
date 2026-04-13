@@ -1,6 +1,14 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { useSettingsStore, type AccentKey, type GraphStyle, type ThemeMode } from '@/stores/settings'
+import {
+  ROW_SEPARATOR_MAX,
+  clampSeparatorStrength,
+  useSettingsStore,
+  type AccentKey,
+  type GraphStyle,
+  type RowSeparatorStyle,
+  type ThemeMode,
+} from '@/stores/settings'
 
 const store = useSettingsStore()
 
@@ -15,6 +23,17 @@ const graphStyleOptions: Array<{ value: GraphStyle; label: string }> = [
   { value: 'step', label: '直角' },
   { value: 'angular', label: '锐角' },
 ]
+
+const separatorStyleOptions: Array<{ value: RowSeparatorStyle; label: string }> = [
+  { value: 'solid', label: '实线' },
+  { value: 'dashed', label: '虚线' },
+  { value: 'dotted', label: '点线' },
+]
+
+function onSeparatorStrengthInput(e: Event) {
+  const v = Number((e.target as HTMLInputElement).value)
+  store.rowSeparatorStrength = clampSeparatorStrength(v)
+}
 
 interface AccentRow {
   key: AccentKey
@@ -132,6 +151,43 @@ const hasAnyOverride = computed(() => Object.keys(store.accentOverrides).length 
 
     <div v-if="!hasAnyOverride" class="accent-empty-hint">
       当前未覆盖任何强调色，使用主题内置配色。
+    </div>
+
+    <div class="section-title section-title--spaced">
+      行分隔线
+      <span class="section-title-hint">（提交历史每行之间）</span>
+    </div>
+    <div class="separator-row">
+      <span class="separator-label">强度</span>
+      <input
+        type="range"
+        class="separator-range"
+        :min="0"
+        :max="ROW_SEPARATOR_MAX"
+        :step="1"
+        :value="store.rowSeparatorStrength"
+        @input="onSeparatorStrengthInput"
+      />
+      <span class="separator-value">
+        {{ store.rowSeparatorStrength === 0 ? '无' : `${store.rowSeparatorStrength} / ${ROW_SEPARATOR_MAX}` }}
+      </span>
+    </div>
+    <div class="theme-grid separator-style-grid">
+      <label
+        v-for="opt in separatorStyleOptions"
+        :key="opt.value"
+        class="theme-card"
+        :class="{ 'is-active': store.rowSeparatorStyle === opt.value }"
+      >
+        <input
+          type="radio"
+          name="row-separator-style"
+          :value="opt.value"
+          :checked="store.rowSeparatorStyle === opt.value"
+          @change="store.rowSeparatorStyle = opt.value"
+        />
+        <span class="theme-card-label">{{ opt.label }}</span>
+      </label>
     </div>
 
     <div class="section-title section-title--spaced">提交图</div>
@@ -298,5 +354,34 @@ const hasAnyOverride = computed(() => Object.keys(store.accentOverrides).length 
   margin-top: 6px;
   font-size: var(--font-sm);
   color: var(--text-muted);
+}
+
+.separator-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.separator-label {
+  font-size: var(--font-md);
+  color: var(--text-primary);
+}
+
+.separator-range {
+  accent-color: var(--accent-blue);
+  width: 100%;
+}
+
+.separator-value {
+  font-size: var(--font-sm);
+  color: var(--text-muted);
+  font-family: var(--code-font-family);
+  min-width: 48px;
+  text-align: right;
+}
+
+.separator-style-grid {
+  margin-top: 8px;
 }
 </style>

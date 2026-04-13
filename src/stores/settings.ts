@@ -31,6 +31,19 @@ export type ExternalTerminal = 'terminal' | 'iterm2' | 'warp' | 'ghostty' | 'cus
  */
 export type GraphStyle = 'rounded' | 'step' | 'angular'
 
+/**
+ * 提交历史行分隔线样式：
+ * - `solid`（默认）：实线
+ * - `dashed`：虚线
+ * - `dotted`：点线
+ */
+export type RowSeparatorStyle = 'solid' | 'dashed' | 'dotted'
+
+/** 行分隔线强度档位数（0 = 无色，MAX = 最深） */
+export const ROW_SEPARATOR_MAX = 10
+/** 最高档对应的 alpha（保持与旧版 `rgba(54,58,79,0.4)` 一致） */
+export const ROW_SEPARATOR_ALPHA_PEAK = 0.4
+
 export interface ExternalTerminalPreset {
   value: ExternalTerminal
   label: string
@@ -56,6 +69,9 @@ export interface SettingsData {
   externalTerminal: ExternalTerminal
   externalTerminalCustom: string  // 当 externalTerminal === 'custom' 时使用的 app 名 / bundle id
   graphStyle: GraphStyle
+  /** 提交历史行分隔线强度 0..ROW_SEPARATOR_MAX，0 无色，MAX 最深；默认中档 */
+  rowSeparatorStrength: number
+  rowSeparatorStyle: RowSeparatorStyle
 }
 
 export const DEFAULT_SETTINGS: SettingsData = {
@@ -68,6 +84,8 @@ export const DEFAULT_SETTINGS: SettingsData = {
   externalTerminal: 'terminal',
   externalTerminalCustom: '',
   graphStyle: 'rounded',
+  rowSeparatorStrength: Math.round(ROW_SEPARATOR_MAX / 2),
+  rowSeparatorStyle: 'solid',
 }
 
 /**
@@ -166,6 +184,12 @@ export function applySettingsToDom(data: SettingsData) {
       root.style.removeProperty(`--accent-${k}`)
     }
   }
+
+  // 行分隔线：alpha = strength / MAX * ALPHA_PEAK，主题相关的 rgb 由 main.css 处理
+  const strength = clampSeparatorStrength(data.rowSeparatorStrength)
+  const alpha = (strength / ROW_SEPARATOR_MAX) * ROW_SEPARATOR_ALPHA_PEAK
+  root.style.setProperty('--row-separator-alpha', alpha.toFixed(3))
+  root.style.setProperty('--row-separator-style', data.rowSeparatorStyle)
 }
 
 // ── 模块顶层 side-effect：import 就同步 apply（防 FOUC） ──────────────
@@ -202,6 +226,8 @@ export const useSettingsStore = defineStore('settings', () => {
   const externalTerminal = ref<ExternalTerminal>(__initialData.externalTerminal)
   const externalTerminalCustom = ref<string>(__initialData.externalTerminalCustom)
   const graphStyle = ref<GraphStyle>(__initialData.graphStyle)
+  const rowSeparatorStrength = ref<number>(clampSeparatorStrength(__initialData.rowSeparatorStrength))
+  const rowSeparatorStyle = ref<RowSeparatorStyle>(__initialData.rowSeparatorStyle)
 
   function snapshot(): SettingsData {
     return {
@@ -214,6 +240,8 @@ export const useSettingsStore = defineStore('settings', () => {
       externalTerminal: externalTerminal.value,
       externalTerminalCustom: externalTerminalCustom.value,
       graphStyle: graphStyle.value,
+      rowSeparatorStrength: rowSeparatorStrength.value,
+      rowSeparatorStyle: rowSeparatorStyle.value,
     }
   }
 
@@ -239,6 +267,8 @@ export const useSettingsStore = defineStore('settings', () => {
       externalTerminal,
       externalTerminalCustom,
       graphStyle,
+      rowSeparatorStrength,
+      rowSeparatorStyle,
     ],
     () => {
       applySettingsToDom(snapshot())
@@ -265,6 +295,8 @@ export const useSettingsStore = defineStore('settings', () => {
     themeMode.value = DEFAULT_SETTINGS.themeMode
     accentOverrides.value = {}
     graphStyle.value = DEFAULT_SETTINGS.graphStyle
+    rowSeparatorStrength.value = DEFAULT_SETTINGS.rowSeparatorStrength
+    rowSeparatorStyle.value = DEFAULT_SETTINGS.rowSeparatorStyle
   }
 
   function resetUiFont() {
@@ -313,6 +345,8 @@ export const useSettingsStore = defineStore('settings', () => {
     externalTerminal,
     externalTerminalCustom,
     graphStyle,
+    rowSeparatorStrength,
+    rowSeparatorStyle,
     uiFontIsDefault,
     codeFontIsDefault,
     setAccentOverride,
@@ -328,6 +362,11 @@ export const useSettingsStore = defineStore('settings', () => {
 function clampSize(n: number): number {
   if (!Number.isFinite(n)) return DEFAULT_SETTINGS.uiFontSize
   return Math.max(MIN_FONT_SIZE, Math.min(MAX_FONT_SIZE, Math.round(n)))
+}
+
+export function clampSeparatorStrength(n: number): number {
+  if (!Number.isFinite(n)) return DEFAULT_SETTINGS.rowSeparatorStrength
+  return Math.max(0, Math.min(ROW_SEPARATOR_MAX, Math.round(n)))
 }
 
 export { MIN_FONT_SIZE, MAX_FONT_SIZE }

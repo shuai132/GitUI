@@ -1,6 +1,6 @@
 # 12. 设置
 
-用户可调整的外观偏好：主题（跟随系统 / 浅色 / 深色）、UI 与代码字体字号、五个 accent 强调色覆盖。纯前端功能，不涉及 IPC。
+用户可调整的外观偏好：主题（跟随系统 / 浅色 / 深色）、UI 与代码字体字号、五个 accent 强调色覆盖、提交历史行分隔线强度与样式、提交图分叉样式。纯前端功能，不涉及 IPC。
 
 ## 涉及模块
 
@@ -26,6 +26,8 @@
 - `codeFontFamily: string`
 - `codeFontSize: number`（px）
 - `accentOverrides: Partial<Record<'blue'|'green'|'red'|'yellow'|'orange', string>>`（HEX）
+- `rowSeparatorStrength: number`（0..`ROW_SEPARATOR_MAX`，默认中档；0 = 无色，最高档保持历史观感）
+- `rowSeparatorStyle: 'solid' | 'dashed' | 'dotted'`（行分隔线样式）
 
 字体的预设下拉候选见 `UI_FONT_PRESETS` / `CODE_FONT_PRESETS`（同文件），每项 `value` 是完整 `font-family` fallback 串。
 
@@ -46,6 +48,10 @@ Accent 覆盖：store 对每个 accent 键调用 `setProperty('--accent-<key>', 
 
 - UI 字体/字号只改了 `html, body, #app` 根元素；**子组件里的硬编码 px 保持不变**。理由：这些硬编码是针对工具栏/侧边栏的"紧凑次级字号"，整体缩放会破坏布局节奏。实际效果覆盖通过继承生效的主要正文区域。
 - 代码字体**批量穿透**到 diff 容器（`InlineDiff` / `SideBySideDiff` / `DiffView`）、commit hash 展示（`CommitList` / `CommitInfoPanel` / `HistoryView`）、sidebar stash index、error / reflog 对话框等使用代码字体的位置（搜索 `code-font-family` 得到完整清单）。代码字号只在三个 diff 容器生效，hash 类小字号保持原有 10-11px 不跟字号联动。
+
+## 行分隔线
+
+提交历史 `.commit-row` 的 `border-bottom` 抽成三个 CSS 变量：`--row-separator-rgb`（基础色，主题相关，在 `main.css` 里由 `:root` / `[data-theme="light"]` 分别定义）、`--row-separator-alpha`（由 store 按 `strength / ROW_SEPARATOR_MAX * ROW_SEPARATOR_ALPHA_PEAK` 写入）、`--row-separator-style`（直接写字符串）。最高档的 alpha 对齐旧版观感；0 档 alpha 为 0，border 虽透明但仍占 1px，保持布局稳定。
 
 ## 持久化与启动
 
