@@ -28,3 +28,5 @@ parking_lot = "0.12"
 thiserror = "1"
 uuid = { version = "1", features = ["v4"] }
 log = "0.4"
+portable-pty = "0.8"
+base64 = "0.22"

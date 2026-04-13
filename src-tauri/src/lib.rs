@@ -2,15 +2,17 @@ mod commands;
 mod git;
 mod logger;
 mod repo_manager;
+mod terminal;
 mod tray;
 mod watcher;
 
 use commands::{
     branch::*, commit::*, diff::*, log::*, remote::*, repo::*, stash::*, status::*, submodule::*,
-    system::*, tag::*,
+    system::*, tag::*, terminal::*,
 };
 use commands::system::StartupRepo;
 use repo_manager::RepoManager;
+use terminal::TerminalManager;
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::{Emitter, Manager, WindowEvent};
 use watcher::WatcherService;
@@ -32,6 +34,7 @@ pub fn run() {
         .plugin(tauri_plugin_store::Builder::new().build())
         .manage(RepoManager::new())
         .manage(WatcherService::new())
+        .manage(TerminalManager::new())
         .manage(StartupRepo(std::sync::Mutex::new(startup_repo)))
         .invoke_handler(tauri::generate_handler![
             // Repo
@@ -92,6 +95,11 @@ pub fn run() {
             discard_file,
             get_reflog,
             run_gc,
+            // Terminal
+            terminal_spawn,
+            terminal_write,
+            terminal_resize,
+            terminal_close,
         ])
         .menu(|app| {
             // App submenu: 用自定义 About 替代系统默认的 About

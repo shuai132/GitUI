@@ -15,6 +15,11 @@ const KEYS = {
   customDockLayout: 'gitui.history.customDockLayout',
   layoutPreset: 'gitui.history.layoutPreset',
   debugPanel: 'gitui.debug.visible',
+  terminalMode: 'gitui.terminal.mode',
+  terminalDock: 'gitui.terminal.dock',
+  terminalHeight: 'gitui.terminal.height',
+  terminalWidth: 'gitui.terminal.width',
+  terminalVisible: 'gitui.terminal.visible',
 } as const
 
 // ── 读取工具 ──────────────────────────────────────────────────────────
@@ -63,6 +68,11 @@ export interface DockLayout {
 }
 
 const DIFF_MODE_VALUES = ['side-by-side', 'inline', 'by-hunk'] as const
+
+export type TerminalMode = 'in-app' | 'system'
+export type TerminalDock = 'bottom' | 'right'
+const TERMINAL_MODE_VALUES = ['in-app', 'system'] as const
+const TERMINAL_DOCK_VALUES = ['bottom', 'right'] as const
 
 const PRESET_LAYOUTS: Record<string, DockLayout> = {
   vertical:   { spanning: 'commits', edge: 'top',  first: 'info', second: 'diff' },
@@ -154,6 +164,17 @@ export const useUiStore = defineStore('ui', () => {
   const diffHighlightEnabled = ref<boolean>(loadBool(KEYS.diffHighlight, true))
   const debugPanelVisible = ref<boolean>(loadBool(KEYS.debugPanel, false))
 
+  // ── Terminal 偏好 ─────────────────────────────────────────────────
+  const terminalMode = ref<TerminalMode>(
+    loadString<TerminalMode>(KEYS.terminalMode, 'in-app', TERMINAL_MODE_VALUES),
+  )
+  const terminalDock = ref<TerminalDock>(
+    loadString<TerminalDock>(KEYS.terminalDock, 'bottom', TERMINAL_DOCK_VALUES),
+  )
+  const terminalHeight = ref<number>(loadNumber(KEYS.terminalHeight, 260))
+  const terminalWidth = ref<number>(loadNumber(KEYS.terminalWidth, 420))
+  const terminalVisible = ref<boolean>(loadBool(KEYS.terminalVisible, false))
+
   // ── 持久化动作 ────────────────────────────────────────────────────
   // 拖动类：组件在 pointermove 里直接改 .value，pointerup 再调 persistXxx()
   function persistSidebarWidth() {
@@ -223,6 +244,38 @@ export const useUiStore = defineStore('ui', () => {
     localStorage.setItem(KEYS.debugPanel, String(debugPanelVisible.value))
   }
 
+  // ── Terminal 偏好动作 ─────────────────────────────────────────────
+  function setTerminalMode(mode: TerminalMode) {
+    terminalMode.value = mode
+    localStorage.setItem(KEYS.terminalMode, mode)
+  }
+
+  function setTerminalDock(dock: TerminalDock) {
+    terminalDock.value = dock
+    localStorage.setItem(KEYS.terminalDock, dock)
+  }
+
+  function toggleTerminalDock() {
+    setTerminalDock(terminalDock.value === 'bottom' ? 'right' : 'bottom')
+  }
+
+  function persistTerminalHeight() {
+    localStorage.setItem(KEYS.terminalHeight, String(terminalHeight.value))
+  }
+
+  function persistTerminalWidth() {
+    localStorage.setItem(KEYS.terminalWidth, String(terminalWidth.value))
+  }
+
+  function setTerminalVisible(v: boolean) {
+    terminalVisible.value = v
+    localStorage.setItem(KEYS.terminalVisible, String(v))
+  }
+
+  function toggleTerminalVisible() {
+    setTerminalVisible(!terminalVisible.value)
+  }
+
   // ── WipPanel 粘性请求 ─────────────────────────────────────────────
   function requestDiscardAll() {
     shouldOpenDiscardAll.value = true
@@ -247,10 +300,17 @@ export const useUiStore = defineStore('ui', () => {
     diffViewMode,
     diffHighlightEnabled,
     debugPanelVisible,
+    terminalMode,
+    terminalDock,
+    terminalHeight,
+    terminalWidth,
+    terminalVisible,
     // persistence
     persistSidebarWidth,
     persistReposHeight,
     persistHistoryPaneSizes,
+    persistTerminalHeight,
+    persistTerminalWidth,
     // setters / togglers
     setDockLayout,
     toggleHistoryLayout,
@@ -259,6 +319,11 @@ export const useUiStore = defineStore('ui', () => {
     setDiffViewMode,
     toggleDiffHighlight,
     toggleDebugPanel,
+    setTerminalMode,
+    setTerminalDock,
+    toggleTerminalDock,
+    setTerminalVisible,
+    toggleTerminalVisible,
     // transient
     requestDiscardAll,
     consumeDiscardAllRequest,

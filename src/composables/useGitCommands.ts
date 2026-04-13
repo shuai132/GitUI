@@ -225,6 +225,19 @@ export function useGitCommands() {
   const runGc = (repoId: string) =>
     call<string>('run_gc', { repoId })
 
+  // ---- Terminal (in-app PTY) ----
+  const terminalSpawn = (repoId: string, cols: number, rows: number) =>
+    call<string>('terminal_spawn', { repoId, cols, rows })
+
+  const terminalWrite = (sessionId: string, data: string) =>
+    call<void>('terminal_write', { sessionId, data })
+
+  const terminalResize = (sessionId: string, cols: number, rows: number) =>
+    call<void>('terminal_resize', { sessionId, cols, rows })
+
+  const terminalClose = (sessionId: string) =>
+    call<void>('terminal_close', { sessionId })
+
   return {
     openRepo,
     closeRepo,
@@ -273,5 +286,9 @@ export function useGitCommands() {
     discardFile,
     getReflog,
     runGc,
+    terminalSpawn,
+    terminalWrite,
+    terminalResize,
+    terminalClose,
   }
 }

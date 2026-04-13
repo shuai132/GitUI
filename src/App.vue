@@ -5,6 +5,7 @@ import AppSidebar from '@/components/layout/AppSidebar.vue'
 import AppToolbar from '@/components/layout/AppToolbar.vue'
 import AppStatusBar from '@/components/layout/AppStatusBar.vue'
 import DebugPanel from '@/components/debug/DebugPanel.vue'
+import TerminalPanel from '@/components/terminal/TerminalPanel.vue'
 import { useRepoStore } from '@/stores/repos'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useHistoryStore } from '@/stores/history'
@@ -149,7 +150,15 @@ watch(
         @dblclick="toggleSidebar"
       />
       <main class="app-main">
-        <RouterView />
+        <div class="main-with-terminal" :data-dock="uiStore.terminalDock">
+          <div class="main-content"><RouterView /></div>
+          <TerminalPanel
+            v-if="uiStore.terminalVisible"
+            :style="uiStore.terminalDock === 'bottom'
+              ? { height: uiStore.terminalHeight + 'px' }
+              : { width: uiStore.terminalWidth + 'px' }"
+          />
+        </div>
       </main>
       <DebugPanel v-if="uiStore.debugPanelVisible" />
     </div>
@@ -178,6 +187,29 @@ watch(
   overflow: hidden;
   display: flex;
   flex-direction: column;
+}
+
+/* Terminal 停靠容器：bottom 时垂直堆叠，right 时水平并排 */
+.main-with-terminal {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  overflow: hidden;
+}
+.main-with-terminal[data-dock="bottom"] {
+  flex-direction: column;
+}
+.main-with-terminal[data-dock="right"] {
+  flex-direction: row;
+}
+.main-content {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 /* Sidebar resize handle: 覆盖在 sidebar 右边界上 */

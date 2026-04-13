@@ -9,3 +9,4 @@ pub mod status;
 pub mod submodule;
 pub mod system;
 pub mod tag;
+pub mod terminal;

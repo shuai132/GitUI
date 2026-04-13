@@ -115,6 +115,17 @@ GitUI 的前后端通过 Tauri v2 的 IPC 通道通信：
 | `get_reflog` | `repoId` | `ReflogEntry[]` （最近 500 条） |
 | `run_gc` | `repoId` | `string` (消息) |
 
+### Terminal（应用内 PTY）
+
+| 命令 | 参数 | 返回 |
+|------|------|------|
+| `terminal_spawn` | `repoId, cols, rows` | `string` (session_id) |
+| `terminal_write` | `sessionId, data` (base64-encoded bytes) | `void` |
+| `terminal_resize` | `sessionId, cols, rows` | `void` |
+| `terminal_close` | `sessionId` | `void` |
+
+> 数据以 base64 编码避免 UTF-8 边界被切断。PTY 子 shell 默认取 `$SHELL`（Windows `COMSPEC` / `powershell.exe`），`cwd` 为 `repoId` 对应的仓库路径。详见 `src-tauri/src/terminal.rs::TerminalManager`。
+
 ## 类型映射表
 
 `src-tauri/src/git/types.rs` ↔ `src/types/git.ts`：
@@ -147,6 +158,8 @@ GitUI 的前后端通过 Tauri v2 的 IPC 通道通信：
 | `repo://status-changed` | `repoId: string` | `WatcherService` 检测到工作目录变化（300ms 防抖） | `useGitEvents.onStatusChanged` → `workspaceStore.refresh + submodulesStore.loadSubmodules`（仅当 repoId === activeRepoId） |
 | `repo://operation-progress` | `{ op, progress, message? }` | 目前未使用，接口留给长时间操作（大 clone / fetch 进度） | `useGitEvents.onOperationProgress` |
 | `repo://error` | `{ repoId, msg }` | 目前未使用 | `useGitEvents.onError` |
+| `terminal://data` | `{ session_id: string, data: string (base64) }` | `TerminalManager` 读循环每次拿到 PTY 输出时推送 | `TerminalPanel.vue` 按 `sessionId` 过滤后 `term.write(bytes)` |
+| `terminal://exit` | `{ session_id: string }` | PTY 子进程退出时推送 | `TerminalPanel.vue` 标记 session 结束、显示 `[shell exited]` |
 
 ## 新增命令的 checklist
 
