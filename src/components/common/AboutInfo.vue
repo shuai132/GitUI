@@ -39,8 +39,7 @@ async function openUrl(url: string) {
         <span class="about-label">版本：</span>
         <span class="about-value">{{ appVersion }}</span>
       </div>
-      <div class="about-row">
-        <span class="about-label">项目：</span>
+      <div class="about-row about-row-project">
         <a
           class="about-link"
           href="https://github.com/shuai132/GitUI"
@@ -82,6 +81,10 @@ async function openUrl(url: string) {
   display: flex;
   align-items: center;
   font-size: var(--font-md);
+}
+
+.about-row-project {
+  margin-top: 2px;
 }
 
 .about-label {
