@@ -1,3 +1,4 @@
+use base64::prelude::{Engine as _, BASE64_STANDARD};
 use git2::{
     BranchType, DiffFormat, DiffOptions, Repository, RepositoryState, ResetType, StashFlags,
     StatusOptions, SubmoduleIgnore, SubmoduleStatus,
@@ -9,6 +10,9 @@ use crate::git::{
     error::{GitError, GitResult},
     types::*,
 };
+
+/// 二进制预览（图片等）最大读取字节数，超过则不返回原始字节。
+pub const MAX_PREVIEW_BYTES: u64 = 10 * 1024 * 1024;
 
 pub struct GitEngine;
 
@@ -429,6 +433,8 @@ impl GitEngine {
                 hunks: vec![],
                 additions: 0,
                 deletions: 0,
+                old_blob_oid: None,
+                new_blob_oid: None,
             }))
     }
 
@@ -467,6 +473,10 @@ impl GitEngine {
                         _ => FileStatusKind::Modified,
                     };
                     let _ = status;
+                    let old_id = delta.old_file().id();
+                    let new_id = delta.new_file().id();
+                    let old_blob_oid = if old_id.is_zero() { None } else { Some(old_id.to_string()) };
+                    let new_blob_oid = if new_id.is_zero() { None } else { Some(new_id.to_string()) };
                     current_file = Some(FileDiff {
                         old_path,
                         new_path,
@@ -474,6 +484,8 @@ impl GitEngine {
                         hunks: vec![],
                         additions: 0,
                         deletions: 0,
+                        old_blob_oid,
+                        new_blob_oid,
                     });
                 }
                 DiffLineType::HunkHeader => {
@@ -540,6 +552,63 @@ impl GitEngine {
         }
 
         Ok(file_diffs)
+    }
+
+    /// 按 blob oid 读取原始字节并 base64 编码（用于二进制文件预览）。
+    /// 超过 `MAX_PREVIEW_BYTES` 时返回 `truncated=true`，不带字节。
+    pub fn get_blob_bytes(path: &str, oid_str: &str) -> GitResult<BlobData> {
+        let repo = Self::open(path)?;
+        let oid = git2::Oid::from_str(oid_str)
+            .map_err(|e| GitError::OperationFailed(e.message().to_string()))?;
+        let blob = repo.find_blob(oid)?;
+        let size = blob.size() as u64;
+        if size > MAX_PREVIEW_BYTES {
+            return Ok(BlobData {
+                bytes_base64: String::new(),
+                size,
+                truncated: true,
+            });
+        }
+        let encoded = BASE64_STANDARD.encode(blob.content());
+        Ok(BlobData {
+            bytes_base64: encoded,
+            size,
+            truncated: false,
+        })
+    }
+
+    /// 读取工作区内相对路径的文件字节（用于预览 WIP 未暂存的新版）。
+    /// 路径会规范化后校验仍位于仓库目录内，防止路径穿越。
+    pub fn read_worktree_file(path: &str, rel_path: &str) -> GitResult<BlobData> {
+        let repo_root = Path::new(path)
+            .canonicalize()
+            .map_err(|e| GitError::OperationFailed(format!("canonicalize repo: {}", e)))?;
+        let full = repo_root.join(rel_path);
+        let full_canon = full
+            .canonicalize()
+            .map_err(|e| GitError::OperationFailed(format!("file not found: {}", e)))?;
+        if !full_canon.starts_with(&repo_root) {
+            return Err(GitError::OperationFailed(
+                "path escapes repository root".to_string(),
+            ));
+        }
+        let meta = std::fs::metadata(&full_canon)
+            .map_err(|e| GitError::OperationFailed(format!("stat file: {}", e)))?;
+        let size = meta.len();
+        if size > MAX_PREVIEW_BYTES {
+            return Ok(BlobData {
+                bytes_base64: String::new(),
+                size,
+                truncated: true,
+            });
+        }
+        let bytes = std::fs::read(&full_canon)
+            .map_err(|e| GitError::OperationFailed(format!("read file: {}", e)))?;
+        Ok(BlobData {
+            bytes_base64: BASE64_STANDARD.encode(&bytes),
+            size,
+            truncated: false,
+        })
     }
 
     pub fn list_branches(path: &str) -> GitResult<Vec<BranchInfo>> {

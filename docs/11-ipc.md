@@ -56,6 +56,8 @@ GitUI 的前后端通过 Tauri v2 的 IPC 通道通信：
 | `get_log` | `repoId, offset, limit, includeUnreachable, includeStashes` | `LogPage` |
 | `get_commit_detail` | `repoId, oid` | `CommitDetail` |
 | `get_file_diff` | `repoId, filePath, staged` | `FileDiff` |
+| `get_blob_bytes` | `repoId, oid` | `BlobData` (按 blob oid 读取原始字节，用于图片等二进制预览；超过 10 MB 返回 `truncated=true` 且不带字节) |
+| `read_worktree_file` | `repoId, relPath` | `BlobData` (读取工作区内相对路径文件；用于 WIP 未暂存的新版；同样受 10 MB 上限限制) |
 
 ### Branch
 
@@ -141,7 +143,8 @@ GitUI 的前后端通过 Tauri v2 的 IPC 通道通信：
 | `TagInfo`（含 `is_annotated`, `message`, `tagger_name`, `time`） | `TagInfo` |
 | `DiffLine` | `DiffLine` |
 | `DiffHunk` | `DiffHunk` |
-| `FileDiff` | `FileDiff` |
+| `FileDiff`（含 `old_blob_oid`, `new_blob_oid` 用于图片预览） | `FileDiff` |
+| `BlobData` | `BlobData` |
 | `CommitDetail` | `CommitDetail` |
 | `LogPage` | `LogPage` |
 | `StashEntry` | `StashEntry` |

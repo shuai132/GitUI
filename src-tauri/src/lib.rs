@@ -61,6 +61,8 @@ pub fn run() {
             get_commit_detail,
             // Diff
             get_file_diff,
+            get_blob_bytes,
+            read_worktree_file,
             // Branch
             list_branches,
             create_branch,

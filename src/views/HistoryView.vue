@@ -876,7 +876,12 @@ onUnmounted(() => {
         <div class="dock-handle dock-handle-float" @pointerdown="onDragHandlePointerDown('diff', $event)" title="拖拽停靠">
           <svg width="8" height="14" viewBox="0 0 8 14"><circle cx="2" cy="2" r="1" fill="currentColor"/><circle cx="6" cy="2" r="1" fill="currentColor"/><circle cx="2" cy="7" r="1" fill="currentColor"/><circle cx="6" cy="7" r="1" fill="currentColor"/><circle cx="2" cy="12" r="1" fill="currentColor"/><circle cx="6" cy="12" r="1" fill="currentColor"/></svg>
         </div>
-        <DiffView :diff="currentDiff" @close="showDetail = false" />
+        <DiffView
+          :diff="currentDiff"
+          :repo-id="repoStore.activeRepoId ?? undefined"
+          :wip="selectedWip ? { staged: diffStore.currentStaged } : null"
+          @close="showDetail = false"
+        />
       </div>
 
       <!-- Info panel: WipPanel when WIP row selected, else CommitInfoPanel -->

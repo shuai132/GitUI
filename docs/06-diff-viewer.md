@@ -22,6 +22,8 @@ pub struct FileDiff {
     pub hunks: Vec<DiffHunk>,
     pub additions: usize,
     pub deletions: usize,
+    pub old_blob_oid: Option<String>,  // 图片预览按需拉取 blob 时用
+    pub new_blob_oid: Option<String>,
 }
 
 pub struct DiffHunk {
@@ -91,8 +93,17 @@ export const EXT_TO_LANG: Record<string, string> = {
 
 工具栏最右边的 `×` 按钮触发 `emit('close')`。在 `HistoryView` 中映射到 `showDetail = false`，折叠整个详情区。
 
+## 图片 / SVG 预览
+
+针对常见位图（PNG/JPG/GIF/WEBP/BMP/ICO）和 SVG，diff 区会切到 `ImageDiff.vue` 组件，旧版在左 / 新版在右并排展示，每侧下方显示 `宽×高 · 大小`。
+
+**按需拉取字节**：`FileDiff` 带 `old_blob_oid / new_blob_oid` 两个字段，前端根据扩展名判定需要预览时，调用 `get_blob_bytes(repoId, oid)` 获取 base64 字节。WIP 未暂存修改的新版 oid 为 None，此时回退到 `read_worktree_file(repoId, relPath)` 直接读磁盘。文件超过 10 MB（`MAX_PREVIEW_BYTES` 常量）不返回字节，UI 显示占位。
+
+**SVG 双视图**：工具栏多一对"图片 / 文本"按钮，默认走图片预览，切到文本时复用现有三种文本 diff 模式。
+
+调用入口：`DiffView` 需要接收 `repoId` 和 `wip: { staged } | null` 两个新 prop。`HistoryView.vue` 一处透传（WIP 行选中时 `wip` 非 null，提交详情时为 null）。
+
 ## 行动项（未完成）
 
-- [ ] 二进制文件的占位提示（当前只有 `is_binary` 标志，UI 端尚未特殊处理）
-- [ ] 图片 diff 预览
 - [ ] Word-level 高亮（增删行的相似片段对比）
+- [ ] 大图滚动缩放 / 叠加对比视图

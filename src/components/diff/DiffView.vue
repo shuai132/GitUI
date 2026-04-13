@@ -3,12 +3,17 @@ import { ref, computed } from 'vue'
 import type { FileDiff } from '@/types/git'
 import SideBySideDiff from './SideBySideDiff.vue'
 import InlineDiff from './InlineDiff.vue'
+import ImageDiff from './ImageDiff.vue'
 import { EXT_TO_LANG } from '@/lib/highlight'
+import { detectPreviewKind } from '@/lib/preview'
 import { useUiStore } from '@/stores/ui'
 
 const props = defineProps<{
   diff: FileDiff | null
   loading?: boolean
+  repoId?: string
+  /** WIP 场景传入；提交详情传 null 或不传 */
+  wip?: { staged: boolean } | null
 }>()
 
 const emit = defineEmits<{ close: [] }>()
@@ -20,6 +25,20 @@ const syntaxLang = computed<string | null>(() => {
   const filePath = props.diff.new_path ?? props.diff.old_path ?? ''
   const ext = filePath.split('.').pop()?.toLowerCase() ?? ''
   return EXT_TO_LANG[ext] ?? null
+})
+
+const previewKind = computed(() => {
+  if (!props.diff) return null
+  return detectPreviewKind(props.diff.new_path ?? props.diff.old_path)
+})
+
+// SVG 可在图片预览和文本 diff 之间切换；位图强制图片视图
+const svgTextMode = ref(false)
+
+const isImageView = computed(() => {
+  if (previewKind.value === 'raster') return true
+  if (previewKind.value === 'svg' && !svgTextMode.value) return true
+  return false
 })
 
 // 子 diff 组件的引用（切换 viewMode 时 v-if 切换实例，ref 自动更新）
@@ -43,90 +62,119 @@ function onPrevChange() {
       <span class="diff-file-path" :title="diff.new_path ?? diff.old_path">
         {{ diff.new_path ?? diff.old_path }}
       </span>
-      <span class="diff-file-stats">
+      <span class="diff-file-stats" v-if="!isImageView">
         <span class="add">+{{ diff.additions }}</span>
         <span class="del">-{{ diff.deletions }}</span>
       </span>
 
       <div class="toolbar-spacer" />
 
-      <!-- 上 / 下变更跳转 -->
-      <button
-        class="btn-icon"
-        title="上一变更"
-        @click="onPrevChange"
-      >
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <polyline points="18 15 12 9 6 15" />
-        </svg>
-      </button>
-      <button
-        class="btn-icon"
-        title="下一变更"
-        @click="onNextChange"
-      >
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <polyline points="6 9 12 15 18 9" />
-        </svg>
-      </button>
+      <!-- 文本模式下才显示变更跳转、语法高亮、三种视图切换 -->
+      <template v-if="!isImageView">
+        <!-- 上 / 下变更跳转 -->
+        <button
+          class="btn-icon"
+          title="上一变更"
+          @click="onPrevChange"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="18 15 12 9 6 15" />
+          </svg>
+        </button>
+        <button
+          class="btn-icon"
+          title="下一变更"
+          @click="onNextChange"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="6 9 12 15 18 9" />
+          </svg>
+        </button>
 
-      <div class="toolbar-divider" />
+        <div class="toolbar-divider" />
 
-      <!-- 语法高亮开关 -->
-      <button
-        class="btn-icon"
-        :class="{ active: uiStore.diffHighlightEnabled }"
-        title="语法高亮"
-        @click="uiStore.toggleDiffHighlight()"
-      >
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <polyline points="16 18 22 12 16 6" />
-          <polyline points="8 6 2 12 8 18" />
-        </svg>
-      </button>
+        <!-- 语法高亮开关 -->
+        <button
+          class="btn-icon"
+          :class="{ active: uiStore.diffHighlightEnabled }"
+          title="语法高亮"
+          @click="uiStore.toggleDiffHighlight()"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="16 18 22 12 16 6" />
+            <polyline points="8 6 2 12 8 18" />
+          </svg>
+        </button>
 
-      <div class="toolbar-divider" />
+        <div class="toolbar-divider" />
 
-      <!-- 模式切换 -->
-      <button
-        class="btn-icon"
-        :class="{ active: uiStore.diffViewMode === 'by-hunk' }"
-        title="按 hunk 分块"
-        @click="uiStore.setDiffViewMode('by-hunk')"
-      >
-        <!-- 两个独立方块 -->
-        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-          <rect x="2" y="2" width="12" height="5" rx="1" />
-          <rect x="2" y="9" width="12" height="5" rx="1" />
-        </svg>
-      </button>
-      <button
-        class="btn-icon"
-        :class="{ active: uiStore.diffViewMode === 'inline' }"
-        title="单列连续"
-        @click="uiStore.setDiffViewMode('inline')"
-      >
-        <!-- 水平条列表 -->
-        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-          <line x1="2" y1="4" x2="14" y2="4" />
-          <line x1="2" y1="8" x2="14" y2="8" />
-          <line x1="2" y1="12" x2="14" y2="12" />
-        </svg>
-      </button>
-      <button
-        class="btn-icon"
-        :class="{ active: uiStore.diffViewMode === 'side-by-side' }"
-        title="左右分栏"
-        @click="uiStore.setDiffViewMode('side-by-side')"
-      >
-        <!-- 左右双栏 -->
-        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-          <rect x="2" y="2" width="12" height="12" rx="1" />
-          <line x1="8" y1="2" x2="8" y2="14" />
-        </svg>
-      </button>
+        <!-- 模式切换 -->
+        <button
+          class="btn-icon"
+          :class="{ active: uiStore.diffViewMode === 'by-hunk' }"
+          title="按 hunk 分块"
+          @click="uiStore.setDiffViewMode('by-hunk')"
+        >
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+            <rect x="2" y="2" width="12" height="5" rx="1" />
+            <rect x="2" y="9" width="12" height="5" rx="1" />
+          </svg>
+        </button>
+        <button
+          class="btn-icon"
+          :class="{ active: uiStore.diffViewMode === 'inline' }"
+          title="单列连续"
+          @click="uiStore.setDiffViewMode('inline')"
+        >
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+            <line x1="2" y1="4" x2="14" y2="4" />
+            <line x1="2" y1="8" x2="14" y2="8" />
+            <line x1="2" y1="12" x2="14" y2="12" />
+          </svg>
+        </button>
+        <button
+          class="btn-icon"
+          :class="{ active: uiStore.diffViewMode === 'side-by-side' }"
+          title="左右分栏"
+          @click="uiStore.setDiffViewMode('side-by-side')"
+        >
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+            <rect x="2" y="2" width="12" height="12" rx="1" />
+            <line x1="8" y1="2" x2="8" y2="14" />
+          </svg>
+        </button>
 
-      <div class="toolbar-divider" />
+        <div class="toolbar-divider" />
+      </template>
+
+      <!-- SVG 才出现：图片 / 文本 切换 -->
+      <template v-if="previewKind === 'svg'">
+        <button
+          class="btn-icon"
+          :class="{ active: !svgTextMode }"
+          title="图片预览"
+          @click="svgTextMode = false"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="3" width="18" height="18" rx="2" />
+            <circle cx="8.5" cy="8.5" r="1.5" />
+            <polyline points="21 15 16 10 5 21" />
+          </svg>
+        </button>
+        <button
+          class="btn-icon"
+          :class="{ active: svgTextMode }"
+          title="文本 diff"
+          @click="svgTextMode = true"
+        >
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+            <line x1="2" y1="4" x2="14" y2="4" />
+            <line x1="2" y1="8" x2="14" y2="8" />
+            <line x1="2" y1="12" x2="10" y2="12" />
+          </svg>
+        </button>
+        <div class="toolbar-divider" />
+      </template>
 
       <!-- 关闭 diff 面板 -->
       <button class="btn-icon" title="关闭" @click="emit('close')">
@@ -139,8 +187,14 @@ function onPrevChange() {
 
     <!-- Diff body -->
     <div class="diff-body">
+      <ImageDiff
+        v-if="isImageView && diff && repoId"
+        :diff="diff"
+        :repo-id="repoId"
+        :wip="wip ?? null"
+      />
       <SideBySideDiff
-        v-if="uiStore.diffViewMode === 'side-by-side'"
+        v-else-if="uiStore.diffViewMode === 'side-by-side'"
         ref="diffRef"
         :diff="diff"
         :loading="loading"

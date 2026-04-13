@@ -110,6 +110,21 @@ pub struct FileDiff {
     pub hunks: Vec<DiffHunk>,
     pub additions: usize,
     pub deletions: usize,
+    /// 旧侧 blob oid；新增/未跟踪场景为 None（对应 git2 的零 oid）
+    #[serde(default)]
+    pub old_blob_oid: Option<String>,
+    /// 新侧 blob oid；删除场景或工作区未暂存的修改侧为 None
+    #[serde(default)]
+    pub new_blob_oid: Option<String>,
+}
+
+/// 二进制 blob 的字节数据（base64 编码），用于图片预览等场景。
+/// 超过大小阈值时 `truncated=true` 且 `bytes_base64` 为空。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BlobData {
+    pub bytes_base64: String,
+    pub size: u64,
+    pub truncated: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

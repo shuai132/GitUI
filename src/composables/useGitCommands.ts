@@ -5,6 +5,7 @@ import type {
   CommitDetail,
   LogPage,
   FileDiff,
+  BlobData,
   BranchInfo,
   SubmoduleInfo,
   StashEntry,
@@ -120,6 +121,12 @@ export function useGitCommands() {
   // ---- Diff ----
   const getFileDiff = (repoId: string, filePath: string, staged: boolean) =>
     call<FileDiff>('get_file_diff', { repoId, filePath, staged })
+
+  const getBlobBytes = (repoId: string, oid: string) =>
+    call<BlobData>('get_blob_bytes', { repoId, oid })
+
+  const readWorktreeFile = (repoId: string, relPath: string) =>
+    call<BlobData>('read_worktree_file', { repoId, relPath })
 
   // ---- Branch ----
   const listBranches = (repoId: string) =>
@@ -262,6 +269,8 @@ export function useGitCommands() {
     getLog,
     getCommitDetail,
     getFileDiff,
+    getBlobBytes,
+    readWorktreeFile,
     listBranches,
     createBranch,
     switchBranch,

@@ -80,6 +80,17 @@ export interface FileDiff {
   hunks: DiffHunk[]
   additions: number
   deletions: number
+  /** 旧侧 blob oid；新增/未跟踪场景为空 */
+  old_blob_oid?: string
+  /** 新侧 blob oid；删除或 WIP 未暂存修改侧为空 */
+  new_blob_oid?: string
+}
+
+/** 二进制 blob 的字节数据（base64 编码），用于图片预览等 */
+export interface BlobData {
+  bytes_base64: string
+  size: number
+  truncated: boolean
 }
 
 export interface CommitDetail {
