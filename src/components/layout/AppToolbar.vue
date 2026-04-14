@@ -959,8 +959,12 @@ async function handleDblClick(e: MouseEvent) {
 }
 
 .btn-tool:disabled {
-  opacity: 0.4;
   cursor: not-allowed;
+}
+
+/* 纯禁用状态才压暗；busy 显示 spinner 时保持全亮，否则 spinner 也会被压到 40% 看不清 */
+.btn-tool:disabled:not(:has(.spinner)) {
+  opacity: 0.4;
 }
 
 .btn-tool-group {
@@ -984,9 +988,11 @@ async function handleDblClick(e: MouseEvent) {
 }
 
 .spinner {
+  display: inline-block;
+  box-sizing: border-box;
   width: 12px;
   height: 12px;
-  border: 1.5px solid var(--text-muted);
+  border: 2px solid var(--border);
   border-top-color: var(--accent-blue);
   border-radius: 50%;
   animation: spin 0.6s linear infinite;
