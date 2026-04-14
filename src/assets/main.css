@@ -61,6 +61,14 @@
     --row-separator-rgb: 54, 58, 79;
     --row-separator-alpha: 0.2;
     --row-separator-style: solid;
+
+    /* 未暂存 / 已暂存区域配色 */
+    --unstaged-accent: var(--accent-orange);
+    --unstaged-accent-bg: rgba(245, 169, 127, 0.15);
+    --unstaged-bar: rgba(245, 169, 127, 0.25);
+    --staged-accent: var(--accent-green);
+    --staged-accent-bg: rgba(166, 218, 149, 0.15);
+    --staged-bar: rgba(166, 218, 149, 0.25);
   }
 
   /* 浅色主题（GitHub Primer Light 风格：冷灰白 + 工程化配色） */
@@ -97,6 +105,14 @@
 
     /* 行分隔线：浅色主题下用 --border (#d0d7de) 的 rgb 基调 */
     --row-separator-rgb: 208, 215, 222;
+
+    /* 未暂存 / 已暂存区域配色 */
+    --unstaged-accent: var(--accent-orange);
+    --unstaged-accent-bg: rgba(188, 76, 0, 0.12);
+    --unstaged-bar: rgba(188, 76, 0, 0.18);
+    --staged-accent: var(--accent-green);
+    --staged-accent-bg: rgba(26, 127, 55, 0.12);
+    --staged-bar: rgba(26, 127, 55, 0.18);
   }
 
   * {

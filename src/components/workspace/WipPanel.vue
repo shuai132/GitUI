@@ -341,6 +341,7 @@ watch(
         :empty-text="t('workspace.wip.empty.unstaged')"
         :show-row-actions="true"
         :selected-path="selectedPath"
+        variant="unstaged"
         @select="onSelectFile"
         @toggle="onToggleFile"
         @context-menu="onFileContext"
@@ -362,6 +363,7 @@ watch(
         :empty-text="t('workspace.wip.empty.staged')"
         :show-row-actions="true"
         :selected-path="selectedPath"
+        variant="staged"
         @select="onSelectFile"
         @toggle="onToggleFile"
         @context-menu="onFileContext"
@@ -509,7 +511,8 @@ watch(
 
 .panel-lists {
   flex: 1;
-  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
   min-height: 0;
   outline: none;
 }

@@ -13,6 +13,8 @@ const props = defineProps<{
   showRowActions?: boolean
   /** 被选中的文件路径（用于高亮） */
   selectedPath?: string | null
+  /** 视觉变体：'unstaged'（橙色）| 'staged'（绿色）；省略为中性 */
+  variant?: 'unstaged' | 'staged'
 }>()
 
 const emit = defineEmits<{
@@ -30,8 +32,18 @@ function onRowContext(e: MouseEvent, file: FileEntry) {
 </script>
 
 <template>
-  <div class="file-list-section">
+  <div class="file-list-section" :class="variant ? `variant-${variant}` : ''">
     <div class="section-header">
+      <svg v-if="variant === 'unstaged'" class="section-icon" width="12" height="12"
+           viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="10"/>
+        <circle cx="12" cy="12" r="3" fill="currentColor" stroke="none"/>
+      </svg>
+      <svg v-if="variant === 'staged'" class="section-icon" width="12" height="12"
+           viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="10"/>
+        <polyline points="9 12 11.5 14.5 16 9.5"/>
+      </svg>
       <span class="section-title">{{ title }}</span>
       <span class="section-count">{{ files.length }}</span>
       <slot name="header-actions" />
@@ -75,17 +87,28 @@ function onRowContext(e: MouseEvent, file: FileEntry) {
 .file-list-section {
   display: flex;
   flex-direction: column;
+  flex: 1;
+  min-height: 0;
 }
 
 .section-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 6px;
-  padding: 5px 10px;
+  padding: 3px 10px;
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border);
   user-select: none;
+}
+
+.section-count {
+  margin-right: auto;
+}
+
+.file-entries {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
 }
 
 .section-title {
@@ -173,5 +196,45 @@ function onRowContext(e: MouseEvent, file: FileEntry) {
   color: var(--text-muted);
   font-size: var(--font-sm);
   font-style: italic;
+}
+
+/* ── Section variant styles (unstaged / staged) ── */
+
+.section-icon {
+  flex-shrink: 0;
+}
+
+.variant-unstaged .section-header {
+  border-left: 3px solid var(--unstaged-accent);
+}
+
+.variant-staged .section-header {
+  border-left: 3px solid var(--staged-accent);
+}
+
+.variant-unstaged .section-icon {
+  color: var(--unstaged-accent);
+}
+
+.variant-staged .section-icon {
+  color: var(--staged-accent);
+}
+
+.variant-unstaged .section-count {
+  color: var(--unstaged-accent);
+  background: var(--unstaged-accent-bg);
+}
+
+.variant-staged .section-count {
+  color: var(--staged-accent);
+  background: var(--staged-accent-bg);
+}
+
+.variant-unstaged .file-entry {
+  border-left: 2px solid var(--unstaged-bar);
+}
+
+.variant-staged .file-entry {
+  border-left: 2px solid var(--staged-bar);
 }
 </style>
