@@ -33,6 +33,14 @@
 - [ ] 合并冲突解决 UI
 - [ ] 文件历史 / Blame
 
+## 安装
+
+macOS 上因应用未签名，首次打开可能被系统拦截，需执行：
+
+```bash
+sudo xattr -dr com.apple.quarantine /Applications/GitUI.app
+```
+
 ## 开发
 
 ```bash
