@@ -46,14 +46,14 @@ pub struct RepoManager {
 
 「添加仓库」有三个入口，均统一收敛到同一套 menu + dialog：
 
-- **工具栏**：`AppToolbar.vue` 的「打开」按钮是 split-button——主按钮保留旧行为（直接选目录 → `open_repo`），右侧 chevron 弹「添加仓库」菜单
-- **侧栏**：`AppSidebar.vue` 的 `+` 按钮直接弹同一菜单（侧栏空间紧张，不再保留默认动作；菜单的「打开」即原行为）
+- **工具栏**：`AppToolbar.vue` 的「新建」按钮（`+` 图标）点击直接弹「添加仓库」菜单，不再做 split-button 的默认动作
+- **侧栏**：`AppSidebar.vue` 的 `+` 按钮行为一致，弹同一菜单
 - **菜单项**：打开本地仓库 / 克隆远程仓库 / 新建本地仓库
 
 菜单和 `CloneRepoDialog` / `InitRepoDialog` 都挂在 `App.vue` 顶层。状态由 `composables/useRepoCreation.ts` 用模块级 `ref` 持有（单例），各入口只调用 `showMenuAt(anchor)` / `openCloneDialog()` / `openInitDialog()`。
 
 ```
-点击 + 或 chevron
+点击 + 按钮
   → useRepoCreation.showMenuAt(anchor)
   → 用户在 ContextMenu 中选 "克隆" / "新建"
     ├─ "克隆" → CloneRepoDialog
@@ -89,7 +89,7 @@ pub struct RepoManager {
 ## 打开流程
 
 ```
-用户点击 + 按钮 / 顶栏"打开"
+用户在侧栏 / 工具栏弹出的「添加仓库」菜单里选"打开本地仓库"
   → plugin-dialog openDialog({ directory: true })
   → reposStore.openRepo(path)
   → git.openRepo(path) → invoke("open_repo")

@@ -131,6 +131,8 @@ commit 面板内容有一个计算出的 `commitListMinWidth = graph + desc + ha
 
 其中 `checkoutCommit` 在后端使用 `safe` 模式 checkout：若工作区有未提交变更会失败（保护用户）。
 
+**`is_stash === true` 的行走另一套菜单**：Apply Stash / Pop Stash / Delete Stash，与侧栏 STASH section 的右键菜单同源（见 [10-stash-reflog.md](./10-stash-reflog.md)）。菜单按 `stashStore.entries` 里匹配 `commit_oid` 找到对应 index，再调 `stashStore.apply / pop / drop`。
+
 ## 分支标签
 
 提交列表的每一行会把 `historyStore.branches` 中指向该 commit 的分支渲染成小 tag（`branchTagMap` computed）。颜色：

@@ -34,8 +34,8 @@ Fetch / Push / Pull 是三个独立命令，统一走 git2 的 `RemoteCallbacks`
 
 `anchorRect` 用于定位菜单到触发按钮下方：
 
-- Pull / Push 按钮：`(e.currentTarget as HTMLElement).getBoundingClientRect()`
-- Actions 菜单里的 "抓取"：用 `actionsBtnRef` 的 rect 作为 fallback
+- Pull / Push / Fetch 按钮：`(e.currentTarget as HTMLElement).getBoundingClientRect()`
+- 其他调用方（如 tag push 走 `usePickRemote`）没有 anchor 时，回退到 `actionsBtnRef` 的 rect
 
 多 remote 时每次都弹菜单、不记忆——remote 切换在日常工作里是显式决定。如果后续证明太烦，可以再加 per-repo 的偏好记忆。
 
