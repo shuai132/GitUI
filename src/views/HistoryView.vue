@@ -1304,11 +1304,13 @@ onUnmounted(() => {
 }
 
 .commit-row.wip-row {
-  background: rgba(245, 169, 127, 0.04);
+  background: rgba(139, 213, 202, 0.05);
 }
 
+/* 选中时用 Catppuccin Teal（半透明底），与普通 commit 的实心蓝区分，
+   暗示"这是进行中的工作副本"而非已落盘的提交 */
 .commit-row.wip-row.selected {
-  background: rgba(245, 169, 127, 0.15);
+  background: rgba(139, 213, 202, 0.2);
 }
 
 /* ── Columns ─────────────────────────────────────────────────────── */
