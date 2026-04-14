@@ -36,6 +36,13 @@ const viewToggles = computed<ToggleRow[]>(() => [
     get: () => uiStore.debugPanelVisible,
     toggle: () => uiStore.toggleDebugPanel(),
   },
+  {
+    key: 'detailFilesFirst',
+    label: t('settings.advanced.detailFilesFirst'),
+    hint: t('settings.advanced.detailFilesFirstHint'),
+    get: () => uiStore.detailFilesFirst,
+    toggle: () => uiStore.toggleDetailFilesFirst(),
+  },
 ])
 
 interface PlaceholderItem {

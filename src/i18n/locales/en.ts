@@ -528,6 +528,8 @@ const messages = {
       showStashesHint: 'Draw stash nodes on the history graph',
       debugLog: 'Debug log',
       debugLogHint: 'Show the debug log panel at the bottom of the main view',
+      detailFilesFirst: 'File list on top',
+      detailFilesFirstHint: 'Show changed files above commit info in the detail panel',
       upcomingTitle: 'Coming soon',
       shortcuts: 'Shortcuts',
       shortcutsHint: 'Custom keyboard shortcuts — coming soon',

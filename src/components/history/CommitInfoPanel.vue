@@ -20,6 +20,8 @@ const emit = defineEmits<{
 const uiStore = useUiStore()
 const sizes = uiStore.historyPaneSizes
 
+const filesFirst = computed(() => uiStore.detailFilesFirst)
+
 // ── 头部区（summary + meta-grid）和变动文件列表之间的可拖拽分隔条 ──
 // commitInfoTopH === 0 时头部自适应内容高度；拖动后变成像素值，持久化到 uiStore
 const panelRoot = ref<HTMLElement | null>(null)
@@ -39,10 +41,12 @@ function startTopResize(e: PointerEvent) {
   const startY = e.clientY
   const startH = topEl.getBoundingClientRect().height
   const rootH = rootEl.getBoundingClientRect().height
-  // 上限：留至少 80px 给下方 file-tabs
+  // 上限：留至少 80px 给另一区
   const maxH = Math.max(80, rootH - 80)
+  // filesFirst 时 top-section 在 handle 下方，拖动方向反转
+  const dir = filesFirst.value ? -1 : 1
   const onMove = (ev: PointerEvent) => {
-    const next = startH + (ev.clientY - startY)
+    const next = startH + dir * (ev.clientY - startY)
     sizes.commitInfoTopH = Math.max(60, Math.min(maxH, next))
   }
   const onUp = () => {
@@ -84,7 +88,11 @@ const bodyText = computed(() => {
 <template>
   <div class="commit-info-panel" v-if="commit" ref="panelRoot">
     <!-- 上半区：头部 + 元数据（高度由 sizes.commitInfoTopH 控制，可拖拽） -->
-    <div class="top-section" ref="topSection" :style="topSectionStyle">
+    <div
+      class="top-section"
+      ref="topSection"
+      :style="[topSectionStyle, filesFirst ? { order: 2 } : {}]"
+    >
       <!-- Header: avatar + commit title -->
       <div class="panel-header">
         <div class="avatar" :style="{ background: avatarColor }">{{ initials }}</div>
@@ -125,11 +133,16 @@ const bodyText = computed(() => {
     <div
       v-if="commit.diffs.length"
       class="top-resize"
+      :style="filesFirst ? { order: 1 } : {}"
       @pointerdown="startTopResize"
     />
 
     <!-- Changed files tab strip -->
-    <div class="file-tabs" v-if="commit.diffs.length">
+    <div
+      class="file-tabs"
+      :style="filesFirst ? { order: 0 } : {}"
+      v-if="commit.diffs.length"
+    >
       <div
         v-for="(d, idx) in commit.diffs"
         :key="idx"

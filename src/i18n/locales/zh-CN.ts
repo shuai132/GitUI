@@ -528,6 +528,8 @@ const messages = {
       showStashesHint: '在历史图中绘制 stash 节点',
       debugLog: '调试日志',
       debugLogHint: '在主界面底部展示调试日志面板',
+      detailFilesFirst: '文件列表置顶',
+      detailFilesFirstHint: '提交详情面板中将变更文件列表显示在提交信息上方',
       upcomingTitle: '即将推出',
       shortcuts: '快捷键',
       shortcutsHint: '自定义键盘快捷键即将推出',
