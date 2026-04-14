@@ -90,7 +90,7 @@ export interface SettingsData {
 export const DEFAULT_SETTINGS: SettingsData = {
   themeMode: 'auto',
   uiFontFamily: '',
-  uiFontSize: 13,
+  uiFontSize: 12,
   codeFontFamily: '',
   codeFontSize: 12,
   accentOverrides: {},
