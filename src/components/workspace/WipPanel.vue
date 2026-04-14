@@ -156,7 +156,16 @@ function checkDiscardAllRequest() {
     uiStore.consumeDiscardAllRequest()
   }
 }
-onMounted(checkDiscardAllRequest)
+onMounted(() => {
+  checkDiscardAllRequest()
+  // 首次进入 WIP：若尚未选中任何文件，自动选中第一个
+  // （顺序：未暂存 + 未跟踪 → 已暂存，与视觉列表一致）
+  if (!selectedPath.value && allFiles.value.length > 0) {
+    const first = allFiles.value[0]
+    selectedPath.value = first.path
+    diffStore.loadFileDiff(first.path, first.staged)
+  }
+})
 watch(() => uiStore.shouldOpenDiscardAll, checkDiscardAllRequest)
 
 // ── 提交表单 ──────────────────────────────────────────────────────
