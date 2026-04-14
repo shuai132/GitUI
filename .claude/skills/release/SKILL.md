@@ -37,10 +37,10 @@ git rev-parse vX.Y.Z 2>/dev/null # tag 是否已存在（存在即返回 hash，
 ### 2. 创建 annotated tag
 
 ```bash
-git tag -a vX.Y.Z -m "Release X.Y.Z"
+git tag -a vX.Y.Z -m "chore: release vX.Y.Z"
 ```
 
-使用 annotated tag（`-a` + `-m`），便于 `git describe` 和 GitHub Release 页面展示。
+使用 annotated tag（`-a` + `-m`），tag message 固定格式为 `chore: release vX.Y.Z`，与项目提交规范保持一致。
 
 ### 3. 推送 tag 到远程
 
