@@ -59,6 +59,50 @@ const showWipRow = computed(() => {
 // 当前是否选中的是 WIP 行（而不是某条 commit）
 const selectedWip = ref(false)
 
+// WIP 文件统计（用于详情面板标题栏）
+const wipStats = computed(() => {
+  const s = workspaceStore.status
+  if (!s) return { modified: 0, deleted: 0, added: 0 }
+
+  let modified = 0
+  let deleted = 0
+  let added = 0
+
+  const allFiles = [...s.staged, ...s.unstaged, ...s.untracked]
+
+  for (const f of allFiles) {
+    if (f.status === 'deleted') {
+      deleted++
+    } else if (f.status === 'added' || f.status === 'untracked') {
+      added++
+    } else {
+      modified++
+    }
+  }
+
+  return { modified, deleted, added }
+})
+
+// Commit 文件统计
+const commitStats = computed(() => {
+  const diffs = historyStore.selectedCommit?.diffs ?? []
+  let modified = 0
+  let deleted = 0
+  let added = 0
+
+  for (const d of diffs) {
+    if (!d.new_path || d.new_path === '/dev/null') {
+      deleted++
+    } else if (!d.old_path || d.old_path === '/dev/null') {
+      added++
+    } else {
+      modified++
+    }
+  }
+
+  return { modified, deleted, added }
+})
+
 // 虚拟行数 = 过滤后 commits + (WIP 行占 1 个，搜索时隐藏)
 const virtualRowCount = computed(() =>
   filteredCommits.value.length + (!uiStore.historySearchQuery.trim() && showWipRow.value ? 1 : 0),
@@ -981,6 +1025,58 @@ onUnmounted(() => {
             <svg width="8" height="14" viewBox="0 0 8 14"><circle cx="2" cy="2" r="1" fill="currentColor"/><circle cx="6" cy="2" r="1" fill="currentColor"/><circle cx="2" cy="7" r="1" fill="currentColor"/><circle cx="6" cy="7" r="1" fill="currentColor"/><circle cx="2" cy="12" r="1" fill="currentColor"/><circle cx="6" cy="12" r="1" fill="currentColor"/></svg>
           </div>
           <span class="pane-header-title">{{ t('history.detailsPanel.title') }}</span>
+          <!-- 文件变更统计 -->
+          <span v-if="selectedWip" class="pane-header-stats">
+            <span class="ph-stat" title="Modified">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 20h9"/>
+                <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+              </svg>
+              <span class="ph-stat-label">modified</span>
+              <span class="ph-stat-value">{{ wipStats.modified }}</span>
+            </span>
+            <span class="ph-stat deleted" title="Deleted">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="5" y1="12" x2="19" y2="12"/>
+              </svg>
+              <span class="ph-stat-label">deleted</span>
+              <span class="ph-stat-value">{{ wipStats.deleted }}</span>
+            </span>
+            <span class="ph-stat added" title="Added">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="12" y1="5" x2="12" y2="19"/>
+                <line x1="5" y1="12" x2="19" y2="12"/>
+              </svg>
+              <span class="ph-stat-label">added</span>
+              <span class="ph-stat-value">{{ wipStats.added }}</span>
+            </span>
+          </span>
+          <!-- Commit 统计信息 -->
+          <span v-else-if="historyStore.selectedCommit" class="pane-header-stats">
+            <span class="ph-stat" title="Modified">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 20h9"/>
+                <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+              </svg>
+              <span class="ph-stat-label">modified</span>
+              <span class="ph-stat-value">{{ commitStats.modified }}</span>
+            </span>
+            <span class="ph-stat deleted" title="Deleted">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="5" y1="12" x2="19" y2="12"/>
+              </svg>
+              <span class="ph-stat-label">deleted</span>
+              <span class="ph-stat-value">{{ commitStats.deleted }}</span>
+            </span>
+            <span class="ph-stat added" title="Added">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="12" y1="5" x2="12" y2="19"/>
+                <line x1="5" y1="12" x2="19" y2="12"/>
+              </svg>
+              <span class="ph-stat-label">added</span>
+              <span class="ph-stat-value">{{ commitStats.added }}</span>
+            </span>
+          </span>
         </div>
         <WipPanel v-if="selectedWip" />
         <CommitInfoPanel
@@ -1157,6 +1253,49 @@ onUnmounted(() => {
 }
 .pane-header-title {
   padding: 0 4px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.pane-header-stats {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: 8px;
+  text-transform: none;
+  letter-spacing: normal;
+  font-weight: 500;
+}
+
+.ph-stat {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: var(--font-xs);
+  color: var(--text-secondary);
+}
+
+.ph-stat svg {
+  color: var(--accent-orange);
+}
+
+.ph-stat.deleted svg {
+  color: var(--accent-red);
+}
+
+.ph-stat.added svg {
+  color: var(--accent-green);
+}
+
+.ph-stat-label {
+  color: var(--text-muted);
+}
+
+.ph-stat-value {
+  color: var(--text-primary);
+  font-weight: 600;
+  min-width: 14px;
+  text-align: right;
 }
 
 /* ── Dock overlay（drop zone）────────────────────────────────── */

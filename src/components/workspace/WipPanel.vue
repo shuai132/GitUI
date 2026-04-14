@@ -464,10 +464,13 @@ watch(
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 8px 12px;
+  padding: 4px 12px;
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  height: 28px;
 }
 
 .btn-trash {
