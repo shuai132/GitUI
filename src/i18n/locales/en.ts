@@ -32,6 +32,8 @@ const messages = {
       layoutCustom: 'Custom layout → switch to stacked',
       layoutVertical: 'Stacked layout → switch to side-by-side',
       layoutHorizontal: 'Side-by-side layout → switch to custom',
+      themeSwitchLight: 'Switch to light theme',
+      themeSwitchDark: 'Switch to dark theme',
       settings: 'Settings',
       actions: 'More actions',
     },

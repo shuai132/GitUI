@@ -32,6 +32,8 @@ const messages = {
       layoutCustom: '自定义布局 → 切换为上下',
       layoutVertical: '上下布局 → 切换为左右',
       layoutHorizontal: '左右布局 → 切换为自定义',
+      themeSwitchLight: '切换为浅色主题',
+      themeSwitchDark: '切换为深色主题',
       settings: '设置',
       actions: '更多操作',
     },

@@ -168,6 +168,22 @@ function onSearchKeydown(e: KeyboardEvent) {
   }
 }
 
+// ── 主题切换 ─────────────────────────────────────────────────────
+// 以当前实际生效（解析后）的主题为准在 light ↔ dark 之间切换。
+// auto 档下也按当前呈现切到明确的另一侧，需要恢复 auto 可去设置里改。
+const resolvedTheme = computed<'light' | 'dark'>(() => {
+  const mode = settingsStore.themeMode
+  if (mode !== 'auto') return mode
+  if (typeof window !== 'undefined' && window.matchMedia) {
+    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+  }
+  return 'dark'
+})
+
+function toggleTheme() {
+  settingsStore.themeMode = resolvedTheme.value === 'dark' ? 'light' : 'dark'
+}
+
 // ── 仓库已打开时按钮才可用 ────────────────────────────────────────
 const hasRepo = computed(() => !!repoStore.activeRepoId)
 
@@ -683,6 +699,30 @@ async function handleDblClick(e: MouseEvent) {
           @keydown="onSearchKeydown"
         />
       </div>
+
+      <!-- 主题切换：深色显示太阳（点击切浅色），浅色显示月亮（点击切深色） -->
+      <button
+        class="btn-icon-only"
+        :title="resolvedTheme === 'dark' ? t('toolbar.title.themeSwitchLight') : t('toolbar.title.themeSwitchDark')"
+        @click="toggleTheme"
+      >
+        <!-- 太阳：当前深色 -->
+        <svg v-if="resolvedTheme === 'dark'" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="4"/>
+          <line x1="12" y1="2" x2="12" y2="4"/>
+          <line x1="12" y1="20" x2="12" y2="22"/>
+          <line x1="4.93" y1="4.93" x2="6.34" y2="6.34"/>
+          <line x1="17.66" y1="17.66" x2="19.07" y2="19.07"/>
+          <line x1="2" y1="12" x2="4" y2="12"/>
+          <line x1="20" y1="12" x2="22" y2="12"/>
+          <line x1="4.93" y1="19.07" x2="6.34" y2="17.66"/>
+          <line x1="17.66" y1="6.34" x2="19.07" y2="4.93"/>
+        </svg>
+        <!-- 月亮：当前浅色 -->
+        <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+        </svg>
+      </button>
 
       <button
         v-if="hasRepo"
