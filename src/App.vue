@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import AppSidebar from '@/components/layout/AppSidebar.vue'
@@ -174,6 +174,17 @@ onStatusChanged((repoId) => {
   }
 })
 
+// Terminal 面板 mount-once：首次显示后一直保留在 DOM 里，
+// 通过 v-show 切换显隐，避免隐藏时销毁 xterm 实例 + pty 会话，
+// 下次展开能保留输出内容。
+const terminalEverMounted = ref(uiStore.terminalVisible)
+watch(
+  () => uiStore.terminalVisible,
+  (v) => {
+    if (v) terminalEverMounted.value = true
+  },
+)
+
 // Refresh workspace when active repo changes
 watch(
   () => repoStore.activeRepoId,
@@ -212,7 +223,8 @@ watch(
         <div class="main-with-terminal" :data-dock="uiStore.terminalDock">
           <div class="main-content"><RouterView /></div>
           <TerminalPanel
-            v-if="uiStore.terminalVisible"
+            v-if="terminalEverMounted"
+            v-show="uiStore.terminalVisible"
             :style="uiStore.terminalDock === 'bottom'
               ? { height: uiStore.terminalHeight + 'px' }
               : { width: uiStore.terminalWidth + 'px' }"

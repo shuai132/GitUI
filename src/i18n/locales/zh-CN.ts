@@ -25,9 +25,9 @@ const messages = {
       stashEmpty: '没有可 stash 的变更',
       popWithCount: 'Pop 最新 stash (共 {count} 条)',
       popEmpty: '没有 stash',
-      terminalInApp: '打开应用内终端',
       terminalSystem: '在系统终端打开仓库',
-      terminalModeSelect: '选择终端打开方式',
+      terminalToggleShow: '显示应用内终端',
+      terminalToggleHide: '隐藏应用内终端',
       layoutCustom: '自定义布局 → 切换为上下',
       layoutVertical: '上下布局 → 切换为左右',
       layoutHorizontal: '左右布局 → 切换为自定义',
@@ -38,10 +38,6 @@ const messages = {
       ff: 'Pull (fast-forward if possible)',
       ffOnly: 'Pull (fast-forward only)',
       rebase: 'Pull (rebase)',
-    },
-    terminalMode: {
-      inApp: '在应用内打开',
-      system: '在系统终端打开',
     },
     actionsMenu: {
       fetching: '抓取中...',

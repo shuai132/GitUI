@@ -15,7 +15,6 @@ const KEYS = {
   customDockLayout: 'gitui.history.customDockLayout',
   layoutPreset: 'gitui.history.layoutPreset',
   debugPanel: 'gitui.debug.visible',
-  terminalMode: 'gitui.terminal.mode',
   terminalDock: 'gitui.terminal.dock',
   terminalHeight: 'gitui.terminal.height',
   terminalWidth: 'gitui.terminal.width',
@@ -69,9 +68,7 @@ export interface DockLayout {
 
 const DIFF_MODE_VALUES = ['side-by-side', 'inline', 'by-hunk'] as const
 
-export type TerminalMode = 'in-app' | 'system'
 export type TerminalDock = 'bottom' | 'right'
-const TERMINAL_MODE_VALUES = ['in-app', 'system'] as const
 const TERMINAL_DOCK_VALUES = ['bottom', 'right'] as const
 
 const PRESET_LAYOUTS: Record<string, DockLayout> = {
@@ -168,9 +165,6 @@ export const useUiStore = defineStore('ui', () => {
   const debugPanelVisible = ref<boolean>(loadBool(KEYS.debugPanel, false))
 
   // ── Terminal 偏好 ─────────────────────────────────────────────────
-  const terminalMode = ref<TerminalMode>(
-    loadString<TerminalMode>(KEYS.terminalMode, 'in-app', TERMINAL_MODE_VALUES),
-  )
   const terminalDock = ref<TerminalDock>(
     loadString<TerminalDock>(KEYS.terminalDock, 'bottom', TERMINAL_DOCK_VALUES),
   )
@@ -248,11 +242,6 @@ export const useUiStore = defineStore('ui', () => {
   }
 
   // ── Terminal 偏好动作 ─────────────────────────────────────────────
-  function setTerminalMode(mode: TerminalMode) {
-    terminalMode.value = mode
-    localStorage.setItem(KEYS.terminalMode, mode)
-  }
-
   function setTerminalDock(dock: TerminalDock) {
     terminalDock.value = dock
     localStorage.setItem(KEYS.terminalDock, dock)
@@ -303,7 +292,6 @@ export const useUiStore = defineStore('ui', () => {
     diffViewMode,
     diffHighlightEnabled,
     debugPanelVisible,
-    terminalMode,
     terminalDock,
     terminalHeight,
     terminalWidth,
@@ -322,7 +310,6 @@ export const useUiStore = defineStore('ui', () => {
     setDiffViewMode,
     toggleDiffHighlight,
     toggleDebugPanel,
-    setTerminalMode,
     setTerminalDock,
     toggleTerminalDock,
     setTerminalVisible,

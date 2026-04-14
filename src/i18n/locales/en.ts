@@ -25,9 +25,9 @@ const messages = {
       stashEmpty: 'Nothing to stash',
       popWithCount: 'Pop latest stash ({count} total)',
       popEmpty: 'No stash',
-      terminalInApp: 'Open in-app terminal',
       terminalSystem: 'Open repository in system terminal',
-      terminalModeSelect: 'Choose terminal mode',
+      terminalToggleShow: 'Show in-app terminal',
+      terminalToggleHide: 'Hide in-app terminal',
       layoutCustom: 'Custom layout → switch to stacked',
       layoutVertical: 'Stacked layout → switch to side-by-side',
       layoutHorizontal: 'Side-by-side layout → switch to custom',
@@ -38,10 +38,6 @@ const messages = {
       ff: 'Pull (fast-forward if possible)',
       ffOnly: 'Pull (fast-forward only)',
       rebase: 'Pull (rebase)',
-    },
-    terminalMode: {
-      inApp: 'Open in app',
-      system: 'Open in system terminal',
     },
     actionsMenu: {
       fetching: 'Fetching...',

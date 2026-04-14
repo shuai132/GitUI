@@ -133,45 +133,6 @@ function onPullModeSelect(action: string) {
   setPullMode(action as PullMode)
 }
 
-// ── Terminal 模式下拉 ────────────────────────────────────────────
-type TerminalModeAction = 'in-app' | 'system'
-const terminalMenu = reactive({
-  visible: false,
-  x: 0,
-  y: 0,
-})
-
-const terminalMenuItems = computed<ContextMenuItem[]>(() => [
-  {
-    label: `${uiStore.terminalMode === 'in-app' ? '● ' : '○ '}${t('toolbar.terminalMode.inApp')}`,
-    action: 'in-app',
-  },
-  {
-    label: `${uiStore.terminalMode === 'system' ? '● ' : '○ '}${t('toolbar.terminalMode.system')}`,
-    action: 'system',
-  },
-])
-
-function onTerminalChevronClick(e: MouseEvent) {
-  e.stopPropagation()
-  if (terminalMenu.visible) {
-    terminalMenu.visible = false
-    return
-  }
-  const el = e.currentTarget as HTMLElement
-  const rect = el.getBoundingClientRect()
-  terminalMenu.x = rect.left
-  terminalMenu.y = rect.bottom + 4
-  terminalMenu.visible = true
-}
-
-async function onTerminalModeSelect(action: string) {
-  terminalMenu.visible = false
-  uiStore.setTerminalMode(action as TerminalModeAction)
-  // 按新模式直接执行一次，符合 SourceTree 下拉点选即应用的直觉
-  await onTerminal()
-}
-
 const showReflogDialog = ref(false)
 const showErrorHistoryDialog = ref(false)
 const showAboutDialog = ref(false)
@@ -377,18 +338,20 @@ async function onPop() {
 }
 
 // ── Terminal ────────────────────────────────────────────────────────
-async function onTerminal() {
+// 中间按钮：直接在系统终端打开当前仓库
+async function onOpenSystemTerminal() {
   const id = repoStore.activeRepoId
   if (!id) return
-  if (uiStore.terminalMode === 'in-app') {
-    if (!uiStore.terminalVisible) uiStore.setTerminalVisible(true)
-    return
-  }
   try {
     await git.openTerminal(id, resolveExternalTerminalApp(settingsStore))
   } catch {
     /* toast 由 errorsStore watch 统一处理 */
   }
+}
+
+// 右侧小按钮：切换应用内终端可见（内容由 App.vue 的 mount-once 保留）
+function onToggleInAppTerminal() {
+  uiStore.toggleTerminalVisible()
 }
 
 // ── Actions 下拉菜单 ───────────────────────────────────────────────
@@ -661,32 +624,19 @@ async function handleDblClick(e: MouseEvent) {
         <span>Pop</span>
       </button>
 
-      <!-- Terminal (split button: main + chevron) -->
-      <div class="btn-tool-group">
-        <button
-          class="btn-tool btn-tool--main"
-          :title="uiStore.terminalMode === 'in-app' ? t('toolbar.title.terminalInApp') : t('toolbar.title.terminalSystem')"
-          :disabled="!hasRepo"
-          @click="onTerminal"
-        >
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <polyline points="4 17 10 11 4 5"/>
-            <line x1="12" y1="19" x2="20" y2="19"/>
-          </svg>
-          <span>Terminal</span>
-        </button>
-        <button
-          class="btn-tool btn-tool--chevron"
-          :title="t('toolbar.title.terminalModeSelect')"
-          data-menu-anchor
-          :disabled="!hasRepo"
-          @click="onTerminalChevronClick($event)"
-        >
-          <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-            <polyline points="6 9 12 15 18 9"/>
-          </svg>
-        </button>
-      </div>
+      <!-- Terminal：在系统终端打开当前仓库 -->
+      <button
+        class="btn-tool"
+        :title="t('toolbar.title.terminalSystem')"
+        :disabled="!hasRepo"
+        @click="onOpenSystemTerminal"
+      >
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="4 17 10 11 4 5"/>
+          <line x1="12" y1="19" x2="20" y2="19"/>
+        </svg>
+        <span>Terminal</span>
+      </button>
     </div>
 
     <div class="toolbar-spacer" data-tauri-drag-region />
@@ -721,6 +671,19 @@ async function handleDblClick(e: MouseEvent) {
           @keydown="onSearchKeydown"
         />
       </div>
+
+      <button
+        v-if="hasRepo"
+        class="btn-icon-only"
+        :class="{ 'btn-icon-only--active': uiStore.terminalVisible }"
+        :title="uiStore.terminalVisible ? t('toolbar.title.terminalToggleHide') : t('toolbar.title.terminalToggleShow')"
+        @click="onToggleInAppTerminal"
+      >
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="4 17 10 11 4 5"/>
+          <line x1="12" y1="19" x2="20" y2="19"/>
+        </svg>
+      </button>
 
       <button
         v-if="hasRepo"
@@ -824,16 +787,6 @@ async function handleDblClick(e: MouseEvent) {
       :items="pullModeMenuItems"
       @close="pullModeMenu.visible = false"
       @select="onPullModeSelect"
-    />
-
-    <!-- Terminal 模式选择菜单 -->
-    <ContextMenu
-      :visible="terminalMenu.visible"
-      :x="terminalMenu.x"
-      :y="terminalMenu.y"
-      :items="terminalMenuItems"
-      @close="terminalMenu.visible = false"
-      @select="onTerminalModeSelect"
     />
   </div>
 </template>
@@ -1018,6 +971,12 @@ async function handleDblClick(e: MouseEvent) {
 .btn-icon-only:hover:not(:disabled) {
   background: var(--bg-overlay);
   color: var(--text-primary);
+}
+
+/* 切换型图标按钮处于激活态（终端已展开） */
+.btn-icon-only--active {
+  background: var(--bg-overlay);
+  color: var(--accent-blue);
 }
 
 .btn-icon-only:disabled {
