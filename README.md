@@ -19,7 +19,7 @@
 - [x] SSH 凭据链：ssh-agent → `~/.ssh/id_ed25519` → `~/.ssh/id_rsa`，HTTPS 走系统 credential helper
 - [x] Submodule：init / update / edit URL / deinit，已克隆的可作为新仓库打开
 - [x] Diff 查看器：inline / side-by-side / by-hunk 三种模式、多语言语法高亮、图片 / SVG 预览
-- [x] Stash：push / pop（含 untracked 文件），用提交信息作 stash message
+- [x] Stash：push / pop / apply / delete（含 untracked 文件），用提交信息作 stash message
 - [x] Reflog 查看、git gc 触发入口
 - [x] 工作目录文件监控，状态自动刷新
 - [x] 内置终端：应用内（xterm.js + PTY）/ 调用外部终端

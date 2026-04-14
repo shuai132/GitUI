@@ -172,9 +172,11 @@ const messages = {
     },
     stash: {
       menu: {
-        popLatest: 'Pop stash@{index}（最新）',
-        copyOid: '复制 commit hash',
+        apply: 'Apply Stash',
+        pop: 'Pop Stash',
+        delete: 'Delete Stash',
       },
+      confirmDelete: '确认删除 stash@{index} "{message}"？此操作不可撤销。',
     },
     submodule: {
       menu: {
@@ -245,6 +247,9 @@ const messages = {
       copySha: '复制提交 SHA',
       createTag: '在此创建标签...',
       createAnnotatedTag: '创建附注标签...',
+      stashApply: 'Apply Stash',
+      stashPop: 'Pop Stash',
+      stashDelete: 'Delete Stash',
     },
     dialog: {
       confirmCheckout: { body: '检出到提交 {shortOid} 将进入 detached HEAD 状态，确认？' },
@@ -255,6 +260,7 @@ const messages = {
         hardBody: 'Hard reset 将丢弃所有未提交变更，确认把 {branch} 重置到 {shortOid}？',
         mode: { soft: 'soft', mixed: 'mixed', hard: 'hard' },
       },
+      confirmStashDelete: { body: '确认删除 stash@{index} "{message}"？此操作不可撤销。' },
     },
   },
   branches: {

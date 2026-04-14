@@ -6,7 +6,7 @@
 
 ### 涉及模块
 
-- 后端：`commands/stash.rs`、`GitEngine::stash_push / stash_pop / stash_list`
+- 后端：`commands/stash.rs`、`GitEngine::stash_push / stash_pop / stash_apply / stash_drop / stash_list`
 - 前端：
   - `stores/stash.ts`
   - `components/layout/AppToolbar.vue`（Stash / Pop 按钮）
@@ -15,12 +15,15 @@
 
 ### 后端
 
-`GitEngine::stash_push / stash_pop / stash_list`（见 `git/engine.rs`）。数据结构 `StashEntry` 见 `git/types.rs`。行为要点：
+`GitEngine::stash_push / stash_pop / stash_apply / stash_drop / stash_list`（见 `git/engine.rs`）。数据结构 `StashEntry` 见 `git/types.rs`。行为要点：
 
 - `stash_push` 使用 `StashFlags::INCLUDE_UNTRACKED`，新文件会一起被 stash
-- `stash_pop` 只对最新一条（`index 0`）生效，UI 不暴露按索引 pop（会错乱 hash）
+- `stash_pop / stash_apply / stash_drop` 接收 `index` 参数（UI 侧按 `StashEntry.index` 传入）：
+  - `pop` = apply + drop，工具栏 "Pop" 按钮传 0（最新一条）
+  - `apply` 只应用不移除；`drop` 只移除不应用
+  - drop 之后其他 stash 的 index 会顺位前移，前端 `stashStore` 在操作后统一 `refresh()` 重新拉取
 - `stash_list` 通过 `stash_foreach` 只读遍历，不触发写操作
-- 没有 drop / apply / branch 等操作
+- 没有 branch（`git stash branch`）等操作
 
 ### UI
 
@@ -34,9 +37,10 @@
 - 总数显示在 section title 上
 - 每条显示 `{index}` + message
 - 点击 stash 行 → `historyStore.selectCommit(stash.commit_oid)` 把该 stash commit 当普通 commit 展开到详情面板
-- 右键菜单：
-  - `Pop stash@{n}（最新）` —— 只对 `index === 0` 启用
-  - 复制 commit hash
+- 右键菜单（侧边栏 STASH 行 / 历史图里 `is_stash === true` 的提交共用同一组语义）：
+  - `Apply Stash` —— 应用但保留条目
+  - `Pop Stash` —— 应用并移除
+  - `Delete Stash` —— 仅移除（带二次确认；不使用 danger 红色样式，和其他 stash 项保持同等视觉权重）
 
 ### 历史图里的 stash
 

@@ -6,6 +6,7 @@ import { useHistoryStore } from '@/stores/history'
 import { useRepoStore } from '@/stores/repos'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useDiffStore } from '@/stores/diff'
+import { useStashStore } from '@/stores/stash'
 import { useUiStore } from '@/stores/ui'
 import { formatAbsoluteTime, formatAuthor, formatHistoryTime } from '@/utils/format'
 import { LANE_W, ROW_H } from '@/utils/graph'
@@ -26,6 +27,7 @@ const historyStore = useHistoryStore()
 const repoStore = useRepoStore()
 const workspaceStore = useWorkspaceStore()
 const diffStore = useDiffStore()
+const stashStore = useStashStore()
 const uiStore = useUiStore()
 
 // ── 键盘导航焦点：最后一次点击过 commits / files 中的哪一个 ────────
@@ -533,8 +535,27 @@ const currentBranchName = computed(
     historyStore.branches.find((b) => b.is_head && !b.is_remote)?.name ?? 'HEAD',
 )
 
+// 根据 commit_oid 在 stashStore 中查到对应 stash；找不到返回 null
+function stashEntryForCommit(oid: string) {
+  return stashStore.entries.find((s) => s.commit_oid === oid) ?? null
+}
+
 const commitMenuItems = computed<ContextMenuItem[]>(() => {
-  if (!commitMenu.commit) return []
+  const c = commitMenu.commit
+  if (!c) return []
+
+  // Stash 提交：只提供 stash 相关操作（apply / pop / delete）
+  if (c.is_stash) {
+    const entry = stashEntryForCommit(c.oid)
+    // entry 理论上一定存在（stash commit 必然来自 stashStore），兜底 disable
+    const hasEntry = entry !== null
+    return [
+      { label: t('history.contextMenu.stashApply'), action: 'stash-apply', disabled: !hasEntry },
+      { label: t('history.contextMenu.stashPop'), action: 'stash-pop', disabled: !hasEntry },
+      { label: t('history.contextMenu.stashDelete'), action: 'stash-delete', disabled: !hasEntry },
+    ]
+  }
+
   return [
     { label: t('history.contextMenu.checkout'), action: 'checkout' },
     { separator: true },
@@ -580,6 +601,24 @@ async function onCommitMenuAction(action: string) {
   if (!c) return
   try {
     switch (action) {
+      case 'stash-apply': {
+        const entry = stashEntryForCommit(c.oid)
+        if (entry) await stashStore.apply(entry.index)
+        break
+      }
+      case 'stash-pop': {
+        const entry = stashEntryForCommit(c.oid)
+        if (entry) await stashStore.pop(entry.index)
+        break
+      }
+      case 'stash-delete': {
+        const entry = stashEntryForCommit(c.oid)
+        if (!entry) break
+        if (confirm(t('history.dialog.confirmStashDelete.body', { index: entry.index, message: entry.message }))) {
+          await stashStore.drop(entry.index)
+        }
+        break
+      }
       case 'checkout':
         if (
           confirm(

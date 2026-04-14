@@ -38,10 +38,10 @@ export const useStashStore = defineStore('stash', () => {
     await Promise.all([refresh(), workspaceStore.refresh()])
   }
 
-  async function pop() {
+  async function pop(index = 0) {
     const repoStore = useRepoStore()
     if (!repoStore.activeRepoId) return
-    await git.stashPop(repoStore.activeRepoId)
+    await git.stashPop(repoStore.activeRepoId, index)
     const workspaceStore = useWorkspaceStore()
     const historyStore = useHistoryStore()
     await Promise.all([
@@ -49,6 +49,24 @@ export const useStashStore = defineStore('stash', () => {
       workspaceStore.refresh(),
       historyStore.loadLog(),
     ])
+  }
+
+  async function apply(index: number) {
+    const repoStore = useRepoStore()
+    if (!repoStore.activeRepoId) return
+    await git.stashApply(repoStore.activeRepoId, index)
+    // apply 不移除 stash 条目，但会改动工作区，需要刷新
+    const workspaceStore = useWorkspaceStore()
+    await workspaceStore.refresh()
+  }
+
+  async function drop(index: number) {
+    const repoStore = useRepoStore()
+    if (!repoStore.activeRepoId) return
+    await git.stashDrop(repoStore.activeRepoId, index)
+    // drop 只删除 stash 条目，但历史图里若绘制了 stash 节点也要刷新
+    const historyStore = useHistoryStore()
+    await Promise.all([refresh(), historyStore.loadLog()])
   }
 
   function reset() {
@@ -63,6 +81,8 @@ export const useStashStore = defineStore('stash', () => {
     refresh,
     push,
     pop,
+    apply,
+    drop,
     reset,
   }
 })

@@ -1512,19 +1512,64 @@ impl GitEngine {
         Ok(())
     }
 
-    /// Pop 最新的 stash（index 0）
-    pub fn stash_pop(path: &str) -> GitResult<()> {
+    /// Pop 指定 index 的 stash（默认 0 即最新一条）；成功后该 stash 被移除。
+    pub fn stash_pop(path: &str, index: usize) -> GitResult<()> {
         let mut repo = Self::open(path)?;
-        let mut has_any = false;
-        repo.stash_foreach(|_, _, _| {
-            has_any = true;
-            false // 第一条就够了
-        })?;
-        if !has_any {
+        let count = Self::stash_count(&mut repo)?;
+        if count == 0 {
             return Err(GitError::OperationFailed("没有可 pop 的 stash".to_string()));
         }
-        repo.stash_pop(0, None)?;
+        if index >= count {
+            return Err(GitError::OperationFailed(format!(
+                "stash@{{{}}} 不存在（共 {} 条）",
+                index, count
+            )));
+        }
+        repo.stash_pop(index, None)?;
         Ok(())
+    }
+
+    /// Apply 指定 index 的 stash，应用后保留该 stash（不移除）。
+    pub fn stash_apply(path: &str, index: usize) -> GitResult<()> {
+        let mut repo = Self::open(path)?;
+        let count = Self::stash_count(&mut repo)?;
+        if count == 0 {
+            return Err(GitError::OperationFailed("没有可 apply 的 stash".to_string()));
+        }
+        if index >= count {
+            return Err(GitError::OperationFailed(format!(
+                "stash@{{{}}} 不存在（共 {} 条）",
+                index, count
+            )));
+        }
+        repo.stash_apply(index, None)?;
+        Ok(())
+    }
+
+    /// 删除指定 index 的 stash（不 apply）。
+    pub fn stash_drop(path: &str, index: usize) -> GitResult<()> {
+        let mut repo = Self::open(path)?;
+        let count = Self::stash_count(&mut repo)?;
+        if count == 0 {
+            return Err(GitError::OperationFailed("没有可删除的 stash".to_string()));
+        }
+        if index >= count {
+            return Err(GitError::OperationFailed(format!(
+                "stash@{{{}}} 不存在（共 {} 条）",
+                index, count
+            )));
+        }
+        repo.stash_drop(index)?;
+        Ok(())
+    }
+
+    fn stash_count(repo: &mut Repository) -> GitResult<usize> {
+        let mut n = 0usize;
+        repo.stash_foreach(|_, _, _| {
+            n += 1;
+            true
+        })?;
+        Ok(n)
     }
 
     /// 列出所有 stash 条目

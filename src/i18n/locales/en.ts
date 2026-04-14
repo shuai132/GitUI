@@ -172,9 +172,11 @@ const messages = {
     },
     stash: {
       menu: {
-        popLatest: 'Pop stash@{index} (latest)',
-        copyOid: 'Copy commit hash',
+        apply: 'Apply Stash',
+        pop: 'Pop Stash',
+        delete: 'Delete Stash',
       },
+      confirmDelete: 'Delete stash@{index} "{message}"? This cannot be undone.',
     },
     submodule: {
       menu: {
@@ -245,6 +247,9 @@ const messages = {
       copySha: 'Copy commit SHA',
       createTag: 'Create tag here...',
       createAnnotatedTag: 'Create annotated tag...',
+      stashApply: 'Apply Stash',
+      stashPop: 'Pop Stash',
+      stashDelete: 'Delete Stash',
     },
     dialog: {
       confirmCheckout: { body: 'Checking out commit {shortOid} will leave HEAD detached. Continue?' },
@@ -255,6 +260,7 @@ const messages = {
         hardBody: 'Hard reset will discard all uncommitted changes. Reset {branch} to {shortOid}?',
         mode: { soft: 'soft', mixed: 'mixed', hard: 'hard' },
       },
+      confirmStashDelete: { body: 'Delete stash@{index} "{message}"? This cannot be undone.' },
     },
   },
   branches: {

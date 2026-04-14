@@ -109,7 +109,9 @@ GitUI 的前后端通过 Tauri v2 的 IPC 通道通信：
 | 命令 | 参数 | 返回 |
 |------|------|------|
 | `stash_push` | `repoId, message: string \| null` | `void` |
-| `stash_pop` | `repoId` | `void` |
+| `stash_pop` | `repoId, index: number \| null`（缺省 0） | `void` |
+| `stash_apply` | `repoId, index: number` | `void` |
+| `stash_drop` | `repoId, index: number` | `void` |
 | `stash_list` | `repoId` | `StashEntry[]` |
 
 ### System

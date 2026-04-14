@@ -218,8 +218,14 @@ export function useGitCommands() {
   const stashPush = (repoId: string, message?: string) =>
     call<void>('stash_push', { repoId, message: message ?? null })
 
-  const stashPop = (repoId: string) =>
-    call<void>('stash_pop', { repoId })
+  const stashPop = (repoId: string, index = 0) =>
+    call<void>('stash_pop', { repoId, index })
+
+  const stashApply = (repoId: string, index: number) =>
+    call<void>('stash_apply', { repoId, index })
+
+  const stashDrop = (repoId: string, index: number) =>
+    call<void>('stash_drop', { repoId, index })
 
   const stashList = (repoId: string) =>
     call<StashEntry[]>('stash_list', { repoId })
@@ -311,6 +317,8 @@ export function useGitCommands() {
     deinitSubmodule,
     stashPush,
     stashPop,
+    stashApply,
+    stashDrop,
     stashList,
     openTerminal,
     openInNewWindow,

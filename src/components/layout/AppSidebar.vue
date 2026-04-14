@@ -566,8 +566,9 @@ const stashMenuItems = computed<ContextMenuItem[]>(() => {
   const s = stashMenu.target
   if (!s) return []
   return [
-    { label: t('sidebar.stash.menu.popLatest', { index: s.index }), action: 'pop', disabled: s.index !== 0 },
-    { label: t('sidebar.stash.menu.copyOid'), action: 'copy-oid' },
+    { label: t('sidebar.stash.menu.apply'), action: 'apply' },
+    { label: t('sidebar.stash.menu.pop'), action: 'pop' },
+    { label: t('sidebar.stash.menu.delete'), action: 'delete' },
   ]
 })
 
@@ -589,11 +590,16 @@ async function onStashMenuAction(action: string) {
   if (!s) return
   try {
     switch (action) {
-      case 'pop':
-        await stashStore.pop()
+      case 'apply':
+        await stashStore.apply(s.index)
         break
-      case 'copy-oid':
-        await navigator.clipboard.writeText(s.commit_oid)
+      case 'pop':
+        await stashStore.pop(s.index)
+        break
+      case 'delete':
+        if (confirm(t('sidebar.stash.confirmDelete', { index: s.index, message: s.message }))) {
+          await stashStore.drop(s.index)
+        }
         break
     }
   } catch (err) {

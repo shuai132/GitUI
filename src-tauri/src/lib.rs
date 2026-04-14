@@ -92,6 +92,8 @@ pub fn run() {
             // Stash
             stash_push,
             stash_pop,
+            stash_apply,
+            stash_drop,
             stash_list,
             // System
             open_terminal,
