@@ -33,25 +33,16 @@ function segStroke(seg: GraphSegment): string {
 /**
  * commit 圆圈的渲染样式：
  *  - 普通：实心，背景色描边
- *  - stash：空心（背景色填充），分支色描边
- *  - unreachable：空心 + 灰色虚线描边
+ *  - stash / unreachable：空心 + 灰色虚线描边（相同样式）
  *  - 选中且普通：fill 换成 row-selected-fg（在选中蓝底上显眼的白圆点）
  */
 const circleAttrs = computed(() => {
-  if (props.row.isUnreachable) {
+  if (props.row.isUnreachable || props.row.isStash) {
     return {
       fill: 'var(--bg-secondary)',
       stroke: UNREACHABLE_COLOR,
       strokeWidth: props.isSelected ? 2 : 1.5,
       strokeDasharray: '2 2',
-    }
-  }
-  if (props.row.isStash) {
-    return {
-      fill: 'var(--bg-secondary)',
-      stroke: props.row.color,
-      strokeWidth: props.isSelected ? 2.5 : 2,
-      strokeDasharray: '',
     }
   }
   if (props.isSelected) {
