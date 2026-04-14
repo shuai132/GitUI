@@ -725,6 +725,7 @@ async function handleDblClick(e: MouseEvent) {
         class="btn-icon-only"
         :title="t('toolbar.title.actions')"
         :disabled="!hasRepo"
+        data-menu-anchor
         @mousedown.stop
         @click="onActions"
       >
