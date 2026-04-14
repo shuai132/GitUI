@@ -42,7 +42,7 @@ const ctxMenuItems = computed<ContextMenuItem[]>(() => [
   { label: t('terminal.menu.selectAll'), action: 'select-all' },
   { label: t('terminal.menu.clear'), action: 'clear' },
   { separator: true },
-  { label: t('terminal.menu.close'), action: 'close', danger: true },
+  { label: t('terminal.menu.close'), action: 'close' },
 ])
 
 // ── base64 编解码 ────────────────────────────────────────────────────
@@ -204,11 +204,10 @@ onMounted(async () => {
   unlistenExit = await listen<{ session_id: string }>(
     'terminal://exit',
     (event) => {
-      if (!term) return
-      if (event.payload.session_id === sessionId) {
-        term.write('\r\n\x1b[33m[shell exited]\x1b[0m\r\n')
-        sessionId = null
-      }
+      if (event.payload.session_id !== sessionId) return
+      sessionId = null
+      // shell 自行退出（exit / Ctrl-D）→ 自动关闭面板
+      uiStore.setTerminalVisible(false)
     },
   )
 
@@ -257,6 +256,19 @@ watch(
 // 停靠切换：下一 tick 触发 fit+resize
 watch(() => uiStore.terminalDock, () => scheduleResize())
 
+// 面板重新显示：若 session 已退出，重开一个
+watch(
+  () => uiStore.terminalVisible,
+  async (v) => {
+    if (disposed || !term) return
+    if (v && !sessionId) {
+      term.reset()
+      await spawnSession()
+    }
+    if (v) scheduleResize()
+  },
+)
+
 // ── 停靠 resize handle ──────────────────────────────────────────────
 function startResize(e: PointerEvent) {
   e.preventDefault()
@@ -298,7 +310,10 @@ function onToggleDock() {
   uiStore.toggleTerminalDock()
 }
 
-function onClose() {
+async function onClose() {
+  // 用户主动关闭：先终止 PTY session，再隐藏面板
+  await closeSession()
+  if (term) term.reset()
   uiStore.setTerminalVisible(false)
 }
 
