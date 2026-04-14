@@ -21,6 +21,7 @@ const messages = {
       pull: 'Pull (fetch + merge)',
       pullModeSelect: 'Choose Pull mode',
       push: 'Push current branch',
+      fetch: 'Fetch from remote (no merge)',
       stash: 'Stash current working tree',
       stashEmpty: 'Nothing to stash',
       popWithCount: 'Pop latest stash ({count} total)',
@@ -40,8 +41,6 @@ const messages = {
       rebase: 'Pull (rebase)',
     },
     actionsMenu: {
-      fetching: 'Fetching...',
-      fetch: 'Fetch',
       showUnreachable: 'Show dangling refs',
       showStashes: 'Show stashes',
       debugLog: 'Debug log',

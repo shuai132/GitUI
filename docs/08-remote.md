@@ -17,7 +17,7 @@ Fetch / Push / Pull 是三个独立命令，统一走 git2 的 `RemoteCallbacks`
 |------|------|------|
 | Pull | `git.pullBranch(repoId, remote, branch)` | 成功后 `loadLog() + loadBranches()` |
 | Push | `git.pushBranch(repoId, remote, branch)` | 成功后 `loadBranches()` |
-| Actions → 抓取 | `git.fetchRemote(repoId, remote)` | 成功后 `loadLog() + loadBranches()` |
+| Fetch | `git.fetchRemote(repoId, remote)` | 成功后 `loadLog() + loadBranches()`，并懒加载远端 tag 列表 |
 
 > Fetch 曾经只刷 `loadBranches()`——结果：新的远端 commit 不会立刻出现在提交图里，用户以为 fetch 没生效会重复点。现在 fetch 和 pull 一视同仁，都并发刷 log + branches。
 

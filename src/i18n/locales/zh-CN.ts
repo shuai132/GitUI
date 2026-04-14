@@ -21,6 +21,7 @@ const messages = {
       pull: 'Pull (fetch + merge)',
       pullModeSelect: '选择 Pull 模式',
       push: 'Push 当前分支',
+      fetch: '从远端抓取（不合并）',
       stash: 'Stash 当前工作区',
       stashEmpty: '没有可 stash 的变更',
       popWithCount: 'Pop 最新 stash (共 {count} 条)',
@@ -40,8 +41,6 @@ const messages = {
       rebase: 'Pull (rebase)',
     },
     actionsMenu: {
-      fetching: '抓取中...',
-      fetch: '抓取 (Fetch)',
       showUnreachable: '显示悬垂引用',
       showStashes: '显示贮藏',
       debugLog: '调试日志',

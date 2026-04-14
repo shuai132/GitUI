@@ -337,6 +337,32 @@ async function onPop() {
   }
 }
 
+// ── Fetch ───────────────────────────────────────────────────────────
+async function onFetch(e: MouseEvent) {
+  const id = repoStore.activeRepoId
+  if (!id) return
+  const rect = (e.currentTarget as HTMLElement | null)?.getBoundingClientRect()
+  const remote = await pickRemote(rect)
+  if (!remote) {
+    const remotes = await git.listRemotes(id).catch(() => [])
+    if (remotes.length === 0) showError(t('toolbar.noRemoteConfigured'))
+    return
+  }
+  busy.fetch = true
+  try {
+    await git.fetchRemote(id, remote)
+    // fetch 会带来新的远端 commits，log 也要刷新，
+    // 不然用户会以为 fetch 没生效
+    await Promise.all([historyStore.loadLog(), historyStore.loadBranches()])
+    // 远端 tag 列表可能随 fetch 变化（新增 / 被别人删）
+    historyStore.loadRemoteTags().catch(() => {})
+  } catch {
+    /* toast 由 errorsStore watch 统一处理 */
+  } finally {
+    busy.fetch = false
+  }
+}
+
 // ── Terminal ────────────────────────────────────────────────────────
 // 中间按钮：直接在系统终端打开当前仓库
 async function onOpenSystemTerminal() {
@@ -363,12 +389,6 @@ const actionsMenu = reactive({
 const actionsBtnRef = ref<HTMLButtonElement | null>(null)
 
 const actionsMenuItems = computed<ContextMenuItem[]>(() => [
-  {
-    label: busy.fetch ? t('toolbar.actionsMenu.fetching') : t('toolbar.actionsMenu.fetch'),
-    action: 'fetch',
-    disabled: !hasRepo.value || busy.fetch,
-  },
-  { separator: true },
   {
     label:
       (uiStore.showUnreachableCommits ? '✓ ' : '   ') +
@@ -435,29 +455,6 @@ async function onActionsSelect(action: string) {
   const id = repoStore.activeRepoId
   if (!id) return
   switch (action) {
-    case 'fetch': {
-      const rect = actionsBtnRef.value?.getBoundingClientRect()
-      const remote = await pickRemote(rect)
-      if (!remote) {
-        const remotes = await git.listRemotes(id).catch(() => [])
-        if (remotes.length === 0) showError(t('toolbar.noRemoteConfigured'))
-        return
-      }
-      busy.fetch = true
-      try {
-        await git.fetchRemote(id, remote)
-        // fetch 会带来新的远端 commits，log 也要刷新，
-        // 不然用户会以为 fetch 没生效
-        await Promise.all([historyStore.loadLog(), historyStore.loadBranches()])
-        // 远端 tag 列表可能随 fetch 变化（新增 / 被别人删）
-        historyStore.loadRemoteTags().catch(() => {})
-      } catch {
-        /* toast 由 errorsStore watch 统一处理 */
-      } finally {
-        busy.fetch = false
-      }
-      break
-    }
     case 'reflog': {
       showReflogDialog.value = true
       break
@@ -622,6 +619,21 @@ async function handleDblClick(e: MouseEvent) {
           <polyline points="9 8 12 5 15 8"/>
         </svg>
         <span>Pop</span>
+      </button>
+
+      <!-- Fetch：抓取远端但不合并 -->
+      <button
+        class="btn-tool"
+        :title="t('toolbar.title.fetch')"
+        :disabled="!hasRepo || busy.fetch"
+        @click="onFetch($event)"
+      >
+        <span v-if="busy.fetch" class="spinner" />
+        <svg v-else width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="23 4 23 10 17 10"/>
+          <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+        </svg>
+        <span>Fetch</span>
       </button>
 
       <!-- Terminal：在系统终端打开当前仓库 -->
