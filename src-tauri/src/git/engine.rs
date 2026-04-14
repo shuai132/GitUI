@@ -1508,7 +1508,21 @@ impl GitEngine {
         let mut repo = Self::open(path)?;
         let sig = repo.signature()?;
         let flags = StashFlags::INCLUDE_UNTRACKED;
-        repo.stash_save2(&sig, message, Some(flags))?;
+
+        // 如果没有提供消息，生成简洁的 "WIP on {branch}" 格式
+        let default_msg = if message.is_none() {
+            let branch_name = repo
+                .head()
+                .ok()
+                .and_then(|h| h.shorthand().map(|s| s.to_string()))
+                .unwrap_or_else(|| "(no branch)".to_string());
+            Some(format!("WIP on {}", branch_name))
+        } else {
+            None
+        };
+
+        let msg = message.or(default_msg.as_deref());
+        repo.stash_save2(&sig, msg, Some(flags))?;
         Ok(())
     }
 
