@@ -209,7 +209,14 @@ const messages = {
       resizeDateWidth: '拖动调整「日期」列宽度',
     },
     tooltip: { author: '作者', date: '时间', commit: '提交' },
-    tag: { annotated: '附注标签' },
+    tag: {
+      annotated: '附注标签',
+      status: {
+        synced: '已同步到远程',
+        localOnly: '仅本地，尚未推送',
+        unknown: '远程状态未知',
+      },
+    },
     dock: { dragToMove: '拖拽停靠' },
     detailsPanel: {
       title: '详情',

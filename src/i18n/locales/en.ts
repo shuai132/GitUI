@@ -209,7 +209,14 @@ const messages = {
       resizeDateWidth: 'Drag to resize the Date column',
     },
     tooltip: { author: 'Author', date: 'Date', commit: 'Commit' },
-    tag: { annotated: 'annotated' },
+    tag: {
+      annotated: 'annotated',
+      status: {
+        synced: 'Synced to remote',
+        localOnly: 'Local only, not pushed',
+        unknown: 'Remote status unknown',
+      },
+    },
     dock: { dragToMove: 'Drag to dock' },
     detailsPanel: {
       title: 'Details',

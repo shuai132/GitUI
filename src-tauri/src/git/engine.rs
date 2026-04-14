@@ -820,6 +820,37 @@ impl GitEngine {
         Ok(())
     }
 
+    /// 列出远端所有 tag 的短名（通过 `ls-remote`，不做 fetch）。
+    /// Git 的 tag 是共享命名空间，本地没有 `refs/remotes/<remote>/tags/*` 镜像，
+    /// 所以只能在线查询远端 refs 才能判断某个本地 tag 是否已推送。
+    pub fn list_remote_tag_names(path: &str, remote_name: &str) -> GitResult<Vec<String>> {
+        log::debug!("[engine::list_remote_tag_names] remote={remote_name}");
+        let repo = Self::open(path)?;
+        let mut remote = repo.find_remote(remote_name)?;
+        let mut callbacks = git2::RemoteCallbacks::new();
+        callbacks.credentials(make_credentials_callback());
+        remote.connect_auth(git2::Direction::Fetch, Some(callbacks), None)?;
+        let heads = remote.list()?;
+
+        let mut names: Vec<String> = Vec::new();
+        for head in heads {
+            let name = head.name();
+            // annotated tag 会额外多出一条 `refs/tags/X^{}`（peeled），短名与原 tag
+            // 重复，直接跳过。
+            if !name.starts_with("refs/tags/") || name.ends_with("^{}") {
+                continue;
+            }
+            names.push(name["refs/tags/".len()..].to_string());
+        }
+        // 断开连接，避免占用（RemoteCallbacks 里的借用到此释放）
+        let _ = remote.disconnect();
+        log::debug!(
+            "[engine::list_remote_tag_names] remote={remote_name} count={}",
+            names.len()
+        );
+        Ok(names)
+    }
+
     // ── 提交级操作 ──────────────────────────────────────────────────────
 
     /// 检出指定提交（detached HEAD）

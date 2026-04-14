@@ -75,6 +75,7 @@ pub fn run() {
             // Tag
             list_tags,
             delete_tag,
+            list_remote_tags,
             // Remote
             fetch_remote,
             push_branch,

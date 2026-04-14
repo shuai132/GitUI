@@ -185,11 +185,31 @@ const tagsByCommit = computed(() => {
   return map
 })
 
+type TagRemoteStatus = 'synced' | 'local_only' | 'unknown'
+
+function tagRemoteStatus(tag: TagInfo): TagRemoteStatus {
+  if (!historyStore.remoteTagsChecked) return 'unknown'
+  return historyStore.remoteTagNames.has(tag.name) ? 'synced' : 'local_only'
+}
+
+function tagStatusLabel(status: TagRemoteStatus): string {
+  switch (status) {
+    case 'synced':
+      return t('history.tag.status.synced')
+    case 'local_only':
+      return t('history.tag.status.localOnly')
+    default:
+      return t('history.tag.status.unknown')
+  }
+}
+
 function tagChipTitle(tag: TagInfo): string {
   const head = tag.is_annotated
     ? `🏷 ${tag.name} (${t('history.tag.annotated')})`
     : `🏷 ${tag.name}`
-  return tag.message ? `${head}\n\n${tag.message}` : head
+  const status = `[${tagStatusLabel(tagRemoteStatus(tag))}]`
+  const body = `${head} ${status}`
+  return tag.message ? `${body}\n\n${tag.message}` : body
 }
 
 // ── Graph column width ───────────────────────────────────────────────
@@ -709,6 +729,11 @@ const panelBorders = computed(() => {
 
 onMounted(() => {
   window.addEventListener('keydown', onKeyDown)
+  // 懒加载远程 tag 列表：用于区分本地 / 已同步到远程的 tag chip。
+  // loadRemoteTags 内部已吞单个 remote 的失败，这里再兜一层以防意外。
+  if (repoStore.activeRepoId) {
+    historyStore.loadRemoteTags().catch(() => {})
+  }
 })
 onUnmounted(() => {
   window.removeEventListener('keydown', onKeyDown)
@@ -834,6 +859,7 @@ onUnmounted(() => {
                     v-for="tagItem in tagsByCommit.get(filteredCommits[toRealIdx(vRow.index)]?.oid ?? '')"
                     :key="'tag:' + tagItem.name"
                     class="tag-chip"
+                    :class="'tag-chip--' + tagRemoteStatus(tagItem)"
                     :title="tagChipTitle(tagItem)"
                   >
                     <svg
@@ -850,6 +876,16 @@ onUnmounted(() => {
                       <line x1="7" y1="7" x2="7.01" y2="7"/>
                     </svg>
                     {{ tagItem.name }}
+                    <span
+                      v-if="tagRemoteStatus(tagItem) === 'synced'"
+                      class="tag-status-icon tag-status-icon--synced"
+                      aria-hidden="true"
+                    >✓</span>
+                    <span
+                      v-else-if="tagRemoteStatus(tagItem) === 'local_only'"
+                      class="tag-status-icon tag-status-icon--local"
+                      aria-hidden="true"
+                    >↑</span>
                   </span>
                   <span
                     v-for="tag in branchTagMap.get(filteredCommits[toRealIdx(vRow.index)]?.oid ?? '')"
@@ -1401,6 +1437,24 @@ onUnmounted(() => {
   flex-shrink: 0;
   white-space: nowrap;
   opacity: 0.9;
+}
+
+/* 远程同步状态图标：直接跟在 tag 名后面 */
+.tag-status-icon {
+  font-size: 10px;
+  line-height: 1;
+  font-weight: 700;
+  margin-left: 1px;
+}
+.tag-status-icon--synced {
+  color: var(--accent-green);
+}
+.tag-status-icon--local {
+  color: var(--accent-orange);
+}
+/* 选中行里图标也随前景色 */
+.commit-row.selected .tag-status-icon {
+  color: inherit !important;
 }
 
 /* ── Hints ───────────────────────────────────────────────────────── */

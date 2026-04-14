@@ -12,6 +12,11 @@ export const useHistoryStore = defineStore('history', () => {
   const commits = ref<CommitInfo[]>([])
   const branches = ref<BranchInfo[]>([])
   const tags = ref<TagInfo[]>([])
+  // 远端已存在的 tag 短名集合（任一 remote 命中即算已同步）。
+  // 通过 list_remote_tags 懒加载，失败时 remoteTagsChecked 保持 false，UI 显示"未知"。
+  const remoteTagNames = ref<Set<string>>(new Set())
+  const remoteTagsChecked = ref(false)
+  const remoteTagsLoading = ref(false)
   const selectedCommit = ref<CommitDetail | null>(null)
   const graphRows = ref<GraphRow[]>([])
   const selectedFileDiffIndex = ref(0)
@@ -218,13 +223,75 @@ export const useHistoryStore = defineStore('history', () => {
     const repoStore = useRepoStore()
     if (!repoStore.activeRepoId) return
     await git.deleteTag(repoStore.activeRepoId, name)
+    // 删了就不应再被视为"已同步到远程"——即便远端仍存在也无法对应
+    if (remoteTagNames.value.has(name)) {
+      const next = new Set(remoteTagNames.value)
+      next.delete(name)
+      remoteTagNames.value = next
+    }
     await loadTags()
+  }
+
+  /// 并发查询所有 remote 的 tag 列表，合并成 set；失败的 remote 跳过。
+  /// 至少一个 remote 成功即 remoteTagsChecked = true；全部失败（通常是无网络 / 认证错误）
+  /// 保持 false，让前端显示"未知"态而不是误判成"仅本地"。
+  async function loadRemoteTags() {
+    const repoStore = useRepoStore()
+    if (!repoStore.activeRepoId) return
+    if (remoteTagsLoading.value) return
+    remoteTagsLoading.value = true
+    try {
+      const repoId = repoStore.activeRepoId
+      const remotes = await git.listRemotes(repoId).catch(() => [] as string[])
+      if (remotes.length === 0) {
+        // 无 remote：认为已检查，所有 tag 都是"仅本地"
+        remoteTagsChecked.value = true
+        remoteTagNames.value = new Set()
+        return
+      }
+      const results = await Promise.all(
+        remotes.map(r =>
+          git.listRemoteTags(repoId, r).then(
+            names => ({ ok: true as const, names }),
+            () => ({ ok: false as const, names: [] as string[] }),
+          ),
+        ),
+      )
+      const merged = new Set<string>()
+      let anySuccess = false
+      for (const r of results) {
+        if (r.ok) {
+          anySuccess = true
+          for (const n of r.names) merged.add(n)
+        }
+      }
+      if (anySuccess) {
+        remoteTagNames.value = merged
+        remoteTagsChecked.value = true
+      }
+    } finally {
+      remoteTagsLoading.value = false
+    }
+  }
+
+  /// push 成功后乐观更新，避免再等一次 ls-remote。
+  function markTagPushed(name: string) {
+    if (!remoteTagNames.value.has(name)) {
+      const next = new Set(remoteTagNames.value)
+      next.add(name)
+      remoteTagNames.value = next
+    }
+    // 即使之前没拉过远程 tag，这里也能确认"至少这个在远端"
+    remoteTagsChecked.value = true
   }
 
   function reset() {
     commits.value = []
     branches.value = []
     tags.value = []
+    remoteTagNames.value = new Set()
+    remoteTagsChecked.value = false
+    remoteTagsLoading.value = false
     selectedCommit.value = null
     graphRows.value = []
     selectedFileDiffIndex.value = 0
@@ -235,6 +302,9 @@ export const useHistoryStore = defineStore('history', () => {
     commits,
     branches,
     tags,
+    remoteTagNames,
+    remoteTagsChecked,
+    remoteTagsLoading,
     selectedCommit,
     graphRows,
     selectedFileDiffIndex,
@@ -247,6 +317,8 @@ export const useHistoryStore = defineStore('history', () => {
     loadMore,
     loadBranches,
     loadTags,
+    loadRemoteTags,
+    markTagPushed,
     selectCommit,
     selectFileDiff,
     createBranch,

@@ -186,6 +186,8 @@ watch(
       await historyStore.loadTags()
       await submodulesStore.loadSubmodules()
       await stashStore.refresh()
+      // 远端 tag 同步状态独立于以上数据源，走网络，失败静默
+      historyStore.loadRemoteTags().catch(() => {})
     } else {
       submodulesStore.reset()
       stashStore.reset()

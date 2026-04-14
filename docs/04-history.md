@@ -139,6 +139,16 @@ commit 面板内容有一个计算出的 `commitListMinWidth = graph + desc + ha
 - 远程 → `--accent-orange`
 - 其他本地 → `--accent-green`
 
+## Tag chip 远程同步状态
+
+提交行旁的 tag chip 以及侧栏 Tag 列表每个条目会按远程同步状态叠加小图标：
+
+- `synced`（✓，绿色）：该 tag 短名在任一 remote 的 `refs/tags/` 中存在
+- `local_only`（↑，橙色）：远程 tag 列表已成功查询过，但该 tag 未出现
+- `unknown`（无图标）：远程 tag 列表未查询或全部失败
+
+远程状态由 `historyStore.remoteTagNames`（Set）+ `remoteTagsChecked` 维护，通过 `list_remote_tags` 命令懒加载。触发时机：切换仓库、HistoryView 挂载、fetch 成功。`pushTag` 成功后走 `markTagPushed` 乐观更新。`ls-remote` 失败时 `remoteTagsChecked` 保持 false，所有 chip 回退到 unknown，不弹错误 toast。
+
 ## 分支/远程操作后的刷新
 
 `historyStore` 暴露的 `switchBranch / checkoutRemoteBranch / cherryPickCommit / revertCommit / resetToCommit / checkoutCommit` 全部在 await 后并发 `loadLog() + loadBranches()` 刷新 UI。

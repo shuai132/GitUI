@@ -486,6 +486,8 @@ async function onActionsSelect(action: string) {
         // fetch 会带来新的远端 commits，log 也要刷新，
         // 不然用户会以为 fetch 没生效
         await Promise.all([historyStore.loadLog(), historyStore.loadBranches()])
+        // 远端 tag 列表可能随 fetch 变化（新增 / 被别人删）
+        historyStore.loadRemoteTags().catch(() => {})
       } catch {
         /* toast 由 errorsStore watch 统一处理 */
       } finally {

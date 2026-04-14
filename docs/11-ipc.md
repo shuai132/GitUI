@@ -81,6 +81,7 @@ GitUI 的前后端通过 Tauri v2 的 IPC 通道通信：
 |------|------|------|
 | `list_tags` | `repoId` | `TagInfo[]` |
 | `delete_tag` | `repoId, name` | `void` |
+| `list_remote_tags` | `repoId, remoteName` | `string[]` （通过 `Remote::connect_auth + list()` 读远端 `refs/tags/*`，返回 tag 短名列表；网络请求，失败由调用方处理） |
 
 ### Remote
 

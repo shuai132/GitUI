@@ -461,6 +461,28 @@ async function onSubmoduleClick(s: SubmoduleInfo) {
 // ── Tags ─────────────────────────────────────────────────────────────
 const tags = computed(() => historyStore.tags)
 
+type TagRemoteStatus = 'synced' | 'local_only' | 'unknown'
+function tagRemoteStatus(tag: TagInfo): TagRemoteStatus {
+  if (!historyStore.remoteTagsChecked) return 'unknown'
+  return historyStore.remoteTagNames.has(tag.name) ? 'synced' : 'local_only'
+}
+function tagStatusLabel(status: TagRemoteStatus): string {
+  switch (status) {
+    case 'synced':
+      return t('history.tag.status.synced')
+    case 'local_only':
+      return t('history.tag.status.localOnly')
+    default:
+      return t('history.tag.status.unknown')
+  }
+}
+function tagItemTitle(tag: TagInfo): string {
+  const base = tag.is_annotated && tag.message
+    ? `${tag.name}\n\n${tag.message}`
+    : tag.name
+  return `${base}\n[${tagStatusLabel(tagRemoteStatus(tag))}]`
+}
+
 const tagMenu = reactive({
   visible: false,
   x: 0,
@@ -512,6 +534,8 @@ async function onTagMenuAction(action: string) {
         const remote = await pickRemote(id)
         if (!remote) break
         await git.pushTag(id, remote, tag.name)
+        // 乐观更新：push 成功后该 tag 一定在该远端存在
+        historyStore.markTagPushed(tag.name)
         break
       }
       case 'delete':
@@ -642,13 +666,13 @@ async function onStashMenuAction(action: string) {
         </div>
         <template v-if="!sectionState.isCollapsed('tags')">
           <div
-            v-for="t in tags"
-            :key="t.name"
+            v-for="tag in tags"
+            :key="tag.name"
             class="branch-item tag-item"
-            :class="{ 'tag-item--lightweight': !t.is_annotated }"
-            :title="t.is_annotated && t.message ? `${t.name}\n\n${t.message}` : t.name"
-            @click="jumpToBranchCommit(t.commit_oid)"
-            @contextmenu="openTagMenu($event, t)"
+            :class="{ 'tag-item--lightweight': !tag.is_annotated }"
+            :title="tagItemTitle(tag)"
+            @click="jumpToBranchCommit(tag.commit_oid)"
+            @contextmenu="openTagMenu($event, tag)"
           >
             <svg
               class="tag-icon"
@@ -664,7 +688,17 @@ async function onStashMenuAction(action: string) {
               <path d="M20.59 13.41 13.42 20.58a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/>
               <line x1="7" y1="7" x2="7.01" y2="7"/>
             </svg>
-            <span class="branch-label">{{ t.name }}</span>
+            <span class="branch-label">{{ tag.name }}</span>
+            <span
+              v-if="tagRemoteStatus(tag) === 'synced'"
+              class="tag-status-icon tag-status-icon--synced"
+              aria-hidden="true"
+            >✓</span>
+            <span
+              v-else-if="tagRemoteStatus(tag) === 'local_only'"
+              class="tag-status-icon tag-status-icon--local"
+              aria-hidden="true"
+            >↑</span>
           </div>
         </template>
       </div>
@@ -1116,6 +1150,22 @@ async function onStashMenuAction(action: string) {
 
 .tag-item--lightweight .tag-icon {
   color: var(--text-muted);
+}
+
+/* 远程同步状态图标（和 HistoryView 的 chip 图标风格一致） */
+.tag-item .tag-status-icon {
+  margin-left: auto;
+  padding-left: 4px;
+  font-size: 10px;
+  line-height: 1;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.tag-item .tag-status-icon--synced {
+  color: var(--accent-green);
+}
+.tag-item .tag-status-icon--local {
+  color: var(--accent-orange);
 }
 
 .branch-label {

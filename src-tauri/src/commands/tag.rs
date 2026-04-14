@@ -28,3 +28,16 @@ pub async fn delete_tag(
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
     GitEngine::delete_tag(&meta.path, &name)
 }
+
+#[tauri::command]
+pub async fn list_remote_tags(
+    repo_id: String,
+    remote_name: String,
+    repo_manager: State<'_, RepoManager>,
+) -> Result<Vec<String>, GitError> {
+    log::debug!("[list_remote_tags] remote={remote_name}");
+    let meta = repo_manager
+        .get_meta(&repo_id)
+        .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
+    GitEngine::list_remote_tag_names(&meta.path, &remote_name)
+}
