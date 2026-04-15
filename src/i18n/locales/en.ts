@@ -173,7 +173,7 @@ const messages = {
         pop: 'Pop Stash',
         delete: 'Delete Stash',
       },
-      confirmDelete: 'Delete stash@{index} "{message}"? This cannot be undone.',
+      confirmDelete: "Delete stash{'@'}{index} \"{message}\"? This cannot be undone.",
     },
     submodule: {
       menu: {
@@ -258,7 +258,7 @@ const messages = {
         hardBody: 'Hard reset will discard all uncommitted changes. Reset {branch} to {shortOid}?',
         mode: { soft: 'soft', mixed: 'mixed', hard: 'hard' },
       },
-      confirmStashDelete: { body: 'Delete stash@{index} "{message}"? This cannot be undone.' },
+      confirmStashDelete: { body: "Delete stash{'@'}{index} \"{message}\"? This cannot be undone." },
       editMessage: {
         title: 'Edit Commit Message',
         confirm: 'Apply',

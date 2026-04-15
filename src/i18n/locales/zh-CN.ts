@@ -173,7 +173,7 @@ const messages = {
         pop: 'Pop Stash',
         delete: 'Delete Stash',
       },
-      confirmDelete: '确认删除 stash@{index} "{message}"？此操作不可撤销。',
+      confirmDelete: "确认删除 stash{'@'}{index} \"{message}\"？此操作不可撤销。",
     },
     submodule: {
       menu: {
@@ -258,7 +258,7 @@ const messages = {
         hardBody: 'Hard reset 将丢弃所有未提交变更，确认把 {branch} 重置到 {shortOid}？',
         mode: { soft: 'soft', mixed: 'mixed', hard: 'hard' },
       },
-      confirmStashDelete: { body: '确认删除 stash@{index} "{message}"？此操作不可撤销。' },
+      confirmStashDelete: { body: "确认删除 stash{'@'}{index} \"{message}\"？此操作不可撤销。" },
       editMessage: {
         title: '修改提交信息',
         confirm: '确认修改',
