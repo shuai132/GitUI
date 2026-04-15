@@ -49,6 +49,8 @@ const stagedAll = computed<FileEntry[]>(() => workspaceStore.status?.staged ?? [
 // ── 文件选择 & diff 加载 ──────────────────────────────────────────
 const selectedPath = ref<string | null>(null)
 const panelListsRef = ref<HTMLElement | null>(null)
+const unstagedListRef = ref<InstanceType<typeof FileChangeList> | null>(null)
+const stagedListRef = ref<InstanceType<typeof FileChangeList> | null>(null)
 
 /** 合并的文件列表（未暂存 + 已暂存），与视觉顺序一致 */
 const allFiles = computed<FileEntry[]>(() => [...unstagedAll.value, ...stagedAll.value])
@@ -303,8 +305,12 @@ function onListKeydown(e: KeyboardEvent) {
   diffStore.loadFileDiff(next.path, next.staged)
 
   // 滚动选中项到可视区域
-  const entry = panelListsRef.value?.querySelectorAll('.file-entry')[nextIdx] as HTMLElement | undefined
-  entry?.scrollIntoView({ block: 'nearest' })
+  const unstagedLen = unstagedAll.value.length
+  if (nextIdx < unstagedLen) {
+    unstagedListRef.value?.scrollToIndex(nextIdx)
+  } else {
+    stagedListRef.value?.scrollToIndex(nextIdx - unstagedLen)
+  }
 }
 
 // ── 工作区刷新时清理失效的 selectedPath ─────────────────────────
@@ -345,6 +351,7 @@ watch(
     <div ref="panelListsRef" class="panel-lists" tabindex="-1" @keydown="onListKeydown">
       <div class="split-top" :style="{ flex: `${splitPct} 0 0%` }">
         <FileChangeList
+          ref="unstagedListRef"
           :files="unstagedAll"
           :title="t('workspace.wip.section.unstaged')"
           :empty-text="t('workspace.wip.empty.unstaged')"
@@ -371,6 +378,7 @@ watch(
 
       <div class="split-bottom" :style="{ flex: `${100 - splitPct} 0 0%` }">
         <FileChangeList
+          ref="stagedListRef"
           :files="stagedAll"
           :title="t('workspace.wip.section.staged')"
           :empty-text="t('workspace.wip.empty.staged')"

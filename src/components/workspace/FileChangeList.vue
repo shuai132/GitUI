@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { ref, computed } from 'vue'
+import { useVirtualizer } from '@tanstack/vue-virtual'
 import { useI18n } from 'vue-i18n'
 import type { FileEntry, FileStatusKind } from '@/types/git'
 import { fileStatusColor } from '@/utils/format'
@@ -35,6 +37,26 @@ const statusIconMap: Record<FileStatusKind, { d: string; stroke?: boolean }> = {
   untracked: { d: 'M12 5v14M5 12h14', stroke: true },
   conflicted: { d: 'M18 6L6 18M6 6l12 12' },
 }
+
+// 每行固定高度：padding 1px top+bottom + 内容约 18px = 20px
+const ROW_H = 20
+
+const scrollEl = ref<HTMLElement | null>(null)
+
+const virtualizer = useVirtualizer(
+  computed(() => ({
+    count: props.files.length,
+    getScrollElement: () => scrollEl.value,
+    estimateSize: () => ROW_H,
+    overscan: 5,
+  }))
+)
+
+function scrollToIndex(idx: number) {
+  virtualizer.value.scrollToIndex(idx, { align: 'auto' })
+}
+
+defineExpose({ scrollToIndex })
 </script>
 
 <template>
@@ -44,47 +66,64 @@ const statusIconMap: Record<FileStatusKind, { d: string; stroke?: boolean }> = {
       <span class="section-count">{{ files.length }}</span>
       <slot name="header-actions" />
     </div>
-    <div class="file-entries">
+    <div ref="scrollEl" class="file-entries">
       <div
-        v-for="file in files"
-        :key="file.path"
-        class="file-entry"
-        :class="{ selected: selectedPath === file.path }"
-        @click="emit('select', file)"
-        @contextmenu="onRowContext($event, file)"
+        v-if="files.length === 0"
+        class="empty-hint"
       >
-        <svg
-          class="status-icon"
-          :style="{ color: fileStatusColor(file.status) }"
-          width="13"
-          height="13"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <path :d="statusIconMap[file.status]?.d ?? statusIconMap.untracked.d" />
-        </svg>
-        <span class="file-path" :title="file.path">
-          {{ file.path.split('/').pop() }}
-        </span>
-        <span class="file-stats" v-if="file.additions > 0 || file.deletions > 0">
-          <span class="add" v-if="file.additions > 0">+{{ file.additions }}</span>
-          <span class="del" v-if="file.deletions > 0">-{{ file.deletions }}</span>
-        </span>
-        <button
-          v-if="showRowActions"
-          class="row-action"
-          :title="file.staged ? t('workspace.fileList.rowAction.unstageTitle') : t('workspace.fileList.rowAction.stageTitle')"
-          @click.stop="emit('toggle', file)"
-        >
-          {{ file.staged ? t('workspace.fileList.rowAction.unstage') : t('workspace.fileList.rowAction.stage') }}
-        </button>
-      </div>
-      <div v-if="files.length === 0" class="empty-hint">
         {{ emptyText ?? t('workspace.fileList.emptyDefault') }}
+      </div>
+      <div
+        v-else
+        :style="{ height: virtualizer.getTotalSize() + 'px', position: 'relative' }"
+      >
+        <div
+          v-for="vRow in virtualizer.getVirtualItems()"
+          :key="vRow.index"
+          class="file-entry"
+          :class="{ selected: selectedPath === files[vRow.index].path }"
+          :style="{
+            position: 'absolute',
+            top: vRow.start + 'px',
+            height: ROW_H + 'px',
+            width: '100%',
+          }"
+          @click="emit('select', files[vRow.index])"
+          @contextmenu="onRowContext($event, files[vRow.index])"
+        >
+          <svg
+            class="status-icon"
+            :style="{ color: fileStatusColor(files[vRow.index].status) }"
+            width="13"
+            height="13"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path :d="statusIconMap[files[vRow.index].status]?.d ?? statusIconMap.untracked.d" />
+          </svg>
+          <span class="file-path" :title="files[vRow.index].path">
+            {{ files[vRow.index].path.split('/').pop() }}
+          </span>
+          <span
+            class="file-stats"
+            v-if="files[vRow.index].additions > 0 || files[vRow.index].deletions > 0"
+          >
+            <span class="add" v-if="files[vRow.index].additions > 0">+{{ files[vRow.index].additions }}</span>
+            <span class="del" v-if="files[vRow.index].deletions > 0">-{{ files[vRow.index].deletions }}</span>
+          </span>
+          <button
+            v-if="showRowActions"
+            class="row-action"
+            :title="files[vRow.index].staged ? t('workspace.fileList.rowAction.unstageTitle') : t('workspace.fileList.rowAction.stageTitle')"
+            @click.stop="emit('toggle', files[vRow.index])"
+          >
+            {{ files[vRow.index].staged ? t('workspace.fileList.rowAction.unstage') : t('workspace.fileList.rowAction.stage') }}
+          </button>
+        </div>
       </div>
     </div>
   </div>
@@ -138,10 +177,10 @@ const statusIconMap: Record<FileStatusKind, { d: string; stroke?: boolean }> = {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 1px 4px;
+  padding: 0 4px;
   cursor: pointer;
   transition: background 0.1s;
-  position: relative;
+  box-sizing: border-box;
 }
 
 .file-entry:hover {
