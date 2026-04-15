@@ -191,6 +191,9 @@ watch(
   async (id) => {
     if (id) {
       router.push('/history')
+      // 立即清空旧仓库数据，避免右侧面板残留上一个仓库的内容
+      historyStore.reset()
+      workspaceStore.reset()
       // 这些操作彼此独立，并发加载，总耗时 = 最慢的那个而非全部之和
       await Promise.all([
         workspaceStore.refresh(id),

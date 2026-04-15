@@ -57,6 +57,11 @@ const showWipRow = computed(() => {
   return s.staged.length + s.unstaged.length + s.untracked.length > 0
 })
 
+// 工作区还在加载中（切仓库后还没拿到 status）
+const showWipLoading = computed(() =>
+  !uiStore.historySearchQuery.trim() && workspaceStore.loading && !workspaceStore.status,
+)
+
 // 当前是否选中的是 WIP 行（而不是某条 commit）
 const selectedWip = ref(false)
 
@@ -104,19 +109,19 @@ const commitStats = computed(() => {
   return { modified, deleted, added }
 })
 
-// 虚拟行数 = 过滤后 commits + (WIP 行占 1 个，搜索时隐藏)
+// 虚拟行数 = 过滤后 commits + (WIP 行或 WIP 加载占位各占 1 个，搜索时隐藏)
 const virtualRowCount = computed(() =>
-  filteredCommits.value.length + (!uiStore.historySearchQuery.trim() && showWipRow.value ? 1 : 0),
+  filteredCommits.value.length + (!uiStore.historySearchQuery.trim() && (showWipRow.value || showWipLoading.value) ? 1 : 0),
 )
 
 // 真实 commit 索引 → 虚拟行索引
 function toVirtualIdx(realIdx: number): number {
-  return showWipRow.value ? realIdx + 1 : realIdx
+  return (showWipRow.value || showWipLoading.value) ? realIdx + 1 : realIdx
 }
 
-// 虚拟行索引 → 真实 commit 索引（WIP 行返回 -1）
+// 虚拟行索引 → 真实 commit 索引（WIP 行/加载行返回 -1）
 function toRealIdx(virtualIdx: number): number {
-  if (showWipRow.value) {
+  if (showWipRow.value || showWipLoading.value) {
     return virtualIdx === 0 ? -1 : virtualIdx - 1
   }
   return virtualIdx
@@ -303,8 +308,9 @@ function selectWipRow() {
 }
 
 function selectRow(virtualIdx: number) {
-  if (showWipRow.value && virtualIdx === 0) {
-    selectWipRow()
+  if ((showWipRow.value || showWipLoading.value) && virtualIdx === 0) {
+    if (showWipRow.value) selectWipRow()
+    // WIP 加载中：忽略点击
     return
   }
   const realIdx = toRealIdx(virtualIdx)
@@ -322,7 +328,7 @@ function selectRow(virtualIdx: number) {
 }
 
 function isSelected(virtualIdx: number): boolean {
-  if (showWipRow.value && virtualIdx === 0) return selectedWip.value
+  if ((showWipRow.value || showWipLoading.value) && virtualIdx === 0) return selectedWip.value
   const realIdx = toRealIdx(virtualIdx)
   return historyStore.commits[realIdx]?.oid === selectedOid.value
 }
@@ -523,7 +529,7 @@ function startColResize(e: PointerEvent, col: ColKey) {
 }
 
 // ── 键盘 ↑↓ 在当前激活的 pane 中切换条目 ─────────────────────────────
-// 把 WIP 行视为虚拟索引 0。real commits 占虚拟索引 (showWipRow ? 1 : 0)...count-1。
+// 把 WIP 行/加载占位视为虚拟索引 0。real commits 占虚拟索引 (showWipRow||showWipLoading ? 1 : 0)...count-1。
 function moveCommitSelection(delta: number) {
   const total = virtualRowCount.value
   if (total === 0) return
@@ -781,6 +787,15 @@ watch(
   },
 )
 
+// 切换仓库时立即清空右侧面板选中状态，避免显示上一个仓库的数据
+watch(
+  () => repoStore.activeRepoId,
+  () => {
+    showDetail.value = false
+    selectedWip.value = false
+  },
+)
+
 // ── 侧边栏点击分支/stash 跳转到对应 commit ──────────────────────────
 watch(
   () => historyStore.pendingJumpOid,
@@ -908,16 +923,19 @@ onUnmounted(() => {
         >
           <div
             v-if="historyStore.loading && historyStore.commits.length === 0"
-            class="list-hint"
-          >{{ t('history.loading') }}</div>
+            class="list-hint list-hint-loading"
+          >
+            <span class="loading-spinner" />
+            {{ t('history.loading') }}
+          </div>
           <div
             v-else
             :style="{ height: virtualizer.getTotalSize() + 'px', position: 'relative' }"
           >
             <template v-for="vRow in virtualizer.getVirtualItems()" :key="vRow.index">
-              <!-- Virtual WIP row (index 0 when working copy has changes) -->
+              <!-- Virtual WIP row (index 0: 工作区有变更时显示，或加载中显示占位) -->
               <div
-                v-if="showWipRow && vRow.index === 0"
+                v-if="(showWipRow || showWipLoading) && vRow.index === 0"
                 class="commit-row wip-row"
                 :class="{ selected: selectedWip }"
                 :style="{
@@ -926,8 +944,17 @@ onUnmounted(() => {
                   height: ROW_H + 'px',
                   width: '100%',
                 }"
-                @click="selectWipRow"
+                @click="showWipRow ? selectWipRow() : undefined"
               >
+                <!-- WIP 加载中占位 -->
+                <template v-if="showWipLoading">
+                  <div class="wip-loading-row">
+                    <span class="loading-spinner" />
+                    <span class="wip-loading-text">{{ t('history.loading') }}</span>
+                  </div>
+                </template>
+                <!-- 正常 WIP 行 -->
+                <template v-else>
                 <WipRow
                   :unstaged-count="workspaceStore.status?.unstaged.length ?? 0"
                   :untracked-count="workspaceStore.status?.untracked.length ?? 0"
@@ -941,6 +968,7 @@ onUnmounted(() => {
                 <div class="col-author" :style="{ width: sizes.authorColW + 'px' }">—</div>
                 <div class="col-date" :style="{ width: sizes.dateColW + 'px' }">—</div>
                 <div class="col-date" :style="{ width: sizes.dateCol2W + 'px' }"></div>
+                </template>
               </div>
 
               <!-- Regular commit row -->
@@ -1708,6 +1736,43 @@ onUnmounted(() => {
 
 .list-hint.dim {
   opacity: 0.6;
+}
+
+.list-hint-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+}
+
+/* ── 旋转加载指示器 ──────────────────────────────────────────────── */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.loading-spinner {
+  display: inline-block;
+  flex-shrink: 0;
+  width: 13px;
+  height: 13px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent-blue);
+  border-radius: 50%;
+  animation: spin 0.65s linear infinite;
+}
+
+.wip-loading-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 12px;
+  height: 100%;
+  font-size: var(--font-sm);
+  color: var(--text-muted);
+}
+
+.wip-loading-text {
+  opacity: 0.8;
 }
 
 /* ── Diff area ───────────────────────────────────────────────────── */

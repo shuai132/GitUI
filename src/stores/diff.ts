@@ -16,14 +16,19 @@ export const useDiffStore = defineStore('diff', () => {
 
   async function loadFileDiff(filePath: string, staged: boolean) {
     const repoStore = useRepoStore()
-    if (!repoStore.activeRepoId) return
+    const repoId = repoStore.activeRepoId
+    if (!repoId) return
 
     loading.value = true
     error.value = null
     currentPath.value = filePath
     currentStaged.value = staged
     try {
-      currentDiff.value = await git.getFileDiff(repoStore.activeRepoId, filePath, staged)
+      const result = await git.getFileDiff(repoId, filePath, staged)
+      // 丢弃过期响应：await 期间用户可能已切换到其他仓库，
+      // 此时 repoId 与当前活跃仓库不符，写入会污染新仓库的 diff
+      if (repoId !== repoStore.activeRepoId) return
+      currentDiff.value = result
     } catch (e: unknown) {
       error.value = String(e)
       currentDiff.value = null

@@ -31,13 +31,17 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     loading.value = true
     error.value = null
     try {
-      status.value = await git.getStatus(id)
+      const result = await git.getStatus(id)
+      // 丢弃过期响应：await 期间用户可能已切换到其他仓库，
+      // 此时 id 与当前活跃仓库不符，写入会污染新仓库的 status
+      if (id !== repoStore.activeRepoId) return
+      status.value = result
       // Clear selected file if it no longer exists
       if (selectedFile.value) {
         const allFiles = [
-          ...(status.value?.staged ?? []),
-          ...(status.value?.unstaged ?? []),
-          ...(status.value?.untracked ?? []),
+          ...(result.staged ?? []),
+          ...(result.unstaged ?? []),
+          ...(result.untracked ?? []),
         ]
         if (!allFiles.find((f) => f.path === selectedFile.value?.path)) {
           selectedFile.value = null
@@ -52,64 +56,77 @@ export const useWorkspaceStore = defineStore('workspace', () => {
 
   async function stageFile(filePath: string) {
     const repoStore = useRepoStore()
-    if (!repoStore.activeRepoId) return
-    await git.stageFile(repoStore.activeRepoId, filePath)
-    await refresh()
+    const id = repoStore.activeRepoId
+    if (!id) return
+    await git.stageFile(id, filePath)
+    await refresh(id)
   }
 
   async function unstageFile(filePath: string) {
     const repoStore = useRepoStore()
-    if (!repoStore.activeRepoId) return
-    await git.unstageFile(repoStore.activeRepoId, filePath)
-    await refresh()
+    const id = repoStore.activeRepoId
+    if (!id) return
+    await git.unstageFile(id, filePath)
+    await refresh(id)
   }
 
   async function stageAll() {
     const repoStore = useRepoStore()
-    if (!repoStore.activeRepoId) return
-    await git.stageAll(repoStore.activeRepoId)
-    await refresh()
+    const id = repoStore.activeRepoId
+    if (!id) return
+    await git.stageAll(id)
+    await refresh(id)
   }
 
   async function unstageAll() {
     const repoStore = useRepoStore()
-    if (!repoStore.activeRepoId) return
-    await git.unstageAll(repoStore.activeRepoId)
-    await refresh()
+    const id = repoStore.activeRepoId
+    if (!id) return
+    await git.unstageAll(id)
+    await refresh(id)
   }
 
   async function commit(message: string) {
     const repoStore = useRepoStore()
-    if (!repoStore.activeRepoId) return
-    const oid = await git.createCommit(repoStore.activeRepoId, message)
-    await refresh()
+    const id = repoStore.activeRepoId
+    if (!id) return
+    const oid = await git.createCommit(id, message)
+    await refresh(id)
     return oid
   }
 
   async function amend(message: string) {
     const repoStore = useRepoStore()
-    if (!repoStore.activeRepoId) return
-    const oid = await git.amendCommit(repoStore.activeRepoId, message)
-    await refresh()
+    const id = repoStore.activeRepoId
+    if (!id) return
+    const oid = await git.amendCommit(id, message)
+    await refresh(id)
     return oid
   }
 
   async function discardAll() {
     const repoStore = useRepoStore()
-    if (!repoStore.activeRepoId) return
-    await git.discardAllChanges(repoStore.activeRepoId)
-    await refresh()
+    const id = repoStore.activeRepoId
+    if (!id) return
+    await git.discardAllChanges(id)
+    await refresh(id)
   }
 
   async function discardFile(filePath: string) {
     const repoStore = useRepoStore()
-    if (!repoStore.activeRepoId) return
-    await git.discardFile(repoStore.activeRepoId, filePath)
-    await refresh()
+    const id = repoStore.activeRepoId
+    if (!id) return
+    await git.discardFile(id, filePath)
+    await refresh(id)
   }
 
   function selectFile(file: FileEntry | null) {
     selectedFile.value = file
+  }
+
+  function reset() {
+    status.value = null
+    selectedFile.value = null
   }
 
   return {
@@ -128,5 +145,6 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     discardAll,
     discardFile,
     selectFile,
+    reset,
   }
 })
