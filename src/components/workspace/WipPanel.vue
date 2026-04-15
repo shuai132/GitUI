@@ -214,15 +214,16 @@ async function onCommit() {
   commitError.value = null
   try {
     const msg = message.value.trim()
-    if (amendChecked.value) {
-      await workspaceStore.amend(msg)
-    } else {
-      await workspaceStore.commit(msg)
-    }
+    const oid = amendChecked.value
+      ? await workspaceStore.amend(msg)
+      : await workspaceStore.commit(msg)
     message.value = ''
     amendChecked.value = false
     await historyStore.loadLog()
     await historyStore.loadBranches()
+    if (oid) {
+      historyStore.selectCommit(oid)
+    }
   } catch (e) {
     commitError.value = String(e)
   } finally {

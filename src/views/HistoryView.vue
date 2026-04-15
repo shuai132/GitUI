@@ -763,6 +763,16 @@ watch(selectedWip, (v) => {
   if (!v) diffStore.clear()
 })
 
+watch(
+  () => historyStore.selectedCommit,
+  (commit) => {
+    if (commit) {
+      selectedWip.value = false
+      showDetail.value = true
+    }
+  },
+)
+
 // ── 开关「显示丢失引用 / 显示贮藏」时重新加载历史 ─────────────────
 watch(
   () => [uiStore.showUnreachableCommits, uiStore.showStashCommits],
