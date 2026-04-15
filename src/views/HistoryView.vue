@@ -130,7 +130,7 @@ const virtualizer = useVirtualizer(
     count: virtualRowCount.value,
     getScrollElement: () => scrollContainer.value,
     estimateSize: () => ROW_H,
-    overscan: 10,
+    overscan: 4,
   }))
 )
 

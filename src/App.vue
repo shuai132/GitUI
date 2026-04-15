@@ -191,12 +191,15 @@ watch(
   async (id) => {
     if (id) {
       router.push('/history')
-      await workspaceStore.refresh(id)
-      await historyStore.loadLog()
-      await historyStore.loadBranches()
-      await historyStore.loadTags()
-      await submodulesStore.loadSubmodules()
-      await stashStore.refresh()
+      // 这些操作彼此独立，并发加载，总耗时 = 最慢的那个而非全部之和
+      await Promise.all([
+        workspaceStore.refresh(id),
+        historyStore.loadLog(),
+        historyStore.loadBranches(),
+        historyStore.loadTags(),
+        submodulesStore.loadSubmodules(),
+        stashStore.refresh(),
+      ])
       // 远端 tag 同步状态独立于以上数据源，走网络，失败静默
       historyStore.loadRemoteTags().catch(() => {})
     } else {
