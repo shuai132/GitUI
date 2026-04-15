@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { CommitDetail } from '@/types/git'
-import { formatAbsoluteTime } from '@/utils/format'
+import type { CommitDetail, FileDiff, FileStatusKind } from '@/types/git'
+import { formatAbsoluteTime, fileStatusColor } from '@/utils/format'
 import { GRAPH_COLORS } from '@/utils/graph'
 import { useUiStore } from '@/stores/ui'
 
@@ -21,6 +21,22 @@ const uiStore = useUiStore()
 const sizes = uiStore.historyPaneSizes
 
 const filesFirst = computed(() => uiStore.detailFilesFirst)
+
+const statusIconMap: Record<FileStatusKind, { d: string; stroke?: boolean }> = {
+  modified: { d: 'M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z' },
+  added: { d: 'M12 5v14M5 12h14' },
+  deleted: { d: 'M5 12h14' },
+  renamed: { d: 'M5 12h7M12 12l-4-4M12 12l-4 4M19 12h-7M12 12l4-4M12 12l4 4' },
+  untracked: { d: 'M12 5v14M5 12h14', stroke: true },
+  conflicted: { d: 'M18 6L6 18M6 6l12 12' },
+}
+
+function diffStatus(d: FileDiff): FileStatusKind {
+  if (!d.old_blob_oid) return 'added'
+  if (!d.new_blob_oid) return 'deleted'
+  if (d.old_path !== d.new_path) return 'renamed'
+  return 'modified'
+}
 
 // ── 头部区（summary + meta-grid）和变动文件列表之间的可拖拽分隔条 ──
 // commitInfoTopH === 0 时头部自适应内容高度；拖动后变成像素值，持久化到 uiStore
@@ -151,6 +167,20 @@ const bodyText = computed(() => {
         @click="emit('selectFile', idx)"
         :title="d.new_path ?? d.old_path ?? ''"
       >
+        <svg
+          class="status-icon"
+          :style="{ color: fileStatusColor(diffStatus(d)) }"
+          width="13"
+          height="13"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path :d="statusIconMap[diffStatus(d)]?.d ?? statusIconMap.modified.d" />
+        </svg>
         <span class="file-name">{{ (d.new_path ?? d.old_path ?? '').split('/').pop() }}</span>
         <span class="file-stats">
           <span class="add">+{{ d.additions }}</span>
@@ -324,11 +354,15 @@ const bodyText = computed(() => {
 .file-tab {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 3px 12px;
+  padding: 3px 4px 3px 6px;
   cursor: pointer;
   font-size: var(--font-sm);
   transition: background 0.1s;
+  gap: 4px;
+}
+
+.file-tab .status-icon {
+  flex-shrink: 0;
 }
 
 .file-tab:hover {
@@ -345,6 +379,8 @@ const bodyText = computed(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  flex: 1;
+  text-align: left;
 }
 
 .file-tab.active .file-name {

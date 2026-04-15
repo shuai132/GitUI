@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useHistoryStore } from '@/stores/history'
@@ -206,6 +206,7 @@ watch(amendChecked, (checked) => {
       message.value = ''
     }
   }
+  nextTick(autoResizeInput)
 })
 
 async function onCommit() {
@@ -329,7 +330,7 @@ watch(
         :title="t('workspace.wip.discardAllTitle')"
         @click="onTrashClick"
       >
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <polyline points="3 6 5 6 21 6"/>
           <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
         </svg>
@@ -400,6 +401,7 @@ watch(
         v-model="message"
         class="message-input"
         rows="1"
+        wrap="off"
         :placeholder="t('workspace.commit.messagePlaceholder')"
         spellcheck="false"
         autocomplete="off"
@@ -475,26 +477,27 @@ watch(
 .panel-header {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 4px 2px;
+  gap: 6px;
+  padding: 1px 4px;
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
   white-space: nowrap;
   overflow: hidden;
-  height: 28px;
+  height: 18px;
 }
 
 .btn-trash {
   background: none;
   border: 1px solid var(--border);
-  border-radius: 4px;
+  border-radius: 3px;
   color: var(--accent-red);
   cursor: pointer;
-  padding: 4px 5px;
+  padding: 0 3px;
   display: flex;
   align-items: center;
   transition: background 0.15s, border-color 0.15s;
+  line-height: 1;
 }
 
 .btn-trash:hover:not(:disabled) {
@@ -508,15 +511,15 @@ watch(
 }
 
 .header-title {
-  font-size: var(--font-md);
+  font-size: var(--font-xs);
   color: var(--text-primary);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .header-branch {
   color: var(--text-muted);
   font-weight: 400;
-  margin-left: 4px;
+  margin-left: 2px;
 }
 
 .panel-lists {
@@ -619,13 +622,19 @@ watch(
   outline: none;
   transition: border-color 0.15s;
   resize: none;
-  overflow: hidden;
+  overflow-x: auto;
+  scrollbar-width: none;
+  overflow-y: hidden;
   line-height: 1.4;
   max-height: 120px;
 }
 
 .message-input:focus {
   border-color: var(--accent-blue);
+}
+
+.message-input::-webkit-scrollbar {
+  display: none;
 }
 
 .commit-error {

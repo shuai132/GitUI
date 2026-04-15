@@ -11,6 +11,8 @@ export interface FileEntry {
   old_path?: string
   status: FileStatusKind
   staged: boolean
+  additions: number
+  deletions: number
 }
 
 export interface WorkspaceStatus {

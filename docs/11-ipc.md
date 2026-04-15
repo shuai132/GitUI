@@ -38,6 +38,8 @@ GitUI 的前后端通过 Tauri v2 的 IPC 通道通信：
 | 命令 | 参数 | 返回 |
 |------|------|------|
 | `get_status` | `repoId` | `WorkspaceStatus` |
+
+`get_status` 内部会额外做一次批量 diff（staged: tree→index, unstaged/untracked: index→workdir），为每个 `FileEntry` 填充 `additions`/`deletions` 行数统计。
 | `stage_file` | `repoId, filePath` | `void` |
 | `unstage_file` | `repoId, filePath` | `void` |
 | `stage_all` | `repoId` | `void` |
@@ -147,7 +149,7 @@ GitUI 的前后端通过 Tauri v2 的 IPC 通道通信：
 |------|------------|
 | `RepoMeta` | `RepoMeta` |
 | `FileStatusKind` enum (`#[serde(rename_all = "snake_case")]`) | `'added' \| 'modified' \| 'deleted' \| 'renamed' \| 'untracked' \| 'conflicted'` |
-| `FileEntry` | `FileEntry` |
+| `FileEntry`（含 `additions`, `deletions`） | `FileEntry` |
 | `WorkspaceStatus` | `WorkspaceStatus` |
 | `CommitInfo`（含 `is_unreachable`, `is_stash`） | `CommitInfo` |
 | `BranchInfo`（含 `ahead`, `behind`） | `BranchInfo` |

@@ -1,6 +1,6 @@
 use base64::prelude::{Engine as _, BASE64_STANDARD};
 use git2::{
-    BranchType, DiffFormat, DiffOptions, Repository, RepositoryState, ResetType, StashFlags,
+    BranchType, Diff, DiffFormat, DiffOptions, Repository, RepositoryState, ResetType, StashFlags,
     StatusOptions, SubmoduleIgnore, SubmoduleStatus,
 };
 use std::path::{Path, PathBuf};
@@ -47,6 +47,8 @@ impl GitEngine {
                     old_path: None,
                     status: FileStatusKind::Added,
                     staged: true,
+                    additions: 0,
+                    deletions: 0,
                 });
             } else if status.is_index_modified() {
                 staged.push(FileEntry {
@@ -54,6 +56,8 @@ impl GitEngine {
                     old_path: None,
                     status: FileStatusKind::Modified,
                     staged: true,
+                    additions: 0,
+                    deletions: 0,
                 });
             } else if status.is_index_deleted() {
                 staged.push(FileEntry {
@@ -61,6 +65,8 @@ impl GitEngine {
                     old_path: None,
                     status: FileStatusKind::Deleted,
                     staged: true,
+                    additions: 0,
+                    deletions: 0,
                 });
             } else if status.is_index_renamed() {
                 let old_path = entry
@@ -72,6 +78,8 @@ impl GitEngine {
                     old_path,
                     status: FileStatusKind::Renamed,
                     staged: true,
+                    additions: 0,
+                    deletions: 0,
                 });
             }
 
@@ -82,6 +90,8 @@ impl GitEngine {
                     old_path: None,
                     status: FileStatusKind::Modified,
                     staged: false,
+                    additions: 0,
+                    deletions: 0,
                 });
             } else if status.is_wt_deleted() {
                 unstaged.push(FileEntry {
@@ -89,6 +99,8 @@ impl GitEngine {
                     old_path: None,
                     status: FileStatusKind::Deleted,
                     staged: false,
+                    additions: 0,
+                    deletions: 0,
                 });
             } else if status.is_wt_new() {
                 untracked.push(FileEntry {
@@ -96,6 +108,8 @@ impl GitEngine {
                     old_path: None,
                     status: FileStatusKind::Untracked,
                     staged: false,
+                    additions: 0,
+                    deletions: 0,
                 });
             } else if status.is_conflicted() {
                 unstaged.push(FileEntry {
@@ -103,6 +117,8 @@ impl GitEngine {
                     old_path: None,
                     status: FileStatusKind::Conflicted,
                     staged: false,
+                    additions: 0,
+                    deletions: 0,
                 });
             }
         }
@@ -124,6 +140,73 @@ impl GitEngine {
             }
             Err(_) => (None, None, None, false),
         };
+
+        // Fill additions/deletions via batch diff stats
+        let fill_stats = |entries: &mut Vec<FileEntry>, diff: &Diff| {
+            let mut path_stats: std::collections::HashMap<String, (usize, usize)> =
+                std::collections::HashMap::new();
+            let mut additions = 0usize;
+            let mut deletions = 0usize;
+            let mut cur_path: Option<String> = None;
+
+            let _ = diff.print(DiffFormat::Patch, |delta, _hunk, line| {
+                use git2::DiffLineType;
+                match line.origin_value() {
+                    DiffLineType::FileHeader => {
+                        if let Some(p) = cur_path.take() {
+                            path_stats.insert(p, (additions, deletions));
+                            additions = 0;
+                            deletions = 0;
+                        }
+                        cur_path = delta
+                            .new_file()
+                            .path()
+                            .or_else(|| delta.old_file().path())
+                            .map(|p| p.to_string_lossy().to_string());
+                    }
+                    DiffLineType::Addition => additions += 1,
+                    DiffLineType::Deletion => deletions += 1,
+                    _ => {}
+                }
+                true
+            });
+            if let Some(p) = cur_path.take() {
+                path_stats.insert(p, (additions, deletions));
+            }
+
+            for entry in entries.iter_mut() {
+                if let Some((a, d)) = path_stats.get(&entry.path) {
+                    entry.additions = *a;
+                    entry.deletions = *d;
+                }
+            }
+        };
+
+        if !staged.is_empty() {
+            let head_tree = repo
+                .head()
+                .ok()
+                .and_then(|h| h.peel_to_commit().ok())
+                .and_then(|c| c.tree().ok());
+            if let Ok(index) = repo.index() {
+                if let Ok(diff) = repo.diff_tree_to_index(head_tree.as_ref(), Some(&index), None) {
+                    fill_stats(&mut staged, &diff);
+                }
+            }
+        }
+
+        if !unstaged.is_empty() || !untracked.is_empty() {
+            let mut opts = DiffOptions::new();
+            opts.include_untracked(true)
+                .show_untracked_content(true)
+                .recurse_untracked_dirs(true);
+            if let Ok(index) = repo.index() {
+                if let Ok(diff) = repo.diff_index_to_workdir(Some(&index), Some(&mut opts)) {
+                    fill_stats(&mut unstaged, &diff);
+                    fill_stats(&mut untracked, &diff);
+                }
+            }
+        }
 
         Ok(WorkspaceStatus {
             staged,

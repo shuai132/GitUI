@@ -34,6 +34,8 @@
   old_path: Option<String>,  // renamed 才有
   status: FileStatusKind,    // added | modified | deleted | renamed | untracked | conflicted
   staged: bool,
+  additions: usize,          // 批量 diff 填充的行数统计
+  deletions: usize,
 }
 ```
 

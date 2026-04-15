@@ -24,6 +24,10 @@ pub struct FileEntry {
     pub old_path: Option<String>,
     pub status: FileStatusKind,
     pub staged: bool,
+    #[serde(default)]
+    pub additions: usize,
+    #[serde(default)]
+    pub deletions: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

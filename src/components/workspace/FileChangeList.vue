@@ -69,9 +69,10 @@ const statusIconMap: Record<FileStatusKind, { d: string; stroke?: boolean }> = {
         </svg>
         <span class="file-path" :title="file.path">
           {{ file.path.split('/').pop() }}
-          <span class="file-dir" v-if="file.path.includes('/')">
-            &nbsp;{{ file.path.substring(0, file.path.lastIndexOf('/')) }}
-          </span>
+        </span>
+        <span class="file-stats" v-if="file.additions > 0 || file.deletions > 0">
+          <span class="add" v-if="file.additions > 0">+{{ file.additions }}</span>
+          <span class="del" v-if="file.deletions > 0">-{{ file.deletions }}</span>
         </span>
         <button
           v-if="showRowActions"
@@ -160,11 +161,12 @@ const statusIconMap: Record<FileStatusKind, { d: string; stroke?: boolean }> = {
   font-family: inherit;
   font-size: var(--font-xs);
   padding: 0 5px;
-  margin-left: auto;
+  position: absolute;
+  right: 4px;
   opacity: 0;
   transition: opacity 0.1s, background 0.1s, color 0.1s;
-  flex-shrink: 0;
   line-height: 14px;
+  z-index: 1;
 }
 
 .file-entry:hover .row-action {
@@ -189,10 +191,16 @@ const statusIconMap: Record<FileStatusKind, { d: string; stroke?: boolean }> = {
   flex: 1;
 }
 
-.file-dir {
-  color: var(--text-muted);
-  font-size: var(--font-sm);
+.file-stats {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+  margin-left: 4px;
+  font-size: var(--font-xs);
 }
+
+.file-stats .add { color: var(--accent-green); }
+.file-stats .del { color: var(--accent-red); }
 
 .empty-hint {
   padding: 8px 10px;
