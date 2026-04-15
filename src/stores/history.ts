@@ -4,7 +4,7 @@ import type { CommitInfo, BranchInfo, CommitDetail, TagInfo } from '@/types/git'
 import { useGitCommands } from '@/composables/useGitCommands'
 import { useRepoStore } from './repos'
 import { useUiStore } from './ui'
-import { computeGraphLayout, type GraphRow } from '@/utils/graph'
+import { computeGraphLayout, type GraphRow, type LaneState } from '@/utils/graph'
 
 const PAGE_SIZE = 200
 
@@ -19,6 +19,8 @@ export const useHistoryStore = defineStore('history', () => {
   const remoteTagsLoading = ref(false)
   const selectedCommit = ref<CommitDetail | null>(null)
   const graphRows = ref<GraphRow[]>([])
+  // loadMore 增量计算所需的末尾 lane 状态，loadLog 重置
+  const graphLaneState = ref<LaneState | null>(null)
   const selectedFileDiffIndex = ref(0)
   const hasMore = ref(false)
   const loading = ref(false)
@@ -56,7 +58,9 @@ export const useHistoryStore = defineStore('history', () => {
       if (!unchanged) {
         commits.value = next
         hasMore.value = page.has_more
-        graphRows.value = computeGraphLayout(commits.value)
+        const { rows, finalState } = computeGraphLayout(commits.value)
+        graphRows.value = rows
+        graphLaneState.value = finalState
       }
     } catch (e: unknown) {
       error.value = String(e)
@@ -79,9 +83,15 @@ export const useHistoryStore = defineStore('history', () => {
         uiStore.showUnreachableCommits,
         uiStore.showStashCommits,
       )
+      // 只计算新增的这一页，从上次的末尾 lane 状态接续，O(200) 而非 O(N)
+      const { rows: newRows, finalState } = computeGraphLayout(
+        page.commits,
+        graphLaneState.value ?? undefined,
+      )
       commits.value.push(...page.commits)
       hasMore.value = page.has_more
-      graphRows.value = computeGraphLayout(commits.value)
+      graphRows.value.push(...newRows)
+      graphLaneState.value = finalState
     } finally {
       loadingMore.value = false
     }

@@ -46,17 +46,33 @@ function laneX(col: number): number {
 export { laneX }
 
 /**
+ * Mutable lane state that can be passed between incremental computations.
+ * Allows `loadMore` to continue from where the previous batch ended
+ * instead of re-processing all accumulated commits.
+ */
+export interface LaneState {
+  lanes: Array<string | null>
+  laneColors: string[]
+  colorCounter: number
+}
+
+/**
  * Computes per-row graph layout data for a list of commits in topological order.
  * Uses a lane-assignment algorithm (pvigier variant):
  *  - Each "lane" holds an OID that is "expected" in that column.
  *  - When a commit is processed, it claims its lane, updates outgoing lane reservations
  *    for its parents, and emits segments for all lines visible in that row.
+ *
+ * Pass `initialState` to continue incrementally from a previous call's `finalState`.
  */
-export function computeGraphLayout(commits: CommitInfo[]): GraphRow[] {
+export function computeGraphLayout(
+  commits: CommitInfo[],
+  initialState?: LaneState,
+): { rows: GraphRow[]; finalState: LaneState } {
   // lanes[col] = the OID we're waiting for in that column (null = free)
-  const lanes: Array<string | null> = []
-  const laneColors: string[] = []
-  let colorCounter = 0
+  const lanes: Array<string | null> = initialState ? [...initialState.lanes] : []
+  const laneColors: string[] = initialState ? [...initialState.laneColors] : []
+  let colorCounter = initialState?.colorCounter ?? 0
 
   const result: GraphRow[] = []
 
@@ -222,5 +238,8 @@ export function computeGraphLayout(commits: CommitInfo[]): GraphRow[] {
     })
   }
 
-  return result
+  return {
+    rows: result,
+    finalState: { lanes: lanes.slice(), laneColors: laneColors.slice(), colorCounter },
+  }
 }
