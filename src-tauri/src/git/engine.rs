@@ -112,11 +112,11 @@ impl GitEngine {
             Ok(head) => {
                 let commit = head.peel_to_commit().ok();
                 let commit_oid = commit.as_ref().map(|c| c.id().to_string());
-                let commit_message = commit.as_ref().and_then(|c| c.message().map(|m| m.to_string()));
+                let commit_message = commit
+                    .as_ref()
+                    .and_then(|c| c.message().map(|m| m.to_string()));
                 if head.is_branch() {
-                    let branch_name = head
-                        .shorthand()
-                        .map(|s| s.to_string());
+                    let branch_name = head.shorthand().map(|s| s.to_string());
                     (branch_name, commit_oid, commit_message, false)
                 } else {
                     (None, commit_oid, commit_message, true)
@@ -214,14 +214,7 @@ impl GitEngine {
 
         let parent_refs: Vec<&git2::Commit> = parent_commits.iter().collect();
 
-        let commit_oid = repo.commit(
-            Some("HEAD"),
-            &sig,
-            &sig,
-            message,
-            &tree,
-            &parent_refs,
-        )?;
+        let commit_oid = repo.commit(Some("HEAD"), &sig, &sig, message, &tree, &parent_refs)?;
 
         Ok(commit_oid.to_string())
     }
@@ -423,19 +416,16 @@ impl GitEngine {
         };
 
         let diffs = Self::parse_diff(&diff)?;
-        Ok(diffs
-            .into_iter()
-            .next()
-            .unwrap_or(FileDiff {
-                old_path: None,
-                new_path: Some(file_path.to_string()),
-                is_binary: false,
-                hunks: vec![],
-                additions: 0,
-                deletions: 0,
-                old_blob_oid: None,
-                new_blob_oid: None,
-            }))
+        Ok(diffs.into_iter().next().unwrap_or(FileDiff {
+            old_path: None,
+            new_path: Some(file_path.to_string()),
+            is_binary: false,
+            hunks: vec![],
+            additions: 0,
+            deletions: 0,
+            old_blob_oid: None,
+            new_blob_oid: None,
+        }))
     }
 
     fn parse_diff(diff: &git2::Diff) -> GitResult<Vec<FileDiff>> {
@@ -463,8 +453,14 @@ impl GitEngine {
                         additions = 0;
                         deletions = 0;
                     }
-                    let old_path = delta.old_file().path().map(|p| p.to_string_lossy().to_string());
-                    let new_path = delta.new_file().path().map(|p| p.to_string_lossy().to_string());
+                    let old_path = delta
+                        .old_file()
+                        .path()
+                        .map(|p| p.to_string_lossy().to_string());
+                    let new_path = delta
+                        .new_file()
+                        .path()
+                        .map(|p| p.to_string_lossy().to_string());
                     let is_binary = delta.old_file().is_binary() || delta.new_file().is_binary();
                     let status = match delta.status() {
                         Delta::Added => FileStatusKind::Added,
@@ -475,8 +471,16 @@ impl GitEngine {
                     let _ = status;
                     let old_id = delta.old_file().id();
                     let new_id = delta.new_file().id();
-                    let old_blob_oid = if old_id.is_zero() { None } else { Some(old_id.to_string()) };
-                    let new_blob_oid = if new_id.is_zero() { None } else { Some(new_id.to_string()) };
+                    let old_blob_oid = if old_id.is_zero() {
+                        None
+                    } else {
+                        Some(old_id.to_string())
+                    };
+                    let new_blob_oid = if new_id.is_zero() {
+                        None
+                    } else {
+                        Some(new_id.to_string())
+                    };
                     current_file = Some(FileDiff {
                         old_path,
                         new_path,
@@ -634,7 +638,11 @@ impl GitEngine {
             let is_head = !is_remote && head_name.as_deref() == Some(name.as_str());
 
             // 对本地分支尝试获取上游分支信息
-            let upstream_branch = if !is_remote { branch.upstream().ok() } else { None };
+            let upstream_branch = if !is_remote {
+                branch.upstream().ok()
+            } else {
+                None
+            };
             let upstream = upstream_branch
                 .as_ref()
                 .and_then(|u| u.name().ok().flatten().map(|s| s.to_string()));
@@ -643,20 +651,20 @@ impl GitEngine {
             let commit_oid = local_oid.map(|o| o.to_string());
 
             // 计算 ahead/behind（仅本地 && 有上游）
-            let (ahead, behind) = if let (Some(local), Some(up)) =
-                (local_oid, upstream_branch.as_ref())
-            {
-                match up.get().peel_to_commit() {
-                    Ok(upstream_commit) => match repo.graph_ahead_behind(local, upstream_commit.id())
-                    {
-                        Ok((a, b)) => (Some(a as u32), Some(b as u32)),
+            let (ahead, behind) =
+                if let (Some(local), Some(up)) = (local_oid, upstream_branch.as_ref()) {
+                    match up.get().peel_to_commit() {
+                        Ok(upstream_commit) => {
+                            match repo.graph_ahead_behind(local, upstream_commit.id()) {
+                                Ok((a, b)) => (Some(a as u32), Some(b as u32)),
+                                Err(_) => (None, None),
+                            }
+                        }
                         Err(_) => (None, None),
-                    },
-                    Err(_) => (None, None),
-                }
-            } else {
-                (None, None)
-            };
+                    }
+                } else {
+                    (None, None)
+                };
 
             branches.push(BranchInfo {
                 name,
@@ -684,7 +692,13 @@ impl GitEngine {
         // 找到远端分支并取得其 commit
         let remote_ref = repo
             .find_branch(remote_branch, BranchType::Remote)
-            .map_err(|e| GitError::OperationFailed(format!("找不到远端分支 {}: {}", remote_branch, e.message())))?;
+            .map_err(|e| {
+                GitError::OperationFailed(format!(
+                    "找不到远端分支 {}: {}",
+                    remote_branch,
+                    e.message()
+                ))
+            })?;
         let commit = remote_ref
             .get()
             .peel_to_commit()
@@ -782,7 +796,9 @@ impl GitEngine {
                     commit_oid,
                     is_annotated: true,
                     message: tag_obj.message().map(|s| s.trim().to_string()),
-                    tagger_name: tagger.as_ref().and_then(|t| t.name().map(|s| s.to_string())),
+                    tagger_name: tagger
+                        .as_ref()
+                        .and_then(|t| t.name().map(|s| s.to_string())),
                     time: tagger.as_ref().map(|t| t.when().seconds()),
                 });
             } else {
@@ -962,12 +978,7 @@ impl GitEngine {
     /// 在指定提交上创建标签
     /// - message = Some(非空) → 附注标签
     /// - message = None 或空字符串 → 轻量标签
-    pub fn create_tag(
-        path: &str,
-        name: &str,
-        oid: &str,
-        message: Option<&str>,
-    ) -> GitResult<()> {
+    pub fn create_tag(path: &str, name: &str, oid: &str, message: Option<&str>) -> GitResult<()> {
         let repo = Self::open(path)?;
         let commit_oid = git2::Oid::from_str(oid)
             .map_err(|e| GitError::OperationFailed(e.message().to_string()))?;
@@ -1082,7 +1093,8 @@ impl GitEngine {
         ))?;
         if !statuses.is_empty() {
             return Err(GitError::OperationFailed(
-                "Cannot rebase: working tree has uncommitted changes. Commit or stash first.".to_string(),
+                "Cannot rebase: working tree has uncommitted changes. Commit or stash first."
+                    .to_string(),
             ));
         }
 
@@ -1109,12 +1121,7 @@ impl GitEngine {
         }
 
         // Perform rebase
-        let mut rebase = repo.rebase(
-            Some(&head_commit),
-            Some(&fetch_commit),
-            None,
-            None,
-        )?;
+        let mut rebase = repo.rebase(Some(&head_commit), Some(&fetch_commit), None, None)?;
 
         let sig = repo.signature()?;
 
@@ -1124,7 +1131,8 @@ impl GitEngine {
             if index.has_conflicts() {
                 rebase.abort()?;
                 return Err(GitError::OperationFailed(
-                    "Rebase conflict: please resolve conflicts manually in the terminal".to_string(),
+                    "Rebase conflict: please resolve conflicts manually in the terminal"
+                        .to_string(),
                 ));
             }
             rebase.commit(None, &sig, None)?;
@@ -1442,11 +1450,7 @@ impl GitEngine {
         let modules_dir = repo.path().join("modules").join(name);
         if modules_dir.exists() {
             std::fs::remove_dir_all(&modules_dir).map_err(|e| {
-                GitError::OperationFailed(format!(
-                    "删除 {} 失败：{}",
-                    modules_dir.display(),
-                    e
-                ))
+                GitError::OperationFailed(format!("删除 {} 失败：{}", modules_dir.display(), e))
             })?;
         }
 
@@ -1454,11 +1458,7 @@ impl GitEngine {
         let workdir_path = repo_workdir.join(&sub_rel_path);
         if workdir_path.exists() {
             std::fs::remove_dir_all(&workdir_path).map_err(|e| {
-                GitError::OperationFailed(format!(
-                    "删除 {} 失败：{}",
-                    workdir_path.display(),
-                    e
-                ))
+                GitError::OperationFailed(format!("删除 {} 失败：{}", workdir_path.display(), e))
             })?;
         }
 
@@ -1548,7 +1548,9 @@ impl GitEngine {
         let mut repo = Self::open(path)?;
         let count = Self::stash_count(&mut repo)?;
         if count == 0 {
-            return Err(GitError::OperationFailed("没有可 apply 的 stash".to_string()));
+            return Err(GitError::OperationFailed(
+                "没有可 apply 的 stash".to_string(),
+            ));
         }
         if index >= count {
             return Err(GitError::OperationFailed(format!(
@@ -1608,9 +1610,7 @@ impl GitEngine {
     pub fn amend_commit(path: &str, message: &str) -> GitResult<String> {
         let repo = Self::open(path)?;
         if message.trim().is_empty() {
-            return Err(GitError::OperationFailed(
-                "提交信息不能为空".to_string(),
-            ));
+            return Err(GitError::OperationFailed("提交信息不能为空".to_string()));
         }
         let head = repo.head()?.peel_to_commit()?;
         let sig = repo.signature()?;
@@ -1618,6 +1618,27 @@ impl GitEngine {
         index.write()?;
         let tree_oid = index.write_tree()?;
         let tree = repo.find_tree(tree_oid)?;
+        let new_oid = head.amend(
+            Some("HEAD"),
+            Some(&sig),
+            Some(&sig),
+            None,
+            Some(message),
+            Some(&tree),
+        )?;
+        Ok(new_oid.to_string())
+    }
+
+    /// 仅修改 HEAD commit 的 message，不改变 tree（不引入新的暂存变更）。
+    /// 返回新 commit OID。
+    pub fn amend_commit_message(path: &str, message: &str) -> GitResult<String> {
+        let repo = Self::open(path)?;
+        if message.trim().is_empty() {
+            return Err(GitError::OperationFailed("提交信息不能为空".to_string()));
+        }
+        let head = repo.head()?.peel_to_commit()?;
+        let sig = repo.signature()?;
+        let tree = head.tree()?;
         let new_oid = head.amend(
             Some("HEAD"),
             Some(&sig),
@@ -1703,9 +1724,8 @@ impl GitEngine {
     /// 从 .gitmodules 文本中移除 `[submodule "<name>"]` 及其后续字段行。
     /// 若删除后整个文件仅剩空白则删除文件本身。
     fn strip_gitmodules_section(gitmodules_path: &Path, name: &str) -> GitResult<()> {
-        let content = std::fs::read_to_string(gitmodules_path).map_err(|e| {
-            GitError::OperationFailed(format!("读取 .gitmodules 失败：{}", e))
-        })?;
+        let content = std::fs::read_to_string(gitmodules_path)
+            .map_err(|e| GitError::OperationFailed(format!("读取 .gitmodules 失败：{}", e)))?;
 
         let target_header = format!("[submodule \"{}\"]", name);
         let mut out = String::with_capacity(content.len());
@@ -1735,13 +1755,11 @@ impl GitEngine {
         });
 
         if non_empty {
-            std::fs::write(gitmodules_path, out).map_err(|e| {
-                GitError::OperationFailed(format!("写入 .gitmodules 失败：{}", e))
-            })?;
+            std::fs::write(gitmodules_path, out)
+                .map_err(|e| GitError::OperationFailed(format!("写入 .gitmodules 失败：{}", e)))?;
         } else {
-            std::fs::remove_file(gitmodules_path).map_err(|e| {
-                GitError::OperationFailed(format!("删除 .gitmodules 失败：{}", e))
-            })?;
+            std::fs::remove_file(gitmodules_path)
+                .map_err(|e| GitError::OperationFailed(format!("删除 .gitmodules 失败：{}", e)))?;
         }
 
         Ok(())

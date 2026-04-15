@@ -18,6 +18,7 @@ import WipPanel from '@/components/workspace/WipPanel.vue'
 import ContextMenu, { type ContextMenuItem } from '@/components/common/ContextMenu.vue'
 import CreateBranchDialog from '@/components/commit/CreateBranchDialog.vue'
 import CreateTagDialog from '@/components/commit/CreateTagDialog.vue'
+import Modal from '@/components/common/Modal.vue'
 import { usePanelDock } from '@/composables/usePanelDock'
 import type { PanelId } from '@/stores/ui'
 import type { BranchInfo, CommitInfo, TagInfo } from '@/types/git'
@@ -571,6 +572,9 @@ const commitMenu = reactive({
 
 const showCreateBranchDialog = ref(false)
 const showCreateTagDialog = ref(false)
+const showEditMessageDialog = ref(false)
+const editMessageCommit = ref<CommitInfo | null>(null)
+const editMessageText = ref('')
 const createTagAnnotated = ref(false)
 const dialogCommit = ref<CommitInfo | null>(null)
 
@@ -578,6 +582,11 @@ const currentBranchName = computed(
   () =>
     historyStore.branches.find((b) => b.is_head && !b.is_remote)?.name ?? 'HEAD',
 )
+
+const headCommitOid = computed(() => {
+  const headBranch = historyStore.branches.find((b) => b.is_head && !b.is_remote)
+  return headBranch?.commit_oid ?? historyStore.commits[0]?.oid ?? ''
+})
 
 // 根据 commit_oid 在 stashStore 中查到对应 stash；找不到返回 null
 function stashEntryForCommit(oid: string) {
@@ -602,6 +611,12 @@ const commitMenuItems = computed<ContextMenuItem[]>(() => {
 
   return [
     { label: t('history.contextMenu.checkout'), action: 'checkout' },
+    { separator: true },
+    {
+      label: t('history.contextMenu.editMessage'),
+      action: 'edit-message',
+      disabled: c.oid !== headCommitOid.value,
+    },
     { separator: true },
     { label: t('history.contextMenu.createBranch'), action: 'create-branch' },
     { label: t('history.contextMenu.cherryPick'), action: 'cherry-pick' },
@@ -672,6 +687,11 @@ async function onCommitMenuAction(action: string) {
           await historyStore.checkoutCommit(c.oid)
         }
         break
+      case 'edit-message':
+        editMessageCommit.value = c
+        editMessageText.value = c.message.trim()
+        showEditMessageDialog.value = true
+        break
       case 'create-branch':
         dialogCommit.value = c
         showCreateBranchDialog.value = true
@@ -723,6 +743,16 @@ async function onCommitMenuAction(action: string) {
         showCreateTagDialog.value = true
         break
     }
+  } catch (err) {
+    alert(String(err))
+  }
+}
+
+async function onEditMessageConfirm() {
+  if (!editMessageText.value.trim()) return
+  try {
+    await historyStore.amendCommitMessage(editMessageText.value.trim())
+    showEditMessageDialog.value = false
   } catch (err) {
     alert(String(err))
   }
@@ -1024,7 +1054,7 @@ onUnmounted(() => {
           <div class="dock-handle" @pointerdown="onDragHandlePointerDown('info', $event)" :title="t('history.dock.dragToMove')">
             <svg width="8" height="14" viewBox="0 0 8 14"><circle cx="2" cy="2" r="1" fill="currentColor"/><circle cx="6" cy="2" r="1" fill="currentColor"/><circle cx="2" cy="7" r="1" fill="currentColor"/><circle cx="6" cy="7" r="1" fill="currentColor"/><circle cx="2" cy="12" r="1" fill="currentColor"/><circle cx="6" cy="12" r="1" fill="currentColor"/></svg>
           </div>
-          <span class="pane-header-title">{{ t('history.detailsPanel.title') }}</span>
+          <span class="pane-header-title" />
           <!-- 文件变更统计 -->
           <span v-if="selectedWip" class="pane-header-stats">
             <span class="ph-stat" title="Modified">
@@ -1150,6 +1180,27 @@ onUnmounted(() => {
     @close="showCreateTagDialog = false"
   />
 
+  <!-- Edit commit message dialog -->
+  <Modal
+    v-if="showEditMessageDialog"
+    :visible="showEditMessageDialog"
+    :title="t('history.dialog.editMessage.title')"
+    width="480px"
+    @close="showEditMessageDialog = false"
+  >
+    <textarea
+      v-model="editMessageText"
+      class="edit-message-input"
+      rows="6"
+      spellcheck="false"
+      autocomplete="off"
+    />
+    <template #footer>
+      <button class="btn btn-secondary" @click="showEditMessageDialog = false">{{ t('common.cancel') }}</button>
+      <button class="btn btn-primary" :disabled="!editMessageText.trim()" @click="onEditMessageConfirm">{{ t('history.dialog.editMessage.confirm') }}</button>
+    </template>
+  </Modal>
+
   <!-- Commit hover tooltip（自定义样式，跟随鼠标） -->
   <div
     v-if="commitTooltip.visible"
@@ -1206,7 +1257,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 16px;
+  width: 10px;
   flex-shrink: 0;
   cursor: grab;
   color: var(--text-muted);
@@ -1252,7 +1303,7 @@ onUnmounted(() => {
   letter-spacing: 0.04em;
 }
 .pane-header-title {
-  padding: 0 4px;
+  padding: 0 1px;
   white-space: nowrap;
   flex-shrink: 0;
 }
@@ -1261,7 +1312,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin-left: 8px;
+  margin-left: 0px;
   text-transform: none;
   letter-spacing: normal;
   font-weight: 500;
@@ -1657,5 +1708,38 @@ onUnmounted(() => {
   overflow: hidden;
   min-width: 0;
   min-height: 0;
+}
+
+.edit-message-input {
+  width: 100%;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: var(--font-md);
+  padding: 8px;
+  resize: vertical;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.edit-message-input:focus {
+  border-color: var(--accent-blue);
+}
+
+.btn-primary {
+  background: var(--accent-blue);
+  color: var(--bg-primary);
+  font-weight: 600;
+}
+
+.btn-primary:hover:not(:disabled) {
+  opacity: 0.85;
+}
+
+.btn-primary:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 </style>

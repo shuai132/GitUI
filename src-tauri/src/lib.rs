@@ -54,6 +54,7 @@ pub fn run() {
             // Commit
             create_commit,
             amend_commit,
+            amend_commit_message,
             checkout_commit,
             cherry_pick_commit,
             revert_commit,

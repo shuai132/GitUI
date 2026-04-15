@@ -14,6 +14,22 @@ import yaml from 'highlight.js/lib/languages/yaml'
 import sql from 'highlight.js/lib/languages/sql'
 import c from 'highlight.js/lib/languages/c'
 import cpp from 'highlight.js/lib/languages/cpp'
+import swift from 'highlight.js/lib/languages/swift'
+import objectivec from 'highlight.js/lib/languages/objectivec'
+import kotlin from 'highlight.js/lib/languages/kotlin'
+import scala from 'highlight.js/lib/languages/scala'
+import ruby from 'highlight.js/lib/languages/ruby'
+import php from 'highlight.js/lib/languages/php'
+import csharp from 'highlight.js/lib/languages/csharp'
+import dart from 'highlight.js/lib/languages/dart'
+import lua from 'highlight.js/lib/languages/lua'
+import perl from 'highlight.js/lib/languages/perl'
+import r from 'highlight.js/lib/languages/r'
+import diff from 'highlight.js/lib/languages/diff'
+import ini from 'highlight.js/lib/languages/ini'
+import dockerfile from 'highlight.js/lib/languages/dockerfile'
+import makefile from 'highlight.js/lib/languages/makefile'
+import protobuf from 'highlight.js/lib/languages/protobuf'
 
 hljs.registerLanguage('javascript', javascript)
 hljs.registerLanguage('typescript', typescript)
@@ -23,7 +39,7 @@ hljs.registerLanguage('go', go)
 hljs.registerLanguage('json', json)
 hljs.registerLanguage('css', css)
 hljs.registerLanguage('xml', xml)
-hljs.registerLanguage('html', xml)  // html 与 xml 共享同一语言定义
+hljs.registerLanguage('html', xml)
 hljs.registerLanguage('markdown', markdown)
 hljs.registerLanguage('java', java)
 hljs.registerLanguage('bash', bash)
@@ -31,6 +47,22 @@ hljs.registerLanguage('yaml', yaml)
 hljs.registerLanguage('sql', sql)
 hljs.registerLanguage('c', c)
 hljs.registerLanguage('cpp', cpp)
+hljs.registerLanguage('swift', swift)
+hljs.registerLanguage('objectivec', objectivec)
+hljs.registerLanguage('kotlin', kotlin)
+hljs.registerLanguage('scala', scala)
+hljs.registerLanguage('ruby', ruby)
+hljs.registerLanguage('php', php)
+hljs.registerLanguage('csharp', csharp)
+hljs.registerLanguage('dart', dart)
+hljs.registerLanguage('lua', lua)
+hljs.registerLanguage('perl', perl)
+hljs.registerLanguage('r', r)
+hljs.registerLanguage('diff', diff)
+hljs.registerLanguage('ini', ini)
+hljs.registerLanguage('dockerfile', dockerfile)
+hljs.registerLanguage('makefile', makefile)
+hljs.registerLanguage('protobuf', protobuf)
 
 export const EXT_TO_LANG: Record<string, string> = {
   js: 'javascript', mjs: 'javascript', cjs: 'javascript',
@@ -49,6 +81,22 @@ export const EXT_TO_LANG: Record<string, string> = {
   sql: 'sql',
   c: 'c', h: 'c',
   cpp: 'cpp', cc: 'cpp', cxx: 'cpp',
+  swift: 'swift',
+  m: 'objectivec', mm: 'objectivec',
+  kt: 'kotlin', kts: 'kotlin',
+  scala: 'scala',
+  rb: 'ruby',
+  php: 'php',
+  cs: 'csharp',
+  dart: 'dart',
+  lua: 'lua',
+  pl: 'perl', pm: 'perl',
+  r: 'r',
+  diff: 'diff', patch: 'diff',
+  ini: 'ini', cfg: 'ini',
+  dockerfile: 'dockerfile',
+  mk: 'makefile',
+  proto: 'protobuf',
 }
 
 function escapeHtml(s: string): string {

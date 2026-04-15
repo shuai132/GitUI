@@ -232,37 +232,43 @@ async function onCommit() {
 
 function onMessageKeydown(e: KeyboardEvent) {
   if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+    e.preventDefault()
     onCommit()
   }
 }
 
-// ── 提交表单高度拖拽 ─────────────────────────────────────────────
-const COMMIT_FORM_H_KEY = 'wip-commit-form-height'
-const commitFormH = ref(parseInt(localStorage.getItem(COMMIT_FORM_H_KEY) || '0', 10) || 0)
-const wipPanelRef = ref<HTMLElement | null>(null)
+const messageInputRef = ref<HTMLTextAreaElement | null>(null)
 
-function startCommitResize(e: PointerEvent) {
+function autoResizeInput() {
+  const el = messageInputRef.value
+  if (!el) return
+  el.style.height = 'auto'
+  el.style.height = el.scrollHeight + 'px'
+}
+
+// ── 未暂存/已暂存分割线拖拽 ────────────────────────────────────────
+const WIP_SPLIT_KEY = 'wip-split-pct'
+const splitPct = ref(parseFloat(localStorage.getItem(WIP_SPLIT_KEY) || '50'))
+
+function startSplitResize(e: PointerEvent) {
   e.preventDefault()
+  const container = panelListsRef.value
+  if (!container) return
   const startY = e.clientY
-  const panelEl = wipPanelRef.value
-  if (!panelEl) return
-  const formEl = panelEl.querySelector('.commit-form') as HTMLElement | null
-  if (!formEl) return
-  const startH = formEl.offsetHeight
+  const startH = container.getBoundingClientRect().height
+  const startPct = splitPct.value
 
   const onMove = (ev: PointerEvent) => {
-    const delta = startY - ev.clientY
-    const maxH = panelEl.clientHeight - 80
-    commitFormH.value = Math.max(100, Math.min(maxH, startH + delta))
+    const delta = ev.clientY - startY
+    const next = startPct + (delta / startH) * 100
+    splitPct.value = Math.max(15, Math.min(85, next))
   }
   const onUp = () => {
     window.removeEventListener('pointermove', onMove)
     window.removeEventListener('pointerup', onUp)
     document.body.style.cursor = ''
     document.body.style.userSelect = ''
-    if (commitFormH.value > 0) {
-      localStorage.setItem(COMMIT_FORM_H_KEY, String(commitFormH.value))
-    }
+    localStorage.setItem(WIP_SPLIT_KEY, String(splitPct.value))
   }
   window.addEventListener('pointermove', onMove)
   window.addEventListener('pointerup', onUp)
@@ -313,7 +319,7 @@ watch(
 </script>
 
 <template>
-  <div ref="wipPanelRef" class="wip-panel">
+  <div class="wip-panel">
     <!-- Header -->
     <div class="panel-header">
       <button
@@ -335,85 +341,88 @@ watch(
 
     <!-- 文件列表区 -->
     <div ref="panelListsRef" class="panel-lists" tabindex="-1" @keydown="onListKeydown">
-      <FileChangeList
-        :files="unstagedAll"
-        :title="t('workspace.wip.section.unstaged')"
-        :empty-text="t('workspace.wip.empty.unstaged')"
-        :show-row-actions="true"
-        :selected-path="selectedPath"
-        variant="unstaged"
-        @select="onSelectFile"
-        @toggle="onToggleFile"
-        @context-menu="onFileContext"
-      >
-        <template #header-actions>
-          <button
-            v-if="unstagedAll.length > 0"
-            class="btn-section"
-            @click="onStageAll"
-          >
-            {{ t('workspace.wip.stageAll') }}
-          </button>
-        </template>
-      </FileChangeList>
+      <div class="split-top" :style="{ flex: `${splitPct} 0 0%` }">
+        <FileChangeList
+          :files="unstagedAll"
+          :title="t('workspace.wip.section.unstaged')"
+          :empty-text="t('workspace.wip.empty.unstaged')"
+          :show-row-actions="true"
+          :selected-path="selectedPath"
+          variant="unstaged"
+          @select="onSelectFile"
+          @toggle="onToggleFile"
+          @context-menu="onFileContext"
+        >
+          <template #header-actions>
+            <button
+              v-if="unstagedAll.length > 0"
+              class="btn-section"
+              @click="onStageAll"
+            >
+              {{ t('workspace.wip.stageAll') }}
+            </button>
+          </template>
+        </FileChangeList>
+      </div>
 
-      <FileChangeList
-        :files="stagedAll"
-        :title="t('workspace.wip.section.staged')"
-        :empty-text="t('workspace.wip.empty.staged')"
-        :show-row-actions="true"
-        :selected-path="selectedPath"
-        variant="staged"
-        @select="onSelectFile"
-        @toggle="onToggleFile"
-        @context-menu="onFileContext"
-      >
-        <template #header-actions>
-          <button
-            v-if="stagedAll.length > 0"
-            class="btn-section"
-            @click="onUnstageAll"
-          >
-            {{ t('workspace.wip.unstageAll') }}
-          </button>
-        </template>
-      </FileChangeList>
+      <div class="split-resize" @pointerdown="startSplitResize" />
+
+      <div class="split-bottom" :style="{ flex: `${100 - splitPct} 0 0%` }">
+        <FileChangeList
+          :files="stagedAll"
+          :title="t('workspace.wip.section.staged')"
+          :empty-text="t('workspace.wip.empty.staged')"
+          :show-row-actions="true"
+          :selected-path="selectedPath"
+          variant="staged"
+          @select="onSelectFile"
+          @toggle="onToggleFile"
+          @context-menu="onFileContext"
+        >
+          <template #header-actions>
+            <button
+              v-if="stagedAll.length > 0"
+              class="btn-section"
+              @click="onUnstageAll"
+            >
+              {{ t('workspace.wip.unstageAll') }}
+            </button>
+          </template>
+        </FileChangeList>
+      </div>
     </div>
 
-    <!-- 拖拽分隔条 -->
-    <div class="commit-resize" @pointerdown="startCommitResize" />
-
     <!-- 提交表单 -->
-    <div class="commit-form" :style="commitFormH > 0 ? { height: commitFormH + 'px' } : {}">
-      <label class="amend-row">
-        <input
-          type="checkbox"
-          v-model="amendChecked"
-          :disabled="isUnborn"
-        />
-        <span>{{ t('workspace.commit.amendLabel') }}</span>
-        <span v-if="isUnborn" class="amend-hint">{{ t('workspace.commit.amendUnbornHint') }}</span>
-      </label>
-
+    <div class="commit-form">
       <textarea
+        ref="messageInputRef"
         v-model="message"
         class="message-input"
-        rows="3"
+        rows="1"
         :placeholder="t('workspace.commit.messagePlaceholder')"
         spellcheck="false"
         autocomplete="off"
         @keydown="onMessageKeydown"
+        @input="autoResizeInput"
       />
-
+      <div class="commit-actions">
+        <label class="amend-row" :title="t('workspace.commit.amendLabel')">
+          <input
+            type="checkbox"
+            v-model="amendChecked"
+            :disabled="isUnborn"
+          />
+          <span>Amend</span>
+        </label>
+        <button
+          class="btn-commit"
+          :disabled="!canCommit"
+          @click="onCommit"
+        >
+          {{ commitButtonLabel }}
+        </button>
+      </div>
       <div v-if="commitError" class="commit-error">{{ commitError }}</div>
-
-      <button
-        class="btn-commit"
-        :disabled="!canCommit"
-        @click="onCommit"
-      >
-        {{ commitButtonLabel }}
-      </button>
     </div>
 
     <!-- 丢弃全部变更确认框 -->
@@ -466,7 +475,7 @@ watch(
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 4px 12px;
+  padding: 4px 2px;
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
@@ -517,6 +526,30 @@ watch(
   outline: none;
 }
 
+.split-top,
+.split-bottom {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.split-resize {
+  height: 4px;
+  flex-shrink: 0;
+  cursor: row-resize;
+  background: transparent;
+  border-top: 1px solid var(--border);
+  position: relative;
+  z-index: 1;
+  transition: background 0.15s;
+}
+
+.split-resize:hover,
+.split-resize:active {
+  background: rgba(138, 173, 244, 0.3);
+}
+
 .btn-section {
   background: var(--bg-surface);
   border: 1px solid var(--border);
@@ -525,7 +558,8 @@ watch(
   cursor: pointer;
   font-family: inherit;
   font-size: var(--font-xs);
-  padding: 2px 8px;
+  padding: 0 5px;
+  line-height: 14px;
   transition: background 0.1s, color 0.1s, border-color 0.1s;
 }
 
@@ -535,42 +569,33 @@ watch(
   border-color: var(--accent-blue);
 }
 
-.commit-resize {
-  height: 6px;
-  margin-top: -3px;
-  margin-bottom: -3px;
-  cursor: row-resize;
-  background: transparent;
-  transition: background 0.15s;
-  flex-shrink: 0;
-  position: relative;
-  z-index: 1;
-}
-
-.commit-resize:hover,
-.commit-resize:active {
-  background: rgba(138, 173, 244, 0.3);
-}
-
 .commit-form {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 10px 12px;
+  gap: 4px;
+  padding: 6px 12px;
   border-top: 1px solid var(--border);
   background: var(--bg-secondary);
   flex-shrink: 0;
   overflow: hidden;
 }
 
-.amend-row {
+.commit-actions {
   display: flex;
   align-items: center;
   gap: 6px;
+  justify-content: space-between;
+}
+
+.amend-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
   font-size: var(--font-sm);
   color: var(--text-secondary);
   cursor: pointer;
   user-select: none;
+  flex-shrink: 0;
 }
 
 .amend-row input[type='checkbox'] {
@@ -582,11 +607,6 @@ watch(
   cursor: not-allowed;
 }
 
-.amend-hint {
-  color: var(--text-muted);
-  font-size: var(--font-xs);
-}
-
 .message-input {
   background: var(--bg-surface);
   border: 1px solid var(--border);
@@ -594,12 +614,13 @@ watch(
   color: var(--text-primary);
   font-family: inherit;
   font-size: var(--font-md);
-  padding: 6px 8px;
-  resize: none;
+  padding: 4px 8px;
   outline: none;
   transition: border-color 0.15s;
-  flex: 1;
-  min-height: 0;
+  resize: none;
+  overflow: hidden;
+  line-height: 1.4;
+  max-height: 120px;
 }
 
 .message-input:focus {
@@ -616,12 +637,14 @@ watch(
   color: var(--bg-primary);
   border: none;
   border-radius: 4px;
-  padding: 7px 16px;
+  padding: 4px 14px;
   font-size: var(--font-md);
   font-family: inherit;
   font-weight: 600;
   cursor: pointer;
   transition: opacity 0.15s;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .btn-commit:hover:not(:disabled) {

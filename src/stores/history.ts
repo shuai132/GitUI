@@ -212,6 +212,16 @@ export const useHistoryStore = defineStore('history', () => {
     await Promise.all([loadLog(), loadBranches()])
   }
 
+  async function amendCommitMessage(message: string) {
+    const repoStore = useRepoStore()
+    if (!repoStore.activeRepoId) return
+    await git.amendCommitMessage(repoStore.activeRepoId, message)
+    await Promise.all([loadLog(), loadBranches()])
+    if (selectedCommit.value) {
+      await selectCommit(selectedCommit.value.info.oid)
+    }
+  }
+
   async function createTag(name: string, oid: string, message: string | null) {
     const repoStore = useRepoStore()
     if (!repoStore.activeRepoId) return
@@ -329,6 +339,7 @@ export const useHistoryStore = defineStore('history', () => {
     cherryPickCommit,
     revertCommit,
     resetToCommit,
+    amendCommitMessage,
     createTag,
     deleteTag,
     reset,

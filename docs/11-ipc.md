@@ -49,6 +49,7 @@ GitUI 的前后端通过 Tauri v2 的 IPC 通道通信：
 |------|------|------|
 | `create_commit` | `repoId, message` | `string` (new oid) |
 | `amend_commit` | `repoId, message` | `string` (new oid) |
+| `amend_commit_message` | `repoId, message` | `string` (new oid) |
 | `checkout_commit` | `repoId, oid` | `void` |
 | `cherry_pick_commit` | `repoId, oid` | `void` |
 | `revert_commit` | `repoId, oid` | `void` |

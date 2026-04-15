@@ -88,6 +88,9 @@ export function useGitCommands() {
   const amendCommit = (repoId: string, message: string) =>
     call<string>('amend_commit', { repoId, message })
 
+  const amendCommitMessage = (repoId: string, message: string) =>
+    call<string>('amend_commit_message', { repoId, message })
+
   const checkoutCommit = (repoId: string, oid: string) =>
     call<void>('checkout_commit', { repoId, oid })
 
@@ -286,6 +289,7 @@ export function useGitCommands() {
     unstageAll,
     createCommit,
     amendCommit,
+    amendCommitMessage,
     checkoutCommit,
     cherryPickCommit,
     revertCommit,

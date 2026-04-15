@@ -242,6 +242,7 @@ const messages = {
       resetHard: 'Hard（丢弃所有变更）',
       revert: 'Revert 此提交',
       copySha: '复制提交 SHA',
+      editMessage: '修改提交信息...',
       createTag: '在此创建标签...',
       createAnnotatedTag: '创建附注标签...',
       stashApply: 'Apply Stash',
@@ -258,6 +259,10 @@ const messages = {
         mode: { soft: 'soft', mixed: 'mixed', hard: 'hard' },
       },
       confirmStashDelete: { body: '确认删除 stash@{index} "{message}"？此操作不可撤销。' },
+      editMessage: {
+        title: '修改提交信息',
+        confirm: '确认修改',
+      },
     },
   },
   branches: {

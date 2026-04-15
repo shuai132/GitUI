@@ -242,6 +242,7 @@ const messages = {
       resetHard: 'Hard (discard all changes)',
       revert: 'Revert this commit',
       copySha: 'Copy commit SHA',
+      editMessage: 'Edit commit message...',
       createTag: 'Create tag here...',
       createAnnotatedTag: 'Create annotated tag...',
       stashApply: 'Apply Stash',
@@ -258,6 +259,10 @@ const messages = {
         mode: { soft: 'soft', mixed: 'mixed', hard: 'hard' },
       },
       confirmStashDelete: { body: 'Delete stash@{index} "{message}"? This cannot be undone.' },
+      editMessage: {
+        title: 'Edit Commit Message',
+        confirm: 'Apply',
+      },
     },
   },
   branches: {

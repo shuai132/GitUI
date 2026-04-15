@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
-import type { FileEntry } from '@/types/git'
-import { fileStatusLabel, fileStatusColor } from '@/utils/format'
+import type { FileEntry, FileStatusKind } from '@/types/git'
+import { fileStatusColor } from '@/utils/format'
 
 const { t } = useI18n()
 
@@ -9,11 +9,8 @@ const props = defineProps<{
   files: FileEntry[]
   title: string
   emptyText?: string
-  /** 显示每行的快捷操作按钮（Stage / Unstage / Discard），用于 WipPanel */
   showRowActions?: boolean
-  /** 被选中的文件路径（用于高亮） */
   selectedPath?: string | null
-  /** 视觉变体：'unstaged'（橙色）| 'staged'（绿色）；省略为中性 */
   variant?: 'unstaged' | 'staged'
 }>()
 
@@ -29,21 +26,20 @@ function onRowContext(e: MouseEvent, file: FileEntry) {
   e.preventDefault()
   emit('contextMenu', e, file)
 }
+
+const statusIconMap: Record<FileStatusKind, { d: string; stroke?: boolean }> = {
+  modified: { d: 'M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z' },
+  added: { d: 'M12 5v14M5 12h14' },
+  deleted: { d: 'M5 12h14' },
+  renamed: { d: 'M5 12h7M12 12l-4-4M12 12l-4 4M19 12h-7M12 12l4-4M12 12l4 4' },
+  untracked: { d: 'M12 5v14M5 12h14', stroke: true },
+  conflicted: { d: 'M18 6L6 18M6 6l12 12' },
+}
 </script>
 
 <template>
   <div class="file-list-section" :class="variant ? `variant-${variant}` : ''">
     <div class="section-header">
-      <svg v-if="variant === 'unstaged'" class="section-icon" width="12" height="12"
-           viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <circle cx="12" cy="12" r="10"/>
-        <circle cx="12" cy="12" r="3" fill="currentColor" stroke="none"/>
-      </svg>
-      <svg v-if="variant === 'staged'" class="section-icon" width="12" height="12"
-           viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <circle cx="12" cy="12" r="10"/>
-        <polyline points="9 12 11.5 14.5 16 9.5"/>
-      </svg>
       <span class="section-title">{{ title }}</span>
       <span class="section-count">{{ files.length }}</span>
       <slot name="header-actions" />
@@ -57,10 +53,20 @@ function onRowContext(e: MouseEvent, file: FileEntry) {
         @click="emit('select', file)"
         @contextmenu="onRowContext($event, file)"
       >
-        <span
-          class="status-badge"
+        <svg
+          class="status-icon"
           :style="{ color: fileStatusColor(file.status) }"
-        >{{ fileStatusLabel(file.status) }}</span>
+          width="13"
+          height="13"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path :d="statusIconMap[file.status]?.d ?? statusIconMap.untracked.d" />
+        </svg>
         <span class="file-path" :title="file.path">
           {{ file.path.split('/').pop() }}
           <span class="file-dir" v-if="file.path.includes('/')">
@@ -94,11 +100,12 @@ function onRowContext(e: MouseEvent, file: FileEntry) {
 .section-header {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 3px 10px;
+  gap: 5px;
+  padding: 1px 4px;
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border);
   user-select: none;
+  height: 18px;
 }
 
 .section-count {
@@ -112,26 +119,25 @@ function onRowContext(e: MouseEvent, file: FileEntry) {
 }
 
 .section-title {
-  font-size: var(--font-sm);
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  font-size: var(--font-xs);
+  font-weight: 500;
   color: var(--text-muted);
 }
 
 .section-count {
-  font-size: var(--font-sm);
+  font-size: 10px;
   color: var(--text-muted);
   background: var(--bg-overlay);
-  padding: 1px 6px;
-  border-radius: 8px;
+  padding: 0 4px;
+  border-radius: 6px;
+  line-height: 12px;
 }
 
 .file-entry {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 3px 10px;
+  padding: 1px 4px;
   cursor: pointer;
   transition: background 0.1s;
   position: relative;
@@ -153,11 +159,12 @@ function onRowContext(e: MouseEvent, file: FileEntry) {
   cursor: pointer;
   font-family: inherit;
   font-size: var(--font-xs);
-  padding: 2px 6px;
+  padding: 0 5px;
   margin-left: auto;
   opacity: 0;
   transition: opacity 0.1s, background 0.1s, color 0.1s;
   flex-shrink: 0;
+  line-height: 14px;
 }
 
 .file-entry:hover .row-action {
@@ -170,12 +177,8 @@ function onRowContext(e: MouseEvent, file: FileEntry) {
   border-color: var(--accent-blue);
 }
 
-.status-badge {
-  font-size: var(--font-sm);
-  font-weight: 700;
-  width: 14px;
+.status-icon {
   flex-shrink: 0;
-  font-family: var(--code-font-family, 'SF Mono', monospace);
 }
 
 .file-path {
@@ -200,24 +203,12 @@ function onRowContext(e: MouseEvent, file: FileEntry) {
 
 /* ── Section variant styles (unstaged / staged) ── */
 
-.section-icon {
-  flex-shrink: 0;
-}
-
 .variant-unstaged .section-header {
   border-left: 3px solid var(--unstaged-accent);
 }
 
 .variant-staged .section-header {
   border-left: 3px solid var(--staged-accent);
-}
-
-.variant-unstaged .section-icon {
-  color: var(--unstaged-accent);
-}
-
-.variant-staged .section-icon {
-  color: var(--staged-accent);
 }
 
 .variant-unstaged .section-count {
