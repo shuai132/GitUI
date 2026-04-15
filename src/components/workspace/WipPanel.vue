@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
+import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useHistoryStore } from '@/stores/history'
@@ -47,7 +48,7 @@ const unstagedAll = computed<FileEntry[]>(() => {
 const stagedAll = computed<FileEntry[]>(() => workspaceStore.status?.staged ?? [])
 
 // ── 文件选择 & diff 加载 ──────────────────────────────────────────
-const selectedPath = ref<string | null>(null)
+const selectedPath = storeToRefs(workspaceStore).wipSelectedPath
 const panelListsRef = ref<HTMLElement | null>(null)
 const unstagedListRef = ref<InstanceType<typeof FileChangeList> | null>(null)
 const stagedListRef = ref<InstanceType<typeof FileChangeList> | null>(null)
@@ -166,6 +167,10 @@ onMounted(() => {
     const first = allFiles.value[0]
     selectedPath.value = first.path
     diffStore.loadFileDiff(first.path, first.staged)
+  } else if (selectedPath.value) {
+    // 切换仓库后恢复：selectedPath 已由 App.vue 恢复，重新加载对应 diff
+    const file = allFiles.value.find(f => f.path === selectedPath.value)
+    if (file) diffStore.loadFileDiff(file.path, file.staged)
   }
 })
 watch(() => uiStore.shouldOpenDiscardAll, checkDiscardAllRequest)

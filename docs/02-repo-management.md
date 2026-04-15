@@ -133,6 +133,16 @@ pub struct RepoManager {
 - 路由强制跳到 `/history`
 - 持久化 `activePath`
 
+### 视图状态保存与恢复
+
+切换仓库时，App.vue 会在 reset 之前把当前仓库的视图状态快照到 `reposStore` 的内存 Map（不持久化），包括：
+
+- 当前选中的 commit oid（若有）
+- WIP 行是否被选中
+- WIP 面板里选中的文件路径
+
+切回同一仓库时，新数据加载完成后自动恢复这份快照：commit 选中状态通过 `pendingJumpOid` 复用侧边栏跳转机制处理（含滚动到可见区域）；WIP 选中状态直接写入相关 store，WipPanel 挂载时读取并重新加载 diff。
+
 ## 侧边栏拖动排序
 
 `AppSidebar.vue` 的"所有仓库"列表支持拖动重排。**不用 HTML5 DnD**：Tauri WKWebView 下 drag image / dropEffect / hit testing 都不稳定，改用 pointer events 自己实现：

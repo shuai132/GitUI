@@ -18,6 +18,8 @@ export const useHistoryStore = defineStore('history', () => {
   const remoteTagsChecked = ref(false)
   const remoteTagsLoading = ref(false)
   const selectedCommit = ref<CommitDetail | null>(null)
+  const selectedWip = ref(false)
+  const showDetail = ref(false)
   const graphRows = ref<GraphRow[]>([])
   // loadMore 增量计算所需的末尾 lane 状态，loadLog 重置
   const graphLaneState = ref<LaneState | null>(null)
@@ -313,6 +315,8 @@ export const useHistoryStore = defineStore('history', () => {
     remoteTagsChecked.value = false
     remoteTagsLoading.value = false
     selectedCommit.value = null
+    selectedWip.value = false
+    showDetail.value = false
     graphRows.value = []
     selectedFileDiffIndex.value = 0
     hasMore.value = false
@@ -326,6 +330,8 @@ export const useHistoryStore = defineStore('history', () => {
     remoteTagsChecked,
     remoteTagsLoading,
     selectedCommit,
+    selectedWip,
+    showDetail,
     graphRows,
     selectedFileDiffIndex,
     hasMore,

@@ -7,6 +7,7 @@ import { useRepoStore } from './repos'
 export const useWorkspaceStore = defineStore('workspace', () => {
   const status = ref<WorkspaceStatus | null>(null)
   const selectedFile = ref<FileEntry | null>(null)
+  const wipSelectedPath = ref<string | null>(null)
   const loading = ref(false)
   const error = ref<string | null>(null)
 
@@ -127,11 +128,13 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   function reset() {
     status.value = null
     selectedFile.value = null
+    wipSelectedPath.value = null
   }
 
   return {
     status,
     selectedFile,
+    wipSelectedPath,
     loading,
     error,
     commitDraft,

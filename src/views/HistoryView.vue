@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
+import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import { useVirtualizer } from '@tanstack/vue-virtual'
 import { useHistoryStore } from '@/stores/history'
@@ -36,7 +37,7 @@ type ActivePane = 'commits' | 'files'
 const activePane = ref<ActivePane>('commits')
 
 // ── 详情区（info + diff）显示状态（默认隐藏，点击提交后显示）────────
-const showDetail = ref(false)
+const { selectedWip, showDetail } = storeToRefs(historyStore)
 
 // ── Search / filter ─────────────────────────────────────────────────
 const filteredCommits = computed(() => {
@@ -63,8 +64,6 @@ const showWipLoading = computed(() =>
 )
 
 // 当前是否选中的是 WIP 行（而不是某条 commit）
-const selectedWip = ref(false)
-
 // WIP 文件统计（用于详情面板标题栏）
 const wipStats = computed(() => {
   const s = workspaceStore.status
@@ -784,15 +783,6 @@ watch(
   () => [uiStore.showUnreachableCommits, uiStore.showStashCommits],
   () => {
     if (repoStore.activeRepoId) historyStore.loadLog()
-  },
-)
-
-// 切换仓库时立即清空右侧面板选中状态，避免显示上一个仓库的数据
-watch(
-  () => repoStore.activeRepoId,
-  () => {
-    showDetail.value = false
-    selectedWip.value = false
   },
 )
 

@@ -9,6 +9,12 @@ const STORE_FILE = 'gitui-repos.json'
 const KEY_PATHS = 'paths'
 const KEY_ACTIVE_PATH = 'activePath'
 
+interface RepoViewState {
+  selectedCommitOid: string | null
+  selectedWip: boolean
+  wipSelectedPath: string | null
+}
+
 export const useRepoStore = defineStore('repos', () => {
   const repos = ref<RepoMeta[]>([])
   const activeRepoId = ref<string | null>(null)
@@ -17,6 +23,16 @@ export const useRepoStore = defineStore('repos', () => {
 
   const git = useGitCommands()
   const store = new LazyStore(STORE_FILE)
+
+  const repoViewStates = new Map<string, RepoViewState>()
+
+  function saveViewState(repoId: string, state: RepoViewState) {
+    repoViewStates.set(repoId, state)
+  }
+
+  function getViewState(repoId: string): RepoViewState | undefined {
+    return repoViewStates.get(repoId)
+  }
 
   async function persist() {
     const paths = repos.value.map((r) => r.path)
@@ -171,5 +187,7 @@ export const useRepoStore = defineStore('repos', () => {
     setActive,
     reorderRepos,
     activeRepo,
+    saveViewState,
+    getViewState,
   }
 })

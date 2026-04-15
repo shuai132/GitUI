@@ -188,8 +188,16 @@ watch(
 // Refresh workspace when active repo changes
 watch(
   () => repoStore.activeRepoId,
-  async (id) => {
+  async (id, prevId) => {
     if (id) {
+      // 切走前保存上一个仓库的视图状态
+      if (prevId) {
+        repoStore.saveViewState(prevId, {
+          selectedCommitOid: historyStore.selectedCommit?.info.oid ?? null,
+          selectedWip: historyStore.selectedWip,
+          wipSelectedPath: workspaceStore.wipSelectedPath,
+        })
+      }
       router.push('/history')
       // 立即清空旧仓库数据，避免右侧面板残留上一个仓库的内容
       historyStore.reset()
@@ -205,6 +213,19 @@ watch(
       ])
       // 远端 tag 同步状态独立于以上数据源，走网络，失败静默
       historyStore.loadRemoteTags().catch(() => {})
+      // 恢复新仓库上次的视图状态
+      const saved = repoStore.getViewState(id)
+      if (saved) {
+        if (saved.selectedWip) {
+          // 先设文件路径（WipPanel onMounted 会读取并加载 diff），再打开面板
+          workspaceStore.wipSelectedPath = saved.wipSelectedPath
+          historyStore.selectedWip = true
+          historyStore.showDetail = true
+        } else if (saved.selectedCommitOid) {
+          // 复用 pendingJumpOid：HistoryView 负责 selectCommit + 滚动 + showDetail=true
+          historyStore.pendingJumpOid = saved.selectedCommitOid
+        }
+      }
     } else {
       submodulesStore.reset()
       stashStore.reset()
