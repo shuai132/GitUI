@@ -234,17 +234,18 @@ const canStash = computed(() => {
 })
 const canStashPop = computed(() => hasRepo.value && stashStore.entries.length > 0)
 
-// ── 工具栏全局错误展示（浮层） ─────────────────────────────────────
-const toastError = ref<string | null>(null)
+// ── 工具栏全局 Toast 通知（浮层） ─────────────────────────────────
+const toast = ref<{ type: 'success' | 'error'; message: string } | null>(null)
 let toastTimer: number | null = null
-function showError(msg: string) {
-  toastError.value = msg
+function showToast(type: 'success' | 'error', msg: string) {
+  toast.value = { type, message: msg }
   if (toastTimer !== null) window.clearTimeout(toastTimer)
   toastTimer = window.setTimeout(() => {
-    toastError.value = null
+    toast.value = null
     toastTimer = null
-  }, 4000)
+  }, 3000)
 }
+function showError(msg: string) { showToast('error', msg) }
 
 // ── Helpers ────────────────────────────────────────────────────────
 // 多 remote 选择菜单：pickRemote 复用同一个 ContextMenu，resolve 回传
@@ -326,6 +327,7 @@ async function onPull(e: MouseEvent) {
   try {
     await git.pullBranch(id, remote, branch, pullMode.value)
     await Promise.all([historyStore.loadLog(), historyStore.loadBranches()])
+    showToast('success', t('toolbar.opSuccess', { label: t('toolbar.opLabels.pull') }))
   } catch {
     /* toast 由 errorsStore watch 统一处理 */
   } finally {
@@ -352,6 +354,7 @@ async function doPush(mode: PushMode, anchorRect?: DOMRect) {
   try {
     await git.pushBranch(id, remote, branch, mode)
     await historyStore.loadBranches()
+    showToast('success', t('toolbar.opSuccess', { label: t('toolbar.opLabels.push') }))
   } catch {
     /* toast 由 errorsStore watch 统一处理 */
   } finally {
@@ -514,7 +517,7 @@ async function onActionsSelect(action: string) {
       busy.gc = true
       try {
         const msg = await git.runGc(id)
-        showError(msg)  // 借用 toast 展示成功信息
+        showToast('success', msg)
       } catch {
         /* toast 由 errorsStore watch 统一处理 */
       } finally {
@@ -717,10 +720,25 @@ async function handleDblClick(e: MouseEvent) {
 
     <div class="toolbar-spacer" data-tauri-drag-region />
 
-    <!-- 错误提示（自动消失） -->
-    <div v-if="toastError" class="toast-error" :title="toastError">
-      {{ toastError }}
-    </div>
+    <!-- Toast 通知（自动消失） -->
+    <Transition name="toast">
+      <div v-if="toast" class="toast" :class="`toast--${toast.type}`">
+        <div class="toast-accent" />
+        <div class="toast-icon-wrap">
+          <!-- success: checkmark -->
+          <svg v-if="toast.type === 'success'" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="20 6 9 17 4 12"/>
+          </svg>
+          <!-- error: X -->
+          <svg v-else width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"/>
+            <line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </div>
+        <span class="toast-message">{{ toast.message }}</span>
+        <div class="toast-progress" />
+      </div>
+    </Transition>
 
     <!-- 右侧：搜索框、布局切换、更多操作 -->
     <div class="toolbar-right">
@@ -1096,21 +1114,111 @@ async function handleDblClick(e: MouseEvent) {
 }
 
 
-.toast-error {
-  position: absolute;
-  top: 44px;
-  right: 12px;
-  max-width: 440px;
+/* ── Toast ──────────────────────────────────────────────────────── */
+.toast-enter-active {
+  transition: opacity 0.28s ease, transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.toast-leave-active {
+  transition: opacity 0.22s ease, transform 0.22s ease;
+}
+.toast-enter-from,
+.toast-leave-to {
+  opacity: 0;
+  transform: translateX(calc(100% + 24px));
+}
+
+.toast {
+  position: fixed;
+  top: 56px;
+  right: 16px;
+  width: 288px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
   background: var(--bg-surface);
-  border: 1px solid var(--accent-red);
-  border-radius: 6px;
-  padding: 6px 10px;
-  font-size: var(--font-sm);
-  color: var(--accent-red);
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
-  white-space: nowrap;
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 10px;
+  padding: 13px 14px;
   overflow: hidden;
-  text-overflow: ellipsis;
-  z-index: 50;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.3);
+  z-index: 9999;
+}
+
+/* 左侧彩色竖条 */
+.toast-accent {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  border-radius: 10px 0 0 10px;
+}
+
+/* 图标圆圈 */
+.toast-icon-wrap {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.toast-message {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+/* 底部倒计时进度条 */
+.toast-progress {
+  position: absolute;
+  left: 4px;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  border-radius: 0 0 10px 0;
+  transform-origin: left;
+  animation: toast-progress-shrink 3s linear forwards;
+}
+
+@keyframes toast-progress-shrink {
+  from { transform: scaleX(1); }
+  to   { transform: scaleX(0); }
+}
+
+/* 成功：绿色 */
+.toast--success .toast-accent {
+  background: var(--accent-green);
+}
+.toast--success .toast-icon-wrap {
+  background: color-mix(in srgb, var(--accent-green) 18%, transparent);
+  color: var(--accent-green);
+}
+.toast--success .toast-message {
+  color: var(--text-primary);
+}
+.toast--success .toast-progress {
+  background: var(--accent-green);
+  opacity: 0.5;
+}
+
+/* 失败：红色 */
+.toast--error .toast-accent {
+  background: var(--accent-red);
+}
+.toast--error .toast-icon-wrap {
+  background: color-mix(in srgb, var(--accent-red) 18%, transparent);
+  color: var(--accent-red);
+}
+.toast--error .toast-message {
+  color: var(--text-primary);
+}
+.toast--error .toast-progress {
+  background: var(--accent-red);
+  opacity: 0.5;
 }
 </style>

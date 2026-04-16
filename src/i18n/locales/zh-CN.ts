@@ -13,6 +13,7 @@ const messages = {
   },
   toolbar: {
     opFailed: '{label} 失败：{message}',
+    opSuccess: '{label} 成功',
     noRemoteConfigured: '当前仓库没有配置 remote',
     button: { open: '打开', new: '新建' },
     search: { placeholder: '搜索提交' },
