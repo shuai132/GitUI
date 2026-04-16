@@ -2,6 +2,22 @@ use std::cell::Cell;
 
 use git2::{Cred, CredentialType, Error as Git2Error};
 
+/// 跨平台获取用户主目录。
+/// Windows 优先读 USERPROFILE，回退 HOMEDRIVE+HOMEPATH；其他平台读 HOME。
+fn home_dir() -> String {
+    #[cfg(target_os = "windows")]
+    {
+        if let Ok(p) = std::env::var("USERPROFILE") {
+            return p;
+        }
+        let drive = std::env::var("HOMEDRIVE").unwrap_or_default();
+        let path = std::env::var("HOMEPATH").unwrap_or_default();
+        return format!("{drive}{path}");
+    }
+    #[cfg(not(target_os = "windows"))]
+    std::env::var("HOME").unwrap_or_default()
+}
+
 /// 创建一个带重试计数的凭据回调闭包。
 /// git2 在凭据无效时会反复调用 callback，不加计数器会死循环。
 pub fn make_credentials_callback(
@@ -44,7 +60,7 @@ pub fn make_credentials_callback(
 
             // 第 2 次尝试：~/.ssh/id_ed25519
             if n <= 1 {
-                let home = std::env::var("HOME").unwrap_or_default();
+                let home = home_dir();
                 let ed25519 = std::path::Path::new(&home).join(".ssh/id_ed25519");
                 if ed25519.exists() {
                     log::debug!("[credentials] trying {}", ed25519.display());
@@ -62,7 +78,7 @@ pub fn make_credentials_callback(
 
             // 第 3 次尝试：~/.ssh/id_rsa
             if n <= 2 {
-                let home = std::env::var("HOME").unwrap_or_default();
+                let home = home_dir();
                 let rsa = std::path::Path::new(&home).join(".ssh/id_rsa");
                 if rsa.exists() {
                     log::debug!("[credentials] trying {}", rsa.display());
