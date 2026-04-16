@@ -140,8 +140,20 @@ pub struct RepoManager {
 - 当前选中的 commit oid（若有）
 - WIP 行是否被选中
 - WIP 面板里选中的文件路径
+- 工作区 status 缓存（`WorkspaceStatus`，含 staged / unstaged / untracked 文件列表）
 
-切回同一仓库时，新数据加载完成后自动恢复这份快照：commit 选中状态通过 `pendingJumpOid` 复用侧边栏跳转机制处理（含滚动到可见区域）；WIP 选中状态直接写入相关 store，WipPanel 挂载时读取并重新加载 diff。
+切回同一仓库时：
+- **commit / WIP 选中状态**：新数据加载完后恢复，commit 通过 `pendingJumpOid` 处理（含滚动），WIP 选中直接写入相关 store
+- **WIP 计数**：切换瞬间用缓存的 `WorkspaceStatus` 初始化，WipRow 徽章立即可见，`workspaceStore.refresh()` 完成后自动替换为最新值；首次进入的仓库无缓存则沿用原 loading 占位
+
+### 内置 Terminal 多仓库 session
+
+`TerminalPanel.vue` 为每个仓库维护独立的 PTY session 和 xterm 实例（惰性初始化，首次可见时创建）：
+
+- **切换仓库**：隐藏旧仓库的 xterm div，显示新仓库的 xterm div；旧 session **保持运行**，切回时 shell 历史和进程原封不动
+- **关闭面板（×）**：只关闭当前仓库的 PTY session，其他仓库的 session 不受影响；重新打开时为当前仓库新建 session
+- **移除仓库**：自动 dispose 对应 xterm 实例并关闭 PTY session
+- **实现**：模板里 `v-for` 遍历 `repoStore.repos`，每个仓库一个 `<div.terminal-host>`，用 `display: none` 隐藏非激活仓库；脚本用 `Map<repoId, RepoTerminal>` 持有各仓库的 `Terminal` / `FitAddon` / `sessionId`
 
 ## 侧边栏拖动排序
 

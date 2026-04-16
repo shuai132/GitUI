@@ -15,16 +15,20 @@ const uiStore = useUiStore()
 const repoStore = useRepoStore()
 const git = useGitCommands()
 
-const hostEl = ref<HTMLDivElement | null>(null)
+// ── 每仓库独立的 xterm 实例和 PTY session ────────────────────────────
+interface RepoTerminal {
+  term: Terminal
+  fit: FitAddon
+  sessionId: string | null
+}
 
-let term: Terminal | null = null
-let fit: FitAddon | null = null
-let sessionId: string | null = null
-let unlistenData: UnlistenFn | null = null
-let unlistenExit: UnlistenFn | null = null
-let resizeObs: ResizeObserver | null = null
+const repoTerminals = new Map<string, RepoTerminal>()
+const hostEls = new Map<string, HTMLDivElement>()
+let activeResizeObs: ResizeObserver | null = null
 let resizeDebounce: number | null = null
 let themeObs: MutationObserver | null = null
+let unlistenData: UnlistenFn | null = null
+let unlistenExit: UnlistenFn | null = null
 let disposed = false
 
 // ── 右键菜单 ────────────────────────────────────────────────────────
@@ -47,7 +51,6 @@ const ctxMenuItems = computed<ContextMenuItem[]>(() => [
 
 // ── base64 编解码 ────────────────────────────────────────────────────
 function b64encode(s: string): string {
-  // TextEncoder → bytes → btoa
   const bytes = new TextEncoder().encode(s)
   let bin = ''
   for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i])
@@ -69,7 +72,6 @@ function isLightTheme(): boolean {
 function readTheme() {
   const s = getComputedStyle(document.documentElement)
   const light = isLightTheme()
-  // 深浅两套 16 色基调；accent-* 由 CSS 变量覆盖以保证和主题一致
   const base = light
     ? {
         black: '#32383f',
@@ -125,50 +127,28 @@ function readTheme() {
 }
 
 function applyTheme() {
-  if (!term) return
-  term.options.theme = readTheme()
-}
-
-// ── 生命周期 ────────────────────────────────────────────────────────
-async function spawnSession() {
-  if (!term || !fit) return
-  const repoId = repoStore.activeRepoId
-  if (!repoId) return
-  // 保证容器已排版、fit 可拿到尺寸
-  await nextTick()
-  try { fit.fit() } catch {}
-  const cols = term.cols || 80
-  const rows = term.rows || 24
-  try {
-    sessionId = await git.terminalSpawn(repoId, cols, rows)
-  } catch (e) {
-    term.write(`\r\n[${t('terminal.spawnFailed')}] ${(e as Error).message}\r\n`)
-  }
-}
-
-async function closeSession() {
-  const id = sessionId
-  sessionId = null
-  if (id) {
-    try { await git.terminalClose(id) } catch {}
-  }
-}
-
-function scheduleResize() {
-  if (resizeDebounce !== null) window.clearTimeout(resizeDebounce)
-  resizeDebounce = window.setTimeout(() => {
-    if (!fit || !term) return
-    try { fit.fit() } catch {}
-    if (sessionId) {
-      git.terminalResize(sessionId, term.cols, term.rows).catch(() => {})
-    }
-  }, 80)
-}
-
-onMounted(async () => {
-  if (!hostEl.value) return
   const theme = readTheme()
-  term = new Terminal({
+  for (const rt of repoTerminals.values()) {
+    rt.term.options.theme = theme
+  }
+}
+
+// ── 动态 ref callback（v-for 使用）──────────────────────────────────
+function setHostEl(repoId: string, el: HTMLDivElement | null) {
+  if (el) {
+    hostEls.set(repoId, el)
+  } else {
+    hostEls.delete(repoId)
+  }
+}
+
+// ── 创建/获取/销毁仓库终端 ──────────────────────────────────────────
+function createTerminalFor(repoId: string): RepoTerminal {
+  const el = hostEls.get(repoId)
+  if (!el) throw new Error(`No host element for repo ${repoId}`)
+
+  const theme = readTheme()
+  const term = new Terminal({
     fontFamily: getComputedStyle(document.documentElement).getPropertyValue('--code-font-family').trim() || 'Menlo, monospace',
     fontSize: 13,
     cursorBlink: true,
@@ -176,46 +156,126 @@ onMounted(async () => {
     scrollback: 5000,
     allowProposedApi: true,
   })
-  fit = new FitAddon()
+  const fit = new FitAddon()
   term.loadAddon(fit)
-  term.open(hostEl.value)
+  term.open(el)
   try { fit.fit() } catch {}
 
   // 键盘输入 → PTY
   term.onData((d) => {
-    if (!sessionId) return
-    git.terminalWrite(sessionId, b64encode(d)).catch(() => {})
+    const rt = repoTerminals.get(repoId)
+    if (!rt?.sessionId) return
+    git.terminalWrite(rt.sessionId, b64encode(d)).catch(() => {})
   })
 
-  // 选区变化 → 控制"复制"菜单项是否可用
+  // 选区变化（仅对当前激活仓库更新选区状态）
   term.onSelectionChange(() => {
-    hasSelection.value = !!term?.hasSelection()
+    if (repoStore.activeRepoId === repoId) {
+      hasSelection.value = !!term.hasSelection()
+    }
   })
 
-  // PTY 输出 → 屏幕
+  const rt: RepoTerminal = { term, fit, sessionId: null }
+  repoTerminals.set(repoId, rt)
+  return rt
+}
+
+async function spawnSessionFor(repoId: string) {
+  // 等待 DOM 更新，确保 hostEl 已渲染
+  await nextTick()
+  const el = hostEls.get(repoId)
+  if (!el || disposed) return
+
+  let rt = repoTerminals.get(repoId)
+  if (!rt) {
+    rt = createTerminalFor(repoId)
+  }
+  if (rt.sessionId) return // 已有活跃 session
+
+  try { rt.fit.fit() } catch {}
+  const cols = rt.term.cols || 80
+  const rows = rt.term.rows || 24
+  try {
+    rt.sessionId = await git.terminalSpawn(repoId, cols, rows)
+  } catch (e) {
+    rt.term.write(`\r\n[${t('terminal.spawnFailed')}] ${(e as Error).message}\r\n`)
+  }
+}
+
+async function closeSessionFor(repoId: string) {
+  const rt = repoTerminals.get(repoId)
+  if (!rt?.sessionId) return
+  const id = rt.sessionId
+  rt.sessionId = null
+  try { await git.terminalClose(id) } catch {}
+}
+
+function disposeRepoTerminal(repoId: string) {
+  closeSessionFor(repoId)
+  const rt = repoTerminals.get(repoId)
+  if (rt) {
+    rt.term.dispose()
+    repoTerminals.delete(repoId)
+  }
+}
+
+// ── ResizeObserver（只观察当前激活仓库的宿主 div）────────────────────
+function scheduleResize() {
+  if (resizeDebounce !== null) window.clearTimeout(resizeDebounce)
+  resizeDebounce = window.setTimeout(() => {
+    const id = repoStore.activeRepoId
+    if (!id) return
+    const rt = repoTerminals.get(id)
+    if (!rt) return
+    try { rt.fit.fit() } catch {}
+    if (rt.sessionId) {
+      git.terminalResize(rt.sessionId, rt.term.cols, rt.term.rows).catch(() => {})
+    }
+  }, 80)
+}
+
+function setupResizeObserver(repoId: string) {
+  if (activeResizeObs) {
+    activeResizeObs.disconnect()
+    activeResizeObs = null
+  }
+  const el = hostEls.get(repoId)
+  if (!el) return
+  activeResizeObs = new ResizeObserver(() => scheduleResize())
+  activeResizeObs.observe(el)
+}
+
+// ── 生命周期 ────────────────────────────────────────────────────────
+onMounted(async () => {
+  // PTY 输出 → 路由到对应仓库的 xterm
   unlistenData = await listen<{ session_id: string; data: string }>(
     'terminal://data',
     (event) => {
-      if (!sessionId || event.payload.session_id !== sessionId || !term) return
-      const bytes = b64decodeToBytes(event.payload.data)
-      term.write(bytes)
+      for (const rt of repoTerminals.values()) {
+        if (rt.sessionId === event.payload.session_id) {
+          rt.term.write(b64decodeToBytes(event.payload.data))
+          break
+        }
+      }
     },
   )
+  // shell 退出 → 清除 sessionId；若是当前激活仓库则隐藏面板
   unlistenExit = await listen<{ session_id: string }>(
     'terminal://exit',
     (event) => {
-      if (event.payload.session_id !== sessionId) return
-      sessionId = null
-      // shell 自行退出（exit / Ctrl-D）→ 自动关闭面板
-      uiStore.setTerminalVisible(false)
+      for (const [repoId, rt] of repoTerminals) {
+        if (rt.sessionId === event.payload.session_id) {
+          rt.sessionId = null
+          if (repoId === repoStore.activeRepoId) {
+            uiStore.setTerminalVisible(false)
+          }
+          break
+        }
+      }
     },
   )
 
-  // 容器尺寸变化 → fit + resize PTY
-  resizeObs = new ResizeObserver(() => scheduleResize())
-  resizeObs.observe(hostEl.value)
-
-  // 主题切换（:root[data-theme] 变化）→ 同步 xterm 主题
+  // 主题切换（:root[data-theme] 变化）→ 同步所有 xterm 主题
   themeObs = new MutationObserver((muts) => {
     for (const m of muts) {
       if (m.type === 'attributes' && m.attributeName === 'data-theme') {
@@ -226,46 +286,81 @@ onMounted(async () => {
   })
   themeObs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
 
-  await spawnSession()
+  // 首次 mount 时若面板可见，立即为当前仓库开 session
+  const id = repoStore.activeRepoId
+  if (id && uiStore.terminalVisible) {
+    await spawnSessionFor(id)
+    setupResizeObserver(id)
+    scheduleResize()
+  }
 })
 
 onBeforeUnmount(async () => {
   disposed = true
-  if (resizeObs) { resizeObs.disconnect(); resizeObs = null }
+  if (activeResizeObs) { activeResizeObs.disconnect(); activeResizeObs = null }
   if (themeObs) { themeObs.disconnect(); themeObs = null }
   if (resizeDebounce !== null) window.clearTimeout(resizeDebounce)
   if (unlistenData) { unlistenData(); unlistenData = null }
   if (unlistenExit) { unlistenExit(); unlistenExit = null }
-  await closeSession()
-  if (term) { term.dispose(); term = null }
-  fit = null
+  // 关闭所有 session，dispose 所有 xterm 实例
+  for (const repoId of [...repoTerminals.keys()]) {
+    await closeSessionFor(repoId)
+    const rt = repoTerminals.get(repoId)
+    if (rt) rt.term.dispose()
+  }
+  repoTerminals.clear()
 })
 
-// 切换仓库：关旧 session，起新 session（保留 term 实例）
+// 切换仓库：不关闭旧 session，切换 ResizeObserver，若新仓库无 session 则 spawn
 watch(
   () => repoStore.activeRepoId,
   async (id, old) => {
-    if (disposed || !term) return
-    if (id === old) return
-    await closeSession()
-    term.reset()
-    if (id) await spawnSession()
+    if (disposed || !id || id === old) return
+    setupResizeObserver(id)
+    if (uiStore.terminalVisible) {
+      const rt = repoTerminals.get(id)
+      if (!rt?.sessionId) {
+        if (rt) rt.term.reset()
+        await spawnSessionFor(id)
+      }
+      try { repoTerminals.get(id)?.fit.fit() } catch {}
+      scheduleResize()
+    }
   },
 )
 
 // 停靠切换：下一 tick 触发 fit+resize
 watch(() => uiStore.terminalDock, () => scheduleResize())
 
-// 面板重新显示：若 session 已退出，重开一个
+// 面板显示：为当前仓库 spawn session（若尚无）
 watch(
   () => uiStore.terminalVisible,
   async (v) => {
-    if (disposed || !term) return
-    if (v && !sessionId) {
-      term.reset()
-      await spawnSession()
+    if (disposed) return
+    const id = repoStore.activeRepoId
+    if (!id) return
+    if (v) {
+      const rt = repoTerminals.get(id)
+      if (!rt?.sessionId) {
+        if (rt) rt.term.reset()
+        await spawnSessionFor(id)
+      }
+      setupResizeObserver(id)
+      scheduleResize()
     }
-    if (v) scheduleResize()
+  },
+)
+
+// 仓库从列表移除：清理对应 session 和 xterm 实例
+watch(
+  () => repoStore.repos.map((r) => r.id),
+  (newIds, oldIds) => {
+    if (!oldIds) return
+    for (const id of oldIds) {
+      if (!newIds.includes(id)) {
+        disposeRepoTerminal(id)
+      }
+    }
   },
 )
 
@@ -311,17 +406,24 @@ function onToggleDock() {
 }
 
 async function onClose() {
-  // 用户主动关闭：先终止 PTY session，再隐藏面板
-  await closeSession()
-  if (term) term.reset()
+  // 关闭当前仓库的 PTY session，隐藏面板；其他仓库的 session 保留
+  const id = repoStore.activeRepoId
+  if (id) {
+    await closeSessionFor(id)
+    const rt = repoTerminals.get(id)
+    if (rt) rt.term.reset()
+  }
   uiStore.setTerminalVisible(false)
 }
 
 // ── 右键菜单 handlers ───────────────────────────────────────────────
 function onContextMenu(e: MouseEvent) {
   e.preventDefault()
-  // 打开菜单前刷新一下选区状态，避免 onSelectionChange 遗漏
-  hasSelection.value = !!term?.hasSelection()
+  const id = repoStore.activeRepoId
+  if (id) {
+    const rt = repoTerminals.get(id)
+    hasSelection.value = !!rt?.term.hasSelection()
+  }
   ctxMenu.x = e.clientX
   ctxMenu.y = e.clientY
   ctxMenu.visible = true
@@ -329,10 +431,12 @@ function onContextMenu(e: MouseEvent) {
 
 async function onCtxSelect(action: string) {
   ctxMenu.visible = false
-  if (!term) return
+  const id = repoStore.activeRepoId
+  const rt = id ? repoTerminals.get(id) : null
+  if (!rt) return
   switch (action) {
     case 'copy': {
-      const sel = term.getSelection()
+      const sel = rt.term.getSelection()
       if (sel) {
         try { await navigator.clipboard.writeText(sel) } catch {}
       }
@@ -341,20 +445,18 @@ async function onCtxSelect(action: string) {
     case 'paste': {
       try {
         const text = await navigator.clipboard.readText()
-        if (text && sessionId) {
-          await git.terminalWrite(sessionId, b64encode(text))
+        if (text && rt.sessionId) {
+          await git.terminalWrite(rt.sessionId, b64encode(text))
         }
       } catch {}
       break
     }
     case 'select-all':
-      term.selectAll()
-      hasSelection.value = !!term.hasSelection()
+      rt.term.selectAll()
+      hasSelection.value = !!rt.term.hasSelection()
       break
     case 'clear':
-      // xterm 的 clear 把 viewport 清空但保留 scrollback；
-      // 对交互式 shell 直接 reset 更接近"清屏"的直觉
-      term.clear()
+      rt.term.clear()
       break
     case 'close':
       onClose()
@@ -391,7 +493,16 @@ async function onCtxSelect(action: string) {
         </button>
       </div>
     </div>
-    <div ref="hostEl" class="terminal-host" @contextmenu="onContextMenu" />
+
+    <!-- 每个仓库一个宿主 div，只显示当前激活仓库的终端 -->
+    <div
+      v-for="repo in repoStore.repos"
+      :key="repo.id"
+      class="terminal-host"
+      :ref="(el) => setHostEl(repo.id, el as HTMLDivElement | null)"
+      :style="{ display: repo.id === repoStore.activeRepoId ? undefined : 'none' }"
+      @contextmenu="onContextMenu"
+    />
 
     <ContextMenu
       :visible="ctxMenu.visible"

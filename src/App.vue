@@ -190,18 +190,20 @@ watch(
   () => repoStore.activeRepoId,
   async (id, prevId) => {
     if (id) {
-      // 切走前保存上一个仓库的视图状态
+      // 切走前保存上一个仓库的视图状态（含 WIP 缓存，供切回时立即显示）
       if (prevId) {
         repoStore.saveViewState(prevId, {
           selectedCommitOid: historyStore.selectedCommit?.info.oid ?? null,
           selectedWip: historyStore.selectedWip,
           wipSelectedPath: workspaceStore.wipSelectedPath,
+          cachedWorkspaceStatus: workspaceStore.status,
         })
       }
       router.push('/history')
-      // 立即清空旧仓库数据，避免右侧面板残留上一个仓库的内容
+      // 清空 history；workspace 用新仓库的缓存状态初始化，若有缓存则 WipRow 立即可见
+      const newRepoCache = repoStore.getViewState(id)
       historyStore.reset()
-      workspaceStore.reset()
+      workspaceStore.reset(newRepoCache?.cachedWorkspaceStatus ?? null)
       // 这些操作彼此独立，并发加载，总耗时 = 最慢的那个而非全部之和
       await Promise.all([
         workspaceStore.refresh(id),

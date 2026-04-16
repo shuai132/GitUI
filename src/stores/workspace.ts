@@ -125,8 +125,8 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     selectedFile.value = file
   }
 
-  function reset() {
-    status.value = null
+  function reset(cachedStatus: WorkspaceStatus | null = null) {
+    status.value = cachedStatus
     selectedFile.value = null
     wipSelectedPath.value = null
   }

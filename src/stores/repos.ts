@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { LazyStore } from '@tauri-apps/plugin-store'
-import type { RepoMeta } from '@/types/git'
+import type { RepoMeta, WorkspaceStatus } from '@/types/git'
 import { useGitCommands } from '@/composables/useGitCommands'
 
 // 持久化存储：记录打开过的仓库路径以及上次激活的路径
@@ -13,6 +13,7 @@ interface RepoViewState {
   selectedCommitOid: string | null
   selectedWip: boolean
   wipSelectedPath: string | null
+  cachedWorkspaceStatus: WorkspaceStatus | null
 }
 
 export const useRepoStore = defineStore('repos', () => {
