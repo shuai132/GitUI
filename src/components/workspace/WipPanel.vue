@@ -85,8 +85,82 @@ async function onStageAll() {
   await workspaceStore.stageAll()
 }
 
+// ── 多选状态 ──────────────────────────────────────────────────────
+const unstagedMultiPaths = ref<string[]>([])
+const stagedMultiPaths = ref<string[]>([])
+
+function onUnstagedMultiSelect(paths: string[]) {
+  unstagedMultiPaths.value = paths
+}
+
+function onStagedMultiSelect(paths: string[]) {
+  stagedMultiPaths.value = paths
+}
+
+async function batchStage() {
+  const paths = [...unstagedMultiPaths.value]
+  for (const path of paths) {
+    await workspaceStore.stageFile(path)
+  }
+  unstagedListRef.value?.clearMultiSelect()
+  unstagedMultiPaths.value = []
+}
+
+async function batchUnstage() {
+  const paths = [...stagedMultiPaths.value]
+  for (const path of paths) {
+    await workspaceStore.unstageFile(path)
+  }
+  stagedListRef.value?.clearMultiSelect()
+  stagedMultiPaths.value = []
+}
+
+async function batchDiscard() {
+  const paths = [...unstagedMultiPaths.value]
+  if (!confirm(t('workspace.confirmDiscard.selected', { count: paths.length }))) return
+  for (const path of paths) {
+    await workspaceStore.discardFile(path)
+  }
+  if (paths.includes(selectedPath.value ?? '')) {
+    selectedPath.value = null
+  }
+  unstagedListRef.value?.clearMultiSelect()
+  unstagedMultiPaths.value = []
+}
+
 async function onUnstageAll() {
   await workspaceStore.unstageAll()
+}
+
+// ── 多选右键菜单 ──────────────────────────────────────────────────
+const batchMenu = reactive({
+  visible: false,
+  x: 0,
+  y: 0,
+  // 'unstaged' | 'staged'
+  source: '' as 'unstaged' | 'staged',
+})
+
+const batchMenuItems = computed<ContextMenuItem[]>(() => {
+  if (batchMenu.source === 'unstaged') {
+    const n = unstagedMultiPaths.value.length
+    return [
+      { label: t('workspace.wip.menu.stageSelected', { count: n }), action: 'batch-stage' },
+      { separator: true },
+      { label: t('workspace.wip.menu.discardSelected', { count: n }), action: 'batch-discard', danger: true },
+    ]
+  }
+  const n = stagedMultiPaths.value.length
+  return [
+    { label: t('workspace.wip.menu.unstageSelected', { count: n }), action: 'batch-unstage' },
+  ]
+})
+
+async function onBatchMenuAction(action: string) {
+  batchMenu.visible = false
+  if (action === 'batch-stage') await batchStage()
+  else if (action === 'batch-unstage') await batchUnstage()
+  else if (action === 'batch-discard') await batchDiscard()
 }
 
 // ── 文件右键菜单 ─────────────────────────────────────────────────
@@ -133,6 +207,18 @@ const fileMenuItems = computed<ContextMenuItem[]>(() => {
 })
 
 function onFileContext(e: MouseEvent, file: FileEntry) {
+  // 右键落在多选区时，显示批量菜单
+  const inUnstagedMulti = unstagedMultiPaths.value.length > 1 &&
+    unstagedMultiPaths.value.includes(file.path)
+  const inStagedMulti = stagedMultiPaths.value.length > 1 &&
+    stagedMultiPaths.value.includes(file.path)
+  if (inUnstagedMulti || inStagedMulti) {
+    batchMenu.source = inUnstagedMulti ? 'unstaged' : 'staged'
+    batchMenu.x = e.clientX
+    batchMenu.y = e.clientY
+    batchMenu.visible = true
+    return
+  }
   fileMenu.file = file
   fileMenu.x = e.clientX
   fileMenu.y = e.clientY
@@ -420,10 +506,19 @@ watch(
           @select="onSelectFile"
           @toggle="onToggleFile"
           @context-menu="onFileContext"
+          @multi-select-change="onUnstagedMultiSelect"
         >
           <template #header-actions>
+            <template v-if="unstagedMultiPaths.length > 1">
+              <button class="btn-section" @click="batchStage">
+                {{ t('workspace.wip.stageSelected', { count: unstagedMultiPaths.length }) }}
+              </button>
+              <button class="btn-section btn-section--danger" @click="batchDiscard">
+                {{ t('workspace.wip.discardSelected', { count: unstagedMultiPaths.length }) }}
+              </button>
+            </template>
             <button
-              v-if="unstagedAll.length > 0"
+              v-else-if="unstagedAll.length > 0"
               class="btn-section"
               @click="onStageAll"
             >
@@ -447,10 +542,18 @@ watch(
           @select="onSelectFile"
           @toggle="onToggleFile"
           @context-menu="onFileContext"
+          @multi-select-change="onStagedMultiSelect"
         >
           <template #header-actions>
             <button
-              v-if="stagedAll.length > 0"
+              v-if="stagedMultiPaths.length > 1"
+              class="btn-section"
+              @click="batchUnstage"
+            >
+              {{ t('workspace.wip.unstageSelected', { count: stagedMultiPaths.length }) }}
+            </button>
+            <button
+              v-else-if="stagedAll.length > 0"
               class="btn-section"
               @click="onUnstageAll"
             >
@@ -529,6 +632,16 @@ watch(
       :items="fileMenuItems"
       @close="fileMenu.visible = false"
       @select="onFileMenuAction"
+    />
+
+    <!-- 多选批量右键菜单 -->
+    <ContextMenu
+      :visible="batchMenu.visible"
+      :x="batchMenu.x"
+      :y="batchMenu.y"
+      :items="batchMenuItems"
+      @close="batchMenu.visible = false"
+      @select="onBatchMenuAction"
     />
   </div>
 </template>
@@ -638,6 +751,11 @@ watch(
   background: var(--accent-blue);
   color: var(--bg-primary);
   border-color: var(--accent-blue);
+}
+
+.btn-section--danger:hover {
+  background: var(--accent-red);
+  border-color: var(--accent-red);
 }
 
 .commit-form {

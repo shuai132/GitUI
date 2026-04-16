@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useVirtualizer } from '@tanstack/vue-virtual'
 import { useI18n } from 'vue-i18n'
 import type { FileEntry, FileStatusKind } from '@/types/git'
@@ -21,7 +21,63 @@ const emit = defineEmits<{
   toggle: [file: FileEntry]
   toggleAll: []
   contextMenu: [event: MouseEvent, file: FileEntry]
+  multiSelectChange: [paths: string[]]
 }>()
+
+// ── 多选状态 ──────────────────────────────────────────────────────
+const multiSelectedPaths = ref(new Set<string>())
+const lastClickedIdx = ref<number | null>(null)
+
+// 文件列表更新时清除失效的多选项
+watch(
+  () => props.files,
+  (files) => {
+    const validPaths = new Set(files.map((f) => f.path))
+    let changed = false
+    for (const p of multiSelectedPaths.value) {
+      if (!validPaths.has(p)) {
+        multiSelectedPaths.value.delete(p)
+        changed = true
+      }
+    }
+    if (changed) emit('multiSelectChange', [...multiSelectedPaths.value])
+  },
+)
+
+function clearMultiSelect() {
+  if (multiSelectedPaths.value.size === 0) return
+  multiSelectedPaths.value.clear()
+  emit('multiSelectChange', [])
+}
+
+function onRowClick(e: MouseEvent, file: FileEntry, idx: number) {
+  if (e.ctrlKey || e.metaKey) {
+    // Ctrl/Cmd+click：切换单项
+    if (multiSelectedPaths.value.has(file.path)) {
+      multiSelectedPaths.value.delete(file.path)
+    } else {
+      multiSelectedPaths.value.add(file.path)
+    }
+    lastClickedIdx.value = idx
+    emit('multiSelectChange', [...multiSelectedPaths.value])
+  } else if (e.shiftKey && lastClickedIdx.value !== null) {
+    // Shift+click：区间选
+    const start = Math.min(lastClickedIdx.value, idx)
+    const end = Math.max(lastClickedIdx.value, idx)
+    for (let i = start; i <= end; i++) {
+      if (props.files[i]) multiSelectedPaths.value.add(props.files[i].path)
+    }
+    emit('multiSelectChange', [...multiSelectedPaths.value])
+  } else {
+    // 普通点击：清除多选，单选此文件
+    if (multiSelectedPaths.value.size > 0) {
+      multiSelectedPaths.value.clear()
+      emit('multiSelectChange', [])
+    }
+    lastClickedIdx.value = idx
+    emit('select', file)
+  }
+}
 
 function onRowContext(e: MouseEvent, file: FileEntry) {
   if (!props.showRowActions) return
@@ -56,7 +112,7 @@ function scrollToIndex(idx: number) {
   virtualizer.value.scrollToIndex(idx, { align: 'auto' })
 }
 
-defineExpose({ scrollToIndex })
+defineExpose({ scrollToIndex, clearMultiSelect })
 </script>
 
 <template>
@@ -81,14 +137,17 @@ defineExpose({ scrollToIndex })
           v-for="vRow in virtualizer.getVirtualItems()"
           :key="vRow.index"
           class="file-entry"
-          :class="{ selected: selectedPath === files[vRow.index].path }"
+          :class="{
+            selected: selectedPath === files[vRow.index].path,
+            'multi-selected': multiSelectedPaths.has(files[vRow.index].path),
+          }"
           :style="{
             position: 'absolute',
             top: vRow.start + 'px',
             height: ROW_H + 'px',
             width: '100%',
           }"
-          @click="emit('select', files[vRow.index])"
+          @click="onRowClick($event, files[vRow.index], vRow.index)"
           @contextmenu="onRowContext($event, files[vRow.index])"
         >
           <svg
@@ -189,6 +248,14 @@ defineExpose({ scrollToIndex })
 
 .file-entry.selected {
   background: rgba(138, 173, 244, 0.18);
+}
+
+.file-entry.multi-selected {
+  background: rgba(138, 173, 244, 0.13);
+}
+
+.file-entry.selected.multi-selected {
+  background: rgba(138, 173, 244, 0.22);
 }
 
 .row-action {
