@@ -105,6 +105,11 @@ pub fn run() {
             discard_file,
             get_reflog,
             run_gc,
+            reveal_file,
+            open_file_in_editor,
+            open_terminal_here,
+            add_to_gitignore,
+            checkout_file_at_commit,
             // Terminal
             terminal_spawn,
             terminal_write,

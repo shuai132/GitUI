@@ -6,6 +6,9 @@ import { useWorkspaceStore } from '@/stores/workspace'
 import { useHistoryStore } from '@/stores/history'
 import { useDiffStore } from '@/stores/diff'
 import { useUiStore } from '@/stores/ui'
+import { useRepoStore } from '@/stores/repos'
+import { resolveExternalTerminalApp, useSettingsStore } from '@/stores/settings'
+import { useGitCommands } from '@/composables/useGitCommands'
 import type { FileEntry } from '@/types/git'
 import FileChangeList from '@/components/workspace/FileChangeList.vue'
 import Modal from '@/components/common/Modal.vue'
@@ -16,6 +19,9 @@ const workspaceStore = useWorkspaceStore()
 const historyStore = useHistoryStore()
 const diffStore = useDiffStore()
 const uiStore = useUiStore()
+const repoStore = useRepoStore()
+const settingsStore = useSettingsStore()
+const git = useGitCommands()
 
 // ── 头部统计 ──────────────────────────────────────────────────────
 const totalCount = computed(() => {
@@ -96,6 +102,20 @@ const fileMenuItems = computed<ContextMenuItem[]>(() => {
       action: 'toggle',
     },
     { separator: true },
+    { label: t('workspace.wip.menu.copyName'), action: 'copy-name' },
+    { label: t('workspace.wip.menu.copyRelativePath'), action: 'copy-relative' },
+    { label: t('workspace.wip.menu.copyAbsolutePath'), action: 'copy-absolute' },
+    { separator: true },
+    { label: t('workspace.wip.menu.revealInFinder'), action: 'reveal' },
+    { label: t('workspace.wip.menu.openInEditor'), action: 'open-editor' },
+    { label: t('workspace.wip.menu.openTerminalHere'), action: 'open-terminal' },
+    { separator: true },
+    {
+      label: t('workspace.wip.menu.addToGitignore'),
+      action: 'add-gitignore',
+      disabled: f.staged || f.status !== 'untracked',
+    },
+    { separator: true },
     {
       label: t('workspace.wip.menu.discardFile'),
       action: 'discard',
@@ -116,9 +136,32 @@ async function onFileMenuAction(action: string) {
   const f = fileMenu.file
   if (!f) return
   fileMenu.visible = false
+
+  const repoPath = repoStore.activeRepo()?.path ?? ''
+  const absPath = repoPath ? `${repoPath}/${f.path}` : f.path
+  const dirPath = absPath.substring(0, absPath.lastIndexOf('/')) || repoPath
+
   try {
     if (action === 'toggle') {
       await onToggleFile(f)
+    } else if (action === 'copy-name') {
+      await navigator.clipboard.writeText(f.path.split('/').pop() ?? f.path)
+    } else if (action === 'copy-relative') {
+      await navigator.clipboard.writeText(f.path)
+    } else if (action === 'copy-absolute') {
+      await navigator.clipboard.writeText(absPath)
+    } else if (action === 'reveal') {
+      await git.revealFile(absPath)
+    } else if (action === 'open-editor') {
+      await git.openFileInEditor(absPath)
+    } else if (action === 'open-terminal') {
+      await git.openTerminalHere(dirPath, resolveExternalTerminalApp(settingsStore))
+    } else if (action === 'add-gitignore') {
+      const repoId = repoStore.activeRepoId
+      if (repoId) {
+        await git.addToGitignore(repoId, f.path)
+        await workspaceStore.refresh(repoId)
+      }
     } else if (action === 'discard') {
       if (!confirm(t('workspace.confirmDiscard.file', { file: f.path }))) return
       await workspaceStore.discardFile(f.path)

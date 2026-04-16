@@ -266,6 +266,21 @@ export function useGitCommands() {
   const runGc = (repoId: string) =>
     call<string>('run_gc', { repoId })
 
+  const revealFile = (path: string) =>
+    call<void>('reveal_file', { path })
+
+  const openFileInEditor = (path: string) =>
+    call<void>('open_file_in_editor', { path })
+
+  const openTerminalHere = (dirPath: string, terminalApp?: string | null) =>
+    call<void>('open_terminal_here', { dirPath, terminalApp: terminalApp ?? null })
+
+  const addToGitignore = (repoId: string, filePath: string) =>
+    call<void>('add_to_gitignore', { repoId, filePath })
+
+  const checkoutFileAtCommit = (repoId: string, sha: string, filePath: string) =>
+    call<void>('checkout_file_at_commit', { repoId, sha, filePath })
+
   // ---- Terminal (in-app PTY) ----
   const terminalSpawn = (repoId: string, cols: number, rows: number) =>
     call<string>('terminal_spawn', { repoId, cols, rows })
@@ -336,6 +351,11 @@ export function useGitCommands() {
     discardFile,
     getReflog,
     runGc,
+    revealFile,
+    openFileInEditor,
+    openTerminalHere,
+    addToGitignore,
+    checkoutFileAtCommit,
     terminalSpawn,
     terminalWrite,
     terminalResize,

@@ -261,3 +261,170 @@ pub async fn discard_file(
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
     GitEngine::discard_file(&meta.path, &file_path)
 }
+
+/// 在系统文件管理器中高亮显示指定文件（接收绝对文件路径）。
+/// macOS: `open -R <path>`  Windows: `explorer /select,<path>`  Linux: xdg-open 父目录
+#[tauri::command]
+pub async fn reveal_file(path: String) -> Result<(), GitError> {
+    #[cfg(target_os = "macos")]
+    {
+        Command::new("open")
+            .args(["-R", &path])
+            .spawn()
+            .map_err(|e| GitError::OperationFailed(format!("打开 Finder 失败: {}", e)))?;
+        return Ok(());
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        Command::new("explorer")
+            .arg(format!("/select,{}", path))
+            .spawn()
+            .map_err(|e| GitError::OperationFailed(format!("打开资源管理器失败: {}", e)))?;
+        return Ok(());
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        let parent = std::path::Path::new(&path)
+            .parent()
+            .map(|p| p.to_string_lossy().to_string())
+            .unwrap_or(path);
+        Command::new("xdg-open")
+            .arg(&parent)
+            .spawn()
+            .map_err(|e| GitError::OperationFailed(format!("打开文件管理器失败: {}", e)))?;
+        return Ok(());
+    }
+
+    #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
+    {
+        let _ = path;
+        Err(GitError::OperationFailed(
+            "当前平台不支持在文件管理器中显示".to_string(),
+        ))
+    }
+}
+
+/// 用系统默认应用打开指定文件（通常是默认编辑器）。
+#[tauri::command]
+pub async fn open_file_in_editor(
+    path: String,
+    app: tauri::AppHandle,
+) -> Result<(), GitError> {
+    use tauri_plugin_opener::OpenerExt;
+    app.opener()
+        .open_path(&path, None::<&str>)
+        .map_err(|e| GitError::OperationFailed(format!("打开文件失败: {}", e)))
+}
+
+/// 在指定目录打开系统终端（直接接受绝对目录路径，不依赖仓库 ID）。
+#[tauri::command]
+pub async fn open_terminal_here(
+    dir_path: String,
+    terminal_app: Option<String>,
+) -> Result<(), GitError> {
+    let path = dir_path;
+
+    #[cfg(target_os = "macos")]
+    {
+        let app = terminal_app
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .unwrap_or("Terminal");
+        Command::new("open")
+            .args(["-a", app, &path])
+            .spawn()
+            .map_err(|e| GitError::OperationFailed(format!("打开终端失败: {}", e)))?;
+        return Ok(());
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    let _ = terminal_app;
+
+    #[cfg(target_os = "linux")]
+    {
+        let candidates: &[(&str, Vec<String>)] = &[
+            (
+                "x-terminal-emulator",
+                vec![format!("--working-directory={}", path)],
+            ),
+            (
+                "gnome-terminal",
+                vec![format!("--working-directory={}", path)],
+            ),
+            ("konsole", vec!["--workdir".to_string(), path.clone()]),
+            ("xterm", vec!["-e".to_string(), format!("cd {}; $SHELL", path)]),
+        ];
+        for (bin, args) in candidates {
+            if Command::new(bin).args(args).spawn().is_ok() {
+                return Ok(());
+            }
+        }
+        return Err(GitError::OperationFailed(
+            "未找到可用的终端程序".to_string(),
+        ));
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        Command::new("cmd")
+            .args(["/C", "start", "cmd", "/K", "cd", "/D", &path])
+            .spawn()
+            .map_err(|e| GitError::OperationFailed(format!("打开终端失败: {}", e)))?;
+        return Ok(());
+    }
+
+    #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
+    {
+        let _ = path;
+        Err(GitError::OperationFailed(
+            "当前平台不支持打开终端".to_string(),
+        ))
+    }
+}
+
+/// 将指定文件路径追加到仓库 .gitignore（幂等，已存在则跳过）。
+#[tauri::command]
+pub async fn add_to_gitignore(
+    repo_id: String,
+    file_path: String,
+    repo_manager: State<'_, RepoManager>,
+) -> Result<(), GitError> {
+    use std::io::Write;
+    let meta = repo_manager
+        .get_meta(&repo_id)
+        .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
+    let gitignore_path = std::path::PathBuf::from(&meta.path).join(".gitignore");
+    let existing = std::fs::read_to_string(&gitignore_path).unwrap_or_default();
+    if existing.lines().any(|l| l == file_path) {
+        return Ok(());
+    }
+    let mut f = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&gitignore_path)
+        .map_err(|e| GitError::OperationFailed(format!("打开 .gitignore 失败: {}", e)))?;
+    if !existing.is_empty() && !existing.ends_with('\n') {
+        writeln!(f)
+            .map_err(|e| GitError::OperationFailed(format!("写入 .gitignore 失败: {}", e)))?;
+    }
+    writeln!(f, "{}", file_path)
+        .map_err(|e| GitError::OperationFailed(format!("写入 .gitignore 失败: {}", e)))?;
+    Ok(())
+}
+
+/// 从指定提交签出单个文件到工作目录（不修改 HEAD 或暂存区）。
+#[tauri::command]
+pub async fn checkout_file_at_commit(
+    repo_id: String,
+    sha: String,
+    file_path: String,
+    repo_manager: State<'_, RepoManager>,
+) -> Result<(), GitError> {
+    let meta = repo_manager
+        .get_meta(&repo_id)
+        .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
+    GitEngine::checkout_file_at_commit(&meta.path, &sha, &file_path)
+}

@@ -133,6 +133,15 @@ commit 面板内容有一个计算出的 `commitListMinWidth = graph + desc + ha
 
 **`is_stash === true` 的行走另一套菜单**：Apply Stash / Pop Stash / Delete Stash，与侧栏 STASH section 的右键菜单同源（见 [10-stash-reflog.md](./10-stash-reflog.md)）。菜单按 `stashStore.entries` 里匹配 `commit_oid` 找到对应 index，再调 `stashStore.apply / pop / drop`。
 
+右键 **CommitInfoPanel 的文件标签**（`components/history/CommitInfoPanel.vue`）弹出文件级菜单：
+
+| 菜单项 | 实现 |
+|--------|------|
+| 复制文件名 / 相对路径 / 绝对路径 | `navigator.clipboard.writeText(...)` |
+| 在 Finder 中显示 | `reveal_file`（已删除文件禁用） |
+| 在编辑器中打开 | `open_file_in_editor`（已删除文件禁用） |
+| 签出此文件版本 | `checkout_file_at_commit`：将该提交的文件写入工作目录，不改 HEAD / 暂存区（已删除文件禁用） |
+
 ## 分支标签
 
 提交列表的每一行会把 `historyStore.branches` 中指向该 commit 的分支渲染成小 tag（`branchTagMap` computed）。颜色：

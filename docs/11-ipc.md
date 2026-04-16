@@ -123,12 +123,17 @@ GitUI 的前后端通过 Tauri v2 的 IPC 通道通信：
 |------|------|------|
 | `open_terminal` | `repoId, terminalApp?: string \| null` | `void`（`terminalApp` 仅 macOS 生效，对应 `open -a <app>`，空值回退到 `Terminal`） |
 | `open_in_new_window` | `repoId` | `void` （以新进程打开仓库，macOS 走 `open -n -a`） |
-| `reveal_in_file_manager` | `repoId` | `void` |
+| `reveal_in_file_manager` | `repoId` | `void` （在文件管理器中显示仓库根目录） |
 | `consume_startup_repo` | — | `string \| null`（取走 `--open-repo` 注入的路径，只生效一次） |
 | `discard_all_changes` | `repoId` | `void` |
 | `discard_file` | `repoId, filePath` | `void` |
 | `get_reflog` | `repoId` | `ReflogEntry[]` （最近 500 条） |
 | `run_gc` | `repoId` | `string` (消息) |
+| `reveal_file` | `path` (绝对路径) | `void` （在文件管理器中高亮显示该文件；macOS: `open -R`，Windows: `explorer /select,`，Linux: xdg-open 父目录） |
+| `open_file_in_editor` | `path` (绝对路径) | `void` （用系统默认应用打开文件，通过 `tauri-plugin-opener`） |
+| `open_terminal_here` | `dirPath` (绝对目录路径), `terminalApp?: string \| null` | `void` （在指定目录打开终端，逻辑同 `open_terminal` 但不依赖 repoId） |
+| `add_to_gitignore` | `repoId, filePath` (相对路径) | `void` （追加到 `.gitignore`，幂等） |
+| `checkout_file_at_commit` | `repoId, sha, filePath` (相对路径) | `void` （从指定提交签出单个文件到工作目录，不改 HEAD / 暂存区） |
 
 ### Terminal（应用内 PTY）
 

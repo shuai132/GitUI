@@ -78,7 +78,7 @@
 
 - 点击文件行 → `diffStore.loadFileDiff(path, staged)` → 左侧（或上方）diff 区展示
 - 复选框切换 → `stageFile` / `unstageFile`
-- 右键菜单：暂存/取消暂存、丢弃此文件的变更（仅未暂存）
+- 右键菜单：复制文件名 / 相对路径 / 绝对路径；在 Finder 中显示；在编辑器中打开；在此打开终端；添加到 `.gitignore`（仅 untracked）；暂存 / 取消暂存；丢弃此文件的变更（仅未暂存）
 - "全部暂存" / "全部取消暂存" 两个快捷按钮
 
 ### 提交表单

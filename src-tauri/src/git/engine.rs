@@ -1871,4 +1871,34 @@ impl GitEngine {
 
         Ok(())
     }
+
+    /// 从指定提交签出单个文件到工作目录（不修改 HEAD 或暂存区）。
+    /// 若该提交中不存在此文件，返回错误。
+    pub fn checkout_file_at_commit(path: &str, sha: &str, file_path: &str) -> GitResult<()> {
+        use std::path::Path;
+        let repo = Self::open(path)?;
+        let oid = git2::Oid::from_str(sha)
+            .map_err(|e| GitError::OperationFailed(e.message().to_string()))?;
+        let commit = repo.find_commit(oid)?;
+        let tree = commit.tree()?;
+        let entry = tree
+            .get_path(Path::new(file_path))
+            .map_err(|_| {
+                GitError::OperationFailed(format!("文件 {} 在该提交中不存在", file_path))
+            })?;
+        let blob = repo
+            .find_blob(entry.id())
+            .map_err(|e| GitError::OperationFailed(e.message().to_string()))?;
+        let workdir = repo
+            .workdir()
+            .ok_or_else(|| GitError::OperationFailed("裸仓库不支持签出文件".to_string()))?;
+        let dest = workdir.join(file_path);
+        if let Some(parent) = dest.parent() {
+            std::fs::create_dir_all(parent)
+                .map_err(|e| GitError::OperationFailed(format!("创建目录失败：{}", e)))?;
+        }
+        std::fs::write(&dest, blob.content())
+            .map_err(|e| GitError::OperationFailed(format!("写入文件失败：{}", e)))?;
+        Ok(())
+    }
 }

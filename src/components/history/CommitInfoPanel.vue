@@ -1,10 +1,14 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { CommitDetail, FileDiff, FileStatusKind } from '@/types/git'
 import { formatAbsoluteTime, fileStatusColor } from '@/utils/format'
 import { GRAPH_COLORS } from '@/utils/graph'
 import { useUiStore } from '@/stores/ui'
+import { useRepoStore } from '@/stores/repos'
+import { useWorkspaceStore } from '@/stores/workspace'
+import { useGitCommands } from '@/composables/useGitCommands'
+import ContextMenu, { type ContextMenuItem } from '@/components/common/ContextMenu.vue'
 
 const { t } = useI18n()
 
@@ -18,6 +22,9 @@ const emit = defineEmits<{
 }>()
 
 const uiStore = useUiStore()
+const repoStore = useRepoStore()
+const workspaceStore = useWorkspaceStore()
+const git = useGitCommands()
 const sizes = uiStore.historyPaneSizes
 
 const filesFirst = computed(() => uiStore.detailFilesFirst)
@@ -99,6 +106,72 @@ const bodyText = computed(() => {
   const firstLine = msg.indexOf('\n')
   return firstLine !== -1 ? msg.slice(firstLine + 1).trim() : ''
 })
+
+// ── 文件右键菜单 ─────────────────────────────────────────────────
+const fileMenu = reactive({
+  visible: false,
+  x: 0,
+  y: 0,
+  diffIdx: -1,
+})
+
+const fileMenuItems = computed<ContextMenuItem[]>(() => {
+  const d = props.commit?.diffs[fileMenu.diffIdx]
+  if (!d) return []
+  const filePath = d.new_path ?? d.old_path ?? ''
+  const isDeleted = !d.new_blob_oid && !!d.old_blob_oid
+  return [
+    { label: t('history.fileMenu.copyName'), action: 'copy-name' },
+    { label: t('history.fileMenu.copyRelativePath'), action: 'copy-relative' },
+    { label: t('history.fileMenu.copyAbsolutePath'), action: 'copy-absolute' },
+    { separator: true },
+    { label: t('history.fileMenu.revealInFinder'), action: 'reveal', disabled: isDeleted },
+    { label: t('history.fileMenu.openInEditor'), action: 'open-editor', disabled: isDeleted },
+    { separator: true },
+    { label: t('history.fileMenu.checkoutFileVersion'), action: 'checkout-file', disabled: isDeleted },
+  ]
+})
+
+function onFileTabContext(e: MouseEvent, idx: number) {
+  e.preventDefault()
+  fileMenu.diffIdx = idx
+  fileMenu.x = e.clientX
+  fileMenu.y = e.clientY
+  fileMenu.visible = true
+}
+
+async function onFileMenuAction(action: string) {
+  const d = props.commit?.diffs[fileMenu.diffIdx]
+  if (!d) return
+  fileMenu.visible = false
+
+  const filePath = d.new_path ?? d.old_path ?? ''
+  const repoPath = repoStore.activeRepo()?.path ?? ''
+  const absPath = repoPath ? `${repoPath}/${filePath}` : filePath
+
+  try {
+    if (action === 'copy-name') {
+      await navigator.clipboard.writeText(filePath.split('/').pop() ?? filePath)
+    } else if (action === 'copy-relative') {
+      await navigator.clipboard.writeText(filePath)
+    } else if (action === 'copy-absolute') {
+      await navigator.clipboard.writeText(absPath)
+    } else if (action === 'reveal') {
+      await git.revealFile(absPath)
+    } else if (action === 'open-editor') {
+      await git.openFileInEditor(absPath)
+    } else if (action === 'checkout-file') {
+      const repoId = repoStore.activeRepoId
+      const sha = props.commit?.info.oid
+      if (repoId && sha) {
+        await git.checkoutFileAtCommit(repoId, sha, filePath)
+        await workspaceStore.refresh(repoId)
+      }
+    }
+  } catch (e) {
+    alert(String(e))
+  }
+}
 </script>
 
 <template>
@@ -165,6 +238,7 @@ const bodyText = computed(() => {
         class="file-tab"
         :class="{ active: idx === selectedFileIdx }"
         @click="emit('selectFile', idx)"
+        @contextmenu="onFileTabContext($event, idx)"
         :title="d.new_path ?? d.old_path ?? ''"
       >
         <svg
@@ -191,6 +265,15 @@ const bodyText = computed(() => {
   </div>
 
   <div v-else class="panel-empty">{{ t('history.detailsPanel.empty') }}</div>
+
+  <ContextMenu
+    :visible="fileMenu.visible"
+    :x="fileMenu.x"
+    :y="fileMenu.y"
+    :items="fileMenuItems"
+    @close="fileMenu.visible = false"
+    @select="onFileMenuAction"
+  />
 </template>
 
 <style scoped>
