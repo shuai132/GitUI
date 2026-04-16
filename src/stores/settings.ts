@@ -184,12 +184,23 @@ function resolveTheme(mode: ThemeMode): 'light' | 'dark' {
   return mode
 }
 
+// ── 同步 Windows 标题栏主题（setTheme 在非 Tauri 环境下静默失败） ────
+async function syncWindowTheme(resolved: 'dark' | 'light') {
+  try {
+    const { getCurrentWindow } = await import('@tauri-apps/api/window')
+    await getCurrentWindow().setTheme(resolved)
+  } catch {
+    // 非 Tauri 环境（浏览器开发模式）忽略
+  }
+}
+
 // ── 把设置应用到 :root（CSS 变量 + data-theme 属性） ─────────────────
 export function applySettingsToDom(data: SettingsData) {
   if (typeof document === 'undefined') return
   const root = document.documentElement
   const resolved = resolveTheme(data.themeMode)
   root.setAttribute('data-theme', resolved)
+  void syncWindowTheme(resolved)
 
   // 字体 / 字号
   root.style.setProperty('--ui-font-family', data.uiFontFamily || '')
