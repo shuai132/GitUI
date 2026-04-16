@@ -347,14 +347,13 @@ const bodyText = computed(() => {
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 1px;
   padding: 4px 0;
 }
 
 .file-tab {
   display: flex;
   align-items: center;
-  padding: 3px 4px 3px 6px;
+  padding: 1px 3px 1px 3px;
   cursor: pointer;
   font-size: var(--font-sm);
   transition: background 0.1s;
