@@ -276,7 +276,7 @@ function onKeydown(e: KeyboardEvent) {
 
 .modal-box {
   background: var(--bg-primary);
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--border);
   border-radius: 8px;
   width: min(1100px, 94vw);
   height: min(720px, 90vh);
@@ -292,7 +292,7 @@ function onKeydown(e: KeyboardEvent) {
   align-items: center;
   gap: 8px;
   padding: 8px 12px;
-  border-bottom: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
 
@@ -342,7 +342,7 @@ function onKeydown(e: KeyboardEvent) {
   border-radius: 4px;
   line-height: 1;
 }
-.close-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+.close-btn:hover { background: var(--bg-overlay); color: var(--text-primary); }
 
 /* Tab content */
 .tab-content {
@@ -368,7 +368,7 @@ function onKeydown(e: KeyboardEvent) {
   flex-shrink: 0;
   cursor: col-resize;
   background: transparent;
-  border-left: 1px solid var(--border-color);
+  border-left: 1px solid var(--border);
   transition: background 0.15s;
 }
 .list-resize-handle:hover,
@@ -379,13 +379,21 @@ function onKeydown(e: KeyboardEvent) {
 .commit-row {
   padding: 7px 10px;
   cursor: pointer;
-  border-bottom: 1px solid var(--border-subtle);
+  border-bottom: 1px var(--row-separator-style) rgba(var(--row-separator-rgb), var(--row-separator-alpha));
   display: flex;
   flex-direction: column;
   gap: 2px;
 }
-.commit-row:hover { background: var(--bg-hover); }
-.commit-row.selected { background: var(--bg-selected); }
+.commit-row:hover { background: var(--bg-overlay); }
+.commit-row.selected {
+  background: var(--row-selected-bg);
+  color: var(--row-selected-fg);
+}
+.commit-row.selected .c-oid,
+.commit-row.selected .c-summary,
+.commit-row.selected .c-meta {
+  color: var(--row-selected-fg);
+}
 
 .c-oid {
   font-family: var(--font-code, monospace);
@@ -415,13 +423,13 @@ function onKeydown(e: KeyboardEvent) {
   font-size: 12px;
   padding: 4px 12px;
   background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--border);
   border-radius: 4px;
   color: var(--text-primary);
   cursor: pointer;
 }
 .btn-load-more:disabled { opacity: 0.5; cursor: default; }
-.btn-load-more:not(:disabled):hover { background: var(--bg-hover); }
+.btn-load-more:not(:disabled):hover { background: var(--bg-overlay); }
 
 .diff-pane {
   flex: 1;
@@ -468,12 +476,12 @@ function onKeydown(e: KeyboardEvent) {
   flex-shrink: 0;
   overflow: hidden;
   padding: 0 6px;
-  border-right: 1px solid var(--border-subtle);
+  border-right: 1px solid var(--border);
   font-size: 11px;
   color: var(--text-muted);
 }
 .blame-ann.empty {
-  border-right: 1px solid var(--border-subtle);
+  border-right: 1px solid var(--border);
 }
 
 .blame-oid {
