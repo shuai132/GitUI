@@ -139,12 +139,32 @@ onMounted(() => {
   else loadBlame()
 })
 
+// ── 历史 tab 左右分割线拖动 ───────────────────────────────────────────────
+const listWidth = ref(280)
+
+function startListResize(e: PointerEvent) {
+  e.preventDefault()
+  const startX = e.clientX
+  const startW = listWidth.value
+  const onMove = (ev: PointerEvent) => {
+    listWidth.value = Math.max(160, Math.min(560, startW + ev.clientX - startX))
+  }
+  const onUp = () => {
+    window.removeEventListener('pointermove', onMove)
+    window.removeEventListener('pointerup', onUp)
+    document.body.style.cursor = ''
+    document.body.style.userSelect = ''
+  }
+  window.addEventListener('pointermove', onMove)
+  window.addEventListener('pointerup', onUp)
+  document.body.style.cursor = 'col-resize'
+  document.body.style.userSelect = 'none'
+}
+
 // ESC 关闭
 function onKeydown(e: KeyboardEvent) {
   if (e.key === 'Escape') emit('close')
 }
-
-const fileName = computed(() => props.filePath.split('/').pop() ?? props.filePath)
 </script>
 
 <template>
@@ -164,14 +184,14 @@ const fileName = computed(() => props.filePath.split('/').pop() ?? props.filePat
             @click="activeTab = 'blame'"
           >{{ t('fileHistory.tabs.blame') }}</button>
         </div>
-        <span class="file-path-label" :title="filePath">{{ fileName }}</span>
+        <span class="file-path-label" :title="filePath">{{ filePath }}</span>
         <button class="close-btn" @click="emit('close')">✕</button>
       </div>
 
       <!-- History Tab -->
       <div v-if="activeTab === 'history'" class="tab-content history-tab">
         <!-- 左侧：commit 列表 -->
-        <div class="commit-list">
+        <div class="commit-list" :style="{ width: listWidth + 'px' }">
           <div v-if="historyLoading && historyCommits.length === 0" class="loading-msg">
             {{ t('fileHistory.loading') }}
           </div>
@@ -195,6 +215,9 @@ const fileName = computed(() => props.filePath.split('/').pop() ?? props.filePat
             {{ t('fileHistory.noHistory') }}
           </div>
         </div>
+
+        <!-- 左右分割线 -->
+        <div class="list-resize-handle" @pointerdown="startListResize" />
 
         <!-- 右侧：选中 commit 的 diff -->
         <div class="diff-pane">
@@ -301,9 +324,12 @@ const fileName = computed(() => props.filePath.split('/').pop() ?? props.filePat
   font-size: 12px;
   color: var(--text-muted);
   flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  direction: rtl;
+  text-align: left;
 }
 
 .close-btn {
@@ -331,12 +357,23 @@ const fileName = computed(() => props.filePath.split('/').pop() ?? props.filePat
 }
 
 .commit-list {
-  width: 280px;
   flex-shrink: 0;
-  border-right: 1px solid var(--border-color);
   overflow-y: auto;
   display: flex;
   flex-direction: column;
+}
+
+.list-resize-handle {
+  width: 5px;
+  flex-shrink: 0;
+  cursor: col-resize;
+  background: transparent;
+  border-left: 1px solid var(--border-color);
+  transition: background 0.15s;
+}
+.list-resize-handle:hover,
+.list-resize-handle:active {
+  background: rgba(138, 173, 244, 0.35);
 }
 
 .commit-row {
