@@ -263,7 +263,7 @@ async function onFileMenuAction(action: string) {
         >
           <path :d="statusIconMap[diffStatus(d)]?.d ?? statusIconMap.modified.d" />
         </svg>
-        <span class="file-name">{{ (d.new_path ?? d.old_path ?? '').split('/').pop() }}</span>
+        <span class="file-name"><span class="path-text">{{ d.new_path ?? d.old_path ?? '' }}</span></span>
         <span class="file-stats">
           <span class="add">+{{ d.additions }}</span>
           <span class="del">-{{ d.deletions }}</span>
@@ -466,11 +466,18 @@ async function onFileMenuAction(action: string) {
 
 .file-name {
   color: var(--text-secondary);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.path-text {
+  display: inline-block;
+  max-width: 100%;
+  direction: rtl;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  flex: 1;
-  text-align: left;
 }
 
 .file-tab.active .file-name {

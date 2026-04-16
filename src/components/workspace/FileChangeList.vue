@@ -106,7 +106,7 @@ defineExpose({ scrollToIndex })
             <path :d="statusIconMap[files[vRow.index].status]?.d ?? statusIconMap.untracked.d" />
           </svg>
           <span class="file-path" :title="files[vRow.index].path">
-            {{ files[vRow.index].path.split('/').pop() }}
+            <span class="path-text">{{ files[vRow.index].path }}</span>
           </span>
           <span
             class="file-stats"
@@ -223,11 +223,19 @@ defineExpose({ scrollToIndex })
 }
 
 .file-path {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
   font-size: var(--font-md);
+}
+
+.path-text {
+  display: inline-block;
+  max-width: 100%;
+  direction: rtl;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  flex: 1;
 }
 
 .file-stats {
