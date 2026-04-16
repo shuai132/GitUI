@@ -34,7 +34,7 @@ const stashStore = useStashStore()
 const diffStore = useDiffStore()
 const uiStore = useUiStore()
 const debugStore = useDebugStore()
-const { onStatusChanged } = useGitEvents()
+const { onStatusChanged, onRemoteUpdated } = useGitEvents()
 const git = useGitCommands()
 
 // 「添加仓库」下拉菜单 + clone/init 对话框：菜单和对话框都挂在 App 顶层，
@@ -187,6 +187,12 @@ onStatusChanged(async (repoId) => {
   historyStore.loadBranches()
   historyStore.loadTags()
   stashStore.refresh()
+})
+
+// 定时后台 fetch 完成后静默刷新分支列表（ahead/behind 数字）
+onRemoteUpdated((repoId) => {
+  if (repoId !== repoStore.activeRepoId) return
+  historyStore.loadBranches()
 })
 
 // Terminal 面板 mount-once：首次显示后一直保留在 DOM 里，

@@ -38,6 +38,14 @@ export function useGitEvents() {
     })
   }
 
+  const onRemoteUpdated = (handler: (repoId: string) => void) => {
+    listen<string>('repo://remote-updated', (event) => {
+      handler(event.payload)
+    }).then((unlisten) => {
+      unlisteners.push(unlisten)
+    })
+  }
+
   onUnmounted(() => {
     unlisteners.forEach((fn) => fn())
   })
@@ -46,5 +54,6 @@ export function useGitEvents() {
     onStatusChanged,
     onOperationProgress,
     onError,
+    onRemoteUpdated,
   }
 }

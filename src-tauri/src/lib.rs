@@ -1,3 +1,4 @@
+mod auto_fetch;
 mod commands;
 mod git;
 mod logger;
@@ -11,9 +12,10 @@ use commands::{
     system::*, tag::*, terminal::*,
 };
 use commands::system::StartupRepo;
+use auto_fetch::AutoFetchService;
 use repo_manager::RepoManager;
 use terminal::TerminalManager;
-use tauri::WindowEvent;
+use tauri::{Manager, WindowEvent};
 use watcher::WatcherService;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -34,6 +36,7 @@ pub fn run() {
         .plugin(tauri_plugin_os::init())
         .manage(RepoManager::new())
         .manage(WatcherService::new())
+        .manage(AutoFetchService::new())
         .manage(TerminalManager::new())
         .manage(StartupRepo(std::sync::Mutex::new(startup_repo)))
         .invoke_handler(tauri::generate_handler![
@@ -123,6 +126,7 @@ pub fn run() {
             logger::set_app_handle(app.handle().clone());
             log::info!("GitUI started");
             tray::setup_tray(&app.handle())?;
+            app.state::<AutoFetchService>().start(app.handle().clone());
             Ok(())
         })
         .on_window_event(|window, event| {
