@@ -574,6 +574,17 @@ const messages = {
       versionLabel: 'Version:',
     },
   },
+  fileHistory: {
+    tabs: { history: 'History', blame: 'Blame' },
+    menu: { history: 'File History', blame: 'View Blame' },
+    loading: 'Loading…',
+    loadMore: 'Load More',
+    noHistory: 'No commit history for this file',
+    noBlame: 'Unable to load blame',
+    blameLoading: 'Computing blame…',
+    selectCommit: 'Select a commit on the left to view changes',
+    notCommitted: 'Not Committed Yet',
+  },
   errors: {
     generic: {
       repoNotFound: 'Repository not found or not a Git repository',

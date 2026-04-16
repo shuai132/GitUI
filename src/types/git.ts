@@ -137,6 +137,24 @@ export interface ReflogEntry {
   time: number
 }
 
+export interface BlameHunk {
+  /** 起始行号（1-based） */
+  start_line: number
+  num_lines: number
+  commit_oid: string
+  short_oid: string
+  author_name: string
+  author_email: string
+  time: number
+  summary: string
+}
+
+export interface FileBlame {
+  /** 文件内容按行（不含换行符） */
+  lines: string[]
+  hunks: BlameHunk[]
+}
+
 // Graph node for DAG visualization
 export interface GraphNode {
   oid: string

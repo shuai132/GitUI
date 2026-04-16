@@ -186,3 +186,26 @@ pub struct SubmoduleInfo {
     pub state: SubmoduleState,
     pub has_workdir_modifications: bool,
 }
+
+/// blame 中连续若干行属于同一次提交的片段
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BlameHunk {
+    /// 起始行号（1-based）
+    pub start_line: u32,
+    /// 该 hunk 包含的行数
+    pub num_lines: u32,
+    pub commit_oid: String,
+    pub short_oid: String,
+    pub author_name: String,
+    pub author_email: String,
+    pub time: i64,
+    pub summary: String,
+}
+
+/// 文件 blame 结果：行内容 + 逐 hunk 注解
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FileBlame {
+    /// 文件内容按行（不含换行符）
+    pub lines: Vec<String>,
+    pub hunks: Vec<BlameHunk>,
+}

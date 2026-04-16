@@ -64,7 +64,10 @@ GitUI 的前后端通过 Tauri v2 的 IPC 通道通信：
 |------|------|------|
 | `get_log` | `repoId, offset, limit, includeUnreachable, includeStashes` | `LogPage` |
 | `get_commit_detail` | `repoId, oid` | `CommitDetail` |
+| `get_file_log` | `repoId, filePath, offset, limit` | `CommitInfo[]`（触碰过该文件的提交列表，从 HEAD 往前遍历，limit 上限 200） |
 | `get_file_diff` | `repoId, filePath, staged` | `FileDiff` |
+| `get_file_diff_at_commit` | `repoId, filePath, oid` | `FileDiff`（指定提交中单个文件的 diff，用 pathspec 过滤，不加载全部 diffs） |
+| `get_file_blame` | `repoId, filePath` | `FileBlame`（工作区文件的逐行 blame 注解） |
 | `get_blob_bytes` | `repoId, oid` | `BlobData` (按 blob oid 读取原始字节，用于图片等二进制预览；超过 10 MB 返回 `truncated=true` 且不带字节) |
 | `read_worktree_file` | `repoId, relPath` | `BlobData` (读取工作区内相对路径文件；用于 WIP 未暂存的新版；同样受 10 MB 上限限制) |
 

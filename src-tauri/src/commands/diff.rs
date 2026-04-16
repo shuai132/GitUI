@@ -4,7 +4,7 @@ use crate::{
     git::{
         engine::GitEngine,
         error::GitError,
-        types::{BlobData, FileDiff},
+        types::{BlobData, FileBlame, FileDiff},
     },
     repo_manager::RepoManager,
 };
@@ -44,4 +44,29 @@ pub async fn read_worktree_file(
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
     GitEngine::read_worktree_file(&meta.path, &rel_path)
+}
+
+#[tauri::command]
+pub async fn get_file_diff_at_commit(
+    repo_id: String,
+    file_path: String,
+    oid: String,
+    repo_manager: State<'_, RepoManager>,
+) -> Result<FileDiff, GitError> {
+    let meta = repo_manager
+        .get_meta(&repo_id)
+        .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
+    GitEngine::get_file_diff_at_commit(&meta.path, &file_path, &oid)
+}
+
+#[tauri::command]
+pub async fn get_file_blame(
+    repo_id: String,
+    file_path: String,
+    repo_manager: State<'_, RepoManager>,
+) -> Result<FileBlame, GitError> {
+    let meta = repo_manager
+        .get_meta(&repo_id)
+        .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
+    GitEngine::get_file_blame(&meta.path, &file_path)
 }

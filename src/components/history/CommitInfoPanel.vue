@@ -19,6 +19,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   selectFile: [idx: number]
+  showFileHistory: [payload: { filePath: string; mode: 'history' | 'blame' }]
 }>()
 
 const uiStore = useUiStore()
@@ -129,6 +130,9 @@ const fileMenuItems = computed<ContextMenuItem[]>(() => {
     { label: t('history.fileMenu.openInEditor'), action: 'open-editor', disabled: isDeleted },
     { separator: true },
     { label: t('history.fileMenu.checkoutFileVersion'), action: 'checkout-file', disabled: isDeleted },
+    { separator: true },
+    { label: t('fileHistory.menu.history'), action: 'file-history' },
+    { label: t('fileHistory.menu.blame'), action: 'file-blame', disabled: isDeleted },
   ]
 })
 
@@ -167,6 +171,10 @@ async function onFileMenuAction(action: string) {
         await git.checkoutFileAtCommit(repoId, sha, filePath)
         await workspaceStore.refresh(repoId)
       }
+    } else if (action === 'file-history') {
+      emit('showFileHistory', { filePath, mode: 'history' })
+    } else if (action === 'file-blame') {
+      emit('showFileHistory', { filePath, mode: 'blame' })
     }
   } catch (e) {
     alert(String(e))

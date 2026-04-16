@@ -1872,6 +1872,193 @@ impl GitEngine {
         Ok(())
     }
 
+    /// 返回触碰过 `file_path` 的提交列表（从 HEAD 开始向前遍历）。
+    /// 按 TOPOLOGICAL | TIME 排序，支持分页（offset + limit，limit 上限 200）。
+    pub fn get_file_log(
+        path: &str,
+        file_path: &str,
+        offset: usize,
+        limit: usize,
+    ) -> GitResult<Vec<CommitInfo>> {
+        let repo = Self::open(path)?;
+        let mut revwalk = repo.revwalk()?;
+        revwalk.set_sorting(git2::Sort::TOPOLOGICAL | git2::Sort::TIME)?;
+        revwalk.push_head().map_err(|e| {
+            GitError::OperationFailed(format!("no HEAD: {}", e.message()))
+        })?;
+
+        let mut results = Vec::new();
+        let mut skipped = 0usize;
+
+        'outer: for oid_result in revwalk {
+            let oid = oid_result?;
+            let commit = repo.find_commit(oid)?;
+
+            // 检查该 commit 是否触碰了目标文件
+            let touched = Self::commit_touches_file(&repo, &commit, file_path)?;
+            if !touched {
+                continue;
+            }
+
+            if skipped < offset {
+                skipped += 1;
+                continue;
+            }
+            if results.len() >= limit {
+                break 'outer;
+            }
+
+            let parent_oids = commit.parent_ids().map(|p| p.to_string()).collect();
+            results.push(CommitInfo {
+                oid: oid.to_string(),
+                short_oid: oid.to_string()[..7].to_string(),
+                message: commit.message().unwrap_or("").to_string(),
+                summary: commit.summary().unwrap_or("").to_string(),
+                author_name: commit.author().name().unwrap_or("").to_string(),
+                author_email: commit.author().email().unwrap_or("").to_string(),
+                time: commit.time().seconds(),
+                parent_oids,
+                is_unreachable: false,
+                is_stash: false,
+            });
+        }
+
+        Ok(results)
+    }
+
+    /// 判断一个 commit 是否修改了 file_path（对比第一个父提交，根提交对比空树）。
+    fn commit_touches_file(
+        repo: &git2::Repository,
+        commit: &git2::Commit,
+        file_path: &str,
+    ) -> GitResult<bool> {
+        let commit_tree = commit.tree()?;
+
+        let mut diff_opts = DiffOptions::new();
+        diff_opts.pathspec(file_path);
+
+        let parent_tree = if commit.parent_count() > 0 {
+            Some(commit.parent(0)?.tree()?)
+        } else {
+            None
+        };
+
+        let diff = repo.diff_tree_to_tree(
+            parent_tree.as_ref(),
+            Some(&commit_tree),
+            Some(&mut diff_opts),
+        )?;
+
+        Ok(diff.deltas().count() > 0)
+    }
+
+    /// 返回指定提交里 file_path 的 diff（仅该文件，不加载整个 CommitDetail）。
+    pub fn get_file_diff_at_commit(
+        path: &str,
+        file_path: &str,
+        oid_str: &str,
+    ) -> GitResult<FileDiff> {
+        let repo = Self::open(path)?;
+        let oid = git2::Oid::from_str(oid_str)
+            .map_err(|e| GitError::OperationFailed(e.message().to_string()))?;
+        let commit = repo.find_commit(oid)?;
+        let commit_tree = commit.tree()?;
+
+        let mut diff_opts = DiffOptions::new();
+        diff_opts.pathspec(file_path);
+
+        let diff = if commit.parent_count() > 0 {
+            let parent_tree = commit.parent(0)?.tree()?;
+            repo.diff_tree_to_tree(
+                Some(&parent_tree),
+                Some(&commit_tree),
+                Some(&mut diff_opts),
+            )?
+        } else {
+            repo.diff_tree_to_tree(None, Some(&commit_tree), Some(&mut diff_opts))?
+        };
+
+        let diffs = Self::parse_diff(&diff)?;
+        Ok(diffs.into_iter().next().unwrap_or(FileDiff {
+            old_path: None,
+            new_path: Some(file_path.to_string()),
+            is_binary: false,
+            hunks: vec![],
+            additions: 0,
+            deletions: 0,
+            old_blob_oid: None,
+            new_blob_oid: None,
+        }))
+    }
+
+    /// 返回工作区文件的 blame 信息（基于 HEAD，不包含未提交行的内容）。
+    pub fn get_file_blame(path: &str, file_path: &str) -> GitResult<FileBlame> {
+        let repo = Self::open(path)?;
+
+        // 读工作区文件内容作为 lines
+        let workdir = repo
+            .workdir()
+            .ok_or_else(|| GitError::OperationFailed("bare repo not supported".to_string()))?;
+        let full_path = workdir.join(file_path);
+        let content = std::fs::read_to_string(&full_path).map_err(|e| {
+            GitError::OperationFailed(format!("读取文件失败：{}", e))
+        })?;
+        let lines: Vec<String> = content.lines().map(String::from).collect();
+
+        // 计算 blame
+        let blame = repo
+            .blame_file(Path::new(file_path), None)
+            .map_err(|e| GitError::OperationFailed(format!("blame 失败：{}", e.message())))?;
+
+        let mut hunks = Vec::new();
+        for hunk in blame.iter() {
+            let orig_oid = hunk.orig_commit_id();
+            let (commit_oid_str, short_oid, author_name, author_email, time, summary) =
+                if orig_oid.is_zero() {
+                    (
+                        "0000000000000000000000000000000000000000".to_string(),
+                        "0000000".to_string(),
+                        "Not Committed Yet".to_string(),
+                        String::new(),
+                        0i64,
+                        "Not Committed Yet".to_string(),
+                    )
+                } else {
+                    match repo.find_commit(orig_oid) {
+                        Ok(c) => (
+                            orig_oid.to_string(),
+                            orig_oid.to_string()[..7].to_string(),
+                            c.author().name().unwrap_or("").to_string(),
+                            c.author().email().unwrap_or("").to_string(),
+                            c.time().seconds(),
+                            c.summary().unwrap_or("").to_string(),
+                        ),
+                        Err(_) => (
+                            orig_oid.to_string(),
+                            orig_oid.to_string()[..7].to_string(),
+                            String::new(),
+                            String::new(),
+                            0i64,
+                            String::new(),
+                        ),
+                    }
+                };
+
+            hunks.push(BlameHunk {
+                start_line: hunk.final_start_line() as u32,
+                num_lines: hunk.lines_in_hunk() as u32,
+                commit_oid: commit_oid_str,
+                short_oid,
+                author_name,
+                author_email,
+                time,
+                summary,
+            });
+        }
+
+        Ok(FileBlame { lines, hunks })
+    }
+
     /// 从指定提交签出单个文件到工作目录（不修改 HEAD 或暂存区）。
     /// 若该提交中不存在此文件，返回错误。
     pub fn checkout_file_at_commit(path: &str, sha: &str, file_path: &str) -> GitResult<()> {

@@ -17,6 +17,7 @@ import DiffView from '@/components/diff/DiffView.vue'
 import CommitInfoPanel from '@/components/history/CommitInfoPanel.vue'
 import WipPanel from '@/components/workspace/WipPanel.vue'
 import ContextMenu, { type ContextMenuItem } from '@/components/common/ContextMenu.vue'
+import FileHistoryModal from '@/components/file-history/FileHistoryModal.vue'
 import CreateBranchDialog from '@/components/commit/CreateBranchDialog.vue'
 import CreateTagDialog from '@/components/commit/CreateTagDialog.vue'
 import Modal from '@/components/common/Modal.vue'
@@ -855,6 +856,19 @@ const panelBorders = computed(() => {
   }
 })
 
+// ── 文件历史 / Blame 模态框 ──────────────────────────────────────────
+const fileHistoryModal = reactive({
+  visible: false,
+  filePath: '',
+  mode: 'history' as 'history' | 'blame',
+})
+
+function openFileHistory(payload: { filePath: string; mode: 'history' | 'blame' }) {
+  fileHistoryModal.filePath = payload.filePath
+  fileHistoryModal.mode = payload.mode
+  fileHistoryModal.visible = true
+}
+
 onMounted(() => {
   window.addEventListener('keydown', onKeyDown)
   // 懒加载远程 tag 列表：用于区分本地 / 已同步到远程的 tag chip。
@@ -1136,12 +1150,13 @@ onUnmounted(() => {
             </span>
           </span>
         </div>
-        <WipPanel v-if="selectedWip" />
+        <WipPanel v-if="selectedWip" @show-file-history="openFileHistory" />
         <CommitInfoPanel
           v-else
           :commit="historyStore.selectedCommit"
           :selected-file-idx="historyStore.selectedFileDiffIndex"
           @select-file="onSelectFile"
+          @show-file-history="openFileHistory"
         />
       </div>
 
@@ -1235,6 +1250,14 @@ onUnmounted(() => {
     class="commit-tooltip"
     :style="{ left: commitTooltip.x + 'px', top: commitTooltip.y + 'px' }"
   >{{ commitTooltip.text }}</div>
+
+  <!-- 文件历史 / Blame 模态框 -->
+  <FileHistoryModal
+    v-if="fileHistoryModal.visible"
+    :file-path="fileHistoryModal.filePath"
+    :initial-mode="fileHistoryModal.mode"
+    @close="fileHistoryModal.visible = false"
+  />
 </template>
 
 <style scoped>

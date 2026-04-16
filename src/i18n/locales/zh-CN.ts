@@ -574,6 +574,17 @@ const messages = {
       versionLabel: '版本：',
     },
   },
+  fileHistory: {
+    tabs: { history: '历史', blame: 'Blame' },
+    menu: { history: '查看文件历史', blame: '查看 Blame' },
+    loading: '加载中…',
+    loadMore: '加载更多',
+    noHistory: '该文件没有提交历史',
+    noBlame: '无法加载 Blame',
+    blameLoading: '正在计算 Blame…',
+    selectCommit: '选择左侧提交以查看变更',
+    notCommitted: '未提交',
+  },
   errors: {
     generic: {
       repoNotFound: '仓库不存在或不是 Git 仓库',

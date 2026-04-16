@@ -63,10 +63,13 @@ pub fn run() {
             // Log
             get_log,
             get_commit_detail,
+            get_file_log,
             // Diff
             get_file_diff,
             get_blob_bytes,
             read_worktree_file,
+            get_file_diff_at_commit,
+            get_file_blame,
             // Branch
             list_branches,
             create_branch,

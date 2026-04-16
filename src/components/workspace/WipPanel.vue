@@ -23,6 +23,10 @@ const repoStore = useRepoStore()
 const settingsStore = useSettingsStore()
 const git = useGitCommands()
 
+const emit = defineEmits<{
+  showFileHistory: [payload: { filePath: string; mode: 'history' | 'blame' }]
+}>()
+
 // ── 头部统计 ──────────────────────────────────────────────────────
 const totalCount = computed(() => {
   const s = workspaceStore.status
@@ -122,6 +126,9 @@ const fileMenuItems = computed<ContextMenuItem[]>(() => {
       danger: true,
       disabled: f.staged,
     },
+    { separator: true },
+    { label: t('fileHistory.menu.history'), action: 'file-history', disabled: f.status === 'untracked' },
+    { label: t('fileHistory.menu.blame'), action: 'file-blame', disabled: f.status === 'untracked' || f.status === 'deleted' },
   ]
 })
 
@@ -168,6 +175,10 @@ async function onFileMenuAction(action: string) {
       if (selectedPath.value === f.path) {
         selectedPath.value = null
       }
+    } else if (action === 'file-history') {
+      emit('showFileHistory', { filePath: f.path, mode: 'history' })
+    } else if (action === 'file-blame') {
+      emit('showFileHistory', { filePath: f.path, mode: 'blame' })
     }
   } catch (e) {
     alert(String(e))

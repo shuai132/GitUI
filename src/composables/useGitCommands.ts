@@ -3,8 +3,10 @@ import type {
   RepoMeta,
   WorkspaceStatus,
   CommitDetail,
+  CommitInfo,
   LogPage,
   FileDiff,
+  FileBlame,
   BlobData,
   BranchInfo,
   SubmoduleInfo,
@@ -132,6 +134,9 @@ export function useGitCommands() {
   const getCommitDetail = (repoId: string, oid: string) =>
     call<CommitDetail>('get_commit_detail', { repoId, oid })
 
+  const getFileLog = (repoId: string, filePath: string, offset: number, limit: number) =>
+    call<CommitInfo[]>('get_file_log', { repoId, filePath, offset, limit })
+
   // ---- Diff ----
   const getFileDiff = (repoId: string, filePath: string, staged: boolean) =>
     call<FileDiff>('get_file_diff', { repoId, filePath, staged })
@@ -141,6 +146,12 @@ export function useGitCommands() {
 
   const readWorktreeFile = (repoId: string, relPath: string) =>
     call<BlobData>('read_worktree_file', { repoId, relPath })
+
+  const getFileDiffAtCommit = (repoId: string, filePath: string, oid: string) =>
+    call<FileDiff>('get_file_diff_at_commit', { repoId, filePath, oid })
+
+  const getFileBlame = (repoId: string, filePath: string) =>
+    call<FileBlame>('get_file_blame', { repoId, filePath })
 
   // ---- Branch ----
   const listBranches = (repoId: string) =>
@@ -316,9 +327,12 @@ export function useGitCommands() {
     createTag,
     getLog,
     getCommitDetail,
+    getFileLog,
     getFileDiff,
     getBlobBytes,
     readWorktreeFile,
+    getFileDiffAtCommit,
+    getFileBlame,
     listBranches,
     createBranch,
     switchBranch,

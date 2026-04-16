@@ -1,7 +1,7 @@
 use tauri::State;
 
 use crate::{
-    git::{engine::GitEngine, error::GitError, types::{CommitDetail, LogPage}},
+    git::{engine::GitEngine, error::GitError, types::{CommitDetail, CommitInfo, LogPage}},
     repo_manager::RepoManager,
 };
 
@@ -32,4 +32,19 @@ pub async fn get_commit_detail(
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
     GitEngine::get_commit_detail(&meta.path, &oid)
+}
+
+#[tauri::command]
+pub async fn get_file_log(
+    repo_id: String,
+    file_path: String,
+    offset: usize,
+    limit: usize,
+    repo_manager: State<'_, RepoManager>,
+) -> Result<Vec<CommitInfo>, GitError> {
+    let meta = repo_manager
+        .get_meta(&repo_id)
+        .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
+    let limit = limit.min(200);
+    GitEngine::get_file_log(&meta.path, &file_path, offset, limit)
 }
