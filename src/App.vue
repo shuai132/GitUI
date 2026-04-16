@@ -158,20 +158,35 @@ function toggleSidebar() {
 }
 
 // Listen for file system changes and refresh status
-onStatusChanged((repoId) => {
-  if (repoId === repoStore.activeRepoId) {
-    workspaceStore.refresh(repoId)
-    submodulesStore.loadSubmodules()
-    // WIP 模式下右侧 diff 也要跟着工作区内容自动刷新；
-    // diffStore.refresh 在 currentPath === null 时是 no-op，非 WIP 场景安全。
-    diffStore.refresh()
-    // 外部 git 操作（命令行 commit/push/fetch/switch/stash 等）也会触发此事件，
-    // 需要同步刷新 history、branches 和 stash
-    historyStore.loadLog()
-    historyStore.loadBranches()
-    historyStore.loadTags()
-    stashStore.refresh()
+onStatusChanged(async (repoId) => {
+  if (repoId !== repoStore.activeRepoId) return
+
+  // 先等 status 刷新完，再决定 diff 怎么处理——
+  // 这样可以判断当前预览的文件是否还存在，避免对已消失的文件发起加载
+  await workspaceStore.refresh(repoId)
+  submodulesStore.loadSubmodules()
+
+  // WIP diff 刷新：currentPath 仍在新 status 里才 refresh，否则 clear
+  if (diffStore.currentPath) {
+    const s = workspaceStore.status
+    const allPaths = [
+      ...(s?.staged ?? []),
+      ...(s?.unstaged ?? []),
+      ...(s?.untracked ?? []),
+    ].map((f) => f.path)
+    if (allPaths.includes(diffStore.currentPath)) {
+      diffStore.refresh()
+    } else {
+      diffStore.clear()
+    }
   }
+
+  // 外部 git 操作（命令行 commit/push/fetch/switch/stash 等）也会触发此事件，
+  // 需要同步刷新 history、branches 和 stash
+  historyStore.loadLog()
+  historyStore.loadBranches()
+  historyStore.loadTags()
+  stashStore.refresh()
 })
 
 // Terminal 面板 mount-once：首次显示后一直保留在 DOM 里，
