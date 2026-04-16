@@ -182,8 +182,12 @@ export function useGitCommands() {
   const fetchRemote = (repoId: string, remoteName: string) =>
     call<void>('fetch_remote', { repoId, remoteName })
 
-  const pushBranch = (repoId: string, remoteName: string, branchName: string) =>
-    call<void>('push_branch', { repoId, remoteName, branchName })
+  const pushBranch = (
+    repoId: string,
+    remoteName: string,
+    branchName: string,
+    mode: 'normal' | 'force' | 'force_with_lease',
+  ) => call<void>('push_branch', { repoId, remoteName, branchName, mode })
 
   const pushTag = (repoId: string, remoteName: string, tagName: string) =>
     call<void>('push_tag', { repoId, remoteName, tagName })

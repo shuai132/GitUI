@@ -82,6 +82,11 @@ const PATTERNS: Array<{ test: (msg: string) => boolean; build: (msg: string) => 
     test: (m) => /reference .* not found|no such (branch|reference)/i.test(m),
     build: () => ({ key: 'errors.ref.notFound' }),
   },
+  // force-with-lease 被拒（远端已有新 commit）
+  {
+    test: (m) => /stale info|fetch first/i.test(m),
+    build: () => ({ key: 'errors.push.forceWithLeaseRejected' }),
+  },
   // 非 fast-forward
   {
     test: (m) => /non[- ]?fast[- ]?forward|cannot fast-forward/i.test(m),

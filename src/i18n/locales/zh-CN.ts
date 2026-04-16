@@ -21,6 +21,7 @@ const messages = {
       pull: 'Pull (fetch + merge)',
       pullModeSelect: '选择 Pull 模式',
       push: 'Push 当前分支',
+      pushModeSelect: '选择 Push 模式',
       fetch: '从远端抓取（不合并）',
       stash: 'Stash 当前工作区',
       stashEmpty: '没有可 stash 的变更',
@@ -41,6 +42,11 @@ const messages = {
       ff: 'Pull (fast-forward if possible)',
       ffOnly: 'Pull (fast-forward only)',
       rebase: 'Pull (rebase)',
+    },
+    pushMode: {
+      normal: 'Push',
+      forceWithLease: 'Push (--force-with-lease，安全强推)',
+      force: 'Push (--force，强制覆盖)',
     },
     actionsMenu: {
       showUnreachable: '显示悬垂引用',
@@ -564,7 +570,10 @@ const messages = {
       alreadyExists: '目标已存在（分支 / 标签 / 引用名重复）',
       notFound: '找不到指定的分支或引用',
     },
-    push: { nonFastForward: '不是 fast-forward：远端有新的 commit，需要先 pull / merge' },
+    push: {
+      nonFastForward: '不是 fast-forward：远端有新的 commit，需要先 pull / merge',
+      forceWithLeaseRejected: 'Force-with-lease 被拒：远端已有新的 commit（他人已推送），请先 fetch',
+    },
     pull: {
       mergeRequired: 'Pull 需要合并（非 fast-forward），当前版本尚未支持——请在终端手动 merge',
       diverged: 'Pull 失败：远端分支已分叉，无法 fast-forward。请使用 merge 或 rebase 模式',

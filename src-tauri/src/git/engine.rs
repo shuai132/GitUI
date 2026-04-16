@@ -1089,20 +1089,44 @@ impl GitEngine {
         Ok(())
     }
 
-    pub fn push(path: &str, remote_name: &str, branch_name: &str) -> GitResult<()> {
-        log::debug!("[engine::push] opening repo at {path}");
+    /// mode: "normal" | "force" | "force_with_lease"
+    pub fn push(path: &str, remote_name: &str, branch_name: &str, mode: &str) -> GitResult<()> {
+        log::debug!("[engine::push] mode={mode} remote={remote_name} branch={branch_name}");
+
+        if mode == "force_with_lease" {
+            return Self::push_force_with_lease(path, remote_name, branch_name);
+        }
+
         let repo = Self::open(path)?;
-        log::debug!("[engine::push] finding remote {remote_name}");
         let mut remote = repo.find_remote(remote_name)?;
         let mut callbacks = git2::RemoteCallbacks::new();
         callbacks.credentials(make_credentials_callback());
         let mut push_opts = git2::PushOptions::new();
         push_opts.remote_callbacks(callbacks);
-        let refspec = format!("refs/heads/{}:refs/heads/{}", branch_name, branch_name);
+        let refspec = if mode == "force" {
+            format!("+refs/heads/{branch_name}:refs/heads/{branch_name}")
+        } else {
+            format!("refs/heads/{branch_name}:refs/heads/{branch_name}")
+        };
         log::debug!("[engine::push] pushing refspec={refspec}");
         remote.push(&[&refspec], Some(&mut push_opts))?;
         log::debug!("[engine::push] done");
         Ok(())
+    }
+
+    fn push_force_with_lease(path: &str, remote_name: &str, branch_name: &str) -> GitResult<()> {
+        log::debug!("[engine::push_force_with_lease] remote={remote_name} branch={branch_name}");
+        let output = std::process::Command::new("git")
+            .args(["-C", path, "push", "--force-with-lease", remote_name, branch_name])
+            .output()
+            .map_err(|e| GitError::OperationFailed(format!("Failed to spawn git: {e}")))?;
+
+        if output.status.success() {
+            Ok(())
+        } else {
+            let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+            Err(GitError::OperationFailed(stderr))
+        }
     }
 
     /// 推送一个本地 tag 到远端。refspec `refs/tags/<name>:refs/tags/<name>`。

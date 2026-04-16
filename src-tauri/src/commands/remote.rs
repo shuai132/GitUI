@@ -25,13 +25,14 @@ pub async fn push_branch(
     repo_id: String,
     remote_name: String,
     branch_name: String,
+    mode: String,
     repo_manager: State<'_, RepoManager>,
 ) -> Result<(), GitError> {
-    log::debug!("[push_branch] remote={remote_name} branch={branch_name}");
+    log::debug!("[push_branch] remote={remote_name} branch={branch_name} mode={mode}");
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    let result = GitEngine::push(&meta.path, &remote_name, &branch_name);
+    let result = GitEngine::push(&meta.path, &remote_name, &branch_name, &mode);
     log::debug!("[push_branch] result={result:?}");
     result
 }

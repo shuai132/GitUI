@@ -133,6 +133,57 @@ function onPullModeSelect(action: string) {
   setPullMode(action as PullMode)
 }
 
+// ── Push 模式 ─────────────────────────────────────────────────────
+type PushMode = 'normal' | 'force_with_lease' | 'force'
+const PUSH_MODE_KEY = 'gitui.push.mode'
+const pushMode = ref<PushMode>(
+  (localStorage.getItem(PUSH_MODE_KEY) as PushMode) || 'normal',
+)
+
+function setPushMode(mode: PushMode) {
+  pushMode.value = mode
+  localStorage.setItem(PUSH_MODE_KEY, mode)
+}
+
+const pushModeMenu = reactive({
+  visible: false,
+  x: 0,
+  y: 0,
+})
+
+const pushModeMenuItems = computed<ContextMenuItem[]>(() => [
+  {
+    label: `${pushMode.value === 'normal' ? '● ' : '○ '}${t('toolbar.pushMode.normal')}`,
+    action: 'normal',
+  },
+  {
+    label: `${pushMode.value === 'force_with_lease' ? '● ' : '○ '}${t('toolbar.pushMode.forceWithLease')}`,
+    action: 'force_with_lease',
+  },
+  {
+    label: `${pushMode.value === 'force' ? '● ' : '○ '}${t('toolbar.pushMode.force')}`,
+    action: 'force',
+  },
+])
+
+function onPushChevronClick(e: MouseEvent) {
+  e.stopPropagation()
+  if (pushModeMenu.visible) {
+    pushModeMenu.visible = false
+    return
+  }
+  const el = e.currentTarget as HTMLElement
+  const rect = el.getBoundingClientRect()
+  pushModeMenu.x = rect.left
+  pushModeMenu.y = rect.bottom + 4
+  pushModeMenu.visible = true
+}
+
+function onPushModeSelect(action: string) {
+  pushModeMenu.visible = false
+  setPushMode(action as PushMode)
+}
+
 const showReflogDialog = ref(false)
 const showErrorHistoryDialog = ref(false)
 const showAboutDialog = ref(false)
@@ -315,7 +366,7 @@ async function onPush(e: MouseEvent) {
   }
   busy.push = true
   try {
-    await git.pushBranch(id, remote, branch)
+    await git.pushBranch(id, remote, branch, pushMode.value)
     await historyStore.loadBranches()
   } catch {
     /* toast 由 errorsStore watch 统一处理 */
@@ -589,21 +640,34 @@ async function handleDblClick(e: MouseEvent) {
         </button>
       </div>
 
-      <!-- Push -->
-      <button
-        class="btn-tool"
-        :title="t('toolbar.title.push')"
-        :disabled="!canRemoteOp || busy.push"
-        @click="onPush($event)"
-      >
-        <span v-if="busy.push" class="spinner" />
-        <svg v-else width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <line x1="12" y1="21" x2="12" y2="9"/>
-          <polyline points="18 15 12 9 6 15"/>
-          <line x1="6" y1="3" x2="18" y2="3"/>
-        </svg>
-        <span>Push</span>
-      </button>
+      <!-- Push (split button: main + chevron) -->
+      <div class="btn-tool-group">
+        <button
+          class="btn-tool btn-tool--main"
+          :title="t('toolbar.title.push')"
+          :disabled="!canRemoteOp || busy.push"
+          @click="onPush($event)"
+        >
+          <span v-if="busy.push" class="spinner" />
+          <svg v-else width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="12" y1="21" x2="12" y2="9"/>
+            <polyline points="18 15 12 9 6 15"/>
+            <line x1="6" y1="3" x2="18" y2="3"/>
+          </svg>
+          <span>Push</span>
+        </button>
+        <button
+          class="btn-tool btn-tool--chevron"
+          :title="t('toolbar.title.pushModeSelect')"
+          data-menu-anchor
+          :disabled="!canRemoteOp || busy.push"
+          @click="onPushChevronClick($event)"
+        >
+          <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <polyline points="6 9 12 15 18 9"/>
+          </svg>
+        </button>
+      </div>
 
       <!-- Stash -->
       <button
@@ -840,6 +904,16 @@ async function handleDblClick(e: MouseEvent) {
       :items="pullModeMenuItems"
       @close="pullModeMenu.visible = false"
       @select="onPullModeSelect"
+    />
+
+    <!-- Push 模式选择菜单 -->
+    <ContextMenu
+      :visible="pushModeMenu.visible"
+      :x="pushModeMenu.x"
+      :y="pushModeMenu.y"
+      :items="pushModeMenuItems"
+      @close="pushModeMenu.visible = false"
+      @select="onPushModeSelect"
     />
   </div>
 </template>

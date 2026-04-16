@@ -21,6 +21,7 @@ const messages = {
       pull: 'Pull (fetch + merge)',
       pullModeSelect: 'Choose Pull mode',
       push: 'Push current branch',
+      pushModeSelect: 'Choose Push mode',
       fetch: 'Fetch from remote (no merge)',
       stash: 'Stash current working tree',
       stashEmpty: 'Nothing to stash',
@@ -41,6 +42,11 @@ const messages = {
       ff: 'Pull (fast-forward if possible)',
       ffOnly: 'Pull (fast-forward only)',
       rebase: 'Pull (rebase)',
+    },
+    pushMode: {
+      normal: 'Push',
+      forceWithLease: 'Push (--force-with-lease, safe force)',
+      force: 'Push (--force, overwrite remote)',
     },
     actionsMenu: {
       showUnreachable: 'Show dangling refs',
@@ -564,7 +570,10 @@ const messages = {
       alreadyExists: 'Target already exists (branch / tag / reference name is taken)',
       notFound: 'The specified branch or reference was not found',
     },
-    push: { nonFastForward: 'Not a fast-forward: the remote has new commits, pull / merge first' },
+    push: {
+      nonFastForward: 'Not a fast-forward: the remote has new commits, pull / merge first',
+      forceWithLeaseRejected: 'Force-with-lease rejected: the remote has new commits (someone else pushed), fetch first',
+    },
     pull: {
       mergeRequired: 'Pull requires a merge (non fast-forward), which is not yet supported — please merge manually in the terminal',
       diverged: 'Pull failed: the remote branch has diverged and cannot be fast-forwarded. Use merge or rebase mode',
