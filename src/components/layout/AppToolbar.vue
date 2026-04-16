@@ -560,6 +560,8 @@ async function openUrl(url: string) {
   open(url)
 }
 
+const isMac = typeof navigator !== 'undefined' && /Mac/i.test(navigator.platform)
+
 // ── 顶部工具栏作为窗口拖动区域 ─────────────────────────────────────
 function handleDragStart(e: MouseEvent) {
   if (e.button !== 0) return
@@ -577,6 +579,7 @@ async function handleDblClick(e: MouseEvent) {
 <template>
   <div
     class="toolbar"
+    :class="{ 'toolbar--mac': isMac }"
     data-tauri-drag-region
     @mousedown="handleDragStart"
     @dblclick="handleDblClick"
@@ -930,9 +933,12 @@ async function handleDblClick(e: MouseEvent) {
   border-bottom: 1px solid var(--border);
   gap: 8px;
   flex-shrink: 0;
-  /* macOS traffic lights 让出 78px 空间 */
-  padding-left: 78px;
   position: relative;
+}
+
+/* macOS traffic lights 让出 78px 空间 */
+.toolbar--mac {
+  padding-left: 78px;
 }
 
 .toolbar-sep {

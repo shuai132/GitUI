@@ -13,8 +13,7 @@ use commands::{
 use commands::system::StartupRepo;
 use repo_manager::RepoManager;
 use terminal::TerminalManager;
-use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
-use tauri::{Emitter, Manager, WindowEvent};
+use tauri::WindowEvent;
 use watcher::WatcherService;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -119,63 +118,6 @@ pub fn run() {
             terminal_resize,
             terminal_close,
         ])
-        .menu(|app| {
-            // App submenu: 用自定义 About 替代系统默认的 About
-            let about = MenuItem::with_id(app, "about", "关于 GitUI", true, None::<&str>)?;
-            let app_submenu = Submenu::with_items(
-                app,
-                "GitUI",
-                true,
-                &[
-                    &about,
-                    &PredefinedMenuItem::separator(app)?,
-                    &PredefinedMenuItem::hide(app, Some("隐藏 GitUI"))?,
-                    &PredefinedMenuItem::hide_others(app, Some("隐藏其他"))?,
-                    &PredefinedMenuItem::show_all(app, Some("显示全部"))?,
-                    &PredefinedMenuItem::separator(app)?,
-                    &PredefinedMenuItem::quit(app, Some("退出 GitUI"))?,
-                ],
-            )?;
-
-            // Edit submenu: 保留剪切/复制/粘贴等标准操作
-            let edit_submenu = Submenu::with_items(
-                app,
-                "Edit",
-                true,
-                &[
-                    &PredefinedMenuItem::undo(app, None)?,
-                    &PredefinedMenuItem::redo(app, None)?,
-                    &PredefinedMenuItem::separator(app)?,
-                    &PredefinedMenuItem::cut(app, None)?,
-                    &PredefinedMenuItem::copy(app, None)?,
-                    &PredefinedMenuItem::paste(app, None)?,
-                    &PredefinedMenuItem::separator(app)?,
-                    &PredefinedMenuItem::select_all(app, None)?,
-                ],
-            )?;
-
-            // Window submenu
-            let window_submenu = Submenu::with_items(
-                app,
-                "Window",
-                true,
-                &[
-                    &PredefinedMenuItem::minimize(app, None)?,
-                    &PredefinedMenuItem::fullscreen(app, None)?,
-                ],
-            )?;
-
-            Menu::with_items(app, &[&app_submenu, &edit_submenu, &window_submenu])
-        })
-        .on_menu_event(|app, event| {
-            if event.id.as_ref() == "about" {
-                if let Some(window) = app.get_webview_window("main") {
-                    let _ = window.show();
-                    let _ = window.set_focus();
-                    let _ = window.emit("show-about", ());
-                }
-            }
-        })
         .setup(|app| {
             logger::init();
             logger::set_app_handle(app.handle().clone());
