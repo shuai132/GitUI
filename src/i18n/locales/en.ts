@@ -44,9 +44,8 @@ const messages = {
       rebase: 'Pull (rebase)',
     },
     pushMode: {
-      normal: 'Push',
-      forceWithLease: 'Push (--force-with-lease, safe force)',
-      force: 'Push (--force, overwrite remote)',
+      forceWithLease: 'Push --force-with-lease (safe force)',
+      force: 'Push --force (overwrite remote)',
     },
     actionsMenu: {
       showUnreachable: 'Show dangling refs',

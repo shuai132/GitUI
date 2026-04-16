@@ -44,9 +44,8 @@ const messages = {
       rebase: 'Pull (rebase)',
     },
     pushMode: {
-      normal: 'Push',
-      forceWithLease: 'Push (--force-with-lease，安全强推)',
-      force: 'Push (--force，强制覆盖)',
+      forceWithLease: 'Push --force-with-lease（安全强推）',
+      force: 'Push --force（强制覆盖）',
     },
     actionsMenu: {
       showUnreachable: '显示悬垂引用',

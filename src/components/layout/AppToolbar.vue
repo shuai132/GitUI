@@ -133,17 +133,8 @@ function onPullModeSelect(action: string) {
   setPullMode(action as PullMode)
 }
 
-// ── Push 模式 ─────────────────────────────────────────────────────
+// ── Push 下拉（单次执行，不持久化） ────────────────────────────────
 type PushMode = 'normal' | 'force_with_lease' | 'force'
-const PUSH_MODE_KEY = 'gitui.push.mode'
-const pushMode = ref<PushMode>(
-  (localStorage.getItem(PUSH_MODE_KEY) as PushMode) || 'normal',
-)
-
-function setPushMode(mode: PushMode) {
-  pushMode.value = mode
-  localStorage.setItem(PUSH_MODE_KEY, mode)
-}
 
 const pushModeMenu = reactive({
   visible: false,
@@ -152,18 +143,8 @@ const pushModeMenu = reactive({
 })
 
 const pushModeMenuItems = computed<ContextMenuItem[]>(() => [
-  {
-    label: `${pushMode.value === 'normal' ? '● ' : '○ '}${t('toolbar.pushMode.normal')}`,
-    action: 'normal',
-  },
-  {
-    label: `${pushMode.value === 'force_with_lease' ? '● ' : '○ '}${t('toolbar.pushMode.forceWithLease')}`,
-    action: 'force_with_lease',
-  },
-  {
-    label: `${pushMode.value === 'force' ? '● ' : '○ '}${t('toolbar.pushMode.force')}`,
-    action: 'force',
-  },
+  { label: t('toolbar.pushMode.forceWithLease'), action: 'force_with_lease' },
+  { label: t('toolbar.pushMode.force'), action: 'force' },
 ])
 
 function onPushChevronClick(e: MouseEvent) {
@@ -181,7 +162,7 @@ function onPushChevronClick(e: MouseEvent) {
 
 function onPushModeSelect(action: string) {
   pushModeMenu.visible = false
-  setPushMode(action as PushMode)
+  doPush(action as PushMode)
 }
 
 const showReflogDialog = ref(false)
@@ -354,11 +335,14 @@ async function onPull(e: MouseEvent) {
 
 // ── Push ────────────────────────────────────────────────────────────
 async function onPush(e: MouseEvent) {
+  await doPush('normal', (e.currentTarget as HTMLElement | null)?.getBoundingClientRect())
+}
+
+async function doPush(mode: PushMode, anchorRect?: DOMRect) {
   const id = repoStore.activeRepoId
   const branch = currentBranch.value
   if (!id || !branch) return
-  const rect = (e.currentTarget as HTMLElement | null)?.getBoundingClientRect()
-  const remote = await pickRemote(rect)
+  const remote = await pickRemote(anchorRect)
   if (!remote) {
     const remotes = await git.listRemotes(id).catch(() => [])
     if (remotes.length === 0) showError(t('toolbar.noRemoteConfigured'))
@@ -366,7 +350,7 @@ async function onPush(e: MouseEvent) {
   }
   busy.push = true
   try {
-    await git.pushBranch(id, remote, branch, pushMode.value)
+    await git.pushBranch(id, remote, branch, mode)
     await historyStore.loadBranches()
   } catch {
     /* toast 由 errorsStore watch 统一处理 */
