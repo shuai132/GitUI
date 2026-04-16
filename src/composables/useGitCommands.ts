@@ -28,7 +28,7 @@ export function useGitCommands() {
    *
    * 每次调用同时记录到 debugStore（命令名、参数、耗时、结果）。
    */
-  async function call<T>(op: string, args?: Record<string, unknown>): Promise<T> {
+  async function call<T>(op: string, args?: Record<string, unknown>, opts?: { silent?: boolean }): Promise<T> {
     const dbg = debugStore.push(op, args)
     const start = performance.now()
     try {
@@ -38,6 +38,7 @@ export function useGitCommands() {
     } catch (raw) {
       const rawStr = typeof raw === 'string' ? raw : raw instanceof Error ? raw.message : JSON.stringify(raw)
       debugStore.reject(dbg.id, performance.now() - start, rawStr)
+      if (opts?.silent) throw raw
       const entry = errorsStore.push(op, raw)
       throw new Error(entry.friendly)
     }
@@ -141,11 +142,11 @@ export function useGitCommands() {
   const getFileDiff = (repoId: string, filePath: string, staged: boolean) =>
     call<FileDiff>('get_file_diff', { repoId, filePath, staged })
 
-  const getBlobBytes = (repoId: string, oid: string) =>
-    call<BlobData>('get_blob_bytes', { repoId, oid })
+  const getBlobBytes = (repoId: string, oid: string, silent = false) =>
+    call<BlobData>('get_blob_bytes', { repoId, oid }, { silent })
 
-  const readWorktreeFile = (repoId: string, relPath: string) =>
-    call<BlobData>('read_worktree_file', { repoId, relPath })
+  const readWorktreeFile = (repoId: string, relPath: string, silent = false) =>
+    call<BlobData>('read_worktree_file', { repoId, relPath }, { silent })
 
   const getFileDiffAtCommit = (repoId: string, filePath: string, oid: string) =>
     call<FileDiff>('get_file_diff_at_commit', { repoId, filePath, oid })

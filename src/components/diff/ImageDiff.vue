@@ -55,15 +55,15 @@ async function loadSide(side: 'old' | 'new') {
     let blob
     if (side === 'old') {
       if (!props.diff.old_blob_oid) return setMissing('old')
-      blob = await getBlobBytes(props.repoId, props.diff.old_blob_oid)
+      blob = await getBlobBytes(props.repoId, props.diff.old_blob_oid, true)
     } else {
       // For unstaged/untracked WIP files, always read from the worktree.
       // diff_index_to_workdir computes new_blob_oid on-the-fly but never writes
       // the object to the store, so getBlobBytes would fail with "object not found".
       if (props.wip && !props.wip.staged && props.diff.new_path) {
-        blob = await readWorktreeFile(props.repoId, props.diff.new_path)
+        blob = await readWorktreeFile(props.repoId, props.diff.new_path, true)
       } else if (props.diff.new_blob_oid) {
-        blob = await getBlobBytes(props.repoId, props.diff.new_blob_oid)
+        blob = await getBlobBytes(props.repoId, props.diff.new_blob_oid, true)
       } else {
         return setMissing('new')
       }
