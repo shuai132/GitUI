@@ -23,12 +23,20 @@ async function openUrl(url: string) {
 <template>
   <div class="about-content">
     <div class="about-icon">
-      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--accent-blue)" stroke-width="1.5">
-        <circle cx="12" cy="12" r="4"/>
-        <line x1="1.05" y1="12" x2="7" y2="12"/>
-        <line x1="17.01" y1="12" x2="22.96" y2="12"/>
-        <line x1="12" y1="1.05" x2="12" y2="7"/>
-        <line x1="12" y1="17.01" x2="12" y2="22.96"/>
+      <svg xmlns="http://www.w3.org/2000/svg" width="72" height="72" viewBox="0 0 512 512">
+        <rect width="512" height="512" rx="112" fill="#1e2030"/>
+        <line x1="186" y1="110" x2="186" y2="402" stroke="#494d64" stroke-width="6" stroke-linecap="round"/>
+        <path d="M 186 210 C 186 300, 326 260, 326 350" stroke="#494d64" stroke-width="6" fill="none" stroke-linecap="round"/>
+        <path d="M 326 350 C 326 390, 186 375, 186 402" stroke="#494d64" stroke-width="6" fill="none" stroke-linecap="round"/>
+        <circle cx="186" cy="402" r="26" fill="#1e2030" stroke="#f5a97f" stroke-width="5"/>
+        <circle cx="186" cy="402" r="13" fill="#f5a97f"/>
+        <circle cx="186" cy="210" r="20" fill="#1e2030" stroke="#8aadf4" stroke-width="5"/>
+        <circle cx="186" cy="210" r="10" fill="#8aadf4"/>
+        <circle cx="326" cy="350" r="22" fill="#1e2030" stroke="#a6da95" stroke-width="5"/>
+        <circle cx="326" cy="350" r="11" fill="#a6da95"/>
+        <circle cx="186" cy="110" r="30" fill="#1e2030" stroke="#c6a0f6" stroke-width="6"/>
+        <circle cx="186" cy="110" r="15" fill="#c6a0f6"/>
+        <circle cx="186" cy="110" r="40" fill="none" stroke="#c6a0f6" stroke-width="2" opacity="0.25"/>
       </svg>
     </div>
     <div class="about-name">GitUI</div>
@@ -98,12 +106,15 @@ async function openUrl(url: string) {
 }
 
 .about-link {
-  color: var(--accent-blue);
+  color: var(--text-muted);
   text-decoration: none;
   cursor: pointer;
+  border-bottom: 1px dashed var(--text-muted);
+  transition: color 0.15s, border-color 0.15s;
 }
 
 .about-link:hover {
-  text-decoration: underline;
+  color: var(--text-primary);
+  border-bottom-color: var(--text-primary);
 }
 </style>
