@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, reactive, computed, watch, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { CommitInfo, FileDiff, FileBlame, BlameHunk } from '@/types/git'
 import { useGitCommands } from '@/composables/useGitCommands'
 import { useRepoStore } from '@/stores/repos'
 import DiffView from '@/components/diff/DiffView.vue'
-import { formatTime } from '@/utils/format'
+import { formatTime, formatAbsoluteTime } from '@/utils/format'
 import { EXT_TO_LANG } from '@/lib/highlight'
 import { highlightLine } from '@/lib/highlight'
 import { GRAPH_COLORS } from '@/utils/graph'
@@ -139,6 +139,38 @@ onMounted(() => {
   else loadBlame()
 })
 
+// ── commit 悬停 tooltip ───────────────────────────────────────────────────
+const tooltip = reactive({ visible: false, x: 0, y: 0, text: '' })
+let tooltipTimer: ReturnType<typeof setTimeout> | null = null
+
+function showTooltip(e: MouseEvent, c: CommitInfo) {
+  if (tooltipTimer !== null) clearTimeout(tooltipTimer)
+  const text = [
+    c.message.trim(),
+    '',
+    `作者：${c.author_name} <${c.author_email}>`,
+    `时间：${formatAbsoluteTime(c.time)}`,
+    `提交：${c.oid}`,
+  ].join('\n')
+  tooltipTimer = setTimeout(() => {
+    tooltip.text = text
+    tooltip.x = e.clientX + 14
+    tooltip.y = e.clientY + 14
+    tooltip.visible = true
+  }, 400)
+}
+
+function moveTooltip(e: MouseEvent) {
+  if (!tooltip.visible) return
+  tooltip.x = e.clientX + 14
+  tooltip.y = e.clientY + 14
+}
+
+function hideTooltip() {
+  if (tooltipTimer !== null) { clearTimeout(tooltipTimer); tooltipTimer = null }
+  tooltip.visible = false
+}
+
 // ── 历史 tab 左右分割线拖动 ───────────────────────────────────────────────
 const listWidth = ref(280)
 
@@ -201,6 +233,9 @@ function onKeydown(e: KeyboardEvent) {
             class="commit-row"
             :class="{ selected: selectedCommit?.oid === c.oid }"
             @click="selectCommit(c)"
+            @mouseenter="showTooltip($event, c)"
+            @mousemove="moveTooltip"
+            @mouseleave="hideTooltip"
           >
             <span class="c-oid">{{ c.short_oid }}</span>
             <span class="c-summary">{{ c.summary }}</span>
@@ -261,6 +296,13 @@ function onKeydown(e: KeyboardEvent) {
       </div>
     </div>
   </div>
+
+  <!-- 悬停 tooltip -->
+  <div
+    v-if="tooltip.visible"
+    class="commit-tooltip"
+    :style="{ left: tooltip.x + 'px', top: tooltip.y + 'px' }"
+  >{{ tooltip.text }}</div>
 </template>
 
 <style scoped>
@@ -527,5 +569,21 @@ function onKeydown(e: KeyboardEvent) {
   color: var(--text-muted);
   font-size: 13px;
   text-align: center;
+}
+
+.commit-tooltip {
+  position: fixed;
+  z-index: 9999;
+  max-width: 520px;
+  padding: 8px 12px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: var(--font-sm);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  pointer-events: none;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
 }
 </style>
