@@ -52,6 +52,10 @@ function clearMultiSelect() {
 
 function onRowClick(e: MouseEvent, file: FileEntry, idx: number) {
   if (e.ctrlKey || e.metaKey) {
+    // 从单选状态切入多选时，先把当前单选项加入多选集
+    if (multiSelectedPaths.value.size === 0 && props.selectedPath) {
+      multiSelectedPaths.value.add(props.selectedPath)
+    }
     // Ctrl/Cmd+click：切换单项
     if (multiSelectedPaths.value.has(file.path)) {
       multiSelectedPaths.value.delete(file.path)
@@ -61,6 +65,10 @@ function onRowClick(e: MouseEvent, file: FileEntry, idx: number) {
     lastClickedIdx.value = idx
     emit('multiSelectChange', [...multiSelectedPaths.value])
   } else if (e.shiftKey && lastClickedIdx.value !== null) {
+    // 从单选状态切入区间选时，先把当前单选项加入多选集
+    if (multiSelectedPaths.value.size === 0 && props.selectedPath) {
+      multiSelectedPaths.value.add(props.selectedPath)
+    }
     // Shift+click：区间选
     const start = Math.min(lastClickedIdx.value, idx)
     const end = Math.max(lastClickedIdx.value, idx)
