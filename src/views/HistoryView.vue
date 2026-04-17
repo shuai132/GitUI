@@ -600,6 +600,9 @@ const rebaseOnto = ref<string | null>(null)
 const showDragDialog = ref(false)
 const dragSourceOid = ref<string | null>(null)
 const dragTargetOid = ref<string | null>(null)
+// 拖拽过程中的临时状态：源行变淡、目标行高亮，drop/dragend 时清零
+const draggingOid = ref<string | null>(null)
+const dragOverOid = ref<string | null>(null)
 
 function openMergeDialog(candidates: string[]) {
   mergeSourceCandidates.value = candidates
@@ -617,6 +620,7 @@ function onCommitDragStart(e: DragEvent, commit: CommitInfo | undefined) {
   if (!commit || commit.is_stash) return
   e.dataTransfer?.setData('text/plain', `gitui:commit:${commit.oid}`)
   if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move'
+  draggingOid.value = commit.oid
 }
 
 function onCommitDragOver(e: DragEvent, commit: CommitInfo | undefined) {
@@ -624,6 +628,10 @@ function onCommitDragOver(e: DragEvent, commit: CommitInfo | undefined) {
   if (!payload || !commit) return
   e.preventDefault()
   if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'
+  // dragover 高频触发，相等检查避免无效 reactivity；源自己不作为目标
+  if (commit.oid !== draggingOid.value && dragOverOid.value !== commit.oid) {
+    dragOverOid.value = commit.oid
+  }
 }
 
 function onCommitDrop(e: DragEvent, commit: CommitInfo | undefined) {
@@ -636,6 +644,14 @@ function onCommitDrop(e: DragEvent, commit: CommitInfo | undefined) {
   dragSourceOid.value = sourceOid
   dragTargetOid.value = commit.oid
   showDragDialog.value = true
+  draggingOid.value = null
+  dragOverOid.value = null
+}
+
+// 用户按 Esc 取消或拖到窗口外松手时 drop 不触发，靠 dragend 兜底清理
+function onCommitDragEnd() {
+  draggingOid.value = null
+  dragOverOid.value = null
 }
 
 function onDragDialogMerge() {
@@ -1106,6 +1122,8 @@ onUnmounted(() => {
                   selected: isSelected(vRow.index),
                   'commit-dim': filteredCommits[toRealIdx(vRow.index)]?.is_unreachable,
                   'commit-stash': filteredCommits[toRealIdx(vRow.index)]?.is_stash,
+                  'drag-target': dragOverOid === filteredCommits[toRealIdx(vRow.index)]?.oid,
+                  'drag-source': draggingOid === filteredCommits[toRealIdx(vRow.index)]?.oid,
                 }"
                 :style="{
                   position: 'absolute',
@@ -1119,6 +1137,7 @@ onUnmounted(() => {
                 @dragstart="onCommitDragStart($event, filteredCommits[toRealIdx(vRow.index)])"
                 @dragover="onCommitDragOver($event, filteredCommits[toRealIdx(vRow.index)])"
                 @drop="onCommitDrop($event, filteredCommits[toRealIdx(vRow.index)])"
+                @dragend="onCommitDragEnd"
               >
                 <!-- Graph column -->
                 <div class="col-graph" :style="{ width: graphColWidth + 'px' }">
@@ -1678,6 +1697,20 @@ onUnmounted(() => {
 
 .commit-row.selected {
   background: var(--row-selected-bg);
+}
+
+/* 拖拽视觉反馈：目标行浅绿高亮 + 绿色 outline，源行变淡 */
+.commit-row.drag-target {
+  background: var(--staged-accent-bg);
+  outline: 1px solid var(--accent-green);
+  outline-offset: -1px;
+}
+.commit-row.drag-source {
+  opacity: 0.45;
+}
+/* drop target 语义压过 selected 蓝底，避免拖到选中行看不出瞄准 */
+.commit-row.selected.drag-target {
+  background: var(--staged-accent-bg);
 }
 
 .commit-row.selected .commit-msg,
