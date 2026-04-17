@@ -24,6 +24,7 @@
 | [11-ipc.md](./11-ipc.md) | IPC 命令目录、Rust ↔ TypeScript 类型映射约定 |
 | [12-settings.md](./12-settings.md) | 设置模态：主题、字体、字号、accent 覆盖 |
 | [13-i18n.md](./13-i18n.md) | 国际化：vue-i18n 接入、auto 模式 locale 解析、key 命名、errorMap 集成 |
+| [14-icons.md](./14-icons.md) | 应用图标源图、HIG padding 规范、`tauri icon` 重建命令 |
 
 ## 阅读建议
 
