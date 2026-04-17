@@ -3,6 +3,7 @@ import { ref } from 'vue'
 import { LazyStore } from '@tauri-apps/plugin-store'
 import type { RepoMeta, WorkspaceStatus } from '@/types/git'
 import { useGitCommands } from '@/composables/useGitCommands'
+import { useRepoOpsStore } from './repoOps'
 
 // 持久化存储：记录打开过的仓库路径以及上次激活的路径
 const STORE_FILE = 'gitui-repos.json'
@@ -151,6 +152,8 @@ export const useRepoStore = defineStore('repos', () => {
     if (activeRepoId.value === repoId) {
       activeRepoId.value = repos.value[0]?.id ?? null
     }
+    // 顺手清掉工具栏按钮的 busy 标志桶，避免关闭的仓库在 map 里留僵尸条目
+    useRepoOpsStore().clearRepo(repoId)
     await persist()
   }
 

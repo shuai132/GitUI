@@ -9,6 +9,7 @@ import { useStashStore } from '@/stores/stash'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useUiStore } from '@/stores/ui'
 import { useErrorsStore } from '@/stores/errors'
+import { useRepoOpsStore } from '@/stores/repoOps'
 import { resolveExternalTerminalApp, useSettingsStore } from '@/stores/settings'
 import { useGitCommands } from '@/composables/useGitCommands'
 import { useRepoCreation } from '@/composables/useRepoCreation'
@@ -25,6 +26,7 @@ const stashStore = useStashStore()
 const workspaceStore = useWorkspaceStore()
 const uiStore = useUiStore()
 const errorsStore = useErrorsStore()
+const repoOpsStore = useRepoOpsStore()
 const settingsStore = useSettingsStore()
 const git = useGitCommands()
 const repoCreation = useRepoCreation()
@@ -74,14 +76,9 @@ watch(
 )
 
 // ── 每个按钮的 loading 状态 ────────────────────────────────────────
-const busy = reactive({
-  pull: false,
-  push: false,
-  stash: false,
-  pop: false,
-  fetch: false,
-  gc: false,
-})
+// 状态按 repoId 存在 repoOpsStore 里；这里的 computed 随 activeRepoId
+// 切换自动返回对应桶，模板沿用 busy.pull / busy.push 等写法。
+const busy = computed(() => repoOpsStore.getBusy(repoStore.activeRepoId))
 
 // ── Pull 模式 ─────────────────────────────────────────────────────
 type PullMode = 'ff' | 'ff_only' | 'rebase'
@@ -325,7 +322,7 @@ async function onPull(e: MouseEvent) {
     if (remotes.length === 0) showError(t('toolbar.noRemoteConfigured'))
     return
   }
-  busy.pull = true
+  repoOpsStore.setBusy(id, 'pull', true)
   try {
     await git.pullBranch(id, remote, branch, pullMode.value)
     await Promise.all([historyStore.loadLog(), historyStore.loadBranches()])
@@ -333,7 +330,7 @@ async function onPull(e: MouseEvent) {
   } catch {
     /* toast 由 errorsStore watch 统一处理 */
   } finally {
-    busy.pull = false
+    repoOpsStore.setBusy(id, 'pull', false)
   }
 }
 
@@ -352,7 +349,7 @@ async function doPush(mode: PushMode, anchorRect?: DOMRect) {
     if (remotes.length === 0) showError(t('toolbar.noRemoteConfigured'))
     return
   }
-  busy.push = true
+  repoOpsStore.setBusy(id, 'push', true)
   try {
     await git.pushBranch(id, remote, branch, mode)
     await historyStore.loadBranches()
@@ -360,14 +357,16 @@ async function doPush(mode: PushMode, anchorRect?: DOMRect) {
   } catch {
     /* toast 由 errorsStore watch 统一处理 */
   } finally {
-    busy.push = false
+    repoOpsStore.setBusy(id, 'push', false)
   }
 }
 
 // ── Stash / Pop ─────────────────────────────────────────────────────
 async function onStash() {
   if (!canStash.value) return
-  busy.stash = true
+  const id = repoStore.activeRepoId
+  if (!id) return
+  repoOpsStore.setBusy(id, 'stash', true)
   try {
     // 用 WipPanel 输入框里的提交信息当 stash message；空则回退到 libgit2 默认 "WIP on..."
     const draft = workspaceStore.commitDraft.trim()
@@ -377,19 +376,21 @@ async function onStash() {
   } catch {
     /* toast 由 errorsStore watch 统一处理 */
   } finally {
-    busy.stash = false
+    repoOpsStore.setBusy(id, 'stash', false)
   }
 }
 
 async function onPop() {
   if (!canStashPop.value) return
-  busy.pop = true
+  const id = repoStore.activeRepoId
+  if (!id) return
+  repoOpsStore.setBusy(id, 'pop', true)
   try {
     await stashStore.pop()
   } catch {
     /* toast 由 errorsStore watch 统一处理 */
   } finally {
-    busy.pop = false
+    repoOpsStore.setBusy(id, 'pop', false)
   }
 }
 
@@ -404,7 +405,7 @@ async function onFetch(e: MouseEvent) {
     if (remotes.length === 0) showError(t('toolbar.noRemoteConfigured'))
     return
   }
-  busy.fetch = true
+  repoOpsStore.setBusy(id, 'fetch', true)
   try {
     await git.fetchRemote(id, remote)
     // fetch 会带来新的远端 commits，log 也要刷新，
@@ -415,7 +416,7 @@ async function onFetch(e: MouseEvent) {
   } catch {
     /* toast 由 errorsStore watch 统一处理 */
   } finally {
-    busy.fetch = false
+    repoOpsStore.setBusy(id, 'fetch', false)
   }
 }
 
@@ -476,9 +477,9 @@ const actionsMenuItems = computed<ContextMenuItem[]>(() => [
     disabled: errorsStore.entries.length === 0,
   },
   {
-    label: busy.gc ? t('toolbar.actionsMenu.gcCleaning') : t('toolbar.actionsMenu.gc'),
+    label: busy.value.gc ? t('toolbar.actionsMenu.gcCleaning') : t('toolbar.actionsMenu.gc'),
     action: 'gc',
-    disabled: !hasRepo.value || busy.gc,
+    disabled: !hasRepo.value || busy.value.gc,
   },
   { separator: true },
   {
@@ -516,14 +517,14 @@ async function onActionsSelect(action: string) {
       break
     }
     case 'gc': {
-      busy.gc = true
+      repoOpsStore.setBusy(id, 'gc', true)
       try {
         const msg = await git.runGc(id)
         showToast('success', msg)
       } catch {
         /* toast 由 errorsStore watch 统一处理 */
       } finally {
-        busy.gc = false
+        repoOpsStore.setBusy(id, 'gc', false)
       }
       break
     }
