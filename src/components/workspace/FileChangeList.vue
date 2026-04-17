@@ -173,7 +173,7 @@ defineExpose({ scrollToIndex, clearMultiSelect })
             <path :d="statusIconMap[files[vRow.index].status]?.d ?? statusIconMap.untracked.d" />
           </svg>
           <span class="file-path" :title="files[vRow.index].path">
-            <span class="path-text">{{ files[vRow.index].path }}</span>
+            <span class="path-text"><bdi>{{ files[vRow.index].path }}</bdi></span>
           </span>
           <span
             class="file-stats"

@@ -263,7 +263,7 @@ async function onFileMenuAction(action: string) {
         >
           <path :d="statusIconMap[diffStatus(d)]?.d ?? statusIconMap.modified.d" />
         </svg>
-        <span class="file-name"><span class="path-text">{{ d.new_path ?? d.old_path ?? '' }}</span></span>
+        <span class="file-name"><span class="path-text"><bdi>{{ d.new_path ?? d.old_path ?? '' }}</bdi></span></span>
         <span class="file-stats">
           <span class="add">+{{ d.additions }}</span>
           <span class="del">-{{ d.deletions }}</span>

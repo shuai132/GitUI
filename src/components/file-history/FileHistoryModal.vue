@@ -216,7 +216,7 @@ function onKeydown(e: KeyboardEvent) {
             @click="activeTab = 'blame'"
           >{{ t('fileHistory.tabs.blame') }}</button>
         </div>
-        <span class="file-path-label" :title="filePath">{{ filePath }}</span>
+        <span class="file-path-label" :title="filePath"><bdi>{{ filePath }}</bdi></span>
         <button class="close-btn" @click="emit('close')">✕</button>
       </div>
 
