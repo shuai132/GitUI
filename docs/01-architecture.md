@@ -109,5 +109,5 @@ Hash 模式，两个主要路由：
 
 - **`Repository` 每次临时打开**：`git2::Repository` 不是 `Send`，而且 libgit2 内部会缓存索引；所以每次命令都 `open(path)` 而不是跨调用持有。开销可接受（纳秒级）
 - **主要状态放在前端 Pinia，而不是后端 `RepoManager`**：后端的 `RepoCacheEntry.status` 目前只是冗余字段，真实可视状态都从命令返回后缓存在 Pinia store。前端是单一事实来源
-- **关闭窗口 = 隐藏**：`lib.rs` 在 `WindowEvent::CloseRequested` 中调 `window.hide()` 并 `prevent_close()`；只有托盘菜单 "退出" 才真正退出
+- **关闭窗口 = 隐藏**：`lib.rs` 在 `WindowEvent::CloseRequested` 中调 `window.hide()` 并 `prevent_close()`；只有托盘菜单 "退出" 才真正退出。恢复窗口的三条路径：托盘左键（关闭默认菜单弹出，直接唤回）、托盘菜单 "显示窗口"、macOS Dock 图标点击（监听 `RunEvent::Reopen`）
 - **watcher 监控整个工作目录而非仅 `.git/`**：只监听 `.git/` 会漏掉 tracked 文件的手动编辑，无法触发状态刷新

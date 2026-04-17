@@ -16,6 +16,10 @@ use auto_fetch::AutoFetchService;
 use repo_manager::RepoManager;
 use terminal::TerminalManager;
 use tauri::{Manager, WindowEvent};
+// RunEvent::Reopen 仅在 macOS 的 tauri 枚举里存在（Dock 图标点击事件），
+// 在 Linux / Windows 上该变体不存在，需要 cfg 隔离 use 和匹配逻辑。
+#[cfg(target_os = "macos")]
+use tauri::RunEvent;
 use watcher::WatcherService;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -149,6 +153,16 @@ pub fn run() {
                 api.prevent_close();
             }
         })
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|_app, _event| {
+            // macOS: 点击 Dock 图标唤回隐藏窗口。其他平台无该事件，整段跳过。
+            #[cfg(target_os = "macos")]
+            if let RunEvent::Reopen { .. } = _event {
+                if let Some(window) = _app.get_webview_window("main") {
+                    let _ = window.show();
+                    let _ = window.set_focus();
+                }
+            }
+        });
 }
