@@ -315,7 +315,7 @@ impl GitEngine {
     ) -> GitResult<LogPage> {
         use std::collections::HashSet;
 
-        let mut repo = Self::open(path)?;
+        let repo = Self::open(path)?;
 
         // ── Step A: 收集所有 ref 可达的 oid 集合（用于判断 unreachable）
         let mut reachable: HashSet<git2::Oid> = HashSet::new();
@@ -335,11 +335,11 @@ impl GitEngine {
         // ── Step B: 收集所有 stash 的 oid 集合，以及 stash 的辅助 parent
         // （index / untracked 快照 commit），这些在用户视角里不该作为独立行出现。
         let mut stash_set: HashSet<git2::Oid> = HashSet::new();
-        repo.stash_foreach(|_, _, oid| {
-            stash_set.insert(*oid);
-            true
-        })
-        .ok();
+        if let Ok(entries) = Self::list_stashes(&repo) {
+            for (_, _, oid) in entries {
+                stash_set.insert(oid);
+            }
+        }
 
         // stash commit 是 3-parent 的特殊对象：
         //   parent[0] = HEAD（基准提交）
@@ -1994,7 +1994,7 @@ impl GitEngine {
     /// Pop 指定 index 的 stash（默认 0 即最新一条）；成功后该 stash 被移除。
     pub fn stash_pop(path: &str, index: usize) -> GitResult<()> {
         let mut repo = Self::open(path)?;
-        let count = Self::stash_count(&mut repo)?;
+        let count = Self::stash_count(&repo)?;
         if count == 0 {
             return Err(GitError::OperationFailed("没有可 pop 的 stash".to_string()));
         }
@@ -2011,7 +2011,7 @@ impl GitEngine {
     /// Apply 指定 index 的 stash，应用后保留该 stash（不移除）。
     pub fn stash_apply(path: &str, index: usize) -> GitResult<()> {
         let mut repo = Self::open(path)?;
-        let count = Self::stash_count(&mut repo)?;
+        let count = Self::stash_count(&repo)?;
         if count == 0 {
             return Err(GitError::OperationFailed(
                 "没有可 apply 的 stash".to_string(),
@@ -2030,7 +2030,7 @@ impl GitEngine {
     /// 删除指定 index 的 stash（不 apply）。
     pub fn stash_drop(path: &str, index: usize) -> GitResult<()> {
         let mut repo = Self::open(path)?;
-        let count = Self::stash_count(&mut repo)?;
+        let count = Self::stash_count(&repo)?;
         if count == 0 {
             return Err(GitError::OperationFailed("没有可删除的 stash".to_string()));
         }
@@ -2044,28 +2044,43 @@ impl GitEngine {
         Ok(())
     }
 
-    fn stash_count(repo: &mut Repository) -> GitResult<usize> {
-        let mut n = 0usize;
-        repo.stash_foreach(|_, _, _| {
-            n += 1;
-            true
-        })?;
-        Ok(n)
+    /// 枚举所有 stash —— 直接读 `refs/stash` reflog，语义与 libgit2 的
+    /// `git_stash_foreach` 一致。绕开 `git2::Repository::stash_foreach`
+    /// 是因为其内部 `CStr::from_ptr(msg).to_str().unwrap()` 会对非 UTF-8
+    /// stash message 直接 panic（Windows 上 GBK 等编码常见），这个 panic
+    /// 会跨 FFI 重新抛出并让 tokio worker 线程崩溃。
+    fn list_stashes(repo: &Repository) -> GitResult<Vec<(usize, String, git2::Oid)>> {
+        let reflog = match repo.reflog("refs/stash") {
+            Ok(r) => r,
+            Err(e) if e.code() == git2::ErrorCode::NotFound => return Ok(Vec::new()),
+            Err(e) => return Err(e.into()),
+        };
+        let mut out = Vec::with_capacity(reflog.len());
+        for (i, entry) in reflog.iter().enumerate() {
+            let msg = entry
+                .message_bytes()
+                .map(|b| String::from_utf8_lossy(b).into_owned())
+                .unwrap_or_default();
+            out.push((i, msg, entry.id_new()));
+        }
+        Ok(out)
+    }
+
+    fn stash_count(repo: &Repository) -> GitResult<usize> {
+        Ok(Self::list_stashes(repo)?.len())
     }
 
     /// 列出所有 stash 条目
     pub fn stash_list(path: &str) -> GitResult<Vec<StashEntry>> {
-        let mut repo = Self::open(path)?;
-        let mut out = Vec::new();
-        repo.stash_foreach(|index, msg, oid| {
-            out.push(StashEntry {
+        let repo = Self::open(path)?;
+        Ok(Self::list_stashes(&repo)?
+            .into_iter()
+            .map(|(index, message, oid)| StashEntry {
                 index,
-                message: msg.to_string(),
+                message,
                 commit_oid: oid.to_string(),
-            });
-            true
-        })?;
-        Ok(out)
+            })
+            .collect())
     }
 
     // ── Amend ──────────────────────────────────────────────────────────
