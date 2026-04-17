@@ -39,11 +39,30 @@ GitUI 的前后端通过 Tauri v2 的 IPC 通道通信：
 |------|------|------|
 | `get_status` | `repoId` | `WorkspaceStatus` |
 
-`get_status` 内部会额外做一次批量 diff（staged: tree→index, unstaged/untracked: index→workdir），为每个 `FileEntry` 填充 `additions`/`deletions` 行数统计。
+`get_status` 内部会额外做一次批量 diff（staged: tree→index, unstaged/untracked: index→workdir），为每个 `FileEntry` 填充 `additions`/`deletions` 行数统计。返回的 `WorkspaceStatus.repo_state` 同时携带 merge/rebase 中间态，供横幅/对话框消费（详见下方 Merge/Rebase/Conflict 节）。
 | `stage_file` | `repoId, filePath` | `void` |
 | `unstage_file` | `repoId, filePath` | `void` |
 | `stage_all` | `repoId` | `void` |
 | `unstage_all` | `repoId` | `void` |
+| `get_repo_state` | `repoId` | `RepoState`（单独查询，用于不需要文件列表的场景） |
+
+### Merge / Rebase / Conflict
+
+| 命令 | 参数 | 返回 |
+|------|------|------|
+| `merge_branch` | `repoId, sourceBranch, strategy: MergeStrategy, message?: string` | `void`（冲突时保留 MERGE_HEAD/MERGE_MSG，返回 OperationFailed） |
+| `merge_continue` | `repoId, message` | `void`（冲突解决后创建二父 merge commit） |
+| `merge_abort` | `repoId` | `void`（`reset --hard HEAD` + `cleanup_state`） |
+| `rebase_plan` | `repoId, upstream, onto?: string` | `RebaseTodoItem[]`（`upstream..HEAD` 的 commit 列表，默认全部 Pick；不执行任何操作） |
+| `rebase_start` | `repoId, upstream, onto?: string, todo?: RebaseTodoItem[]` | `void`（todo 为 null 时等价全部 Pick；冲突或 reword 暂停时保留中间态） |
+| `rebase_continue` | `repoId, amendedMessage?: string` | `void`（冲突解决后继续；`amendedMessage` 只对当前步是 Reword 时生效） |
+| `rebase_skip` | `repoId` | `void`（放弃当前步继续 rebase） |
+| `rebase_abort` | `repoId` | `void`（`Rebase::abort` 恢复 ORIG_HEAD） |
+| `get_conflict_file` | `repoId, filePath` | `ConflictFile`（读 index stage 1/2/3，二进制时 `is_binary=true`、文本字段为空） |
+| `mark_conflict_resolved` | `repoId, filePath, content` | `void`（写工作区文件 + `index.add_path` 替换 conflict stages） |
+| `checkout_conflict_side` | `repoId, filePath, side: 'ours'\|'theirs'` | `void`（从指定侧 stage 读 blob，落盘 + stage） |
+
+Rebase 的交互式 todo 通过 `.git/gitui-rebase-todo.json`（额外文件）持久化，配合 libgit2 原生的 `.git/rebase-merge/`。squash/fixup 在 commit 一步后立即把 HEAD 和前一步合并成一个 commit。
 
 ### Commit
 
@@ -172,6 +191,12 @@ GitUI 的前后端通过 Tauri v2 的 IPC 通道通信：
 | `SubmoduleState` enum | `'uninitialized' \| 'not_cloned' \| 'up_to_date' \| 'modified' \| 'not_found'` |
 | `SubmoduleInfo` | `SubmoduleInfo` |
 | `ReflogEntry` | `ReflogEntry` |
+| `RepoState`（含 `kind`、`merge_*`、`rebase_*` 字段） | `RepoState` |
+| `RepoStateKind` enum | `'clean' \| 'merge' \| 'rebase' \| 'rebase_interactive' \| 'rebase_merge' \| 'cherry_pick' \| 'revert' \| 'bisect' \| 'apply_mailbox'` |
+| `MergeStrategy` enum | `'auto' \| 'fast_forward' \| 'no_fast_forward' \| 'squash'` |
+| `RebaseActionKind` enum | `'pick' \| 'reword' \| 'squash' \| 'fixup' \| 'drop'` |
+| `RebaseTodoItem` | `RebaseTodoItem` |
+| `ConflictFile`（含 `base` / `ours` / `theirs` / `merged_preview` / `is_binary`） | `ConflictFile` |
 
 ## 事件通道
 

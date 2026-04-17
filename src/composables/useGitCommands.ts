@@ -13,6 +13,10 @@ import type {
   StashEntry,
   ReflogEntry,
   TagInfo,
+  RepoState,
+  MergeStrategy,
+  RebaseTodoItem,
+  ConflictFile,
 } from '@/types/git'
 import { useErrorsStore } from '@/stores/errors'
 import { useDebugStore } from '@/stores/debug'
@@ -83,6 +87,76 @@ export function useGitCommands() {
 
   const unstageAll = (repoId: string) =>
     call<void>('unstage_all', { repoId })
+
+  const getRepoState = (repoId: string) =>
+    call<RepoState>('get_repo_state', { repoId })
+
+  // ---- Merge / Rebase / Conflict ----
+  const mergeBranch = (
+    repoId: string,
+    sourceBranch: string,
+    strategy: MergeStrategy,
+    message: string | null,
+  ) =>
+    call<void>('merge_branch', {
+      repoId,
+      sourceBranch,
+      strategy,
+      message: message ?? null,
+    })
+
+  const mergeContinue = (repoId: string, message: string) =>
+    call<void>('merge_continue', { repoId, message })
+
+  const mergeAbort = (repoId: string) =>
+    call<void>('merge_abort', { repoId })
+
+  const rebasePlan = (repoId: string, upstream: string, onto: string | null) =>
+    call<RebaseTodoItem[]>('rebase_plan', {
+      repoId,
+      upstream,
+      onto: onto ?? null,
+    })
+
+  const rebaseStart = (
+    repoId: string,
+    upstream: string,
+    onto: string | null,
+    todo: RebaseTodoItem[] | null,
+  ) =>
+    call<void>('rebase_start', {
+      repoId,
+      upstream,
+      onto: onto ?? null,
+      todo: todo ?? null,
+    })
+
+  const rebaseContinue = (repoId: string, amendedMessage: string | null) =>
+    call<void>('rebase_continue', {
+      repoId,
+      amendedMessage: amendedMessage ?? null,
+    })
+
+  const rebaseSkip = (repoId: string) =>
+    call<void>('rebase_skip', { repoId })
+
+  const rebaseAbort = (repoId: string) =>
+    call<void>('rebase_abort', { repoId })
+
+  const getConflictFile = (repoId: string, filePath: string) =>
+    call<ConflictFile>('get_conflict_file', { repoId, filePath })
+
+  const markConflictResolved = (
+    repoId: string,
+    filePath: string,
+    content: string,
+  ) => call<void>('mark_conflict_resolved', { repoId, filePath, content })
+
+  const checkoutConflictSide = (
+    repoId: string,
+    filePath: string,
+    side: 'ours' | 'theirs',
+  ) => call<void>('checkout_conflict_side', { repoId, filePath, side })
 
   // ---- Commit ----
   const createCommit = (repoId: string, message: string) =>
@@ -318,6 +392,18 @@ export function useGitCommands() {
     unstageFile,
     stageAll,
     unstageAll,
+    getRepoState,
+    mergeBranch,
+    mergeContinue,
+    mergeAbort,
+    rebasePlan,
+    rebaseStart,
+    rebaseContinue,
+    rebaseSkip,
+    rebaseAbort,
+    getConflictFile,
+    markConflictResolved,
+    checkoutConflictSide,
     createCommit,
     amendCommit,
     amendCommitMessage,

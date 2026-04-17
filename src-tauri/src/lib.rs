@@ -8,8 +8,8 @@ mod tray;
 mod watcher;
 
 use commands::{
-    branch::*, commit::*, diff::*, log::*, remote::*, repo::*, stash::*, status::*, submodule::*,
-    system::*, tag::*, terminal::*,
+    branch::*, commit::*, diff::*, log::*, merge_rebase::*, remote::*, repo::*, stash::*,
+    status::*, submodule::*, system::*, tag::*, terminal::*,
 };
 use commands::system::StartupRepo;
 use auto_fetch::AutoFetchService;
@@ -53,6 +53,19 @@ pub fn run() {
             unstage_file,
             stage_all,
             unstage_all,
+            get_repo_state,
+            // Merge / Rebase / Conflict
+            merge_branch,
+            merge_continue,
+            merge_abort,
+            rebase_plan,
+            rebase_start,
+            rebase_continue,
+            rebase_skip,
+            rebase_abort,
+            get_conflict_file,
+            mark_conflict_resolved,
+            checkout_conflict_side,
             // Commit
             create_commit,
             amend_commit,

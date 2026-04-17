@@ -3,6 +3,7 @@ import { ref, watch } from 'vue'
 import type { WorkspaceStatus, FileEntry } from '@/types/git'
 import { useGitCommands } from '@/composables/useGitCommands'
 import { useRepoStore } from './repos'
+import { useMergeRebaseStore } from './mergeRebase'
 
 export const useWorkspaceStore = defineStore('workspace', () => {
   const status = ref<WorkspaceStatus | null>(null)
@@ -37,6 +38,8 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       // 此时 id 与当前活跃仓库不符，写入会污染新仓库的 status
       if (id !== repoStore.activeRepoId) return
       status.value = result
+      // 把后端顺带返回的 repo_state 同步到 mergeRebase store，供横幅/对话框消费
+      useMergeRebaseStore().setRepoState(result.repo_state)
       // Clear selected file if it no longer exists
       if (selectedFile.value) {
         const allFiles = [

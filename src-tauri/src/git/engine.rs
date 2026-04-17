@@ -209,6 +209,8 @@ impl GitEngine {
             }
         }
 
+        let repo_state = Self::build_repo_state(&repo);
+
         Ok(WorkspaceStatus {
             staged,
             unstaged,
@@ -217,6 +219,7 @@ impl GitEngine {
             head_commit,
             head_commit_message,
             is_detached,
+            repo_state,
         })
     }
 
@@ -477,6 +480,15 @@ impl GitEngine {
 
     pub fn get_file_diff(path: &str, file_path: &str, staged: bool) -> GitResult<FileDiff> {
         let repo = Self::open(path)?;
+
+        // 冲突文件：index 只有 stage 1/2/3，没有 stage 0，
+        // 走 diff_index_to_workdir 会被跳过导致返回空。改用 stage 2 blob 与工作区手动 diff。
+        if !staged {
+            if let Some(diff) = Self::try_conflict_diff(&repo, file_path)? {
+                return Ok(diff);
+            }
+        }
+
         let mut diff_opts = DiffOptions::new();
         diff_opts.pathspec(file_path);
 
@@ -508,6 +520,112 @@ impl GitEngine {
             additions: 0,
             deletions: 0,
             old_blob_oid: None,
+            new_blob_oid: None,
+        }))
+    }
+
+    /// 如果 `file_path` 是冲突文件，用 stage 2（ours）blob 与工作区内容做 diff。
+    /// 非冲突返回 Ok(None)，让调用方继续走原路径。
+    fn try_conflict_diff(
+        repo: &Repository,
+        file_path: &str,
+    ) -> GitResult<Option<FileDiff>> {
+        let index = repo.index()?;
+        let conflict = match index.conflicts() {
+            Ok(iter) => {
+                let mut found = None;
+                for c in iter {
+                    let c = c?;
+                    let p = c
+                        .ancestor
+                        .as_ref()
+                        .or(c.our.as_ref())
+                        .or(c.their.as_ref())
+                        .and_then(|e| std::str::from_utf8(&e.path).ok());
+                    if p == Some(file_path) {
+                        found = Some(c);
+                        break;
+                    }
+                }
+                found
+            }
+            Err(_) => None,
+        };
+        let conflict = match conflict {
+            Some(c) => c,
+            None => return Ok(None),
+        };
+
+        // "old" = ours（stage 2）、"new" = 工作区当前内容（含冲突标记）
+        let ours_blob = conflict
+            .our
+            .as_ref()
+            .and_then(|e| repo.find_blob(e.id).ok());
+        let old_bytes: Vec<u8> = ours_blob
+            .as_ref()
+            .map(|b| b.content().to_vec())
+            .unwrap_or_default();
+        let old_blob_oid = conflict.our.as_ref().map(|e| e.id.to_string());
+
+        let workdir = repo
+            .workdir()
+            .ok_or_else(|| GitError::OperationFailed("裸仓库不支持".to_string()))?;
+        let new_bytes = std::fs::read(workdir.join(file_path)).unwrap_or_default();
+
+        let is_binary = old_bytes.contains(&0) || new_bytes.contains(&0);
+
+        let mut hunks: Vec<DiffHunk> = Vec::new();
+        let mut additions = 0usize;
+        let mut deletions = 0usize;
+
+        if !is_binary {
+            let mut diff_opts = git2::DiffOptions::new();
+            diff_opts.context_lines(3).interhunk_lines(0);
+            let patch = git2::Patch::from_buffers(
+                &old_bytes,
+                Some(std::path::Path::new(file_path)),
+                &new_bytes,
+                Some(std::path::Path::new(file_path)),
+                Some(&mut diff_opts),
+            )?;
+            let num_hunks = patch.num_hunks();
+            for hi in 0..num_hunks {
+                let (hunk, num_lines) = patch.hunk(hi)?;
+                let mut cur = DiffHunk {
+                    old_start: hunk.old_start(),
+                    old_lines: hunk.old_lines(),
+                    new_start: hunk.new_start(),
+                    new_lines: hunk.new_lines(),
+                    header: String::from_utf8_lossy(hunk.header()).to_string(),
+                    lines: vec![],
+                };
+                for li in 0..num_lines {
+                    let line = patch.line_in_hunk(hi, li)?;
+                    let origin = line.origin();
+                    match origin {
+                        '+' => additions += 1,
+                        '-' => deletions += 1,
+                        _ => {}
+                    }
+                    cur.lines.push(DiffLine {
+                        origin,
+                        content: String::from_utf8_lossy(line.content()).to_string(),
+                        old_lineno: line.old_lineno(),
+                        new_lineno: line.new_lineno(),
+                    });
+                }
+                hunks.push(cur);
+            }
+        }
+
+        Ok(Some(FileDiff {
+            old_path: Some(file_path.to_string()),
+            new_path: Some(file_path.to_string()),
+            is_binary,
+            hunks,
+            additions,
+            deletions,
+            old_blob_oid,
             new_blob_oid: None,
         }))
     }
@@ -1565,23 +1683,74 @@ impl GitEngine {
         Ok(remotes.iter().flatten().map(|s| s.to_string()).collect())
     }
 
-    #[allow(dead_code)]
-    pub fn get_repo_state(path: &str) -> GitResult<String> {
+    pub fn get_repo_state(path: &str) -> GitResult<RepoState> {
         let repo = Self::open(path)?;
-        let state = match repo.state() {
-            RepositoryState::Clean => "clean",
-            RepositoryState::Merge => "merge",
-            RepositoryState::Revert | RepositoryState::RevertSequence => "revert",
-            RepositoryState::CherryPick | RepositoryState::CherryPickSequence => "cherry-pick",
-            RepositoryState::Bisect => "bisect",
-            RepositoryState::Rebase
-            | RepositoryState::RebaseInteractive
-            | RepositoryState::RebaseMerge => "rebase",
+        Ok(Self::build_repo_state(&repo))
+    }
+
+    /// 读取仓库当前状态（含 merge/rebase 的中间态元数据）。
+    /// 失败场景（读文件报错、路径不存在）统一降级为 Clean，避免阻断 `get_status` 主流程。
+    fn build_repo_state(repo: &Repository) -> RepoState {
+        let head_oid = repo
+            .head()
+            .ok()
+            .and_then(|h| h.peel_to_commit().ok())
+            .map(|c| c.id().to_string());
+
+        let kind = match repo.state() {
+            RepositoryState::Clean => RepoStateKind::Clean,
+            RepositoryState::Merge => RepoStateKind::Merge,
+            RepositoryState::Revert | RepositoryState::RevertSequence => RepoStateKind::Revert,
+            RepositoryState::CherryPick | RepositoryState::CherryPickSequence => {
+                RepoStateKind::CherryPick
+            }
+            RepositoryState::Bisect => RepoStateKind::Bisect,
+            RepositoryState::Rebase => RepoStateKind::Rebase,
+            RepositoryState::RebaseInteractive => RepoStateKind::RebaseInteractive,
+            RepositoryState::RebaseMerge => RepoStateKind::RebaseMerge,
             RepositoryState::ApplyMailbox | RepositoryState::ApplyMailboxOrRebase => {
-                "apply-mailbox"
+                RepoStateKind::ApplyMailbox
             }
         };
-        Ok(state.to_string())
+
+        let git_dir = repo.path().to_path_buf();
+
+        let mut merge_msg = None;
+        let mut merge_head = None;
+        if matches!(kind, RepoStateKind::Merge) {
+            merge_msg = read_trimmed_file(&git_dir.join("MERGE_MSG"));
+            merge_head = read_trimmed_file(&git_dir.join("MERGE_HEAD"))
+                .and_then(|s| s.lines().next().map(|l| l.trim().to_string()));
+        }
+
+        let (
+            rebase_onto,
+            rebase_orig_head,
+            rebase_head_name,
+            rebase_step,
+            rebase_total,
+            rebase_current_oid,
+        ) = if matches!(
+            kind,
+            RepoStateKind::Rebase | RepoStateKind::RebaseInteractive | RepoStateKind::RebaseMerge
+        ) {
+            read_rebase_state(&git_dir)
+        } else {
+            (None, None, None, None, None, None)
+        };
+
+        RepoState {
+            kind,
+            head_oid,
+            merge_msg,
+            merge_head,
+            rebase_onto,
+            rebase_orig_head,
+            rebase_head_name,
+            rebase_step,
+            rebase_total,
+            rebase_current_oid,
+        }
     }
 
     // ── Submodule 操作 ──────────────────────────────────────────────────
@@ -2265,4 +2434,44 @@ impl GitEngine {
             .map_err(|e| GitError::OperationFailed(format!("写入文件失败：{}", e)))?;
         Ok(())
     }
+}
+
+fn read_trimmed_file(p: &Path) -> Option<String> {
+    std::fs::read_to_string(p).ok().map(|s| s.trim().to_string()).filter(|s| !s.is_empty())
+}
+
+/// 读取 `.git/rebase-merge/*` 或 `.git/rebase-apply/*` 下的 rebase 中间态。
+/// 两套目录字段略有差异；返回 `(onto, orig_head, head_name, step, total, current_oid)`。
+fn read_rebase_state(
+    git_dir: &Path,
+) -> (
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    Option<u32>,
+    Option<u32>,
+    Option<String>,
+) {
+    let merge_dir = git_dir.join("rebase-merge");
+    let apply_dir = git_dir.join("rebase-apply");
+    let dir = if merge_dir.is_dir() {
+        merge_dir
+    } else if apply_dir.is_dir() {
+        apply_dir
+    } else {
+        return (None, None, None, None, None, None);
+    };
+
+    let onto = read_trimmed_file(&dir.join("onto"));
+    let orig_head = read_trimmed_file(&dir.join("orig-head"))
+        .or_else(|| read_trimmed_file(&dir.join("head")));
+    let head_name = read_trimmed_file(&dir.join("head-name"));
+    let current_oid = read_trimmed_file(&dir.join("stopped-sha"));
+
+    // rebase-apply: msgnum + end；rebase-merge: msgnum（1-based 已完成步）/ end，
+    // 或 done 文件行数 + git-rebase-todo 剩余行数（此处取 msgnum/end 足矣）
+    let step = read_trimmed_file(&dir.join("msgnum")).and_then(|s| s.parse::<u32>().ok());
+    let total = read_trimmed_file(&dir.join("end")).and_then(|s| s.parse::<u32>().ok());
+
+    (onto, orig_head, head_name, step, total, current_oid)
 }

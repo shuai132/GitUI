@@ -39,6 +39,111 @@ pub struct WorkspaceStatus {
     pub head_commit: Option<String>,
     pub head_commit_message: Option<String>,
     pub is_detached: bool,
+    #[serde(default = "RepoState::clean_default")]
+    pub repo_state: RepoState,
+}
+
+/// 仓库当前所处的"状态"：clean / merge 中 / rebase 中 / cherry-pick 中 / 等等。
+/// 来源：libgit2 `Repository::state()` + 读取 `.git/` 下的中间文件。
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum RepoStateKind {
+    Clean,
+    Merge,
+    Rebase,
+    RebaseInteractive,
+    RebaseMerge,
+    CherryPick,
+    Revert,
+    Bisect,
+    ApplyMailbox,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RepoState {
+    pub kind: RepoStateKind,
+    pub head_oid: Option<String>,
+    /// `.git/MERGE_MSG`（merge 模板消息）
+    pub merge_msg: Option<String>,
+    /// `.git/MERGE_HEAD` 的第一行（待合入的 commit oid）
+    pub merge_head: Option<String>,
+    /// rebase: `.git/rebase-merge/onto` 或 `.git/rebase-apply/onto`
+    pub rebase_onto: Option<String>,
+    /// rebase: `.git/rebase-merge/orig-head`
+    pub rebase_orig_head: Option<String>,
+    /// rebase: `.git/rebase-merge/head-name`
+    pub rebase_head_name: Option<String>,
+    /// rebase 当前步（1-based）
+    pub rebase_step: Option<u32>,
+    /// rebase 总步数
+    pub rebase_total: Option<u32>,
+    /// rebase 当前正在处理的 commit oid（stopped-sha）
+    pub rebase_current_oid: Option<String>,
+}
+
+impl RepoState {
+    pub fn clean_default() -> Self {
+        RepoState {
+            kind: RepoStateKind::Clean,
+            head_oid: None,
+            merge_msg: None,
+            merge_head: None,
+            rebase_onto: None,
+            rebase_orig_head: None,
+            rebase_head_name: None,
+            rebase_step: None,
+            rebase_total: None,
+            rebase_current_oid: None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum MergeStrategy {
+    /// 自动：允许 fast-forward，否则做非 ff 合并
+    Auto,
+    /// 强制 fast-forward；若不能则报错
+    FastForward,
+    /// 禁止 fast-forward，始终创建 merge commit
+    NoFastForward,
+    /// Squash：把 source 的改动压扁写入 index，不创建 merge commit
+    Squash,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum RebaseActionKind {
+    Pick,
+    Reword,
+    Squash,
+    Fixup,
+    Drop,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RebaseTodoItem {
+    pub oid: String,
+    pub short_oid: String,
+    pub action: RebaseActionKind,
+    pub subject: String,
+    /// reword / squash 时前端填入的新消息；其它动作为 None
+    pub new_message: Option<String>,
+}
+
+/// 冲突文件的三方数据（base=stage1, ours=stage2, theirs=stage3）。
+/// 每侧若对应 stage 不存在（删除冲突）则为 None。字节以 UTF-8 解析，非文本时返回
+/// 原始字节的 lossy 串（前端会拒绝在三路编辑器里打开并提示"二进制冲突"）。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConflictFile {
+    pub path: String,
+    pub base: Option<String>,
+    pub ours: Option<String>,
+    pub theirs: Option<String>,
+    /// 工作区当前内容（含冲突标记 `<<<<<<<`），前端可作为合并起点
+    pub merged_preview: String,
+    /// 任一侧疑似二进制（含 NUL 字节），前端应禁用三路编辑器
+    pub is_binary: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

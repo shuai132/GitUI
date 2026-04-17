@@ -23,6 +23,52 @@ export interface WorkspaceStatus {
   head_commit?: string
   head_commit_message?: string
   is_detached: boolean
+  repo_state: RepoState
+}
+
+export type RepoStateKind =
+  | 'clean'
+  | 'merge'
+  | 'rebase'
+  | 'rebase_interactive'
+  | 'rebase_merge'
+  | 'cherry_pick'
+  | 'revert'
+  | 'bisect'
+  | 'apply_mailbox'
+
+export interface RepoState {
+  kind: RepoStateKind
+  head_oid?: string
+  merge_msg?: string
+  merge_head?: string
+  rebase_onto?: string
+  rebase_orig_head?: string
+  rebase_head_name?: string
+  rebase_step?: number
+  rebase_total?: number
+  rebase_current_oid?: string
+}
+
+export type MergeStrategy = 'auto' | 'fast_forward' | 'no_fast_forward' | 'squash'
+
+export type RebaseActionKind = 'pick' | 'reword' | 'squash' | 'fixup' | 'drop'
+
+export interface RebaseTodoItem {
+  oid: string
+  short_oid: string
+  action: RebaseActionKind
+  subject: string
+  new_message?: string
+}
+
+export interface ConflictFile {
+  path: string
+  base?: string
+  ours?: string
+  theirs?: string
+  merged_preview: string
+  is_binary: boolean
 }
 
 export interface CommitInfo {

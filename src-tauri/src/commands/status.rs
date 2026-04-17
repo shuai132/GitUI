@@ -1,7 +1,7 @@
 use tauri::State;
 
 use crate::{
-    git::{engine::GitEngine, error::GitError, types::WorkspaceStatus},
+    git::{engine::GitEngine, error::GitError, types::{RepoState, WorkspaceStatus}},
     repo_manager::RepoManager,
 };
 
@@ -62,4 +62,15 @@ pub async fn unstage_all(
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
     GitEngine::unstage_all(&meta.path)
+}
+
+#[tauri::command]
+pub async fn get_repo_state(
+    repo_id: String,
+    repo_manager: State<'_, RepoManager>,
+) -> Result<RepoState, GitError> {
+    let meta = repo_manager
+        .get_meta(&repo_id)
+        .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
+    GitEngine::get_repo_state(&meta.path)
 }

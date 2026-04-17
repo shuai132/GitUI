@@ -21,6 +21,11 @@ import FileHistoryModal from '@/components/file-history/FileHistoryModal.vue'
 import CreateBranchDialog from '@/components/commit/CreateBranchDialog.vue'
 import CreateTagDialog from '@/components/commit/CreateTagDialog.vue'
 import Modal from '@/components/common/Modal.vue'
+import OngoingOpBanner from '@/components/common/OngoingOpBanner.vue'
+import MergeDialog from '@/components/merge/MergeDialog.vue'
+import RebasePlanDialog from '@/components/rebase/RebasePlanDialog.vue'
+import DragActionDialog from '@/components/history/DragActionDialog.vue'
+import { useMergeRebaseStore } from '@/stores/mergeRebase'
 import { usePanelDock } from '@/composables/usePanelDock'
 import type { PanelId } from '@/stores/ui'
 import type { BranchInfo, CommitInfo, TagInfo } from '@/types/git'
@@ -32,6 +37,7 @@ const workspaceStore = useWorkspaceStore()
 const diffStore = useDiffStore()
 const stashStore = useStashStore()
 const uiStore = useUiStore()
+const mergeRebaseStore = useMergeRebaseStore()
 
 // ── 键盘导航焦点：最后一次点击过 commits / files 中的哪一个 ────────
 type ActivePane = 'commits' | 'files'
@@ -52,10 +58,11 @@ const filteredCommits = computed(() => {
   )
 })
 
-// ── 虚拟 WIP 行：工作副本有变更时显示在列表顶部 ────────────────────
+// ── 虚拟 WIP 行：工作副本有变更时显示在列表顶部（merge/rebase 进行中时也强制显示）────
 const showWipRow = computed(() => {
   const s = workspaceStore.status
   if (!s) return false
+  if (mergeRebaseStore.isOngoing) return true
   return s.staged.length + s.unstaged.length + s.untracked.length > 0
 })
 
@@ -584,6 +591,76 @@ const editMessageText = ref('')
 const createTagAnnotated = ref(false)
 const dialogCommit = ref<CommitInfo | null>(null)
 
+// ── Merge / Rebase 对话框状态 ─────────────────────────────────────
+const showMergeDialog = ref(false)
+const mergeSourceCandidates = ref<string[]>([])
+const showRebaseDialog = ref(false)
+const rebaseUpstream = ref('')
+const rebaseOnto = ref<string | null>(null)
+const showDragDialog = ref(false)
+const dragSourceOid = ref<string | null>(null)
+const dragTargetOid = ref<string | null>(null)
+
+function openMergeDialog(candidates: string[]) {
+  mergeSourceCandidates.value = candidates
+  showMergeDialog.value = true
+}
+
+function openRebaseDialog(upstream: string, onto: string | null) {
+  rebaseUpstream.value = upstream
+  rebaseOnto.value = onto
+  showRebaseDialog.value = true
+}
+
+// ── 拖拽 commit 到 commit：触发合并/变基选择对话框 ───────────────
+function onCommitDragStart(e: DragEvent, commit: CommitInfo | undefined) {
+  if (!commit || commit.is_stash) return
+  e.dataTransfer?.setData('text/plain', `gitui:commit:${commit.oid}`)
+  if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move'
+}
+
+function onCommitDragOver(e: DragEvent, commit: CommitInfo | undefined) {
+  const payload = e.dataTransfer?.types.includes('text/plain')
+  if (!payload || !commit) return
+  e.preventDefault()
+  if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'
+}
+
+function onCommitDrop(e: DragEvent, commit: CommitInfo | undefined) {
+  if (!commit) return
+  const raw = e.dataTransfer?.getData('text/plain') ?? ''
+  if (!raw.startsWith('gitui:commit:')) return
+  const sourceOid = raw.slice('gitui:commit:'.length)
+  if (sourceOid === commit.oid) return
+  e.preventDefault()
+  dragSourceOid.value = sourceOid
+  dragTargetOid.value = commit.oid
+  showDragDialog.value = true
+}
+
+function onDragDialogMerge() {
+  const sourceOid = dragSourceOid.value
+  if (!sourceOid) {
+    showDragDialog.value = false
+    return
+  }
+  const candidates = historyStore.branches
+    .filter(b => !b.is_remote && b.commit_oid === sourceOid && !b.is_head)
+    .map(b => b.name)
+  showDragDialog.value = false
+  openMergeDialog(candidates)
+}
+
+function onDragDialogRebase() {
+  const targetOid = dragTargetOid.value
+  if (!targetOid) {
+    showDragDialog.value = false
+    return
+  }
+  showDragDialog.value = false
+  openRebaseDialog(targetOid, null)
+}
+
 const currentBranchName = computed(
   () =>
     historyStore.branches.find((b) => b.is_head && !b.is_remote)?.name ?? 'HEAD',
@@ -592,6 +669,18 @@ const currentBranchName = computed(
 const headCommitOid = computed(() => {
   const headBranch = historyStore.branches.find((b) => b.is_head && !b.is_remote)
   return headBranch?.commit_oid ?? historyStore.commits[0]?.oid ?? ''
+})
+
+// 选中的文件是否冲突文件；是则让 DiffView 渲染 ConflictView 代替普通 diff
+const currentConflictFilePath = computed<string | null>(() => {
+  if (!selectedWip.value) return null
+  const path = diffStore.currentPath
+  if (!path) return null
+  const s = workspaceStore.status
+  if (!s) return null
+  const all = [...s.staged, ...s.unstaged, ...s.untracked]
+  const file = all.find((f) => f.path === path)
+  return file?.status === 'conflicted' ? path : null
 })
 
 // 根据 commit_oid 在 stashStore 中查到对应 stash；找不到返回 null
@@ -615,6 +704,14 @@ const commitMenuItems = computed<ContextMenuItem[]>(() => {
     ]
   }
 
+  const ongoing = mergeRebaseStore.isOngoing
+  // 该 commit 指向的本地分支（可能多个）
+  const pointedBranches = historyStore.branches
+    .filter(b => !b.is_remote && b.commit_oid === c.oid)
+    .map(b => b.name)
+  const canMerge = !ongoing && pointedBranches.length > 0 && c.oid !== headCommitOid.value
+  const canRebase = !ongoing && c.oid !== headCommitOid.value
+
   return [
     { label: t('history.contextMenu.checkout'), action: 'checkout' },
     { separator: true },
@@ -635,6 +732,17 @@ const commitMenuItems = computed<ContextMenuItem[]>(() => {
       ],
     },
     { label: t('history.contextMenu.revert'), action: 'revert' },
+    { separator: true },
+    {
+      label: t('history.contextMenu.mergeInto', { branch: currentBranchName.value }),
+      action: 'merge-into',
+      disabled: !canMerge,
+    },
+    {
+      label: t('history.contextMenu.rebaseOnto', { branch: currentBranchName.value }),
+      action: 'rebase-onto',
+      disabled: !canRebase,
+    },
     { separator: true },
     { label: t('history.contextMenu.copySha'), action: 'copy-sha' },
     { separator: true },
@@ -735,6 +843,17 @@ async function onCommitMenuAction(action: string) {
         if (confirm(warn)) await historyStore.resetToCommit(c.oid, mode)
         break
       }
+      case 'merge-into': {
+        // 找到指向 c 的本地分支作为候选 source
+        const candidates = historyStore.branches
+          .filter(b => !b.is_remote && b.commit_oid === c.oid && !b.is_head)
+          .map(b => b.name)
+        openMergeDialog(candidates)
+        break
+      }
+      case 'rebase-onto':
+        openRebaseDialog(c.oid, null)
+        break
       case 'copy-sha':
         await navigator.clipboard.writeText(c.oid)
         break
@@ -941,7 +1060,7 @@ onUnmounted(() => {
               <div
                 v-if="(showWipRow || showWipLoading) && vRow.index === 0"
                 class="commit-row wip-row"
-                :class="{ selected: selectedWip }"
+                :class="{ selected: selectedWip, 'wip-ongoing': mergeRebaseStore.isOngoing && !showWipLoading }"
                 :style="{
                   position: 'absolute',
                   top: vRow.start + 'px',
@@ -956,6 +1075,10 @@ onUnmounted(() => {
                     <span class="loading-spinner" />
                     <span class="wip-loading-text">{{ t('history.loading') }}</span>
                   </div>
+                </template>
+                <!-- Merge / Rebase 进行中：WIP 行本身作为提示条 -->
+                <template v-else-if="mergeRebaseStore.isOngoing">
+                  <OngoingOpBanner class="wip-inline-banner" />
                 </template>
                 <!-- 正常 WIP 行 -->
                 <template v-else>
@@ -990,8 +1113,12 @@ onUnmounted(() => {
                   height: ROW_H + 'px',
                   width: '100%',
                 }"
+                :draggable="!filteredCommits[toRealIdx(vRow.index)]?.is_stash"
                 @click="selectRow(vRow.index)"
                 @contextmenu="onCommitContextMenu($event, filteredCommits[toRealIdx(vRow.index)])"
+                @dragstart="onCommitDragStart($event, filteredCommits[toRealIdx(vRow.index)])"
+                @dragover="onCommitDragOver($event, filteredCommits[toRealIdx(vRow.index)])"
+                @drop="onCommitDrop($event, filteredCommits[toRealIdx(vRow.index)])"
               >
                 <!-- Graph column -->
                 <div class="col-graph" :style="{ width: graphColWidth + 'px' }">
@@ -1086,6 +1213,7 @@ onUnmounted(() => {
           :diff="currentDiff"
           :repo-id="repoStore.activeRepoId ?? undefined"
           :wip="selectedWip ? { staged: diffStore.currentStaged } : null"
+          :conflict-file-path="currentConflictFilePath"
           @close="showDetail = false"
         />
       </div>
@@ -1221,6 +1349,32 @@ onUnmounted(() => {
     :commit="dialogCommit"
     :annotated="createTagAnnotated"
     @close="showCreateTagDialog = false"
+  />
+
+  <!-- Merge dialog -->
+  <MergeDialog
+    :visible="showMergeDialog"
+    :source-commit-oid="null"
+    :candidate-sources="mergeSourceCandidates"
+    @close="showMergeDialog = false"
+  />
+
+  <!-- Rebase plan dialog -->
+  <RebasePlanDialog
+    :visible="showRebaseDialog"
+    :upstream="rebaseUpstream"
+    :onto="rebaseOnto"
+    @close="showRebaseDialog = false"
+  />
+
+  <!-- Drag commit → pick merge/rebase dialog -->
+  <DragActionDialog
+    :visible="showDragDialog"
+    :source-oid="dragSourceOid"
+    :target-oid="dragTargetOid"
+    @close="showDragDialog = false"
+    @merge="onDragDialogMerge"
+    @rebase="onDragDialogRebase"
   />
 
   <!-- Edit commit message dialog -->
@@ -1552,6 +1706,17 @@ onUnmounted(() => {
    暗示"这是进行中的工作副本"而非已落盘的提交 */
 .commit-row.wip-row.selected {
   background: rgba(139, 213, 202, 0.2);
+}
+
+/* Merge / Rebase 进行中的 WIP 行：让 banner 撑满整行 */
+.commit-row.wip-ongoing {
+  background: transparent;
+  cursor: default;
+}
+
+.commit-row.wip-ongoing .wip-inline-banner {
+  width: 100%;
+  height: 100%;
 }
 
 /* ── Columns ─────────────────────────────────────────────────────── */

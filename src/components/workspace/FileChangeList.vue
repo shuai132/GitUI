@@ -99,7 +99,7 @@ const statusIconMap: Record<FileStatusKind, { d: string; stroke?: boolean }> = {
   deleted: { d: 'M5 12h14' },
   renamed: { d: 'M5 12h7M12 12l-4-4M12 12l-4 4M19 12h-7M12 12l4-4M12 12l4 4' },
   untracked: { d: 'M12 5v14M5 12h14', stroke: true },
-  conflicted: { d: 'M18 6L6 18M6 6l12 12' },
+  conflicted: { d: 'M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z M12 9v4 M12 17h.01' },
 }
 
 // 每行固定高度：padding 1px top+bottom + 内容约 18px = 20px

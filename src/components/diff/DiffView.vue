@@ -5,6 +5,7 @@ import type { FileDiff } from '@/types/git'
 import SideBySideDiff from './SideBySideDiff.vue'
 import InlineDiff from './InlineDiff.vue'
 import ImageDiff from './ImageDiff.vue'
+import ConflictView from './ConflictView.vue'
 import { EXT_TO_LANG } from '@/lib/highlight'
 import { detectPreviewKind } from '@/lib/preview'
 import { useUiStore } from '@/stores/ui'
@@ -17,6 +18,8 @@ const props = defineProps<{
   repoId?: string
   /** WIP 场景传入；提交详情传 null 或不传 */
   wip?: { staged: boolean } | null
+  /** 当前选中文件是冲突文件时的路径。非空则切换到冲突解决视图 */
+  conflictFilePath?: string | null
 }>()
 
 const emit = defineEmits<{ close: [] }>()
@@ -59,7 +62,14 @@ function onPrevChange() {
 </script>
 
 <template>
-  <div class="diff-view">
+  <!-- 冲突文件：专用双栏解决视图（自带 toolbar） -->
+  <ConflictView
+    v-if="conflictFilePath"
+    :file-path="conflictFilePath"
+    @close="emit('close')"
+  />
+
+  <div v-else class="diff-view">
     <!-- Toolbar -->
     <div class="diff-toolbar" v-if="diff">
       <span class="diff-file-path" :title="diff.new_path ?? diff.old_path">

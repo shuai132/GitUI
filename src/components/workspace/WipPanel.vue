@@ -13,6 +13,7 @@ import type { FileEntry } from '@/types/git'
 import FileChangeList from '@/components/workspace/FileChangeList.vue'
 import Modal from '@/components/common/Modal.vue'
 import ContextMenu, { type ContextMenuItem } from '@/components/common/ContextMenu.vue'
+import { useMergeRebaseStore } from '@/stores/mergeRebase'
 
 const { t } = useI18n()
 const workspaceStore = useWorkspaceStore()
@@ -22,6 +23,7 @@ const uiStore = useUiStore()
 const repoStore = useRepoStore()
 const settingsStore = useSettingsStore()
 const git = useGitCommands()
+const mergeRebaseStore = useMergeRebaseStore()
 
 const emit = defineEmits<{
   showFileHistory: [payload: { filePath: string; mode: 'history' | 'blame' }]
@@ -174,6 +176,17 @@ const fileMenu = reactive({
 const fileMenuItems = computed<ContextMenuItem[]>(() => {
   const f = fileMenu.file
   if (!f) return []
+  if (f.status === 'conflicted') {
+    return [
+      { label: t('workspace.wip.menu.useOurs'), action: 'use-ours' },
+      { label: t('workspace.wip.menu.useTheirs'), action: 'use-theirs' },
+      { separator: true },
+      { label: t('workspace.wip.menu.markResolved'), action: 'mark-resolved' },
+      { separator: true },
+      { label: t('workspace.wip.menu.copyRelativePath'), action: 'copy-relative' },
+      { label: t('workspace.wip.menu.openInEditor'), action: 'open-editor' },
+    ]
+  }
   return [
     {
       label: f.staged ? t('workspace.wip.menu.unstage') : t('workspace.wip.menu.stage'),
@@ -235,7 +248,17 @@ async function onFileMenuAction(action: string) {
   const dirPath = absPath.substring(0, absPath.lastIndexOf('/')) || repoPath
 
   try {
-    if (action === 'toggle') {
+    if (action === 'use-ours') {
+      await mergeRebaseStore.useConflictSide(f.path, 'ours')
+    } else if (action === 'use-theirs') {
+      await mergeRebaseStore.useConflictSide(f.path, 'theirs')
+    } else if (action === 'mark-resolved') {
+      // 工作区当前内容直接作为解决方案
+      const content = await git.readWorktreeFile(repoStore.activeRepoId!, f.path, true)
+        .then(b => atob(b.bytes_base64))
+        .catch(() => '')
+      await mergeRebaseStore.resolveConflict(f.path, content)
+    } else if (action === 'toggle') {
       await onToggleFile(f)
     } else if (action === 'copy-name') {
       await navigator.clipboard.writeText(f.path.split('/').pop() ?? f.path)
