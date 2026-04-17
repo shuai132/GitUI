@@ -25,12 +25,17 @@
 | [12-settings.md](./12-settings.md) | 设置模态：主题、字体、字号、accent 覆盖 |
 | [13-i18n.md](./13-i18n.md) | 国际化：vue-i18n 接入、auto 模式 locale 解析、key 命名、errorMap 集成 |
 | [14-icons.md](./14-icons.md) | 应用图标源图、HIG padding 规范、`tauri icon` 重建命令 |
+| [15-merge-rebase.md](./15-merge-rebase.md) | Merge / 交互式 Rebase、三路合并编辑器、拖拽触发、自动 stash |
 
 ## 阅读建议
 
 - 先读 [01-architecture.md](./01-architecture.md)，建立整体骨架
 - 调具体功能时再按需翻对应文档
 - 要新增 IPC 命令或数据结构，对齐 [11-ipc.md](./11-ipc.md) 的约定
+
+## 规划文档
+
+`plan/` 子目录存放非平凡功能 / 重构开工前的方案文档，命名 `YYYY-MM-DD-NN-name.md`（`NN` 为当日序号，`name` 为 kebab-case 主题）。每份方案包含 Context、进度总览、子任务清单（带 `[ ] / [x]` 勾选状态）、关键决策与验证方式。实施过程中实时更新勾选状态，功能落地后长期保留，方便回看演进决策。详见 CLAUDE.md「规划文档」节。
 
 ## 其他文档
 
