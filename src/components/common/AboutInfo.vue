@@ -1,16 +1,26 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { getVersion } from '@tauri-apps/api/app'
+import { useGitCommands } from '@/composables/useGitCommands'
 
 const { t } = useI18n()
+const git = useGitCommands()
 const appVersion = ref('')
+const gitHash = ref<string | null>(null)
+
+const versionLabel = computed(() => {
+  if (!appVersion.value) return ''
+  return gitHash.value ? `v${appVersion.value}-${gitHash.value}` : `v${appVersion.value}`
+})
 
 onMounted(async () => {
   try {
-    appVersion.value = await getVersion()
+    const info = await git.getBuildInfo()
+    appVersion.value = info.version
+    gitHash.value = info.git_hash
   } catch {
     appVersion.value = ''
+    gitHash.value = null
   }
 })
 
@@ -47,7 +57,7 @@ async function openUrl(url: string) {
       </div>
       <div class="about-row">
         <span class="about-label">{{ t('settings.about.versionLabel') }}</span>
-        <span class="about-value">{{ appVersion }}</span>
+        <span class="about-value">{{ versionLabel }}</span>
       </div>
       <div class="about-row about-row-project">
         <a

@@ -17,6 +17,7 @@ import type {
   MergeStrategy,
   RebaseTodoItem,
   ConflictFile,
+  BuildInfo,
 } from '@/types/git'
 import { useErrorsStore } from '@/stores/errors'
 import { useDebugStore } from '@/stores/debug'
@@ -367,6 +368,9 @@ export function useGitCommands() {
   const checkoutFileAtCommit = (repoId: string, sha: string, filePath: string) =>
     call<void>('checkout_file_at_commit', { repoId, sha, filePath })
 
+  const getBuildInfo = () =>
+    call<BuildInfo>('get_build_info')
+
   // ---- Terminal (in-app PTY) ----
   const terminalSpawn = (repoId: string, cols: number, rows: number) =>
     call<string>('terminal_spawn', { repoId, cols, rows })
@@ -457,6 +461,7 @@ export function useGitCommands() {
     openTerminalHere,
     addToGitignore,
     checkoutFileAtCommit,
+    getBuildInfo,
     terminalSpawn,
     terminalWrite,
     terminalResize,

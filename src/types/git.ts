@@ -201,6 +201,12 @@ export interface FileBlame {
   hunks: BlameHunk[]
 }
 
+/** 构建信息：版本号 + 编译时注入的短 commit hash（缺失时为 null） */
+export interface BuildInfo {
+  version: string
+  git_hash: string | null
+}
+
 // Graph node for DAG visualization
 export interface GraphNode {
   oid: string

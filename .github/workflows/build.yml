@@ -81,10 +81,16 @@ jobs:
         shell: bash
         run: echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
 
+      - name: Get short commit hash
+        id: hash
+        shell: bash
+        run: echo "short=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GIT_HASH: ${{ steps.hash.outputs.short }}
         with:
           tagName: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || '' }}
           releaseName: ${{ startsWith(github.ref, 'refs/tags/v') && format('{0}', github.ref_name) || '' }}
@@ -97,6 +103,6 @@ jobs:
         if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.label }}-${{ steps.version.outputs.version }}
+          name: ${{ matrix.label }}-${{ steps.version.outputs.version }}-${{ steps.hash.outputs.short }}
           path: src-tauri/target/${{ matrix.target }}/release/bundle/**/*
           retention-days: 7

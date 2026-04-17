@@ -314,3 +314,13 @@ pub struct FileBlame {
     pub lines: Vec<String>,
     pub hunks: Vec<BlameHunk>,
 }
+
+/// 构建信息：版本号 + 编译时注入的短 commit hash。
+/// `git_hash` 在以下任一条件成立时为 None：
+/// - 编译时不在 git 工作树中（如 crates.io 发布、容器构建无 .git）
+/// - CI 未传 `GIT_HASH` env，且本地 `git rev-parse` 失败
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BuildInfo {
+    pub version: String,
+    pub git_hash: Option<String>,
+}

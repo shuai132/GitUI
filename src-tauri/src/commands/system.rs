@@ -3,7 +3,7 @@ use std::sync::Mutex;
 use tauri::State;
 
 use crate::{
-    git::{engine::GitEngine, error::GitError, types::ReflogEntry},
+    git::{engine::GitEngine, error::GitError, types::{BuildInfo, ReflogEntry}},
     repo_manager::RepoManager,
 };
 
@@ -427,4 +427,14 @@ pub async fn checkout_file_at_commit(
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
     GitEngine::checkout_file_at_commit(&meta.path, &sha, &file_path)
+}
+
+/// 返回应用版本（`Cargo.toml` 中的 `version`）和编译时注入的短 commit hash。
+/// 用于「关于」面板等需要展示精确 build 标识的场景。
+#[tauri::command]
+pub fn get_build_info() -> BuildInfo {
+    BuildInfo {
+        version: env!("CARGO_PKG_VERSION").to_string(),
+        git_hash: option_env!("GIT_HASH").map(str::to_string),
+    }
 }

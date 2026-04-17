@@ -132,6 +132,7 @@ pub fn run() {
             open_terminal_here,
             add_to_gitignore,
             checkout_file_at_commit,
+            get_build_info,
             // Terminal
             terminal_spawn,
             terminal_write,
