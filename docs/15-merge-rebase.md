@@ -21,7 +21,7 @@
 
 - `components/common/OngoingOpBanner.vue`
 - `components/merge/MergeDialog.vue`
-- `components/merge/ThreeWayMergeEditor.vue`
+- `components/diff/ConflictView.vue`（三路合并编辑器）
 - `components/rebase/RebasePlanDialog.vue`
 - `components/history/DragActionDialog.vue`
 
@@ -41,11 +41,18 @@ MergeDialog / RebasePlanDialog / DragActionDialog
 
 ```
 冲突时 FileStatusKind::Conflicted 出现在 workspaceStore.status.unstaged
-  → 右键 "用三路合并编辑器解决" → ThreeWayMergeEditor 打开
+  → 右键 "用三路合并编辑器解决" → ConflictView 打开
   → getConflictFile 读 stage 1/2/3
-  → 用户编辑 merged 文本 → markConflictResolved 写文件 + stage（add_path 替换 conflict 条目）
+  → 三栏视图：A（ours）| B（theirs）上下排列 + OUTPUT 底部只读预览
+    · A/B 每一行带 checkbox，可按行勾选进入 OUTPUT（VSCode 冲突编辑器风格）
+    · equal 行始终进入 OUTPUT；默认没有任何冲突行被勾选
+    · 顶部按钮：整体用 A / 整体用 B / 全部清空
+    · OUTPUT 随勾选实时合成、不可直接编辑；三栏行号与语法高亮同 SideBySideDiff
+  → 「保存并 stage」→ markConflictResolved 写入合成内容 + stage（add_path 替换 conflict 条目）
   → workspaceStore.refresh
 ```
+
+如需做 UI 表达不了的手工微调，在工作区直接编辑文件后从右键菜单「标记为已解决」即可——OUTPUT 故意保持只读，避免逐行勾选与手工编辑两个事实来源分叉。
 
 ## 后端实现
 
@@ -59,7 +66,7 @@ MergeDialog / RebasePlanDialog / DragActionDialog
 
 ## 关键取舍
 
-- **三路合并编辑器只做行级文本合并**，不做字符级；不实现 `rebase --exec`
+- **三路合并编辑器按行粒度合并**：A/B 每行独立勾选决定是否进入 OUTPUT，不做字符级；不实现 `rebase --exec`
 - **Reword 暂停策略**：前端通过 `rebaseContinue(amendedMessage)` 补交新消息；squash 的最终消息在 plan 阶段就填好，执行过程中不打断
 - **自动 stash pop 失败**时前端只提示"请手动处理 stash"，**不自动强合并**——避免进一步破坏工作区
 - **新 git2 方法**集中在 `merge.rs` / `rebase.rs` / `conflict.rs`，不再继续堆 `engine.rs`（已超 1600 行）

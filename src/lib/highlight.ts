@@ -103,11 +103,19 @@ function escapeHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 }
 
-/** 对单行代码做语法高亮，返回安全的 HTML 字符串 */
-export function highlightLine(content: string, lang: string): string {
+/** 对单行代码做语法高亮，返回安全的 HTML 字符串。lang 为 null 时退化为纯 escape。 */
+export function highlightLine(content: string, lang: string | null): string {
+  if (!lang) return escapeHtml(content)
   try {
     return hljs.highlight(content, { language: lang, ignoreIllegals: true }).value
   } catch {
     return escapeHtml(content)
   }
+}
+
+/** 按文件路径扩展名推断 hljs 语言；未知类型返回 null。 */
+export function detectLangByPath(path: string | null | undefined): string | null {
+  if (!path) return null
+  const ext = path.split('.').pop()?.toLowerCase() ?? ''
+  return EXT_TO_LANG[ext] ?? null
 }
