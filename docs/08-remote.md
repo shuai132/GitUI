@@ -1,10 +1,13 @@
 # 08. 远程操作
 
-Fetch / Push / Pull 是三个独立命令，统一走 git2 的 `RemoteCallbacks` + 自定义凭据回调链。
+Fetch / Push / Pull 是三个独立命令。**远端 URL 是 SSH 时走系统 `git` 命令，HTTPS
+走 git2 + `RemoteCallbacks` + 自定义凭据回调链。** 分叉由 `git/shellout.rs::is_ssh_url`
+判定。
 
 ## 涉及模块
 
-- 后端：`commands/remote.rs`、`GitEngine::fetch / push / pull / list_remotes`、`git/credentials.rs`
+- 后端：`commands/remote.rs`、`GitEngine::fetch / push / pull / list_remotes`、
+  `git/credentials.rs`、`git/shellout.rs`
 - 前端：
   - `components/layout/AppToolbar.vue`（Pull / Push / Fetch 按钮）
   - `stores/history.ts`（远程操作后刷新日志）
@@ -73,14 +76,39 @@ remote.push(&[&refspec], Some(&mut push_opts))?;
 
 不带 `force`：远端已有同名 tag 会返回 non-fast-forward，由 `errors.push.nonFastForward` 给出中文提示，避免误覆盖别人的 release tag。需要覆盖的话回终端 `git push -f origin <tag>`——与 "合并必须手动处理" 同样的安全保守策略。
 
-## 凭据回调链
+## SSH 走系统 git（Windows 适配）
 
-`git/credentials.rs` 的 `credential_callback` 按以下顺序尝试：
+所有涉及网络的 `GitEngine` 方法（`fetch / pull / push / push_tag /
+list_remote_tag_names / clone_repo / update_submodule`）执行前先通过
+`shellout::get_remote_url` 拿到远端 URL，再用 `shellout::is_ssh_url` 判断：
+
+- **SSH（`ssh://...` 或 scp-like `user@host:path`）** → 调 `shellout::run_git`
+  fork 系统 `git`，复用用户命令行 git 已经在用的 OpenSSH / ssh-agent / `~/.ssh/config`
+- **HTTPS / git:// / 本地路径** → 仍走 libgit2 + `RemoteCallbacks`
+
+**为什么不统一走 libgit2？** git2 捆绑的 libssh2 在 Windows 上默认用 WinCNG 做
+crypto 后端，现代 host key 算法（rsa-sha2-256/512 等）支持不全，SSH 握手阶段直接
+抛 `failed to set hostkey preference`。换成 OpenSSL 后端需要 vendored-openssl，
+Windows 打包链复杂度上来，不划算。
+
+**取舍**：
+- SSH 远端要求 PATH 中有 `git` 可执行文件。没有时 `run_git` 返回明确文本提示，
+  由 `errorMap` 兜底显示。Git for Windows 在目标用户里接近 100% 安装率，可接受。
+- Clone 阶段的进度汇报：stderr 按字节读（`\r` / `\n` 都作为分隔符），用
+  `Receiving objects / Resolving deltas / Updating files` 的百分比驱动现有
+  `on_progress("receiving|indexing|checkout", pct, None)`；`remote: ...` 行作为
+  `sideband` message 透传。节流仍由 `commands/repo.rs::clone_repo` 负责。
+
+## 凭据回调链（HTTPS 专用）
+
+`git/credentials.rs::make_credentials_callback` 只在 HTTPS 分支触发。按以下顺序
+尝试（SSH_KEY 分支仍保留，便于远端仓库从 HTTPS 切 SSH 后单次尝试；实际 SSH 操作
+都已经绕开这条链了）：
 
 ```rust
 pub fn credential_callback(url, username, allowed_types) -> Result<Cred, Error> {
     if allowed_types.contains(SSH_KEY) {
-        1. Cred::ssh_key_from_agent(user)       // ssh-agent
+        1. Cred::ssh_key_from_agent(user)
         2. Cred::ssh_key(user, ~/.ssh/id_ed25519)
         3. Cred::ssh_key(user, ~/.ssh/id_rsa)
     }
@@ -91,15 +119,8 @@ pub fn credential_callback(url, username, allowed_types) -> Result<Cred, Error> 
 }
 ```
 
-`user` 默认 `"git"`，如果 URL 里带了用户名会用那个。
-
-这意味着：
-
-- **SSH 仓库**：需要启动 ssh-agent 或放默认路径的 key，无密码保护的 key 优先
-- **HTTPS 仓库**：依赖 OS 的 git credential helper（macOS Keychain / Windows Credential Manager / Linux libsecret）
-- **带密码保护的 key**：目前不支持交互输入——会直接失败
-
-所有 fetch/push/pull 都复用同一个 `RemoteCallbacks::credentials(|url, user, allowed| credential_callback(...))`。
+- **HTTPS 仓库**：依赖 OS 的 git credential helper（macOS Keychain / Windows Credential
+  Manager / Linux libsecret）
 
 ## 列出 remote
 
@@ -107,7 +128,7 @@ pub fn credential_callback(url, username, allowed_types) -> Result<Cred, Error> 
 
 ## 未来改进
 
-- 交互式凭据输入（密码 / SSH passphrase prompt）
+- 交互式凭据输入（HTTPS 密码 prompt；SSH 的 passphrase 由系统 ssh 直接处理）
 - Merge / rebase pull（不止 fast-forward）
 - `git push -u` 首次设置 upstream
 - Remote 选择下拉菜单（Pull 按钮上挂 chevron）

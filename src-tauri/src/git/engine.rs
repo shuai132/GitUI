@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 use crate::git::{
     credentials::make_credentials_callback,
     error::{GitError, GitResult},
+    shellout::{get_remote_url, is_ssh_url, run_git},
     types::*,
 };
 
@@ -924,6 +925,26 @@ impl GitEngine {
     /// 所以只能在线查询远端 refs 才能判断某个本地 tag 是否已推送。
     pub fn list_remote_tag_names(path: &str, remote_name: &str) -> GitResult<Vec<String>> {
         log::debug!("[engine::list_remote_tag_names] remote={remote_name}");
+
+        let url = get_remote_url(path, remote_name)?;
+        if is_ssh_url(&url) {
+            // `git ls-remote --tags <remote>` 输出格式：`<oid>\trefs/tags/<name>[^{}]`
+            let stdout = run_git(path, &["ls-remote", "--tags", remote_name])?;
+            let mut names = Vec::new();
+            for line in stdout.lines() {
+                if let Some((_oid, refname)) = line.split_once('\t') {
+                    if refname.starts_with("refs/tags/") && !refname.ends_with("^{}") {
+                        names.push(refname["refs/tags/".len()..].to_string());
+                    }
+                }
+            }
+            log::debug!(
+                "[engine::list_remote_tag_names] remote={remote_name} count={} (ssh cli)",
+                names.len()
+            );
+            return Ok(names);
+        }
+
         let repo = Self::open(path)?;
         let mut remote = repo.find_remote(remote_name)?;
         let mut callbacks = git2::RemoteCallbacks::new();
@@ -1079,6 +1100,11 @@ impl GitEngine {
     }
 
     pub fn fetch(path: &str, remote_name: &str) -> GitResult<()> {
+        let url = get_remote_url(path, remote_name)?;
+        if is_ssh_url(&url) {
+            run_git(path, &["fetch", remote_name])?;
+            return Ok(());
+        }
         let repo = Self::open(path)?;
         let mut remote = repo.find_remote(remote_name)?;
         let mut callbacks = git2::RemoteCallbacks::new();
@@ -1094,7 +1120,24 @@ impl GitEngine {
         log::debug!("[engine::push] mode={mode} remote={remote_name} branch={branch_name}");
 
         if mode == "force_with_lease" {
-            return Self::push_force_with_lease(path, remote_name, branch_name);
+            run_git(
+                path,
+                &["push", "--force-with-lease", remote_name, branch_name],
+            )?;
+            return Ok(());
+        }
+
+        let refspec = if mode == "force" {
+            format!("+refs/heads/{branch_name}:refs/heads/{branch_name}")
+        } else {
+            format!("refs/heads/{branch_name}:refs/heads/{branch_name}")
+        };
+
+        let url = get_remote_url(path, remote_name)?;
+        if is_ssh_url(&url) {
+            run_git(path, &["push", remote_name, &refspec])?;
+            log::debug!("[engine::push] done (ssh cli)");
+            return Ok(());
         }
 
         let repo = Self::open(path)?;
@@ -1103,30 +1146,10 @@ impl GitEngine {
         callbacks.credentials(make_credentials_callback());
         let mut push_opts = git2::PushOptions::new();
         push_opts.remote_callbacks(callbacks);
-        let refspec = if mode == "force" {
-            format!("+refs/heads/{branch_name}:refs/heads/{branch_name}")
-        } else {
-            format!("refs/heads/{branch_name}:refs/heads/{branch_name}")
-        };
         log::debug!("[engine::push] pushing refspec={refspec}");
         remote.push(&[&refspec], Some(&mut push_opts))?;
         log::debug!("[engine::push] done");
         Ok(())
-    }
-
-    fn push_force_with_lease(path: &str, remote_name: &str, branch_name: &str) -> GitResult<()> {
-        log::debug!("[engine::push_force_with_lease] remote={remote_name} branch={branch_name}");
-        let output = std::process::Command::new("git")
-            .args(["-C", path, "push", "--force-with-lease", remote_name, branch_name])
-            .output()
-            .map_err(|e| GitError::OperationFailed(format!("Failed to spawn git: {e}")))?;
-
-        if output.status.success() {
-            Ok(())
-        } else {
-            let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-            Err(GitError::OperationFailed(stderr))
-        }
     }
 
     /// 推送一个本地 tag 到远端。refspec `refs/tags/<name>:refs/tags/<name>`。
@@ -1134,27 +1157,43 @@ impl GitEngine {
     /// 由前端错误映射（`errors.push.nonFastForward`）给出中文提示。
     pub fn push_tag(path: &str, remote_name: &str, tag_name: &str) -> GitResult<()> {
         log::debug!("[engine::push_tag] remote={remote_name} tag={tag_name}");
+        let refspec = format!("refs/tags/{name}:refs/tags/{name}", name = tag_name);
+
+        let url = get_remote_url(path, remote_name)?;
+        if is_ssh_url(&url) {
+            run_git(path, &["push", remote_name, &refspec])?;
+            return Ok(());
+        }
+
         let repo = Self::open(path)?;
         let mut remote = repo.find_remote(remote_name)?;
         let mut callbacks = git2::RemoteCallbacks::new();
         callbacks.credentials(make_credentials_callback());
         let mut push_opts = git2::PushOptions::new();
         push_opts.remote_callbacks(callbacks);
-        let refspec = format!("refs/tags/{name}:refs/tags/{name}", name = tag_name);
         remote.push(&[&refspec], Some(&mut push_opts))?;
         Ok(())
     }
 
     pub fn pull(path: &str, remote_name: &str, branch_name: &str, mode: &str) -> GitResult<()> {
         log::debug!("[engine::pull] mode={mode} remote={remote_name} branch={branch_name}");
+
+        let url = get_remote_url(path, remote_name)?;
+        if is_ssh_url(&url) {
+            log::debug!("[engine::pull] ssh fetch via system git");
+            run_git(path, &["fetch", remote_name, branch_name])?;
+        } else {
+            let repo_fetch = Self::open(path)?;
+            let mut remote = repo_fetch.find_remote(remote_name)?;
+            let mut callbacks = git2::RemoteCallbacks::new();
+            callbacks.credentials(make_credentials_callback());
+            let mut fetch_opts = git2::FetchOptions::new();
+            fetch_opts.remote_callbacks(callbacks);
+            log::debug!("[engine::pull] fetching via libgit2...");
+            remote.fetch(&[branch_name], Some(&mut fetch_opts), None)?;
+        }
+
         let repo = Self::open(path)?;
-        let mut remote = repo.find_remote(remote_name)?;
-        let mut callbacks = git2::RemoteCallbacks::new();
-        callbacks.credentials(make_credentials_callback());
-        let mut fetch_opts = git2::FetchOptions::new();
-        fetch_opts.remote_callbacks(callbacks);
-        log::debug!("[engine::pull] fetching...");
-        remote.fetch(&[branch_name], Some(&mut fetch_opts), None)?;
         log::debug!("[engine::pull] fetch done, proceeding with mode={mode}");
 
         if mode == "rebase" {
@@ -1272,6 +1311,16 @@ impl GitEngine {
     ) -> GitResult<String> {
         use std::sync::Arc;
 
+        if is_ssh_url(url) {
+            return Self::clone_repo_ssh(
+                url,
+                target_path,
+                depth,
+                recurse_submodules,
+                on_progress,
+            );
+        }
+
         let on_progress: Arc<dyn Fn(&str, u32, Option<String>) + Send + Sync> =
             Arc::new(on_progress);
 
@@ -1358,6 +1407,136 @@ impl GitEngine {
         }
 
         Ok(workdir.to_string_lossy().to_string())
+    }
+
+    /// SSH URL 时走系统 `git clone`，stderr 流式解析驱动 `on_progress`。
+    ///
+    /// git clone 的 stderr 用 `\r` 刷新进度（`Receiving objects: 50% ...\r`），
+    /// 用 `\n` 表示换行，所以逐字节读取、遇 `\r` 或 `\n` 冲缓冲一次。
+    fn clone_repo_ssh(
+        url: &str,
+        target_path: &str,
+        depth: Option<i32>,
+        recurse_submodules: bool,
+        on_progress: impl Fn(&str, u32, Option<String>),
+    ) -> GitResult<String> {
+        use std::io::Read;
+        use std::process::{Command, Stdio};
+
+        let depth_str;
+        let mut args: Vec<&str> = vec!["clone", "--progress"];
+        if let Some(d) = depth {
+            if d > 0 {
+                depth_str = d.to_string();
+                args.push("--depth");
+                args.push(&depth_str);
+            }
+        }
+        if recurse_submodules {
+            args.push("--recurse-submodules");
+        }
+        args.push("--");
+        args.push(url);
+        args.push(target_path);
+
+        let mut child = Command::new("git")
+            .args(&args)
+            .stdout(Stdio::null())
+            .stderr(Stdio::piped())
+            .spawn()
+            .map_err(|e| {
+                if e.kind() == std::io::ErrorKind::NotFound {
+                    GitError::OperationFailed(
+                        "git binary not found in PATH. SSH remotes require a system git install."
+                            .to_string(),
+                    )
+                } else {
+                    GitError::OperationFailed(format!("failed to spawn git clone: {e}"))
+                }
+            })?;
+
+        let mut stderr = child.stderr.take().expect("stderr piped");
+        let mut buf: Vec<u8> = Vec::with_capacity(256);
+        let mut all_stderr: Vec<u8> = Vec::with_capacity(4096);
+        let mut byte = [0u8; 1];
+
+        loop {
+            match stderr.read(&mut byte) {
+                Ok(0) => break,
+                Ok(_) => {
+                    let c = byte[0];
+                    all_stderr.push(c);
+                    if c == b'\r' || c == b'\n' {
+                        if !buf.is_empty() {
+                            let line = String::from_utf8_lossy(&buf);
+                            Self::parse_clone_progress(&line, &on_progress);
+                            buf.clear();
+                        }
+                    } else {
+                        buf.push(c);
+                    }
+                }
+                Err(_) => break,
+            }
+        }
+        if !buf.is_empty() {
+            let line = String::from_utf8_lossy(&buf);
+            Self::parse_clone_progress(&line, &on_progress);
+        }
+
+        let status = child
+            .wait()
+            .map_err(|e| GitError::OperationFailed(format!("waiting for git clone failed: {e}")))?;
+
+        if !status.success() {
+            let err_text = String::from_utf8_lossy(&all_stderr).trim().to_string();
+            let msg = if err_text.is_empty() {
+                format!("git clone failed (exit code {:?})", status.code())
+            } else {
+                err_text
+            };
+            return Err(GitError::OperationFailed(msg));
+        }
+
+        // 小/空仓库 git 可能不输出 "Updating files"，前端进度条需要一个收尾 100%
+        on_progress("checkout", 100, None);
+
+        // target_path 可能是相对路径，返回实际 workdir 让前端打开准确位置
+        let target = Path::new(target_path);
+        let abs = target
+            .canonicalize()
+            .map(|p| p.to_string_lossy().to_string())
+            .unwrap_or_else(|_| target_path.to_string());
+        Ok(abs)
+    }
+
+    fn parse_clone_progress(line: &str, on_progress: &impl Fn(&str, u32, Option<String>)) {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            return;
+        }
+        if let Some(rest) = trimmed.strip_prefix("remote: ") {
+            on_progress("sideband", 0, Some(rest.to_string()));
+            return;
+        }
+        let (stage, rest) = if let Some(r) = trimmed.strip_prefix("Receiving objects:") {
+            ("receiving", r)
+        } else if let Some(r) = trimmed.strip_prefix("Resolving deltas:") {
+            ("indexing", r)
+        } else if let Some(r) = trimmed.strip_prefix("Updating files:") {
+            ("checkout", r)
+        } else {
+            return;
+        };
+        if let Some(pct_end) = rest.find('%') {
+            let digits_start = rest[..pct_end]
+                .rfind(|c: char| !c.is_ascii_digit())
+                .map(|i| i + 1)
+                .unwrap_or(0);
+            if let Ok(pct) = rest[digits_start..pct_end].trim().parse::<u32>() {
+                on_progress(stage, pct, None);
+            }
+        }
     }
 
     /// 在 `path` 上执行 `git init`（非 bare）。
@@ -1491,9 +1670,19 @@ impl GitEngine {
 
     /// Clone 缺失的 submodule 并 checkout 到父仓库记录的 commit
     pub fn update_submodule(path: &str, name: &str) -> GitResult<()> {
+        // submodule URL 是 SSH 时 fallback 到系统 git，避开 libssh2 的限制
+        let url_is_ssh = {
+            let repo = Self::open(path)?;
+            let sub = repo.find_submodule(name)?;
+            sub.url().map(is_ssh_url).unwrap_or(false)
+        };
+        if url_is_ssh {
+            run_git(path, &["submodule", "update", "--init", "--", name])?;
+            return Ok(());
+        }
+
         let repo = Self::open(path)?;
         let mut sub = repo.find_submodule(name)?;
-
         let mut callbacks = git2::RemoteCallbacks::new();
         callbacks.credentials(make_credentials_callback());
         let mut fetch_opts = git2::FetchOptions::new();
@@ -1812,20 +2001,8 @@ impl GitEngine {
 
     /// 对仓库执行 `git gc`，返回命令输出文本。
     pub fn run_gc(path: &str) -> GitResult<String> {
-        let output = std::process::Command::new("git")
-            .args(["-C", path, "gc", "--quiet"])
-            .output()
-            .map_err(|e| GitError::OperationFailed(format!("启动 git gc 失败：{}", e)))?;
-
-        if output.status.success() {
-            Ok("git gc 完成".to_string())
-        } else {
-            let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-            Err(GitError::OperationFailed(format!(
-                "git gc 失败：{}",
-                stderr.trim()
-            )))
-        }
+        run_git(path, &["gc", "--quiet"])?;
+        Ok("git gc 完成".to_string())
     }
 
     /// 从 .gitmodules 文本中移除 `[submodule "<name>"]` 及其后续字段行。
