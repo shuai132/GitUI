@@ -14,6 +14,11 @@ export interface ErrorEntry {
   friendly: string
   /** 原始错误的字符串化形式（展开用） */
   raw: string
+  /**
+   * 呈现级别：'error' = 操作失败（红 ✕），'warning' = 需要用户介入的中间状态
+   * （橙 ⚠️，如合并/rebase/cherry-pick 冲突）。
+   */
+  level: 'error' | 'warning'
 }
 
 const MAX_ENTRIES = 30
@@ -25,12 +30,16 @@ export const useErrorsStore = defineStore('errors', () => {
   let nextId = 1
 
   function push(op: string, raw: unknown): ErrorEntry {
+    const fe = mapGitError(op, raw)
+    const translated = i18n.global.t(fe.key, fe.params ?? {})
+    const friendly = translated && translated !== fe.key ? translated : (fe.fallbackText ?? translated)
     const entry: ErrorEntry = {
       id: nextId++,
       ts: Date.now(),
       op,
-      friendly: formatFriendly(op, raw),
+      friendly,
       raw: rawToString(raw),
+      level: fe.level ?? 'error',
     }
     entries.value.unshift(entry)
     if (entries.value.length > MAX_ENTRIES) {
@@ -51,17 +60,6 @@ export const useErrorsStore = defineStore('errors', () => {
     clear,
   }
 })
-
-/**
- * 把 mapGitError 产出的 i18n key 翻译成当前 locale 下的字符串。
- * key 缺失翻译时回退到 fallbackText（通常是原始 message）。
- */
-function formatFriendly(op: string, raw: unknown): string {
-  const fe = mapGitError(op, raw)
-  const translated = i18n.global.t(fe.key, fe.params ?? {})
-  if (translated && translated !== fe.key) return translated
-  return fe.fallbackText ?? translated
-}
 
 function rawToString(raw: unknown): string {
   if (typeof raw === 'string') return raw

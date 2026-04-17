@@ -30,15 +30,29 @@ export interface FriendlyError {
   params?: Record<string, unknown>
   /** key 缺失翻译时的兜底原文（通常是清理后的原始 message） */
   fallbackText?: string
+  /**
+   * 呈现级别。冲突这类"需要用户介入的中间状态"应为 warning，
+   * 其余默认 'error'（省略即可）。
+   */
+  level?: 'error' | 'warning'
 }
 
 function extractKindAndMessage(raw: unknown): { kind?: GitErrorKind; message: string } {
-  // GitError 枚举序列化后是 { VariantName: "..." } 的单键对象
   if (raw && typeof raw === 'object' && !(raw instanceof Error)) {
-    const keys = Object.keys(raw as Record<string, unknown>)
+    const obj = raw as Record<string, unknown>
+
+    // 当前 GitError 用 #[serde(tag = "kind", content = "message")]，
+    // 序列化形如 { kind: "OperationFailed", message: "..." }
+    if (typeof obj.kind === 'string' && typeof obj.message === 'string') {
+      return { kind: obj.kind as GitErrorKind, message: obj.message }
+    }
+
+    // 兼容旧的 adjacent-tag 形状 { VariantName: "..." }，
+    // 防止序列化策略回切时静默退化
+    const keys = Object.keys(obj)
     if (keys.length === 1) {
       const kind = keys[0] as GitErrorKind
-      const value = (raw as Record<string, unknown>)[kind]
+      const value = obj[kind]
       if (typeof value === 'string') {
         return { kind, message: value }
       }
@@ -104,8 +118,8 @@ const PATTERNS: Array<{ test: (msg: string) => boolean; build: (msg: string) => 
   },
   // Rebase 冲突
   {
-    test: (m) => /Rebase conflict/i.test(m),
-    build: () => ({ key: 'errors.rebase.conflict' }),
+    test: (m) => /Rebase conflict|Rebase 出现冲突/i.test(m),
+    build: () => ({ key: 'errors.rebase.conflict', level: 'warning' }),
   },
   // Rebase 工作区不干净
   {
@@ -119,12 +133,13 @@ const PATTERNS: Array<{ test: (msg: string) => boolean; build: (msg: string) => 
       key: 'errors.cherrypick.conflict',
       params: { type: m.includes('Revert') ? 'revert' : 'cherry-pick' },
       fallbackText: m,
+      level: 'warning',
     }),
   },
-  // 通用冲突
+  // 通用冲突（含后端中文 "Merge 出现冲突" / "仍有未解决的冲突"）
   {
-    test: (m) => /conflict|needs merge/i.test(m),
-    build: () => ({ key: 'errors.merge.conflict' }),
+    test: (m) => /conflict|needs merge|Merge 出现冲突|仍有未解决的冲突/i.test(m),
+    build: () => ({ key: 'errors.merge.conflict', level: 'warning' }),
   },
   // 工作区有未提交变更
   {
