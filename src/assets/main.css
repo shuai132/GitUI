@@ -173,4 +173,58 @@
   ::-webkit-scrollbar-thumb:hover {
     background: var(--text-muted);
   }
+
+  /* 对话框 / 工具条通用按钮。所有 modal 里的「取消 / 确认 / 危险」按钮都走这里，
+     不要再在各组件的 scoped 样式里复写这三个类，避免 HistoryView 那种漏写基类的 bug。 */
+  .btn {
+    padding: 7px 16px;
+    border-radius: 6px;
+    font-family: inherit;
+    font-size: var(--font-md);
+    font-weight: 500;
+    line-height: 1.4;
+    cursor: pointer;
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--text-primary);
+    transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease, filter 0.12s ease;
+  }
+
+  .btn:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+
+  .btn-secondary {
+    background: transparent;
+    color: var(--text-secondary);
+    border-color: var(--border);
+  }
+
+  .btn-secondary:hover:not(:disabled) {
+    background: var(--bg-overlay);
+    color: var(--text-primary);
+  }
+
+  .btn-primary {
+    background: var(--accent-blue);
+    color: #ffffff;
+    border-color: var(--accent-blue);
+    font-weight: 600;
+  }
+
+  .btn-primary:hover:not(:disabled) {
+    filter: brightness(1.08);
+  }
+
+  .btn-danger {
+    background: var(--accent-red);
+    color: #ffffff;
+    border-color: var(--accent-red);
+    font-weight: 600;
+  }
+
+  .btn-danger:hover:not(:disabled) {
+    filter: brightness(1.08);
+  }
 }

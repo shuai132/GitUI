@@ -119,28 +119,4 @@ code {
   justify-content: flex-end;
 }
 
-.btn {
-  padding: 6px 18px;
-  border-radius: 5px;
-  font-size: var(--font-md);
-  font-weight: 500;
-  cursor: pointer;
-  border: 1px solid transparent;
-}
-
-.btn-secondary {
-  background: var(--bg-overlay);
-  color: var(--text-primary);
-  border-color: var(--border);
-}
-
-.btn-primary {
-  background: var(--accent-blue);
-  color: var(--bg-primary);
-  font-weight: 600;
-}
-
-.btn-primary:hover {
-  filter: brightness(1.1);
-}
 </style>

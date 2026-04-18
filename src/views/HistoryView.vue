@@ -2200,18 +2200,4 @@ onUnmounted(() => {
   line-height: 1.55;
 }
 
-.btn-primary {
-  background: var(--accent-blue);
-  color: var(--bg-primary);
-  font-weight: 600;
-}
-
-.btn-primary:hover:not(:disabled) {
-  opacity: 0.85;
-}
-
-.btn-primary:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
 </style>

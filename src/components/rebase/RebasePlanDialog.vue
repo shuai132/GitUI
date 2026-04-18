@@ -338,33 +338,4 @@ async function onSubmit() {
   resize: vertical;
 }
 
-.btn {
-  padding: 6px 18px;
-  border-radius: 5px;
-  font-size: var(--font-md);
-  font-weight: 500;
-  cursor: pointer;
-  border: 1px solid transparent;
-}
-
-.btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.btn-secondary {
-  background: var(--bg-overlay);
-  color: var(--text-primary);
-  border-color: var(--border);
-}
-
-.btn-primary {
-  background: var(--accent-blue);
-  color: var(--bg-primary);
-  font-weight: 600;
-}
-
-.btn-primary:hover:not(:disabled) {
-  filter: brightness(1.1);
-}
 </style>

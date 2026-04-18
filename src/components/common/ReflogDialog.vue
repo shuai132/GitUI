@@ -78,7 +78,7 @@ function copyOid(oid: string) {
       </table>
     </div>
     <template #footer>
-      <button class="btn-close" @click="emit('close')">{{ t('reflog.close') }}</button>
+      <button class="btn btn-secondary" @click="emit('close')">{{ t('reflog.close') }}</button>
     </template>
   </Modal>
 </template>
@@ -157,18 +157,4 @@ function copyOid(oid: string) {
   text-decoration: underline;
 }
 
-.btn-close {
-  padding: 5px 16px;
-  border-radius: 4px;
-  border: 1px solid var(--border);
-  background: transparent;
-  color: var(--text-secondary);
-  font-size: var(--font-md);
-  cursor: pointer;
-}
-
-.btn-close:hover {
-  background: var(--bg-overlay);
-  color: var(--text-primary);
-}
 </style>

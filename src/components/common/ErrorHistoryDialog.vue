@@ -76,13 +76,13 @@ function onCopy(entry: ErrorEntry) {
     </div>
     <template #footer>
       <button
-        class="btn-secondary"
+        class="btn btn-secondary"
         :disabled="errorsStore.entries.length === 0"
         @click="onClear"
       >
         {{ t('errorHistory.clear') }}
       </button>
-      <button class="btn-close" @click="emit('close')">{{ t('errorHistory.close') }}</button>
+      <button class="btn btn-secondary" @click="emit('close')">{{ t('errorHistory.close') }}</button>
     </template>
   </Modal>
 </template>
@@ -183,25 +183,4 @@ function onCopy(entry: ErrorEntry) {
   border-top: 1px solid var(--border);
 }
 
-.btn-close,
-.btn-secondary {
-  padding: 5px 16px;
-  border-radius: 4px;
-  border: 1px solid var(--border);
-  background: transparent;
-  color: var(--text-secondary);
-  font-size: var(--font-md);
-  cursor: pointer;
-}
-
-.btn-close:hover,
-.btn-secondary:hover:not(:disabled) {
-  background: var(--bg-overlay);
-  color: var(--text-primary);
-}
-
-.btn-secondary:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
 </style>

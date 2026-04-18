@@ -257,29 +257,4 @@ async function onAbort() {
   border-color: var(--accent-blue);
 }
 
-.btn {
-  padding: 6px 18px;
-  border-radius: 5px;
-  font-size: var(--font-md);
-  font-weight: 500;
-  border: 1px solid transparent;
-  cursor: pointer;
-}
-
-.btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.btn-secondary {
-  background: var(--bg-overlay);
-  color: var(--text-primary);
-  border-color: var(--border);
-}
-
-.btn-primary {
-  background: var(--accent-blue);
-  color: var(--bg-primary);
-  font-weight: 600;
-}
 </style>
