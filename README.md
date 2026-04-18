@@ -12,7 +12,7 @@
 - [x] 添加仓库：打开本地 / 克隆远程（含浅克隆、递归子模块、实时进度）/ 新建本地仓库
 - [x] 工作副本：暂存 / 取消暂存、提交、amend、discard（单文件或全部）；文件右键菜单（复制路径、在 Finder/编辑器/终端中打开、添加到 .gitignore）
 - [x] 提交历史：分页加载、提交图可视化、丢失引用 / 贮藏可视化、本地搜索、提交行 tag 胶囊；变动文件右键菜单（复制路径、在 Finder/编辑器中打开、签出该文件历史版本）
-- [x] 提交操作：checkout、cherry-pick、revert、reset（soft / mixed / hard）、创建 tag
+- [x] 提交操作：checkout、cherry-pick、revert、reset（soft / mixed / hard）、创建 tag、修改提交信息（HEAD 走 amend，历史提交走 rebase reword）
 - [x] Merge / Rebase：完整 merge（ff / no-ff / squash）、交互式 rebase（reword / squash / fixup / drop / reorder）；右键菜单或拖拽 commit 触发；冲突时用内置三路合并编辑器解决；可选"自动 stash & 恢复"
 - [x] 分支管理：本地 / 远程树形、创建 / 切换 / 删除、检出远程分支并建立追踪
 - [x] Tag 管理：侧边栏 TAGS 列表、创建、删除

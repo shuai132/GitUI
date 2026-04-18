@@ -286,6 +286,8 @@ const messages = {
       editMessage: {
         title: '修改提交信息',
         confirm: '确认修改',
+        rewordHint: '该提交不在 HEAD，将通过 rebase 重写历史（后续提交 SHA 会变化）。',
+        autoStash: '开始前自动 stash 未提交改动，完成后恢复',
       },
     },
   },
@@ -743,6 +745,7 @@ const messages = {
     rebase: {
       conflict: 'Rebase 出现冲突，请解决后继续',
       dirtyWorktree: '工作区有未提交的变更，请先 commit 或 stash 后再 rebase',
+      planMismatch: '找不到目标提交 {shortOid} 的 rebase 计划项，可能是 HEAD 已变动',
     },
     merge: { conflict: '发生冲突，请在工作区解决后继续' },
     worktree: { dirty: '工作区有未提交的变更，请先 commit / stash / discard' },

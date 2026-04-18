@@ -588,6 +588,8 @@ const showCreateTagDialog = ref(false)
 const showEditMessageDialog = ref(false)
 const editMessageCommit = ref<CommitInfo | null>(null)
 const editMessageText = ref('')
+const editMessageAutoStash = ref(false)
+const editMessageSubmitting = ref(false)
 const createTagAnnotated = ref(false)
 const dialogCommit = ref<CommitInfo | null>(null)
 
@@ -697,6 +699,30 @@ const headCommitOid = computed(() => {
   return headBranch?.commit_oid ?? historyStore.commits[0]?.oid ?? ''
 })
 
+// 目标 commit 是否是 HEAD 的祖先（含 HEAD 本身）。
+// 基于已加载的 historyStore.commits 做 BFS：HEAD 起沿 parent_oids 往回走，命中 target 即为祖先。
+// 未在已加载 commits 中（超出分页或在其他分支上）的提交保守判定为 false。
+function isAncestorOfHead(targetOid: string): boolean {
+  const head = headCommitOid.value
+  if (!head) return false
+  if (head === targetOid) return true
+  const oidMap = new Map<string, CommitInfo>()
+  for (const c of historyStore.commits) oidMap.set(c.oid, c)
+  const visited = new Set<string>()
+  const queue: string[] = [head]
+  let i = 0
+  while (i < queue.length) {
+    const oid = queue[i++]
+    if (visited.has(oid)) continue
+    visited.add(oid)
+    if (oid === targetOid) return true
+    const c = oidMap.get(oid)
+    if (!c) continue
+    for (const p of c.parent_oids) queue.push(p)
+  }
+  return false
+}
+
 // 选中的文件是否冲突文件；是则让 DiffView 渲染 ConflictView 代替普通 diff
 const currentConflictFilePath = computed<string | null>(() => {
   if (!selectedWip.value) return null
@@ -737,6 +763,13 @@ const commitMenuItems = computed<ContextMenuItem[]>(() => {
     .map(b => b.name)
   const canMerge = !ongoing && pointedBranches.length > 0 && c.oid !== headCommitOid.value
   const canRebase = !ongoing && c.oid !== headCommitOid.value
+  // 编辑提交信息：HEAD 走 amend；非 HEAD 走 reword rebase。
+  // 禁用条件：不可达 / ongoing op / 根提交（无法 rebase --root）/ 合并提交（rebase 会线性化丢合并语义）/ 非 HEAD 祖先
+  const isHead = c.oid === headCommitOid.value
+  const canEditMessage =
+    !c.is_unreachable &&
+    !ongoing &&
+    (isHead || (c.parent_oids.length === 1 && isAncestorOfHead(c.oid)))
 
   const items: ContextMenuItem[] = [
     { label: t('history.contextMenu.checkout'), action: 'checkout' },
@@ -744,7 +777,7 @@ const commitMenuItems = computed<ContextMenuItem[]>(() => {
     {
       label: t('history.contextMenu.editMessage'),
       action: 'edit-message',
-      disabled: c.oid !== headCommitOid.value,
+      disabled: !canEditMessage,
     },
     { separator: true },
     { label: t('history.contextMenu.createBranch'), action: 'create-branch' },
@@ -842,6 +875,8 @@ async function onCommitMenuAction(action: string) {
       case 'edit-message':
         editMessageCommit.value = c
         editMessageText.value = c.message.trim()
+        editMessageAutoStash.value = false
+        editMessageSubmitting.value = false
         showEditMessageDialog.value = true
         break
       case 'create-branch':
@@ -923,14 +958,39 @@ async function onCommitMenuAction(action: string) {
 }
 
 async function onEditMessageConfirm() {
-  if (!editMessageText.value.trim()) return
+  const text = editMessageText.value.trim()
+  const commit = editMessageCommit.value
+  if (!text || !commit || editMessageSubmitting.value) return
+  editMessageSubmitting.value = true
   try {
-    await historyStore.amendCommitMessage(editMessageText.value.trim())
+    if (commit.oid === headCommitOid.value) {
+      await historyStore.amendCommitMessage(text)
+    } else {
+      // 非 HEAD：通过 rebase 以 reword 方式重写该提交。
+      // upstream = parent（已在菜单判定时校验为单父 & 祖先），rebase_plan 返回
+      // `parent..HEAD` 的完整 todo，前端找到目标项改为 reword 并预填新消息后启动。
+      const parentOid = commit.parent_oids[0]
+      if (!parentOid) return
+      const todo = await mergeRebaseStore.planRebase(parentOid, null)
+      const idx = todo.findIndex((x) => x.oid === commit.oid)
+      if (idx < 0) {
+        alert(t('errors.rebase.planMismatch', { shortOid: commit.short_oid }))
+        return
+      }
+      todo[idx] = { ...todo[idx], action: 'reword', new_message: text }
+      await mergeRebaseStore.startRebase(parentOid, null, todo, editMessageAutoStash.value)
+    }
     showEditMessageDialog.value = false
   } catch (err) {
     alert(String(err))
+  } finally {
+    editMessageSubmitting.value = false
   }
 }
+
+const isEditingHeadCommit = computed(
+  () => !!editMessageCommit.value && editMessageCommit.value.oid === headCommitOid.value,
+)
 
 async function onDropUnreachableConfirm() {
   const c = dropUnreachableDialog.commit
@@ -1456,6 +1516,9 @@ onUnmounted(() => {
     width="480px"
     @close="showEditMessageDialog = false"
   >
+    <div v-if="!isEditingHeadCommit" class="edit-message-hint">
+      {{ t('history.dialog.editMessage.rewordHint') }}
+    </div>
     <textarea
       v-model="editMessageText"
       class="edit-message-input"
@@ -1463,9 +1526,17 @@ onUnmounted(() => {
       spellcheck="false"
       autocomplete="off"
     />
+    <label v-if="!isEditingHeadCommit" class="edit-message-autostash">
+      <input v-model="editMessageAutoStash" type="checkbox" />
+      <span>{{ t('history.dialog.editMessage.autoStash') }}</span>
+    </label>
     <template #footer>
       <button class="btn btn-secondary" @click="showEditMessageDialog = false">{{ t('common.cancel') }}</button>
-      <button class="btn btn-primary" :disabled="!editMessageText.trim()" @click="onEditMessageConfirm">{{ t('history.dialog.editMessage.confirm') }}</button>
+      <button
+        class="btn btn-primary"
+        :disabled="!editMessageText.trim() || editMessageSubmitting"
+        @click="onEditMessageConfirm"
+      >{{ t('history.dialog.editMessage.confirm') }}</button>
     </template>
   </Modal>
 
@@ -2096,6 +2167,30 @@ onUnmounted(() => {
 
 .edit-message-input:focus {
   border-color: var(--accent-blue);
+}
+
+.edit-message-hint {
+  font-size: var(--font-sm);
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+  padding: 6px 10px;
+  background: var(--bg-overlay);
+  border-radius: 4px;
+}
+
+.edit-message-autostash {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  font-size: var(--font-md);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.edit-message-autostash input[type='checkbox'] {
+  cursor: pointer;
+  accent-color: var(--accent-blue);
 }
 
 .drop-unreachable-body {

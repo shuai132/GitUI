@@ -287,6 +287,8 @@ const messages = {
       editMessage: {
         title: 'Edit Commit Message',
         confirm: 'Apply',
+        rewordHint: 'This commit is not HEAD; history will be rewritten via rebase (later commit SHAs will change).',
+        autoStash: 'Auto-stash uncommitted changes before and restore after',
       },
     },
   },
@@ -744,6 +746,7 @@ const messages = {
     rebase: {
       conflict: 'Rebase conflict detected — resolve it to continue',
       dirtyWorktree: 'Working tree has uncommitted changes, please commit or stash before rebasing',
+      planMismatch: 'Cannot find commit {shortOid} in the rebase plan; HEAD may have moved',
     },
     merge: { conflict: 'Merge conflict detected — resolve it in the working tree to continue' },
     worktree: { dirty: 'Working tree has uncommitted changes, please commit / stash / discard first' },

@@ -13,6 +13,7 @@
 | 位置 | 行为 |
 |------|------|
 | 历史视图 commit 右键菜单 | "将此提交所在分支合并到 <branch>..." → 打开 `MergeDialog`；"将 <branch> 变基到此提交..." → 打开 `RebasePlanDialog` |
+| 历史视图 commit 右键 "修改提交信息..." | HEAD 走 amend；**非 HEAD 且是单父祖先提交**时以 `reword` 预填消息启动 rebase（`parent..HEAD`），`new_message` 已填故 rebase 循环不会暂停——见 [04-history.md](./04-history.md) |
 | 历史视图 commit 拖拽 | 拖拽一条 commit 到另一条 commit，松开后打开 `DragActionDialog` 让用户选合并 / 变基 |
 | 顶部 `OngoingOpBanner` | 仓库处于 merge / rebase 中间态时显示；按钮：继续（merge 弹消息编辑框，rebase 直接推进）/ 跳过（仅 rebase）/ 中止 |
 | `WipPanel` 冲突文件右键 | 打开三路合并编辑器 / 使用 ours / 使用 theirs / 标记已解决 |

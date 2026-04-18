@@ -121,6 +121,7 @@ commit 面板内容有一个计算出的 `commitListMinWidth = graph + desc + ha
 | 菜单项 | 实现 |
 |--------|------|
 | 检出此提交 | `checkoutCommit`，confirm detached HEAD |
+| 修改提交信息... | HEAD → `amend_commit_message`；非 HEAD → 以 `reword` 方式触发 rebase（见 [15-merge-rebase.md](./15-merge-rebase.md)），对话框提供「自动 stash」选项处理脏工作区；合并提交 / 根提交 / 非 HEAD 祖先 / ongoing op 下灰 |
 | 在此创建分支... | 打开 `CreateBranchDialog` |
 | Cherry pick 此提交 | `cherryPickCommit`，confirm |
 | 将 `<branch>` 重置到此提交 | 子菜单 soft / mixed / hard |
