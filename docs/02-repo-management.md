@@ -4,9 +4,9 @@ GitUI 的核心使用场景是"同时挂着多个仓库，随时切换"。这份
 
 ## 涉及模块
 
-- 后端：`commands/repo.rs`、`repo_manager.rs`、`watcher.rs`、`tray.rs`、`lib.rs`
-- 前端：`stores/repos.ts`、`components/layout/AppSidebar.vue`、`App.vue`
-- 事件：`repo://status-changed`
+- 后端：`commands/repo.rs`、`repo_manager.rs`、`watcher.rs`、`tray.rs`、`menu.rs`、`lib.rs`
+- 前端：`stores/repos.ts`、`components/layout/AppSidebar.vue`、`components/layout/AppToolbar.vue`、`App.vue`
+- 事件：`repo://status-changed`、`show-about`
 
 ## RepoManager
 
@@ -293,3 +293,7 @@ onStatusChanged((repoId) => {
 ### macOS 细节
 
 `App.vue` / `AppToolbar.vue` 在 macOS 下留 78px 给 traffic lights，工具栏整体承担窗口拖动区域（`data-tauri-drag-region` + `startDragging`）。双击工具栏空白区域切换最大化。
+
+### macOS application menu（`menu.rs`）
+
+仅 macOS 下在 `setup` 阶段构造一份应用菜单，挂到顶部菜单栏。唯一的自定义项是「About GitUI」：点击后通过 `app.emit("show-about", ())` 通知前端，由 `AppToolbar.vue` 的 listener 弹出应用内 AboutInfo 模态框，替代 Tauri 默认的小窗（保持 logo / 版本 / GitHub 链接 / i18n / 主题一致）。其他项（Services / Hide / Quit / Edit 子菜单 / Window 子菜单）全部用 `PredefinedMenuItem` 构造，复用系统标准行为，避免改写 Cmd+Q / Cmd+C / Cmd+V / Cmd+M 等快捷键。Windows / Linux 不创建 application menu，沿用各自的窗口装饰。

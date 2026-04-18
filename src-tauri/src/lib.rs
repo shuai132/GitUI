@@ -2,6 +2,8 @@ mod auto_fetch;
 mod commands;
 mod git;
 mod logger;
+#[cfg(target_os = "macos")]
+mod menu;
 mod repo_manager;
 mod terminal;
 mod tray;
@@ -146,6 +148,8 @@ pub fn run() {
             logger::set_app_handle(app.handle().clone());
             log::info!("GitUI started");
             tray::setup_tray(&app.handle())?;
+            #[cfg(target_os = "macos")]
+            menu::setup_menu(&app.handle())?;
             app.state::<AutoFetchService>().start(app.handle().clone());
             Ok(())
         })
