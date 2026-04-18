@@ -1,16 +1,70 @@
 use base64::prelude::{Engine as _, BASE64_STANDARD};
 use git2::{
-    BranchType, Diff, DiffFormat, DiffOptions, Repository, RepositoryState, ResetType, StashFlags,
-    StatusOptions, SubmoduleIgnore, SubmoduleStatus,
+    AttrCheckFlags, BranchType, Diff, DiffFormat, DiffOptions, Repository, RepositoryState,
+    ResetType, Signature, StashFlags, StatusOptions, SubmoduleIgnore, SubmoduleStatus,
 };
 use std::path::{Path, PathBuf};
 
 use crate::git::{
     credentials::make_credentials_callback,
+    encoding::{decode_commit_text, decode_ref_name, decode_with, detect_file_encoding},
     error::{GitError, GitResult},
     shellout::{get_remote_url, is_ssh_url, run_git},
     types::*,
 };
+
+/// commit summary 取 message 第一行（trim）。
+/// 自实现而不是 `Commit::summary_bytes()`，是因为我们已经按编码 hint 把 message
+/// 解码成 String，从中切片更准也避免再走一次 git2 的内部解码。
+fn summary_from(message: &str) -> String {
+    message
+        .lines()
+        .find(|l| !l.trim().is_empty())
+        .unwrap_or("")
+        .trim()
+        .to_string()
+}
+
+/// 解码 commit message：用 `Commit::message_encoding()` header 作为 hint。
+fn commit_message_decoded(commit: &git2::Commit<'_>) -> String {
+    decode_commit_text(commit.message_bytes(), commit.message_encoding())
+}
+
+/// 解码 signature 的 name / email：用 commit hint。tag 上也复用同一编码。
+fn signature_name(sig: &Signature<'_>, hint: Option<&str>) -> String {
+    decode_commit_text(sig.name_bytes(), hint)
+}
+fn signature_email(sig: &Signature<'_>, hint: Option<&str>) -> String {
+    decode_commit_text(sig.email_bytes(), hint)
+}
+
+/// 构造 `CommitInfo`，统一处理编码（message / summary / author 走同一 hint）。
+fn build_commit_info(
+    commit: &git2::Commit<'_>,
+    parent_oids: Vec<String>,
+    is_unreachable: bool,
+    is_stash: bool,
+    is_reflog_tip: bool,
+) -> CommitInfo {
+    let oid = commit.id();
+    let hint = commit.message_encoding();
+    let message = commit_message_decoded(commit);
+    let summary = summary_from(&message);
+    let author = commit.author();
+    CommitInfo {
+        oid: oid.to_string(),
+        short_oid: oid.to_string()[..7].to_string(),
+        message,
+        summary,
+        author_name: signature_name(&author, hint),
+        author_email: signature_email(&author, hint),
+        time: commit.time().seconds(),
+        parent_oids,
+        is_unreachable,
+        is_stash,
+        is_reflog_tip,
+    }
+}
 
 /// 二进制预览（图片等）最大读取字节数，超过则不返回原始字节。
 pub const MAX_PREVIEW_BYTES: u64 = 10 * 1024 * 1024;
@@ -129,9 +183,7 @@ impl GitEngine {
             Ok(head) => {
                 let commit = head.peel_to_commit().ok();
                 let commit_oid = commit.as_ref().map(|c| c.id().to_string());
-                let commit_message = commit
-                    .as_ref()
-                    .and_then(|c| c.message().map(|m| m.to_string()));
+                let commit_message = commit.as_ref().map(commit_message_decoded);
                 if head.is_branch() {
                     let branch_name = head.shorthand().map(|s| s.to_string());
                     (branch_name, commit_oid, commit_message, false)
@@ -443,19 +495,13 @@ impl GitEngine {
                 commit.parent_ids().map(|p| p.to_string()).collect()
             };
 
-            commits.push(CommitInfo {
-                oid: oid.to_string(),
-                short_oid: oid.to_string()[..7].to_string(),
-                message: commit.message().unwrap_or("").to_string(),
-                summary: commit.summary().unwrap_or("").to_string(),
-                author_name: commit.author().name().unwrap_or("").to_string(),
-                author_email: commit.author().email().unwrap_or("").to_string(),
-                time: commit.time().seconds(),
+            commits.push(build_commit_info(
+                &commit,
                 parent_oids,
                 is_unreachable,
                 is_stash,
                 is_reflog_tip,
-            });
+            ));
             idx += 1;
         }
 
@@ -474,19 +520,7 @@ impl GitEngine {
         let commit = repo.find_commit(oid)?;
 
         let parent_oids = commit.parent_ids().map(|p| p.to_string()).collect();
-        let info = CommitInfo {
-            oid: oid.to_string(),
-            short_oid: oid.to_string()[..7].to_string(),
-            message: commit.message().unwrap_or("").to_string(),
-            summary: commit.summary().unwrap_or("").to_string(),
-            author_name: commit.author().name().unwrap_or("").to_string(),
-            author_email: commit.author().email().unwrap_or("").to_string(),
-            time: commit.time().seconds(),
-            parent_oids,
-            is_unreachable: false,
-            is_stash: false,
-            is_reflog_tip: false,
-        };
+        let info = build_commit_info(&commit, parent_oids, false, false, false);
 
         let diff = if commit.parent_count() > 0 {
             let parent = commit.parent(0)?;
@@ -502,7 +536,7 @@ impl GitEngine {
             repo.diff_tree_to_tree(None, Some(&commit_tree), Some(&mut DiffOptions::new()))?
         };
 
-        let diffs = Self::parse_diff(&diff)?;
+        let diffs = Self::parse_diff(&repo, &diff)?;
 
         Ok(CommitDetail { info, diffs })
     }
@@ -540,7 +574,7 @@ impl GitEngine {
             repo.diff_index_to_workdir(Some(&index), Some(&mut diff_opts))?
         };
 
-        let diffs = Self::parse_diff(&diff)?;
+        let diffs = Self::parse_diff(&repo, &diff)?;
         Ok(diffs.into_iter().next().unwrap_or(FileDiff {
             old_path: None,
             new_path: Some(file_path.to_string()),
@@ -608,6 +642,18 @@ impl GitEngine {
         let mut deletions = 0usize;
 
         if !is_binary {
+            // 按文件确定编码：attr → 工作区内容（current state）UTF-8 试解 → chardetng
+            let attr_encoding: Option<String> = repo
+                .get_attr(
+                    Path::new(file_path),
+                    "working-tree-encoding",
+                    AttrCheckFlags::default(),
+                )
+                .ok()
+                .flatten()
+                .map(|s| s.to_string());
+            let enc = detect_file_encoding(&new_bytes, attr_encoding.as_deref());
+
             let mut diff_opts = git2::DiffOptions::new();
             diff_opts.context_lines(3).interhunk_lines(0);
             let patch = git2::Patch::from_buffers(
@@ -625,7 +671,7 @@ impl GitEngine {
                     old_lines: hunk.old_lines(),
                     new_start: hunk.new_start(),
                     new_lines: hunk.new_lines(),
-                    header: String::from_utf8_lossy(hunk.header()).to_string(),
+                    header: decode_with(enc, hunk.header()),
                     lines: vec![],
                 };
                 for li in 0..num_lines {
@@ -638,7 +684,7 @@ impl GitEngine {
                     }
                     cur.lines.push(DiffLine {
                         origin,
-                        content: String::from_utf8_lossy(line.content()).to_string(),
+                        content: decode_with(enc, line.content()),
                         old_lineno: line.old_lineno(),
                         new_lineno: line.new_lineno(),
                     });
@@ -659,30 +705,57 @@ impl GitEngine {
         }))
     }
 
-    fn parse_diff(diff: &git2::Diff) -> GitResult<Vec<FileDiff>> {
-        let mut file_diffs: Vec<FileDiff> = Vec::new();
-        let mut current_hunks: Vec<DiffHunk> = Vec::new();
-        let mut current_file: Option<FileDiff> = None;
-        let mut current_hunk: Option<DiffHunk> = None;
-        let mut additions = 0usize;
-        let mut deletions = 0usize;
+    /// 把 git2 diff 解析为 `FileDiff` 列表。
+    ///
+    /// 编码处理分两阶段，避免「跨文件检测」导致的 GBK / UTF-8 混合仓库乱码：
+    ///
+    /// 1. **walk 阶段**：只把每个 hunk header / line content 的原始字节拷进
+    ///    内部 `Pending*` 结构，不立即转 String
+    /// 2. **finalize 阶段**：对每个文件单独决定编码（`.gitattributes` 的
+    ///    `working-tree-encoding` → UTF-8 试解 → chardetng on 全文件拼接），
+    ///    再用该编码 decode 所有 header / line bytes
+    ///
+    /// 见 [`crate::git::encoding`] 模块的优先级链注释。
+    fn parse_diff(repo: &Repository, diff: &git2::Diff) -> GitResult<Vec<FileDiff>> {
+        struct PendingHunk {
+            old_start: u32,
+            old_lines: u32,
+            new_start: u32,
+            new_lines: u32,
+            header_bytes: Vec<u8>,
+            lines: Vec<PendingLine>,
+        }
+        struct PendingLine {
+            origin: char,
+            content_bytes: Vec<u8>,
+            old_lineno: Option<u32>,
+            new_lineno: Option<u32>,
+        }
+        struct PendingFile {
+            old_path: Option<String>,
+            new_path: Option<String>,
+            is_binary: bool,
+            old_blob_oid: Option<String>,
+            new_blob_oid: Option<String>,
+            hunks: Vec<PendingHunk>,
+            current_hunk: Option<PendingHunk>,
+            additions: usize,
+            deletions: usize,
+        }
+
+        let mut files: Vec<PendingFile> = Vec::new();
+        let mut current: Option<PendingFile> = None;
 
         diff.print(DiffFormat::Patch, |delta, hunk, line| {
-            use git2::Delta;
             use git2::DiffLineType;
 
             match line.origin_value() {
                 DiffLineType::FileHeader => {
-                    if let Some(mut f) = current_file.take() {
-                        if let Some(h) = current_hunk.take() {
-                            current_hunks.push(h);
+                    if let Some(mut f) = current.take() {
+                        if let Some(h) = f.current_hunk.take() {
+                            f.hunks.push(h);
                         }
-                        f.hunks = current_hunks.drain(..).collect();
-                        f.additions = additions;
-                        f.deletions = deletions;
-                        file_diffs.push(f);
-                        additions = 0;
-                        deletions = 0;
+                        files.push(f);
                     }
                     let old_path = delta
                         .old_file()
@@ -693,13 +766,6 @@ impl GitEngine {
                         .path()
                         .map(|p| p.to_string_lossy().to_string());
                     let is_binary = delta.old_file().is_binary() || delta.new_file().is_binary();
-                    let status = match delta.status() {
-                        Delta::Added => FileStatusKind::Added,
-                        Delta::Deleted => FileStatusKind::Deleted,
-                        Delta::Renamed => FileStatusKind::Renamed,
-                        _ => FileStatusKind::Modified,
-                    };
-                    let _ = status;
                     let old_id = delta.old_file().id();
                     let new_id = delta.new_file().id();
                     let old_blob_oid = if old_id.is_zero() {
@@ -712,62 +778,71 @@ impl GitEngine {
                     } else {
                         Some(new_id.to_string())
                     };
-                    current_file = Some(FileDiff {
+                    current = Some(PendingFile {
                         old_path,
                         new_path,
                         is_binary,
-                        hunks: vec![],
-                        additions: 0,
-                        deletions: 0,
                         old_blob_oid,
                         new_blob_oid,
+                        hunks: Vec::new(),
+                        current_hunk: None,
+                        additions: 0,
+                        deletions: 0,
                     });
                 }
                 DiffLineType::HunkHeader => {
-                    if let Some(h) = current_hunk.take() {
-                        current_hunks.push(h);
-                    }
-                    if let Some(hunk) = hunk {
-                        current_hunk = Some(DiffHunk {
-                            old_start: hunk.old_start(),
-                            old_lines: hunk.old_lines(),
-                            new_start: hunk.new_start(),
-                            new_lines: hunk.new_lines(),
-                            header: String::from_utf8_lossy(hunk.header()).to_string(),
-                            lines: vec![],
-                        });
+                    if let Some(f) = current.as_mut() {
+                        if let Some(h) = f.current_hunk.take() {
+                            f.hunks.push(h);
+                        }
+                        if let Some(hunk) = hunk {
+                            f.current_hunk = Some(PendingHunk {
+                                old_start: hunk.old_start(),
+                                old_lines: hunk.old_lines(),
+                                new_start: hunk.new_start(),
+                                new_lines: hunk.new_lines(),
+                                header_bytes: hunk.header().to_vec(),
+                                lines: Vec::new(),
+                            });
+                        }
                     }
                 }
                 DiffLineType::Addition => {
-                    additions += 1;
-                    if let Some(h) = current_hunk.as_mut() {
-                        h.lines.push(DiffLine {
-                            origin: '+',
-                            content: String::from_utf8_lossy(line.content()).to_string(),
-                            old_lineno: line.old_lineno(),
-                            new_lineno: line.new_lineno(),
-                        });
+                    if let Some(f) = current.as_mut() {
+                        f.additions += 1;
+                        if let Some(h) = f.current_hunk.as_mut() {
+                            h.lines.push(PendingLine {
+                                origin: '+',
+                                content_bytes: line.content().to_vec(),
+                                old_lineno: line.old_lineno(),
+                                new_lineno: line.new_lineno(),
+                            });
+                        }
                     }
                 }
                 DiffLineType::Deletion => {
-                    deletions += 1;
-                    if let Some(h) = current_hunk.as_mut() {
-                        h.lines.push(DiffLine {
-                            origin: '-',
-                            content: String::from_utf8_lossy(line.content()).to_string(),
-                            old_lineno: line.old_lineno(),
-                            new_lineno: line.new_lineno(),
-                        });
+                    if let Some(f) = current.as_mut() {
+                        f.deletions += 1;
+                        if let Some(h) = f.current_hunk.as_mut() {
+                            h.lines.push(PendingLine {
+                                origin: '-',
+                                content_bytes: line.content().to_vec(),
+                                old_lineno: line.old_lineno(),
+                                new_lineno: line.new_lineno(),
+                            });
+                        }
                     }
                 }
                 DiffLineType::Context => {
-                    if let Some(h) = current_hunk.as_mut() {
-                        h.lines.push(DiffLine {
-                            origin: ' ',
-                            content: String::from_utf8_lossy(line.content()).to_string(),
-                            old_lineno: line.old_lineno(),
-                            new_lineno: line.new_lineno(),
-                        });
+                    if let Some(f) = current.as_mut() {
+                        if let Some(h) = f.current_hunk.as_mut() {
+                            h.lines.push(PendingLine {
+                                origin: ' ',
+                                content_bytes: line.content().to_vec(),
+                                old_lineno: line.old_lineno(),
+                                new_lineno: line.new_lineno(),
+                            });
+                        }
                     }
                 }
                 _ => {}
@@ -775,18 +850,77 @@ impl GitEngine {
             true
         })?;
 
-        // Flush last file
-        if let Some(mut f) = current_file.take() {
-            if let Some(h) = current_hunk.take() {
-                current_hunks.push(h);
+        if let Some(mut f) = current.take() {
+            if let Some(h) = f.current_hunk.take() {
+                f.hunks.push(h);
             }
-            f.hunks = current_hunks.drain(..).collect();
-            f.additions = additions;
-            f.deletions = deletions;
-            file_diffs.push(f);
+            files.push(f);
         }
 
-        Ok(file_diffs)
+        // ── Phase 2: per-file encoding detection + decode ───────────────────
+        const SAMPLE_LIMIT: usize = 64 * 1024;
+        let mut out: Vec<FileDiff> = Vec::with_capacity(files.len());
+        for pending in files {
+            // .gitattributes 的 working-tree-encoding（libgit2 不自动转码，但能读到属性值）
+            let attr_encoding: Option<String> = pending
+                .new_path
+                .as_deref()
+                .or(pending.old_path.as_deref())
+                .and_then(|p| {
+                    repo.get_attr(Path::new(p), "working-tree-encoding", AttrCheckFlags::default())
+                        .ok()
+                        .flatten()
+                        .map(|s| s.to_string())
+                });
+
+            // 拼最多 64KB 字节作为 chardetng 的样本（attr 已声明时其实用不上）
+            let mut sample: Vec<u8> = Vec::new();
+            'outer: for h in &pending.hunks {
+                for l in &h.lines {
+                    sample.extend_from_slice(&l.content_bytes);
+                    if sample.len() >= SAMPLE_LIMIT {
+                        break 'outer;
+                    }
+                }
+            }
+
+            let enc = detect_file_encoding(&sample, attr_encoding.as_deref());
+
+            let hunks: Vec<DiffHunk> = pending
+                .hunks
+                .into_iter()
+                .map(|h| DiffHunk {
+                    old_start: h.old_start,
+                    old_lines: h.old_lines,
+                    new_start: h.new_start,
+                    new_lines: h.new_lines,
+                    header: decode_with(enc, &h.header_bytes),
+                    lines: h
+                        .lines
+                        .into_iter()
+                        .map(|l| DiffLine {
+                            origin: l.origin,
+                            content: decode_with(enc, &l.content_bytes),
+                            old_lineno: l.old_lineno,
+                            new_lineno: l.new_lineno,
+                        })
+                        .collect(),
+                })
+                .collect();
+
+            out.push(FileDiff {
+                old_path: pending.old_path,
+                new_path: pending.new_path,
+                is_binary: pending.is_binary,
+                hunks,
+                additions: pending.additions,
+                deletions: pending.deletions,
+                old_blob_oid: pending.old_blob_oid,
+                new_blob_oid: pending.new_blob_oid,
+            });
+        }
+
+        Ok(out)
     }
 
     /// 按 blob oid 读取原始字节并 base64 编码（用于二进制文件预览）。
@@ -858,7 +992,7 @@ impl GitEngine {
 
         for branch_result in repo.branches(None)? {
             let (branch, branch_type) = branch_result?;
-            let name = branch.name()?.unwrap_or("").to_string();
+            let name = decode_ref_name(branch.name_bytes()?);
             let is_remote = branch_type == BranchType::Remote;
 
             // 跳过远程 HEAD 符号引用（如 origin/HEAD），它在 UI 中没有实际用途
@@ -876,7 +1010,7 @@ impl GitEngine {
             };
             let upstream = upstream_branch
                 .as_ref()
-                .and_then(|u| u.name().ok().flatten().map(|s| s.to_string()));
+                .and_then(|u| u.name_bytes().ok().map(decode_ref_name));
 
             let local_oid = branch.get().peel_to_commit().ok().map(|c| c.id());
             let commit_oid = local_oid.map(|o| o.to_string());
@@ -1004,12 +1138,11 @@ impl GitEngine {
         // tag_foreach 回调里只能借用 &repo（不能持有 Repository），所以在闭包里
         // 完成 find_tag / peel_to_commit，收集到局部 Vec 里。
         repo.tag_foreach(|oid, name_bytes| {
-            let Ok(name_str) = std::str::from_utf8(name_bytes) else {
-                return true;
-            };
+            // ref 名按 lossy 解码（git 规范要求 UTF-8，违规罕见但不要因此跳过整个 tag）
+            let name_str = decode_ref_name(name_bytes);
             let short = name_str
                 .strip_prefix("refs/tags/")
-                .unwrap_or(name_str)
+                .unwrap_or(&name_str)
                 .to_string();
 
             // 先尝试 annotated
@@ -1022,14 +1155,17 @@ impl GitEngine {
                     .map(|c| c.id().to_string())
                     .unwrap_or_else(|_| tag_obj.target_id().to_string());
                 let tagger = tag_obj.tagger();
+                // git2 0.19 未暴露 Tag::message_encoding，hint=None 走 UTF-8 试解 + chardetng
+                let message = tag_obj.message_bytes().and_then(|b| {
+                    let s = decode_commit_text(b, None).trim().to_string();
+                    if s.is_empty() { None } else { Some(s) }
+                });
                 tags.push(TagInfo {
                     name: short,
                     commit_oid,
                     is_annotated: true,
-                    message: tag_obj.message().map(|s| s.trim().to_string()),
-                    tagger_name: tagger
-                        .as_ref()
-                        .and_then(|t| t.name().map(|s| s.to_string())),
+                    message,
+                    tagger_name: tagger.as_ref().map(|t| signature_name(t, None)),
                     time: tagger.as_ref().map(|t| t.when().seconds()),
                 });
             } else {
@@ -1155,11 +1291,13 @@ impl GitEngine {
         let tree = repo.find_tree(tree_oid)?;
         let head_commit = repo.head()?.peel_to_commit()?;
         let signature = repo.signature()?;
+        // 复用原 commit message（按其自身 encoding 解码到 UTF-8）
+        let message = commit_message_decoded(&commit);
         repo.commit(
             Some("HEAD"),
             &commit.author(),
             &signature,
-            commit.message().unwrap_or(""),
+            &message,
             &tree,
             &[&head_commit],
         )?;
@@ -1187,9 +1325,10 @@ impl GitEngine {
         let tree = repo.find_tree(tree_oid)?;
         let head_commit = repo.head()?.peel_to_commit()?;
         let signature = repo.signature()?;
+        let original_summary = summary_from(&commit_message_decoded(&commit));
         let msg = format!(
             "Revert \"{}\"\n\nThis reverts commit {}.",
-            commit.summary().unwrap_or(""),
+            original_summary,
             commit.id()
         );
         repo.commit(
@@ -1544,7 +1683,8 @@ impl GitEngine {
             let names: Vec<String> = repo
                 .submodules()?
                 .iter()
-                .filter_map(|s| s.name().map(|n| n.to_string()))
+                .map(|s| decode_ref_name(s.name_bytes()))
+                .filter(|n| !n.is_empty())
                 .collect();
             drop(repo);
             for name in names {
@@ -1709,7 +1849,8 @@ impl GitEngine {
     pub fn list_remotes(path: &str) -> GitResult<Vec<String>> {
         let repo = Self::open(path)?;
         let remotes = repo.remotes()?;
-        Ok(remotes.iter().flatten().map(|s| s.to_string()).collect())
+        // iter_bytes 拿原始字节走 lossy，避免 git2 严格 UTF-8 检查跳过非法 ref 名
+        Ok(remotes.iter_bytes().map(decode_ref_name).collect())
     }
 
     pub fn get_repo_state(path: &str) -> GitResult<RepoState> {
@@ -1790,7 +1931,7 @@ impl GitEngine {
         let mut result = Vec::new();
 
         for sub in repo.submodules()? {
-            let name = sub.name().unwrap_or("").to_string();
+            let name = decode_ref_name(sub.name_bytes());
             if name.is_empty() {
                 continue;
             }
@@ -2196,9 +2337,13 @@ impl GitEngine {
             let oid = entry.id_new();
             let oid_str = oid.to_string();
             let short_oid = oid_str[..7.min(oid_str.len())].to_string();
-            let message = entry.message().unwrap_or("").to_string();
+            // reflog message 没有自己的 encoding header，按 commit 同等策略走自适应解码
+            let message = entry
+                .message_bytes()
+                .map(|b| decode_commit_text(b, None))
+                .unwrap_or_default();
             let committer = entry.committer();
-            let committer_name = committer.name().unwrap_or("").to_string();
+            let committer_name = decode_commit_text(committer.name_bytes(), None);
             let time = committer.when().seconds();
             entries.push(ReflogEntry {
                 oid: oid_str,
@@ -2383,19 +2528,7 @@ impl GitEngine {
             }
 
             let parent_oids = commit.parent_ids().map(|p| p.to_string()).collect();
-            results.push(CommitInfo {
-                oid: oid.to_string(),
-                short_oid: oid.to_string()[..7].to_string(),
-                message: commit.message().unwrap_or("").to_string(),
-                summary: commit.summary().unwrap_or("").to_string(),
-                author_name: commit.author().name().unwrap_or("").to_string(),
-                author_email: commit.author().email().unwrap_or("").to_string(),
-                time: commit.time().seconds(),
-                parent_oids,
-                is_unreachable: false,
-                is_stash: false,
-                is_reflog_tip: false,
-            });
+            results.push(build_commit_info(&commit, parent_oids, false, false, false));
         }
 
         Ok(results)
@@ -2453,7 +2586,7 @@ impl GitEngine {
             repo.diff_tree_to_tree(None, Some(&commit_tree), Some(&mut diff_opts))?
         };
 
-        let diffs = Self::parse_diff(&diff)?;
+        let diffs = Self::parse_diff(&repo, &diff)?;
         Ok(diffs.into_iter().next().unwrap_or(FileDiff {
             old_path: None,
             new_path: Some(file_path.to_string()),
@@ -2500,14 +2633,18 @@ impl GitEngine {
                     )
                 } else {
                     match repo.find_commit(orig_oid) {
-                        Ok(c) => (
-                            orig_oid.to_string(),
-                            orig_oid.to_string()[..7].to_string(),
-                            c.author().name().unwrap_or("").to_string(),
-                            c.author().email().unwrap_or("").to_string(),
-                            c.time().seconds(),
-                            c.summary().unwrap_or("").to_string(),
-                        ),
+                        Ok(c) => {
+                            let hint = c.message_encoding();
+                            let author = c.author();
+                            (
+                                orig_oid.to_string(),
+                                orig_oid.to_string()[..7].to_string(),
+                                signature_name(&author, hint),
+                                signature_email(&author, hint),
+                                c.time().seconds(),
+                                summary_from(&commit_message_decoded(&c)),
+                            )
+                        }
                         Err(_) => (
                             orig_oid.to_string(),
                             orig_oid.to_string()[..7].to_string(),
