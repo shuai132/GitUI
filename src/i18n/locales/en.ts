@@ -15,7 +15,6 @@ const messages = {
     opFailed: '{label} failed: {message}',
     opSuccess: '{label} succeeded',
     noRemoteConfigured: 'This repository has no remote configured',
-    button: { open: 'Open', new: 'New' },
     search: { placeholder: 'Search commits' },
     title: {
       openRepo: 'Open repository',

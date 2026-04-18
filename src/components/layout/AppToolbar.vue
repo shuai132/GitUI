@@ -302,7 +302,7 @@ function onRemoteMenuClose() {
 }
 
 // ── 添加仓库 ────────────────────────────────────────────────────────
-// 单按钮「新建」，点击直接弹菜单（打开 / 克隆 / 新建），
+// 单按钮「Open」，点击直接弹菜单（打开 / 克隆 / 新建），
 // 与侧栏 + 按钮行为一致。
 function showAddRepoMenu(e: MouseEvent) {
   repoCreation.showMenuAt(e.currentTarget as HTMLElement)
@@ -599,7 +599,7 @@ async function handleDblClick(e: MouseEvent) {
           <line x1="12" y1="5" x2="12" y2="19" />
           <line x1="5" y1="12" x2="19" y2="12" />
         </svg>
-        <span>{{ t('toolbar.button.new') }}</span>
+        <span>Open</span>
       </button>
 
       <div class="toolbar-sep" />
