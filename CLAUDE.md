@@ -173,7 +173,7 @@ Rust `snake_case` 字段 ↔ TypeScript `snake_case` 字段（Tauri 默认不做
 |---|---|
 | `RepoMeta` | `RepoMeta` |
 | `WorkspaceStatus` | `WorkspaceStatus` |
-| `CommitInfo` | `CommitInfo`（含 `is_unreachable`, `is_stash`） |
+| `CommitInfo` | `CommitInfo`（含 `is_unreachable`, `is_stash`, `is_reflog_tip`） |
 | `FileDiff` | `FileDiff` |
 | `BranchInfo` | `BranchInfo`（含 `ahead`, `behind`） |
 | `LogPage` | `LogPage` |

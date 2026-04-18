@@ -353,6 +353,12 @@ export function useGitCommands() {
   const runGc = (repoId: string) =>
     call<string>('run_gc', { repoId })
 
+  const dropUnreachableCommit = (repoId: string, oid: string) =>
+    call<number>('drop_unreachable_commit', { repoId, oid })
+
+  const previewDropUnreachableCommit = (repoId: string, oid: string) =>
+    call<number>('preview_drop_unreachable_commit', { repoId, oid })
+
   const revealFile = (path: string) =>
     call<void>('reveal_file', { path })
 
@@ -456,6 +462,8 @@ export function useGitCommands() {
     discardFile,
     getReflog,
     runGc,
+    dropUnreachableCommit,
+    previewDropUnreachableCommit,
     revealFile,
     openFileInEditor,
     openTerminalHere,

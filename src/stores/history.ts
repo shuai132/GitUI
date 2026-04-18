@@ -224,6 +224,20 @@ export const useHistoryStore = defineStore('history', () => {
     await Promise.all([loadLog(), loadBranches()])
   }
 
+  async function dropUnreachableCommit(oid: string) {
+    const repoStore = useRepoStore()
+    if (!repoStore.activeRepoId) return 0
+    const removed = await git.dropUnreachableCommit(repoStore.activeRepoId, oid)
+    await loadLog()
+    return removed
+  }
+
+  async function previewDropUnreachableCommit(oid: string) {
+    const repoStore = useRepoStore()
+    if (!repoStore.activeRepoId) return 0
+    return await git.previewDropUnreachableCommit(repoStore.activeRepoId, oid)
+  }
+
   async function amendCommitMessage(message: string) {
     const repoStore = useRepoStore()
     if (!repoStore.activeRepoId) return
@@ -355,6 +369,8 @@ export const useHistoryStore = defineStore('history', () => {
     cherryPickCommit,
     revertCommit,
     resetToCommit,
+    dropUnreachableCommit,
+    previewDropUnreachableCommit,
     amendCommitMessage,
     createTag,
     deleteTag,

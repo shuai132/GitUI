@@ -127,6 +127,8 @@ pub fn run() {
             discard_file,
             get_reflog,
             run_gc,
+            drop_unreachable_commit,
+            preview_drop_unreachable_commit,
             reveal_file,
             open_file_in_editor,
             open_terminal_here,

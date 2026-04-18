@@ -21,7 +21,7 @@
 - [x] Submodule：init / update / edit URL / deinit，已克隆的可作为新仓库打开
 - [x] Diff 查看器：inline / side-by-side / by-hunk 三种模式、多语言语法高亮、图片 / SVG 预览
 - [x] Stash：push / pop / apply / delete（含 untracked 文件），用提交信息作 stash message
-- [x] Reflog 查看、git gc 触发入口
+- [x] Reflog 查看、git gc 触发入口；右键丢失引用提交可从 HEAD reflog 中剥链移除
 - [x] 工作目录文件监控，状态自动刷新
 - [x] 内置终端：应用内（xterm.js + PTY）/ 调用外部终端
 - [x] 调试日志面板：命令历史 + Rust 后端日志

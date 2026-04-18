@@ -162,6 +162,12 @@ pub struct CommitInfo {
     /// 该提交是一条 stash 的根提交
     #[serde(default)]
     pub is_stash: bool,
+    /// 该提交是 HEAD reflog 闭包中的 "tip"：oid 直接出现在某条 reflog entry 的 new_oid 里，
+    /// 且不是任何其他 reflog oid 的严格祖先。只有 tip 才能通过 `drop_unreachable_commit`
+    /// 直接从视图中移除；非 tip 的 unreachable commit 需要先把它的"后代 tip"移除，
+    /// 它才会晋升为新的 tip。详见 docs/10-stash-reflog.md。
+    #[serde(default)]
+    pub is_reflog_tip: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

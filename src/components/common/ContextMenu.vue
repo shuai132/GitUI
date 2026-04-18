@@ -11,6 +11,8 @@ export interface ContextMenuItem {
   danger?: boolean
   /** 有 children 时，本项作为父项，hover 弹出二级子菜单（不再支持第三级） */
   children?: ContextMenuItem[]
+  /** 鼠标悬停时展示的原生 tooltip；常用于解释为什么 disabled */
+  title?: string
 }
 
 const props = defineProps<{
@@ -178,6 +180,7 @@ onBeforeUnmount(() => {
             'menu-item--disabled': item.disabled,
             'menu-item--danger': item.danger,
           }"
+          :title="item.title"
           @mouseenter="onNonParentMouseEnter"
           @click="onItemClick(item)"
         >

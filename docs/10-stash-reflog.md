@@ -89,6 +89,33 @@
 
 `uiStore.showUnreachableCommits` 开启时，`get_log` 会额外把 HEAD reflog 里那些既不在任何 ref 也不在 stash 集合里的 oid 推进 revwalk 展示。Reflog 对话框是纯查看工具，不改变历史图；丢失引用开关则是把 reflog 里的"孤儿 commit"画到图上。两者互补。
 
+### 从 reflog 中移除单个丢失引用
+
+历史图在 `is_unreachable === true` 的提交上提供"从 reflog 中移除"菜单项，对应命令 `drop_unreachable_commit`（见 `GitEngine::drop_unreachable_commit`），语义是**剥链**：
+
+- 遍历 HEAD reflog 的每条 entry；设其 `new_oid == x`
+- 若 `x == target` 或 target 是 x 的祖先（从 x 出发 revwalk 能遇到 target），该 entry 命中
+- 所有命中 entry 一并删除，再 `reflog.write()` 落盘
+- 返回实际删除数；幂等（重复执行返回 0，不报错）
+- 对象本身仍停留在 `.git/objects/`，由后续 `git gc` 按默认过期策略自然回收
+
+#### 为什么是剥链而不是单条
+
+GitUI 的"丢失引用"视图是"HEAD reflog 闭包"——`get_log` 把 reflog 里的每个 oid 都 push 成 revwalk 起点，显示的是这些起点的**祖先闭包**。因此只删目标自己的 reflog entry 常常看不到视觉变化：它仍能从"以目标为祖先"的更年轻 reflog 起点递归可达。
+
+剥链算法把这些后代入口一并移除，确保目标从视图上真正消失。代价是：点击中间 / 尾端的 commit 时，它的所有 unreachable 后代的 reflog 入口也会被一起清掉。二次确认对话框通过 `preview_drop_unreachable_commit`（dry-run）事前告知具体数量（"将从 HEAD reflog 中移除 N 条引用"），用户据此决定是否继续。
+
+#### `is_reflog_tip` 字段
+
+`CommitInfo.is_reflog_tip` 在 `get_log` 里计算：一个 unreachable commit 是 tip 当且仅当 **oid 在 HEAD reflog 里出现过**（即本身就是 revwalk 起点之一）**且不是任何其他 reflog oid 的严格祖先**。实现上在 `include_unreachable` 分支里对每个 `reflog_oid` 单独跑一次辅助 revwalk、跳过自身后的遍历结果并入 `strict_ancestors` 集合，然后 `is_reflog_tip = reflog_oids.contains(oid) && !strict_ancestors.contains(oid)`。
+
+该字段**当前前端不消费**——视觉上所有 unreachable 共享一档 dim，右键菜单对任何 unreachable 都启用，点击后由 `preview_drop_unreachable_commit` 精确告知影响数。早期版本曾用它做视觉分级（tip 深、ancestor 浅）和菜单禁用，经用户反馈过于费解已全部撤回。字段保留是为了未来可能的微 UI 提示（hover 角标等）。
+
+#### 和整仓 `run_gc` 的分工
+
+- **`drop_unreachable_commit`**：定向剥链，只处理目标及其后代的 reflog 入口；立即生效、零等待
+- **`run_gc`**：仓库维护操作，批量回收物理空间；会连带清掉所有符合 gc 策略的 unreachable 对象
+
 ## git gc
 
 ### 入口

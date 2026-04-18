@@ -84,6 +84,9 @@ export interface CommitInfo {
   is_unreachable: boolean
   /** 该提交是某条 stash 的根提交 */
   is_stash: boolean
+  /** 该提交是 HEAD reflog 闭包的 tip（oid 在 reflog 且不是其他 reflog oid 的严格祖先）。
+   *  仅 tip 能通过右键菜单直接从 reflog 中移除。 */
+  is_reflog_tip: boolean
 }
 
 export interface BranchInfo {

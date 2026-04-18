@@ -264,6 +264,7 @@ const messages = {
       stashDelete: 'Delete Stash',
       mergeInto: "Merge this commit's branch into {branch}…",
       rebaseOnto: 'Rebase {branch} onto this commit…',
+      dropUnreachable: 'Remove from reflog',
     },
     dialog: {
       confirmCheckout: { body: 'Checking out commit {shortOid} will leave HEAD detached. Continue?' },
@@ -275,6 +276,14 @@ const messages = {
         mode: { soft: 'soft', mixed: 'mixed', hard: 'hard' },
       },
       confirmStashDelete: { body: "Delete stash{'@'}{index} \"{message}\"? This cannot be undone." },
+      dropUnreachable: {
+        title: 'Remove from reflog',
+        body: 'Remove {count} reflog entr(y/ies) so that {shortOid} no longer appears as unreachable. If {shortOid} has other unreachable descendants, their reflog entries are removed as well. Objects themselves are reclaimed later by git gc under the default policy.',
+        emptyBody:
+          'No matching entry for {shortOid} in the HEAD reflog closure; nothing to do (it may have been cleared by another tool).',
+        confirm: 'Remove',
+        close: 'Close',
+      },
       editMessage: {
         title: 'Edit Commit Message',
         confirm: 'Apply',

@@ -591,6 +591,16 @@ const editMessageText = ref('')
 const createTagAnnotated = ref(false)
 const dialogCommit = ref<CommitInfo | null>(null)
 
+// 从 reflog 中移除 unreachable 提交的对话框状态。走项目内 Modal 组件，
+// 不用原生 window.confirm/alert —— macOS 下 Tauri WebView 对这些 API 的
+// 支持不稳定（可能静默吞掉），不如走统一对话框体验。
+const dropUnreachableDialog = reactive({
+  visible: false,
+  commit: null as CommitInfo | null,
+  count: 0,
+  submitting: false,
+})
+
 // ── Merge / Rebase 对话框状态 ─────────────────────────────────────
 const showMergeDialog = ref(false)
 const mergeSourceCandidates = ref<string[]>([])
@@ -728,7 +738,7 @@ const commitMenuItems = computed<ContextMenuItem[]>(() => {
   const canMerge = !ongoing && pointedBranches.length > 0 && c.oid !== headCommitOid.value
   const canRebase = !ongoing && c.oid !== headCommitOid.value
 
-  return [
+  const items: ContextMenuItem[] = [
     { label: t('history.contextMenu.checkout'), action: 'checkout' },
     { separator: true },
     {
@@ -765,6 +775,18 @@ const commitMenuItems = computed<ContextMenuItem[]>(() => {
     { label: t('history.contextMenu.createTag'), action: 'create-tag' },
     { label: t('history.contextMenu.createAnnotatedTag'), action: 'create-annotated-tag' },
   ]
+
+  // 丢失引用专属：从 HEAD reflog 中移除让该 commit 从 unreachable 视图消失所需的所有 entry（剥链）。
+  // tip 点了只删自己；中间 / 尾端点了会连带删掉所有"以它为祖先"的 reflog 入口。
+  // 二次确认前通过 preview 命令取具体数量，详见 docs/10-stash-reflog.md。
+  if (c.is_unreachable) {
+    items.push(
+      { separator: true },
+      { label: t('history.contextMenu.dropUnreachable'), action: 'drop-unreachable' },
+    )
+  }
+
+  return items
 })
 
 function onCommitContextMenu(e: MouseEvent, commit: CommitInfo | undefined) {
@@ -873,6 +895,17 @@ async function onCommitMenuAction(action: string) {
       case 'copy-sha':
         await navigator.clipboard.writeText(c.oid)
         break
+      case 'drop-unreachable': {
+        // 先 preview 拿到受影响条数，再弹自定义 Modal（替代原生 confirm/alert，
+        // 后者在 Tauri macOS WebView 下可能静默失效）。count === 0 时也展示，
+        // 让用户看到"无需操作"的明确反馈。
+        const count = await historyStore.previewDropUnreachableCommit(c.oid)
+        dropUnreachableDialog.commit = c
+        dropUnreachableDialog.count = count
+        dropUnreachableDialog.submitting = false
+        dropUnreachableDialog.visible = true
+        break
+      }
       case 'create-tag':
         dialogCommit.value = c
         createTagAnnotated.value = false
@@ -897,6 +930,25 @@ async function onEditMessageConfirm() {
   } catch (err) {
     alert(String(err))
   }
+}
+
+async function onDropUnreachableConfirm() {
+  const c = dropUnreachableDialog.commit
+  if (!c) return
+  dropUnreachableDialog.submitting = true
+  try {
+    await historyStore.dropUnreachableCommit(c.oid)
+    dropUnreachableDialog.visible = false
+  } catch (err) {
+    alert(String(err))
+  } finally {
+    dropUnreachableDialog.submitting = false
+  }
+}
+
+function onDropUnreachableCancel() {
+  dropUnreachableDialog.visible = false
+  dropUnreachableDialog.commit = null
 }
 
 // ── WIP 行文件 diff：离开 WIP 模式时清掉 diff store 里的工作区 diff ───
@@ -1414,6 +1466,38 @@ onUnmounted(() => {
     <template #footer>
       <button class="btn btn-secondary" @click="showEditMessageDialog = false">{{ t('common.cancel') }}</button>
       <button class="btn btn-primary" :disabled="!editMessageText.trim()" @click="onEditMessageConfirm">{{ t('history.dialog.editMessage.confirm') }}</button>
+    </template>
+  </Modal>
+
+  <!-- Drop unreachable reflog entries dialog（替代原生 confirm/alert） -->
+  <Modal
+    v-if="dropUnreachableDialog.visible"
+    :visible="dropUnreachableDialog.visible"
+    :title="t('history.dialog.dropUnreachable.title')"
+    width="480px"
+    @close="onDropUnreachableCancel"
+  >
+    <p class="drop-unreachable-body">
+      <template v-if="dropUnreachableDialog.count === 0">
+        {{ t('history.dialog.dropUnreachable.emptyBody', { shortOid: dropUnreachableDialog.commit?.short_oid ?? '' }) }}
+      </template>
+      <template v-else>
+        {{ t('history.dialog.dropUnreachable.body', {
+          shortOid: dropUnreachableDialog.commit?.short_oid ?? '',
+          count: dropUnreachableDialog.count,
+        }) }}
+      </template>
+    </p>
+    <template #footer>
+      <button class="btn btn-secondary" @click="onDropUnreachableCancel">
+        {{ dropUnreachableDialog.count === 0 ? t('history.dialog.dropUnreachable.close') : t('common.cancel') }}
+      </button>
+      <button
+        v-if="dropUnreachableDialog.count > 0"
+        class="btn btn-primary"
+        :disabled="dropUnreachableDialog.submitting"
+        @click="onDropUnreachableConfirm"
+      >{{ t('history.dialog.dropUnreachable.confirm') }}</button>
     </template>
   </Modal>
 
@@ -2012,6 +2096,13 @@ onUnmounted(() => {
 
 .edit-message-input:focus {
   border-color: var(--accent-blue);
+}
+
+.drop-unreachable-body {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: var(--font-md);
+  line-height: 1.55;
 }
 
 .btn-primary {

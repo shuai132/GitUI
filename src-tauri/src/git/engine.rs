@@ -371,6 +371,11 @@ impl GitEngine {
             }
         }
 
+        // 收集"被 push 为 revwalk 起点"的 reflog oid（只记 unreachable 分支下的那些），
+        // 以及"严格是其他 reflog oid 祖先"的集合——用于下面计算 is_reflog_tip。
+        let mut reflog_oids: HashSet<git2::Oid> = HashSet::new();
+        let mut strict_ancestors: HashSet<git2::Oid> = HashSet::new();
+
         if include_unreachable {
             // 遍历 HEAD reflog，把不在 reachable 也不在 stash 集合里的 oid 推入
             if let Ok(reflog) = repo.reflog("HEAD") {
@@ -378,6 +383,26 @@ impl GitEngine {
                     let oid = entry.id_new();
                     if !reachable.contains(&oid) && !stash_set.contains(&oid) {
                         revwalk.push(oid).ok();
+                        reflog_oids.insert(oid);
+                    }
+                }
+            }
+
+            // Tip 判定：对每个 reflog_oid 单独 walk 一次，跳过自身后的遍历结果
+            // 就是它的严格祖先。一个 reflog_oid 如果出现在别人的严格祖先里，就不是 tip。
+            // reflog 条目上限 500，实测代价可忽略。
+            for root in &reflog_oids {
+                if let Ok(mut aux) = repo.revwalk() {
+                    if aux.push(*root).is_err() {
+                        continue;
+                    }
+                    // 第一个元素是 root 本身，跳过；其余即为严格祖先
+                    let mut it = aux.into_iter();
+                    let _ = it.next();
+                    for oid_result in it {
+                        if let Ok(anc) = oid_result {
+                            strict_ancestors.insert(anc);
+                        }
                     }
                 }
             }
@@ -404,6 +429,8 @@ impl GitEngine {
             let commit = repo.find_commit(oid)?;
             let is_stash = stash_set.contains(&oid);
             let is_unreachable = !is_stash && !reachable.contains(&oid);
+            let is_reflog_tip =
+                is_unreachable && reflog_oids.contains(&oid) && !strict_ancestors.contains(&oid);
 
             // stash 在 DAG 中视作普通 1-parent commit：parent_oids 只保留 parent[0] (HEAD)
             let parent_oids: Vec<String> = if is_stash {
@@ -427,6 +454,7 @@ impl GitEngine {
                 parent_oids,
                 is_unreachable,
                 is_stash,
+                is_reflog_tip,
             });
             idx += 1;
         }
@@ -457,6 +485,7 @@ impl GitEngine {
             parent_oids,
             is_unreachable: false,
             is_stash: false,
+            is_reflog_tip: false,
         };
 
         let diff = if commit.parent_count() > 0 {
@@ -2189,6 +2218,90 @@ impl GitEngine {
         Ok("git gc 完成".to_string())
     }
 
+    /// 计算"让 target 从 HEAD reflog 闭包里消失"所需要移除的 reflog entry 索引集合。
+    ///
+    /// 算法：对每个 HEAD reflog entry 的 `new_oid x`，当 `x == target` 或 target
+    /// 是 x 的祖先（即从 x 出发 revwalk 能遇到 target）时，该 entry 被列入移除集合。
+    /// 这样移除后，任何以 x 为起点的 revwalk 都不会再带出 target，前端视图也就
+    /// 不再把 target 显示为 unreachable。
+    ///
+    /// 抽出独立函数供 `drop_unreachable_commit` 和 `preview_drop_unreachable_commit` 共用。
+    fn compute_drop_unreachable_indices(
+        repo: &Repository,
+        reflog: &git2::Reflog,
+        target: git2::Oid,
+    ) -> Vec<usize> {
+        let mut indices: Vec<usize> = Vec::new();
+        for i in 0..reflog.len() {
+            let Some(entry) = reflog.get(i) else { continue };
+            let root = entry.id_new();
+            if root == target {
+                indices.push(i);
+                continue;
+            }
+            // 判断 target 是否是 root 的祖先：从 root revwalk 看 target 能否被访问
+            let Ok(mut walk) = repo.revwalk() else { continue };
+            if walk.push(root).is_err() {
+                continue;
+            }
+            for anc in walk.flatten() {
+                if anc == target {
+                    indices.push(i);
+                    break;
+                }
+            }
+        }
+        indices
+    }
+
+    /// 从 HEAD reflog 中移除让 `oid` 从 unreachable 视图消失所需的所有 entry（剥链）。
+    ///
+    /// 行为：
+    /// - 对某条 reflog entry，其 `new_oid` 等于 target 或以 target 为祖先时命中，一并删除
+    /// - 点 tip（没人把它当祖先）时只删自己；点链中/尾端时会带走所有后代的 reflog 入口
+    /// - 对象本身仍留在 `.git/objects/`，由后续 `git gc` 按默认过期策略自然回收
+    ///
+    /// 返回实际删除的 entry 数（0 表示 reflog 里没有命中项，属幂等情形）。
+    /// 不直接写回前可通过 `preview_drop_unreachable_commit` 提前取数，用作二次确认文案。
+    pub fn drop_unreachable_commit(path: &str, oid: &str) -> GitResult<usize> {
+        let repo = Self::open(path)?;
+        let target = git2::Oid::from_str(oid)
+            .map_err(|e| GitError::OperationFailed(format!("无效的 oid：{}", e)))?;
+        let mut reflog = repo
+            .reflog("HEAD")
+            .map_err(|e| GitError::OperationFailed(format!("读取 reflog 失败：{}", e)))?;
+
+        let indices = Self::compute_drop_unreachable_indices(&repo, &reflog, target);
+
+        // 从末尾向前删避免索引失效；不重写前一条的 old_oid 链（rewrite_previous_entry = false），
+        // 让 reflog 历史反映"entry 被移除"这件事本身，而不是伪造一段连贯的时间线。
+        for &i in indices.iter().rev() {
+            reflog
+                .remove(i, false)
+                .map_err(|e| GitError::OperationFailed(format!("移除 reflog 条目失败：{}", e)))?;
+        }
+
+        if !indices.is_empty() {
+            reflog
+                .write()
+                .map_err(|e| GitError::OperationFailed(format!("写回 reflog 失败：{}", e)))?;
+        }
+
+        Ok(indices.len())
+    }
+
+    /// `drop_unreachable_commit` 的 dry-run：只计算将要被移除的 reflog entry 数，不实际写回。
+    /// 供前端在二次确认对话框里显示影响范围（"将同时移除 N 条 reflog 引用"）。
+    pub fn preview_drop_unreachable_commit(path: &str, oid: &str) -> GitResult<usize> {
+        let repo = Self::open(path)?;
+        let target = git2::Oid::from_str(oid)
+            .map_err(|e| GitError::OperationFailed(format!("无效的 oid：{}", e)))?;
+        let reflog = repo
+            .reflog("HEAD")
+            .map_err(|e| GitError::OperationFailed(format!("读取 reflog 失败：{}", e)))?;
+        Ok(Self::compute_drop_unreachable_indices(&repo, &reflog, target).len())
+    }
+
     /// 从 .gitmodules 文本中移除 `[submodule "<name>"]` 及其后续字段行。
     /// 若删除后整个文件仅剩空白则删除文件本身。
     fn strip_gitmodules_section(gitmodules_path: &Path, name: &str) -> GitResult<()> {
@@ -2281,6 +2394,7 @@ impl GitEngine {
                 parent_oids,
                 is_unreachable: false,
                 is_stash: false,
+                is_reflog_tip: false,
             });
         }
 

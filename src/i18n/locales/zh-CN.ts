@@ -264,6 +264,7 @@ const messages = {
       stashDelete: 'Delete Stash',
       mergeInto: '将此提交所在分支合并到 {branch}...',
       rebaseOnto: '将 {branch} 变基到此提交...',
+      dropUnreachable: '从 reflog 中移除',
     },
     dialog: {
       confirmCheckout: { body: '检出到提交 {shortOid} 将进入 detached HEAD 状态，确认？' },
@@ -275,6 +276,13 @@ const messages = {
         mode: { soft: 'soft', mixed: 'mixed', hard: 'hard' },
       },
       confirmStashDelete: { body: "确认删除 stash{'@'}{index} \"{message}\"？此操作不可撤销。" },
+      dropUnreachable: {
+        title: '从 reflog 中移除',
+        body: '将从 HEAD reflog 中移除 {count} 条引用，使 {shortOid} 不再显示为丢失引用。若 {shortOid} 仍有其他丢失引用的后代，它们的 reflog 入口也会被一并清掉。对象本身仍由后续 git gc 按默认策略自然回收。',
+        emptyBody: '{shortOid} 在 HEAD reflog 闭包里已经没有对应入口，无需操作（可能已被其他工具清理）。',
+        confirm: '确认移除',
+        close: '关闭',
+      },
       editMessage: {
         title: '修改提交信息',
         confirm: '确认修改',

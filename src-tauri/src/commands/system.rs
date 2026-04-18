@@ -123,6 +123,35 @@ pub async fn run_gc(
     GitEngine::run_gc(&meta.path)
 }
 
+/// 从 HEAD reflog 中移除让 `oid` 从 unreachable 视图消失所需的所有 entry（剥链）。
+/// 具体语义见 `GitEngine::drop_unreachable_commit`：包含目标自身以及所有把目标作为祖先的 reflog 入口。
+/// 返回实际删除的 entry 数；配合 `preview_drop_unreachable_commit` 可在执行前预览数量。
+#[tauri::command]
+pub async fn drop_unreachable_commit(
+    repo_id: String,
+    oid: String,
+    repo_manager: State<'_, RepoManager>,
+) -> Result<usize, GitError> {
+    let meta = repo_manager
+        .get_meta(&repo_id)
+        .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
+    GitEngine::drop_unreachable_commit(&meta.path, &oid)
+}
+
+/// `drop_unreachable_commit` 的 dry-run：返回将被移除的 reflog entry 数，不改 reflog。
+/// 前端在二次确认对话框显示"将同时移除 N 条 reflog 引用"。
+#[tauri::command]
+pub async fn preview_drop_unreachable_commit(
+    repo_id: String,
+    oid: String,
+    repo_manager: State<'_, RepoManager>,
+) -> Result<usize, GitError> {
+    let meta = repo_manager
+        .get_meta(&repo_id)
+        .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
+    GitEngine::preview_drop_unreachable_commit(&meta.path, &oid)
+}
+
 /// 在一个新的 GitUI 实例（新进程）里打开指定仓库。
 ///
 /// - macOS: 找到当前 `.app` bundle，用 `open -n -a <bundle> --args --open-repo <path>`
