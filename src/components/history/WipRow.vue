@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { LANE_W, ROW_H, CIRCLE_R, laneX } from '@/utils/graph'
+import { LANE_W, CIRCLE_R, laneX } from '@/utils/graph'
+import { useSettingsStore } from '@/stores/settings'
 
 const { t } = useI18n()
 
@@ -15,7 +16,9 @@ const props = defineProps<{
   descColWidth: number
 }>()
 
-const midY = ROW_H / 2
+const settings = useSettingsStore()
+const rowH = computed(() => settings.historyRowHeight)
+const midY = computed(() => rowH.value / 2)
 const circleX = laneX(0)
 // 确保 SVG 宽度不小于 graph 列的宽度，让虚线圆和后面的 commit 行对齐
 const svgWidth = computed(() => Math.max(LANE_W, props.graphColWidth))
@@ -29,7 +32,7 @@ const totalCount = computed(() =>
   <div class="col-graph" :style="{ width: graphColWidth + 'px' }">
     <svg
       :width="svgWidth"
-      :height="ROW_H"
+      :height="rowH"
       class="wip-graph"
       :style="{ minWidth: svgWidth + 'px' }"
       xmlns="http://www.w3.org/2000/svg"

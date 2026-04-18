@@ -9,8 +9,9 @@ import { useWorkspaceStore } from '@/stores/workspace'
 import { useDiffStore } from '@/stores/diff'
 import { useStashStore } from '@/stores/stash'
 import { useUiStore } from '@/stores/ui'
+import { useSettingsStore } from '@/stores/settings'
 import { formatAbsoluteTime, formatAuthor, formatHistoryTime } from '@/utils/format'
-import { LANE_W, ROW_H } from '@/utils/graph'
+import { LANE_W } from '@/utils/graph'
 import CommitGraphRow from '@/components/history/CommitGraphRow.vue'
 import WipRow from '@/components/history/WipRow.vue'
 import DiffView from '@/components/diff/DiffView.vue'
@@ -37,7 +38,13 @@ const workspaceStore = useWorkspaceStore()
 const diffStore = useDiffStore()
 const stashStore = useStashStore()
 const uiStore = useUiStore()
+const settingsStore = useSettingsStore()
 const mergeRebaseStore = useMergeRebaseStore()
+
+// 历史列表每行高度（响应式，随设置变化）。
+// 行 `div.height` 走 CSS 变量 var(--history-row-height)（滚动热路径 0 开销），
+// 这里的 computed 仅给虚拟化器 `estimateSize` / 加载阈值用。
+const rowH = computed(() => settingsStore.historyRowHeight)
 
 // ── 键盘导航焦点：最后一次点击过 commits / files 中的哪一个 ────────
 type ActivePane = 'commits' | 'files'
@@ -144,17 +151,22 @@ const virtualizer = useVirtualizer(
   computed(() => ({
     count: virtualRowCount.value,
     getScrollElement: () => scrollContainer.value,
-    estimateSize: () => ROW_H,
+    estimateSize: () => rowH.value,
     overscan: 4,
   }))
 )
+
+// 行高变化时强制虚拟化器丢弃旧 size 缓存，按新值重排。
+watch(rowH, () => {
+  virtualizer.value.measure()
+})
 
 // Load more when near the bottom; 同步列头水平滚动
 function onScroll() {
   const el = scrollContainer.value
   if (!el) return
   if (headerScrollLeft.value !== el.scrollLeft) headerScrollLeft.value = el.scrollLeft
-  if (el.scrollHeight - el.scrollTop - el.clientHeight < ROW_H * 5) {
+  if (el.scrollHeight - el.scrollTop - el.clientHeight < rowH.value * 5) {
     historyStore.loadMore()
   }
 }
@@ -1202,7 +1214,7 @@ onUnmounted(() => {
                 :style="{
                   position: 'absolute',
                   top: vRow.start + 'px',
-                  height: ROW_H + 'px',
+                  height: 'var(--history-row-height)',
                   width: '100%',
                 }"
                 @click="showWipRow ? selectWipRow() : undefined"
@@ -1250,7 +1262,7 @@ onUnmounted(() => {
                 :style="{
                   position: 'absolute',
                   top: vRow.start + 'px',
-                  height: ROW_H + 'px',
+                  height: 'var(--history-row-height)',
                   width: '100%',
                 }"
                 :draggable="!filteredCommits[toRealIdx(vRow.index)]?.is_stash"

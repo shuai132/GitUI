@@ -16,7 +16,7 @@
 - **`GraphRow`**：`column`（本 commit 所在 lane 列号）、`color`（圆点色）、`segments`（要画的线段）、`totalColumns`（行宽）、`isUnreachable` / `isStash` 标记
 - **`GraphSegment`**：`fromCol` / `toCol`（起止列）、`color`、`upper` / `lower`（是否占上半行 / 下半行）
 
-布局常量（lane 宽度、行高、圆点半径）和 `GRAPH_COLORS`（8 色轮换配色表）集中在 `src/utils/graph.ts` 顶部，下文描述中出现的 `LANE_W` / `ROW_H` / `CIRCLE_R` 都指那里的值，需要调整时只改那一处。
+布局常量（lane 宽度、行高、圆点半径）和 `GRAPH_COLORS`（8 色轮换配色表）集中在 `src/utils/graph.ts` 顶部，下文描述中出现的 `LANE_W` / `ROW_H` / `CIRCLE_R` 都指那里的值，需要调整时只改那一处。其中 `ROW_H` 仅作默认值 / fallback，实际渲染走 `settings.historyRowHeight`（CSS 变量 `--history-row-height`），见 [12-settings.md](./12-settings.md)。
 
 ## 算法（pvigier 变体）
 

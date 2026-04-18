@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { LANE_W, ROW_H, CIRCLE_R, laneX, type GraphRow, type GraphSegment } from '@/utils/graph'
+import { LANE_W, CIRCLE_R, laneX, type GraphRow, type GraphSegment } from '@/utils/graph'
 import { useSettingsStore } from '@/stores/settings'
 
 const props = defineProps<{
@@ -11,7 +11,9 @@ const props = defineProps<{
 const settings = useSettingsStore()
 
 const svgWidth = computed(() => Math.max(props.row.totalColumns, 1) * LANE_W)
-const midY = ROW_H / 2
+// 行高 / 垂直中点随设置响应式变化（SVG path d 属性无法用 CSS 变量）
+const rowH = computed(() => settings.historyRowHeight)
+const midY = computed(() => rowH.value / 2)
 
 const UNREACHABLE_COLOR = 'var(--text-muted)'
 
@@ -69,24 +71,26 @@ const circleAttrs = computed(() => {
  * 同列直线两风格共用 M…L。
  */
 function segmentPath(seg: { fromCol: number; toCol: number; upper: boolean; lower: boolean }): string {
+  const H = rowH.value
+  const mid = midY.value
   const x1 = laneX(seg.fromCol)
   const x2 = laneX(seg.toCol)
 
   if (seg.fromCol === seg.toCol) {
-    const y1 = seg.upper ? 0 : midY
-    const y2 = seg.lower ? ROW_H : midY
+    const y1 = seg.upper ? 0 : mid
+    const y2 = seg.lower ? H : mid
     return `M ${x1},${y1} L ${x2},${y2}`
   }
 
   if (settings.graphStyle === 'angular') {
     // 控制点退化（C1=P0、C2=P3）→ 实质是直线，视觉呈折线 / 锐角
     if (seg.upper && !seg.lower) {
-      return `M ${x1},0 C ${x1},${midY} ${x2},${midY} ${x2},${midY}`
+      return `M ${x1},0 C ${x1},${mid} ${x2},${mid} ${x2},${mid}`
     }
     if (!seg.upper && seg.lower) {
-      return `M ${x1},${midY} C ${x1},${midY} ${x2},${ROW_H} ${x2},${ROW_H}`
+      return `M ${x1},${mid} C ${x1},${mid} ${x2},${H} ${x2},${H}`
     }
-    return `M ${x1},0 C ${x1},${midY} ${x2},${midY} ${x2},${ROW_H}`
+    return `M ${x1},0 C ${x1},${mid} ${x2},${mid} ${x2},${H}`
   }
 
   if (settings.graphStyle === 'step') {
@@ -98,13 +102,13 @@ function segmentPath(seg: { fromCol: number; toCol: number; upper: boolean; lowe
     let yStart: number, yEnd: number
     if (seg.upper && !seg.lower) {
       yStart = 0
-      yEnd = midY
+      yEnd = mid
     } else if (!seg.upper && seg.lower) {
-      yStart = midY
-      yEnd = ROW_H
+      yStart = mid
+      yEnd = H
     } else {
       yStart = 0
-      yEnd = ROW_H
+      yEnd = H
     }
     const y1 = yEnd - 2 * STEP_R  // 第一个圆角起点
     const y2 = yEnd - STEP_R       // 水平段 y / 两个圆角的顶点高度
@@ -116,19 +120,19 @@ function segmentPath(seg: { fromCol: number; toCol: number; upper: boolean; lowe
   // rounded：控制点拉到对角，两端紧贴各自 lane 的竖直段更长，中段近似水平。
   // 视觉上是「沿父 lane 竖直走 → 水平横移 → 沿子 lane 竖直走」的圆润 Z。
   if (seg.upper && !seg.lower) {
-    return `M ${x1},0 C ${x1},${midY} ${x2},0 ${x2},${midY}`
+    return `M ${x1},0 C ${x1},${mid} ${x2},0 ${x2},${mid}`
   }
   if (!seg.upper && seg.lower) {
-    return `M ${x1},${midY} C ${x1},${ROW_H} ${x2},${midY} ${x2},${ROW_H}`
+    return `M ${x1},${mid} C ${x1},${H} ${x2},${mid} ${x2},${H}`
   }
-  return `M ${x1},0 C ${x1},${ROW_H} ${x2},0 ${x2},${ROW_H}`
+  return `M ${x1},0 C ${x1},${H} ${x2},0 ${x2},${H}`
 }
 </script>
 
 <template>
   <svg
     :width="svgWidth"
-    :height="ROW_H"
+    :height="rowH"
     class="commit-graph-row"
     :style="{ minWidth: svgWidth + 'px' }"
     xmlns="http://www.w3.org/2000/svg"

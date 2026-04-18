@@ -54,6 +54,11 @@ export const ROW_SEPARATOR_ALPHA_PEAK = 1.0
 /** 旧版（0..10 档位、peak=0.4）持久化值迁移到新尺度的缩放因子：old × 4 = new */
 const ROW_SEPARATOR_LEGACY_SCALE = 4
 
+/** 历史提交行高（px）下限 */
+export const HISTORY_ROW_HEIGHT_MIN = 20
+/** 历史提交行高（px）上限 */
+export const HISTORY_ROW_HEIGHT_MAX = 36
+
 export interface ExternalTerminalPreset {
   value: ExternalTerminal
   /** i18n 消息 key；消费方在 UI 侧用 t() 渲染 */
@@ -83,6 +88,8 @@ export interface SettingsData {
   /** 提交历史行分隔线透明度百分比 0..ROW_SEPARATOR_MAX，直接作为 alpha（%） */
   rowSeparatorStrength: number
   rowSeparatorStyle: RowSeparatorStyle
+  /** 提交历史每行高度（px），范围 HISTORY_ROW_HEIGHT_MIN..MAX */
+  historyRowHeight: number
   /** UI 语言；默认 'auto' 跟随系统 */
   uiLanguage: UiLanguage
 }
@@ -99,6 +106,7 @@ export const DEFAULT_SETTINGS: SettingsData = {
   graphStyle: 'rounded',
   rowSeparatorStrength: 30,
   rowSeparatorStyle: 'solid',
+  historyRowHeight: 28,
   uiLanguage: 'auto',
 }
 
@@ -224,6 +232,10 @@ export function applySettingsToDom(data: SettingsData) {
   const alpha = (strength / ROW_SEPARATOR_MAX) * ROW_SEPARATOR_ALPHA_PEAK
   root.style.setProperty('--row-separator-alpha', alpha.toFixed(3))
   root.style.setProperty('--row-separator-style', data.rowSeparatorStyle)
+
+  // 历史提交行高：CSS 变量下发给 HistoryView / CommitGraphRow / WipRow 消费
+  const rowH = clampHistoryRowHeight(data.historyRowHeight)
+  root.style.setProperty('--history-row-height', `${rowH}px`)
 }
 
 // ── 模块顶层 side-effect：import 就同步 apply（防 FOUC） ──────────────
@@ -262,6 +274,7 @@ export const useSettingsStore = defineStore('settings', () => {
   const graphStyle = ref<GraphStyle>(__initialData.graphStyle)
   const rowSeparatorStrength = ref<number>(clampSeparatorStrength(__initialData.rowSeparatorStrength))
   const rowSeparatorStyle = ref<RowSeparatorStyle>(__initialData.rowSeparatorStyle)
+  const historyRowHeight = ref<number>(clampHistoryRowHeight(__initialData.historyRowHeight))
   const uiLanguage = ref<UiLanguage>(normalizeUiLanguage(__initialData.uiLanguage))
 
   function snapshot(): SettingsData {
@@ -277,6 +290,7 @@ export const useSettingsStore = defineStore('settings', () => {
       graphStyle: graphStyle.value,
       rowSeparatorStrength: rowSeparatorStrength.value,
       rowSeparatorStyle: rowSeparatorStyle.value,
+      historyRowHeight: historyRowHeight.value,
       uiLanguage: uiLanguage.value,
     }
   }
@@ -305,6 +319,7 @@ export const useSettingsStore = defineStore('settings', () => {
       graphStyle,
       rowSeparatorStrength,
       rowSeparatorStyle,
+      historyRowHeight,
       uiLanguage,
     ],
     () => {
@@ -343,6 +358,7 @@ export const useSettingsStore = defineStore('settings', () => {
     graphStyle.value = DEFAULT_SETTINGS.graphStyle
     rowSeparatorStrength.value = DEFAULT_SETTINGS.rowSeparatorStrength
     rowSeparatorStyle.value = DEFAULT_SETTINGS.rowSeparatorStyle
+    historyRowHeight.value = DEFAULT_SETTINGS.historyRowHeight
   }
 
   function resetUiFont() {
@@ -393,6 +409,7 @@ export const useSettingsStore = defineStore('settings', () => {
     graphStyle,
     rowSeparatorStrength,
     rowSeparatorStyle,
+    historyRowHeight,
     uiLanguage,
     uiFontIsDefault,
     codeFontIsDefault,
@@ -414,6 +431,11 @@ function clampSize(n: number): number {
 export function clampSeparatorStrength(n: number): number {
   if (!Number.isFinite(n)) return DEFAULT_SETTINGS.rowSeparatorStrength
   return Math.max(0, Math.min(ROW_SEPARATOR_MAX, Math.round(n)))
+}
+
+export function clampHistoryRowHeight(n: number): number {
+  if (!Number.isFinite(n)) return DEFAULT_SETTINGS.historyRowHeight
+  return Math.max(HISTORY_ROW_HEIGHT_MIN, Math.min(HISTORY_ROW_HEIGHT_MAX, Math.round(n)))
 }
 
 function normalizeUiLanguage(v: unknown): UiLanguage {

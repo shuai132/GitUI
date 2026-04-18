@@ -14,7 +14,9 @@ export const GRAPH_COLORS = [
 ]
 
 export const LANE_W = 14  // px per lane
-export const ROW_H = 28   // row height px
+// 行高默认值 / fallback。实际渲染走 settings.historyRowHeight（CSS 变量
+// --history-row-height）；HistoryView、CommitGraphRow、WipRow 都从 store 读响应式值。
+export const ROW_H = 28
 export const CIRCLE_R = 5 // commit circle radius px
 
 export interface GraphSegment {

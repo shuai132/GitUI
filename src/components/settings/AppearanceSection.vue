@@ -3,7 +3,10 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
   DEFAULT_SETTINGS,
+  HISTORY_ROW_HEIGHT_MAX,
+  HISTORY_ROW_HEIGHT_MIN,
   ROW_SEPARATOR_MAX,
+  clampHistoryRowHeight,
   clampSeparatorStrength,
   useSettingsStore,
   type AccentKey,
@@ -61,6 +64,25 @@ const separatorStrengthIsDefault = computed(
 
 function resetSeparatorStrength() {
   store.rowSeparatorStrength = DEFAULT_SETTINGS.rowSeparatorStrength
+}
+
+function onHistoryRowHeightInput(e: Event) {
+  const v = Number((e.target as HTMLInputElement).value)
+  store.historyRowHeight = clampHistoryRowHeight(v)
+}
+
+const historyRowHeightFillPercent = computed(() => {
+  const range = HISTORY_ROW_HEIGHT_MAX - HISTORY_ROW_HEIGHT_MIN
+  const offset = store.historyRowHeight - HISTORY_ROW_HEIGHT_MIN
+  return `${(offset / range) * 100}%`
+})
+
+const historyRowHeightIsDefault = computed(
+  () => store.historyRowHeight === DEFAULT_SETTINGS.historyRowHeight,
+)
+
+function resetHistoryRowHeight() {
+  store.historyRowHeight = DEFAULT_SETTINGS.historyRowHeight
 }
 
 interface AccentRow {
@@ -242,6 +264,42 @@ const hasAnyOverride = computed(() => Object.keys(store.accentOverrides).length 
         />
         <span class="theme-card-label">{{ opt.label }}</span>
       </label>
+    </div>
+
+    <div class="section-title section-title--spaced">
+      {{ t('settings.appearance.rowHeightTitle') }}
+      <span class="section-title-hint">{{ t('settings.appearance.rowHeightHint') }}</span>
+    </div>
+    <div class="row-height-row">
+      <span class="separator-label">{{ t('settings.appearance.rowHeightLabel') }}</span>
+      <input
+        type="range"
+        class="separator-range"
+        :style="{ '--fill': historyRowHeightFillPercent }"
+        :min="HISTORY_ROW_HEIGHT_MIN"
+        :max="HISTORY_ROW_HEIGHT_MAX"
+        :step="1"
+        :value="store.historyRowHeight"
+        @input="onHistoryRowHeightInput"
+      />
+      <input
+        type="number"
+        class="row-height-number"
+        :min="HISTORY_ROW_HEIGHT_MIN"
+        :max="HISTORY_ROW_HEIGHT_MAX"
+        :step="1"
+        :value="store.historyRowHeight"
+        @input="onHistoryRowHeightInput"
+      />
+      <span class="row-height-unit">px</span>
+      <button
+        class="accent-reset"
+        :disabled="historyRowHeightIsDefault"
+        :title="historyRowHeightIsDefault ? t('settings.appearance.rowHeightResetAlready') : t('settings.appearance.rowHeightResetHint', { value: DEFAULT_SETTINGS.historyRowHeight })"
+        @click="resetHistoryRowHeight"
+      >
+        ×
+      </button>
     </div>
 
     <div class="section-title section-title--spaced">{{ t('settings.appearance.graphTitle') }}</div>
@@ -474,5 +532,35 @@ const hasAnyOverride = computed(() => Object.keys(store.accentOverrides).length 
 
 .separator-style-grid {
   margin-top: 8px;
+}
+
+.row-height-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.row-height-number {
+  width: 56px;
+  padding: 4px 6px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-family: var(--code-font-family);
+  font-size: calc(11.5px * var(--font-scale));
+  outline: none;
+  text-align: right;
+}
+
+.row-height-number:focus {
+  border-color: var(--accent-blue);
+}
+
+.row-height-unit {
+  font-size: var(--font-sm);
+  color: var(--text-muted);
+  font-family: var(--code-font-family);
 }
 </style>
