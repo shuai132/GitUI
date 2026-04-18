@@ -48,15 +48,32 @@ export const useHistoryStore = defineStore('history', () => {
         uiStore.showUnreachableCommits,
         uiStore.showStashCommits,
       )
-      // 若 HEAD / 尾部 / 总数 / has_more 都没变，认为提交序列结构未改动，
-      // 跳过赋值避免触发响应式重渲染（watcher 在纯 worktree 变更时大量出现此情况）
+      // 若 HEAD / 尾部 / 总数 / has_more 都没变，且每个提交的可达/stash/reflog-tip 标志
+      // 也没变，认为提交序列的结构与渲染相关信息都未改动，跳过赋值避免响应式重渲染
+      // （watcher 在纯 worktree 变更时大量出现此情况）。reset --hard 等操作会翻转
+      // 这些标志但不改变 oid 序列，所以必须逐项比对，否则悬垂样式不会立即更新。
       const prev = commits.value
       const next = page.commits
-      const unchanged =
+      let unchanged =
         next.length === prev.length &&
         page.has_more === hasMore.value &&
         next[0]?.oid === prev[0]?.oid &&
         next[next.length - 1]?.oid === prev[prev.length - 1]?.oid
+      if (unchanged) {
+        for (let i = 0; i < next.length; i++) {
+          const a = next[i]
+          const b = prev[i]
+          if (
+            a.oid !== b.oid ||
+            a.is_unreachable !== b.is_unreachable ||
+            a.is_stash !== b.is_stash ||
+            a.is_reflog_tip !== b.is_reflog_tip
+          ) {
+            unchanged = false
+            break
+          }
+        }
+      }
       if (!unchanged) {
         commits.value = next
         hasMore.value = page.has_more
