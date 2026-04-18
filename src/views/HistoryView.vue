@@ -135,6 +135,9 @@ function toRealIdx(virtualIdx: number): number {
 }
 
 const scrollContainer = ref<HTMLElement | null>(null)
+// 列头水平滚动偏移：与 commit-list-body 的 scrollLeft 同步，用 transform 平移列头。
+// 这样列头不参与 .commit-panel 的水平滚动，body 的垂直滚动条始终贴在面板右缘。
+const headerScrollLeft = ref(0)
 
 // ── Virtual list ────────────────────────────────────────────────────
 const virtualizer = useVirtualizer(
@@ -146,10 +149,11 @@ const virtualizer = useVirtualizer(
   }))
 )
 
-// Load more when near the bottom
+// Load more when near the bottom; 同步列头水平滚动
 function onScroll() {
   const el = scrollContainer.value
   if (!el) return
+  if (headerScrollLeft.value !== el.scrollLeft) headerScrollLeft.value = el.scrollLeft
   if (el.scrollHeight - el.scrollTop - el.clientHeight < ROW_H * 5) {
     historyStore.loadMore()
   }
@@ -201,19 +205,19 @@ function hideCommitTooltip() {
   commitTooltip.visible = false
 }
 
-// 把 wheel 的 deltaX 转发到外层 .commit-panel（横向滚动）
-// 原因：body 有 overflow-y: auto，部分浏览器会吞掉 deltaX 不冒泡到父元素
+// 把 wheel 的 deltaX 转发到 .commit-list-body（横向滚动）。
+// body 同时承担水平 + 垂直滚动；列头通过 onScroll 里的 headerScrollLeft 同步。
 function onBodyWheel(e: WheelEvent) {
   // 纵向意图优先：deltaY 不小于 deltaX 时，完全交给浏览器原生纵向滚动，
   // 不做任何处理也不 preventDefault。Windows 下鼠标滚轮常带轻微 deltaX 抖动，
   // 若拦截会连同 deltaY 一起被 preventDefault 吞掉，导致列表滚不动。
   if (Math.abs(e.deltaY) >= Math.abs(e.deltaX)) return
-  const panel = scrollContainer.value?.closest('.commit-panel') as HTMLElement | null
-  if (!panel) return
-  const before = panel.scrollLeft
-  panel.scrollLeft += e.deltaX
+  const body = scrollContainer.value
+  if (!body) return
+  const before = body.scrollLeft
+  body.scrollLeft += e.deltaX
   // 只有实际消费了横向滚动才 preventDefault，避免影响浏览器前进/后退
-  if (panel.scrollLeft !== before) e.preventDefault()
+  if (body.scrollLeft !== before) e.preventDefault()
 }
 
 // ── Branch tag map (oid → branches pointing to this commit) ─────────
@@ -1139,36 +1143,42 @@ onUnmounted(() => {
     >
       <!-- Commit graph + list -->
       <div class="commit-panel" :style="panelBorders['commits']" data-panel-id="commits">
-        <!-- Column headers -->
-        <div class="col-header" :style="{ minWidth: commitListMinWidth + 'px' }" @wheel="onBodyWheel">
-          <div class="dock-handle" @pointerdown="onDragHandlePointerDown('commits', $event)" :title="t('history.dock.dragToMove')">
-            <svg width="8" height="14" viewBox="0 0 8 14"><circle cx="2" cy="2" r="1" fill="currentColor"/><circle cx="6" cy="2" r="1" fill="currentColor"/><circle cx="2" cy="7" r="1" fill="currentColor"/><circle cx="6" cy="7" r="1" fill="currentColor"/><circle cx="2" cy="12" r="1" fill="currentColor"/><circle cx="6" cy="12" r="1" fill="currentColor"/></svg>
-          </div>
-          <div class="col-graph" :style="{ width: graphColWidth + 'px' }"></div>
-          <div class="col-message" :style="{ width: sizes.descColW + 'px' }">{{ t('history.columns.description') }}</div>
-          <div class="col-hash header-col" :style="{ width: sizes.hashColW + 'px' }">
-            {{ t('history.columns.commit') }}
-            <div class="col-resize" @pointerdown="startColResize($event, 'desc')" :title="t('history.columns.resizeGroup')" />
-          </div>
-          <div class="col-author header-col" :style="{ width: sizes.authorColW + 'px' }">
-            {{ t('history.columns.author') }}
-            <div class="col-resize" @pointerdown="startColResize($event, 'hash')" :title="t('history.columns.resizeAuthor')" />
-          </div>
-          <div class="col-date header-col" :style="{ width: sizes.dateColW + 'px' }">
-            {{ t('history.columns.date') }}
-            <div class="col-resize" @pointerdown="startColResize($event, 'author')" :title="t('history.columns.resizeDate')" />
-          </div>
-          <div class="col-date header-col" :style="{ width: sizes.dateCol2W + 'px' }">
-            <span style="visibility: hidden">&nbsp;</span>
-            <div class="col-resize" @pointerdown="startColResize($event, 'date')" :title="t('history.columns.resizeDateWidth')" />
+        <!-- Column headers (clip + transform 跟随 body 的水平滚动，让头部不参与外层水平滚动，
+             从而 body 的垂直滚动条始终贴在面板右缘可见) -->
+        <div class="col-header-clip">
+          <div
+            class="col-header"
+            :style="{ minWidth: commitListMinWidth + 'px', transform: `translateX(${-headerScrollLeft}px)` }"
+            @wheel="onBodyWheel"
+          >
+            <div class="dock-handle" @pointerdown="onDragHandlePointerDown('commits', $event)" :title="t('history.dock.dragToMove')">
+              <svg width="8" height="14" viewBox="0 0 8 14"><circle cx="2" cy="2" r="1" fill="currentColor"/><circle cx="6" cy="2" r="1" fill="currentColor"/><circle cx="2" cy="7" r="1" fill="currentColor"/><circle cx="6" cy="7" r="1" fill="currentColor"/><circle cx="2" cy="12" r="1" fill="currentColor"/><circle cx="6" cy="12" r="1" fill="currentColor"/></svg>
+            </div>
+            <div class="col-graph" :style="{ width: graphColWidth + 'px' }"></div>
+            <div class="col-message" :style="{ width: sizes.descColW + 'px' }">{{ t('history.columns.description') }}</div>
+            <div class="col-hash header-col" :style="{ width: sizes.hashColW + 'px' }">
+              {{ t('history.columns.commit') }}
+              <div class="col-resize" @pointerdown="startColResize($event, 'desc')" :title="t('history.columns.resizeGroup')" />
+            </div>
+            <div class="col-author header-col" :style="{ width: sizes.authorColW + 'px' }">
+              {{ t('history.columns.author') }}
+              <div class="col-resize" @pointerdown="startColResize($event, 'hash')" :title="t('history.columns.resizeAuthor')" />
+            </div>
+            <div class="col-date header-col" :style="{ width: sizes.dateColW + 'px' }">
+              {{ t('history.columns.date') }}
+              <div class="col-resize" @pointerdown="startColResize($event, 'author')" :title="t('history.columns.resizeDate')" />
+            </div>
+            <div class="col-date header-col" :style="{ width: sizes.dateCol2W + 'px' }">
+              <span style="visibility: hidden">&nbsp;</span>
+              <div class="col-resize" @pointerdown="startColResize($event, 'date')" :title="t('history.columns.resizeDateWidth')" />
+            </div>
           </div>
         </div>
 
-        <!-- Virtual list body -->
+        <!-- Virtual list body：水平 + 垂直滚动都收在这里，垂直滚动条永远在 body 右缘 -->
         <div
           class="commit-list-body"
           ref="scrollContainer"
-          :style="{ minWidth: commitListMinWidth + 'px' }"
           @scroll="onScroll"
           @wheel="onBodyWheel"
         >
@@ -1181,7 +1191,7 @@ onUnmounted(() => {
           </div>
           <div
             v-else
-            :style="{ height: virtualizer.getTotalSize() + 'px', position: 'relative' }"
+            :style="{ minWidth: commitListMinWidth + 'px', height: virtualizer.getTotalSize() + 'px', position: 'relative' }"
           >
             <template v-for="vRow in virtualizer.getVirtualItems()" :key="vRow.index">
               <!-- Virtual WIP row (index 0: 工作区有变更时显示，或加载中显示占位) -->
@@ -1651,7 +1661,7 @@ onUnmounted(() => {
   cursor: grabbing;
 }
 /* 鼠标进入面板时显示手柄 */
-.commit-panel:hover > .col-header > .dock-handle,
+.commit-panel:hover .col-header > .dock-handle,
 .info-pane:hover > .pane-header > .dock-handle,
 .diff-area:hover > .dock-handle-float {
   opacity: 0.5;
@@ -1788,10 +1798,19 @@ onUnmounted(() => {
 .commit-panel {
   display: flex;
   flex-direction: column;
-  overflow-x: auto;
-  overflow-y: hidden;
+  /* 水平滚动收进 .commit-list-body，让 body 始终撑满 panel 宽度，
+     垂直滚动条永远贴在 panel 右缘可见。 */
+  overflow: hidden;
   min-width: 0;
   min-height: 0;
+}
+
+/* 列头裁剪容器：内部的 .col-header 用 transform 跟随 body.scrollLeft 平移，
+   超出 panel 宽度的部分由这层裁掉。 */
+.col-header-clip {
+  position: relative;
+  overflow: hidden;
+  flex-shrink: 0;
 }
 
 .info-pane {
@@ -1828,14 +1847,17 @@ onUnmounted(() => {
   pointer-events: none;
   z-index: 3;
 }
-.commit-panel:hover > .col-header > .dock-handle {
+.commit-panel:hover .col-header > .dock-handle {
   pointer-events: auto;
 }
 
 .commit-list-body {
   flex: 1;
-  overflow-y: auto;
-  /* 不设 overflow-x，允许横向滚动事件冒泡到 .commit-panel */
+  /* overflow-y: scroll → 始终保留垂直滚动条 gutter，避免 macOS 默认"按需显示"导致跳动。
+     overflow-x: auto → 水平滚动收在 body 内部，列头通过 onScroll 同步偏移；
+     这样垂直滚动条永远贴在 body 右缘（= panel 右缘），不会被外层水平溢出推走。 */
+  overflow-x: auto;
+  overflow-y: scroll;
 }
 
 .commit-row {

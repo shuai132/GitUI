@@ -110,7 +110,7 @@ const DEFAULT_HISTORY_SIZES: HistoryPaneSizes = {
   hashColW: 64,
   authorColW: 240,
   dateColW: 170,
-  dateCol2W: 170,
+  dateCol2W: 16,
   commitInfoTopH: 0,
 }
 
@@ -158,6 +158,11 @@ export const useUiStore = defineStore('ui', () => {
   const historyPaneSizes = ref<HistoryPaneSizes>(
     loadJson<HistoryPaneSizes>(KEYS.historySizes, DEFAULT_HISTORY_SIZES),
   )
+  // 旧版默认 170px，纯占位列没必要这么宽；超过阈值视为旧默认，迁移到新默认。
+  if (historyPaneSizes.value.dateCol2W > 40) {
+    historyPaneSizes.value.dateCol2W = DEFAULT_HISTORY_SIZES.dateCol2W
+    localStorage.setItem(KEYS.historySizes, JSON.stringify(historyPaneSizes.value))
+  }
 
   const diffViewMode = ref<DiffViewMode>(
     loadString<DiffViewMode>(KEYS.diffViewMode, 'side-by-side', DIFF_MODE_VALUES),
