@@ -346,10 +346,12 @@ defineExpose({ goNextChange, goPrevChange })
 }
 
 /* inline-block wrapper 让宽度 = max(最长行, pane 宽度)，
-   行背景色铺满整行 */
+   行背景色铺满整行。
+   padding-bottom 避免水平滚动条遮挡最后一行代码 */
 .sbs-lines {
   display: inline-block;
   min-width: 100%;
+  padding-bottom: 8px;
 }
 
 .sbs-line {

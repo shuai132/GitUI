@@ -244,8 +244,10 @@ defineExpose({ goNextChange, goPrevChange })
 }
 
 /* ── 连续模式 ─────────────────────────────────────────────────── */
+/* padding-bottom 避免水平滚动条遮挡最后一行代码 */
 .inline-lines {
   min-width: min-content;
+  padding-bottom: 8px;
 }
 
 /* ── 分块模式 ─────────────────────────────────────────────────── */
