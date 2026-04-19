@@ -4,17 +4,15 @@
 
 跨平台 Git 桌面客户端，基于 **Tauri v2（Rust）+ Vue 3** 构建。目标是轻量级、高性能、跨平台。
 
-## 亮点
+## 特色
 
-- **内存与 CPU 占用极低，包体积小**：基于 Tauri + libgit2 的 in-process 调用，没有 Electron 的 Chromium 实例和 Node 进程，也不 fork 外部 `git` 子进程（仅 `git gc` 例外）
-- **混合编码自适应**：Windows 老仓库常见的 commit message 与源码编码不一致（UTF-8 / GBK 等），按 commit `encoding` header 与 `.gitattributes` 的 `working-tree-encoding` 各自独立解码——SourceTree / Fork 这类 GUI 的长期乱码痛点在 GitUI 里不会出现
-- **拖拽式 Merge / Rebase**：在提交图上直接拖动 commit 触发 merge / rebase，冲突走内置三路合并编辑器，不必切到命令行
-- **多仓库托盘常驻**：关闭窗口隐藏到系统托盘、侧边栏一键切换，跨项目高频跳转的开发场景比单窗口工具更顺手
-- **找回误删 commit**：HEAD reflog 中不可达的提交仍然画在提交图里、标记 reflog tip，配合右键「剥链移除」可以精确清理而非粗暴 `git gc`
-- **Stash 视为 commit**：每条 stash 在提交图里作为独立 1-parent commit 渲染，与 HEAD 的位置关系一眼可见，而不是埋在一个单独的列表里
-- **WIP 行内嵌在提交图顶部**：工作区不占独立 tab，未提交变更直接出现在历史第一行，点开右侧切到暂存 / 提交 / amend / discard 面板，减少视图来回切换
-- **大仓库流畅**：提交图基于 pvigier 变体 lane 算法 + 虚拟滚动，几万 commit 仓库下滚动不卡；diff 视图同样虚拟滚动
-- **内置终端 + 文件监控自动刷新**：xterm.js + PTY 应用内跑任意 git / shell 命令，工作目录变更通过 notify 事件 300ms 防抖刷新到 UI，不用手动 refresh
+- **轻量快速**：内存和 CPU 占用极低，安装包小，速度极快
+- **编码自适应**：完美处理 UTF-8 / GBK 混合仓库
+- **拖拽 Merge / Rebase**：提交图支持支持拖拽操作
+- **误删提交找回**：提交图支持显示丢失引用的提交
+- **Stash 可视化**：提交图支持显示 stash 与历史提交的关系
+- **内置终端**：应用内直接运行 git 或任意 shell 命令
+- **跨平台**：支持macOS、Windows、Linux等主流系统
 
 ## 功能
 
