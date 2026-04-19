@@ -412,7 +412,7 @@ async function onFileMenuAction(action: string) {
 }
 
 .mv.oid {
-  font-family: var(--code-font-family, 'SF Mono', monospace);
+  font-family: Menlo, 'SF Mono', monospace;
   font-size: var(--font-xs);
   color: var(--accent-blue);
 }
@@ -426,7 +426,7 @@ async function onFileMenuAction(action: string) {
   background: var(--bg-overlay);
   border-radius: 3px;
   padding: 1px 5px;
-  font-family: var(--code-font-family, 'SF Mono', monospace);
+  font-family: Menlo, 'SF Mono', monospace;
   font-size: var(--font-xs);
   color: var(--accent-blue);
   margin-right: 4px;

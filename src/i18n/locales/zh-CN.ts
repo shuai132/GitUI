@@ -553,6 +553,7 @@ const messages = {
       resetCode: '恢复代码字体和字号默认',
       hint: '提示：若系统未安装所选字体，会自动回退到下一个候选。UI 字号仅影响根级别文本，部分面板/工具栏使用固定字号。',
       preview: '预览',
+      defaultPlaceholder: '默认',
       preset: {
         default: '默认',
         systemUi: '系统界面',

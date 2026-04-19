@@ -103,7 +103,7 @@ const totalCount = computed(() =>
 
 .wip-label {
   font-size: var(--font-md);
-  font-family: var(--code-font-family, 'SF Mono', monospace);
+  font-family: inherit;
   color: var(--text-muted);
   font-style: italic;
   flex-shrink: 0;

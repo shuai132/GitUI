@@ -897,7 +897,7 @@ watch(
   background: var(--bg-overlay);
   padding: 0 4px;
   border-radius: 3px;
-  font-family: var(--code-font-family, 'SF Mono', monospace);
+  font-family: Menlo, 'SF Mono', monospace;
   font-size: var(--font-sm);
 }
 

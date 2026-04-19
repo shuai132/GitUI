@@ -218,9 +218,17 @@ export function applySettingsToDom(data: SettingsData) {
   root.setAttribute('data-theme', resolved)
   void syncWindowTheme(resolved)
 
-  // 字体 / 字号
-  root.style.setProperty('--ui-font-family', data.uiFontFamily || '')
-  root.style.setProperty('--code-font-family', data.codeFontFamily || '')
+  // 字体 / 字号：有自定义值则覆盖，否则移除让 main.css 的默认生效
+  if (data.uiFontFamily) {
+    root.style.setProperty('--ui-font-family', data.uiFontFamily)
+  } else {
+    root.style.removeProperty('--ui-font-family')
+  }
+  if (data.codeFontFamily) {
+    root.style.setProperty('--code-font-family', data.codeFontFamily)
+  } else {
+    root.style.removeProperty('--code-font-family')
+  }
   root.style.setProperty('--ui-font-size', `${data.uiFontSize}px`)
   root.style.setProperty('--code-font-size', `${data.codeFontSize}px`)
 

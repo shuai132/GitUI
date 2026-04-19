@@ -20,7 +20,7 @@
     --border: #3a3e52;
 
     /* 字体与字号（由 settings store 动态覆盖） */
-    --ui-font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', Menlo, monospace;
+    --ui-font-family: -apple-system, 'SF Pro Text', system-ui, 'Segoe UI', 'PingFang SC', sans-serif;
     --ui-font-size: 12px;
     --code-font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', Menlo, monospace;
     --code-font-size: 12px;

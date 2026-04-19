@@ -393,6 +393,9 @@ export function useGitCommands() {
   const getBuildInfo = () =>
     call<BuildInfo>('get_build_info')
 
+  const listSystemFonts = () =>
+    call<string[]>('list_system_fonts')
+
   const setAutoFetchInterval = (secs: number) =>
     call<void>('set_auto_fetch_interval', { secs })
 
@@ -496,6 +499,7 @@ export function useGitCommands() {
     addToGitignore,
     checkoutFileAtCommit,
     getBuildInfo,
+    listSystemFonts,
     setAutoFetchInterval,
     setActiveRepoForFetch,
     terminalSpawn,

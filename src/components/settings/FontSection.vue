@@ -1,15 +1,19 @@
 <script setup lang="ts">
+import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import {
-  useSettingsStore,
-  UI_FONT_PRESETS,
-  CODE_FONT_PRESETS,
-  MIN_FONT_SIZE,
-  MAX_FONT_SIZE,
-} from '@/stores/settings'
+import { useSettingsStore, MIN_FONT_SIZE, MAX_FONT_SIZE } from '@/stores/settings'
+import { useGitCommands } from '@/composables/useGitCommands'
 
 const store = useSettingsStore()
 const { t } = useI18n()
+const { listSystemFonts } = useGitCommands()
+
+const systemFonts = ref<string[]>([])
+
+onMounted(async () => {
+  const fonts = await listSystemFonts().catch(() => [])
+  systemFonts.value = fonts
+})
 
 function clampSize(n: number): number {
   if (!Number.isFinite(n)) return 13
@@ -40,11 +44,18 @@ function onCodeSize(e: Event) {
     </div>
     <div class="form-row">
       <label class="form-label">{{ t('settings.font.familyLabel') }}</label>
-      <select v-model="store.uiFontFamily" class="form-control">
-        <option v-for="p in UI_FONT_PRESETS" :key="p.labelKey" :value="p.value">
-          {{ t(p.labelKey) }}
-        </option>
-      </select>
+      <input
+        v-model="store.uiFontFamily"
+        type="text"
+        list="font-ui-list"
+        class="form-control"
+        :placeholder="t('settings.font.defaultPlaceholder')"
+        autocomplete="off"
+        spellcheck="false"
+      />
+      <datalist id="font-ui-list">
+        <option v-for="f in systemFonts" :key="f" :value="f" />
+      </datalist>
     </div>
     <div class="form-row">
       <label class="form-label">{{ t('settings.font.sizeLabel') }}</label>
@@ -60,6 +71,10 @@ function onCodeSize(e: Event) {
         <span class="size-unit">px</span>
       </div>
     </div>
+    <div class="preview-row">
+      <span class="preview-label">{{ t('settings.font.preview') }}</span>
+      <span class="preview-ui">GitUI — The quick brown fox · 仓库切换 0123</span>
+    </div>
 
     <div class="section-title section-title--spaced">
       <span>{{ t('settings.font.codeTitle') }}</span>
@@ -74,11 +89,18 @@ function onCodeSize(e: Event) {
     </div>
     <div class="form-row">
       <label class="form-label">{{ t('settings.font.familyLabel') }}</label>
-      <select v-model="store.codeFontFamily" class="form-control">
-        <option v-for="p in CODE_FONT_PRESETS" :key="p.labelKey" :value="p.value">
-          {{ t(p.labelKey) }}
-        </option>
-      </select>
+      <input
+        v-model="store.codeFontFamily"
+        type="text"
+        list="font-code-list"
+        class="form-control"
+        :placeholder="t('settings.font.defaultPlaceholder')"
+        autocomplete="off"
+        spellcheck="false"
+      />
+      <datalist id="font-code-list">
+        <option v-for="f in systemFonts" :key="f" :value="f" />
+      </datalist>
     </div>
     <div class="form-row">
       <label class="form-label">{{ t('settings.font.sizeLabel') }}</label>
@@ -93,6 +115,10 @@ function onCodeSize(e: Event) {
         />
         <span class="size-unit">px</span>
       </div>
+    </div>
+    <div class="preview-row">
+      <span class="preview-label">{{ t('settings.font.preview') }}</span>
+      <span class="preview-code">def main() → None:  # abc1f2e3  +42 -7</span>
     </div>
 
     <div class="hint">
@@ -190,6 +216,42 @@ function onCodeSize(e: Event) {
 .size-unit {
   font-size: var(--font-sm);
   color: var(--text-muted);
+}
+
+.preview-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 6px 10px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  margin-top: 2px;
+}
+
+.preview-label {
+  font-size: var(--font-xs);
+  color: var(--text-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.preview-ui {
+  font-family: var(--ui-font-family);
+  font-size: var(--ui-font-size);
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.preview-code {
+  font-family: var(--code-font-family);
+  font-size: var(--code-font-size);
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .hint {

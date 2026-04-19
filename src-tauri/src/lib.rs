@@ -141,6 +141,7 @@ pub fn run() {
              add_to_gitignore,
              checkout_file_at_commit,
              get_build_info,
+             list_system_fonts,
              set_auto_fetch_interval,
              set_active_repo_for_fetch,
             // Terminal

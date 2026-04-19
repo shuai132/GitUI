@@ -490,3 +490,15 @@ pub fn get_build_info() -> BuildInfo {
         git_hash: option_env!("GIT_HASH").map(str::to_string),
     }
 }
+
+/// 枚举系统已安装的字体族名称，返回按字母排序的去重列表。
+/// macOS 使用 CoreText，Windows 使用 DirectWrite，Linux 使用 fontconfig。
+#[tauri::command]
+pub fn list_system_fonts() -> Vec<String> {
+    use font_kit::source::SystemSource;
+    let source = SystemSource::new();
+    let mut families = source.all_families().unwrap_or_default();
+    families.sort_unstable_by(|a, b| a.to_lowercase().cmp(&b.to_lowercase()));
+    families.dedup();
+    families
+}

@@ -554,6 +554,7 @@ const messages = {
       resetCode: 'Reset code font and size to default',
       hint: 'Tip: if a selected font is not installed, it falls back to the next candidate. UI size only affects root-level text; some panels and toolbars use fixed sizes.',
       preview: 'Preview',
+      defaultPlaceholder: 'Default',
       preset: {
         default: 'Default',
         systemUi: 'System UI',
