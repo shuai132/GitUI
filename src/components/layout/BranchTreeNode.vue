@@ -6,12 +6,15 @@ import { useBranchTreeState } from '@/composables/useBranchTreeState'
 const props = defineProps<{
   node: BranchTreeNode
   level: number
+  /** 仅顶层 remote folder（remote name 行）传 true，用于显示删除按钮 */
+  isRemoteRoot?: boolean
 }>()
 
 const emit = defineEmits<{
   selectBranch: [branch: BranchInfo]
   dblclickBranch: [branch: BranchInfo]
   branchContextMenu: [event: MouseEvent, branch: BranchInfo]
+  deleteRemote: [remoteName: string]
 }>()
 
 const treeState = useBranchTreeState()
@@ -37,6 +40,12 @@ function onBranchContextMenu(e: MouseEvent) {
   emit('branchContextMenu', e, props.node.branch)
 }
 
+function onDeleteRemote(e: MouseEvent) {
+  e.stopPropagation()
+  if (props.node.kind !== 'folder') return
+  emit('deleteRemote', props.node.name)
+}
+
 // 缩进：level=0 与 section-title 的 padding-left (12px) 对齐，
 // 之后每层再缩进 12px
 const indentPx = (level: number) => 12 + level * 12 + 'px'
@@ -47,6 +56,7 @@ const indentPx = (level: number) => 12 + level * 12 + 'px'
   <template v-if="node.kind === 'folder'">
     <div
       class="tree-row tree-folder"
+      :class="{ 'tree-folder--remote-root': isRemoteRoot }"
       :style="{ paddingLeft: indentPx(level) }"
       @click="onFolderClick"
     >
@@ -66,6 +76,18 @@ const indentPx = (level: number) => 12 + level * 12 + 'px'
         <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
       </svg>
       <span class="tree-label">{{ node.name }}</span>
+      <!-- 顶层 remote folder：悬停时显示删除按钮 -->
+      <button
+        v-if="isRemoteRoot"
+        class="remote-delete-btn"
+        :title="`Remove remote '${node.name}'`"
+        @click.stop="onDeleteRemote"
+      >
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+          <line x1="18" y1="6" x2="6" y2="18"/>
+          <line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
     </div>
 
     <template v-if="!treeState.isCollapsed(node.path)">
@@ -77,6 +99,7 @@ const indentPx = (level: number) => 12 + level * 12 + 'px'
         @select-branch="(b) => emit('selectBranch', b)"
         @dblclick-branch="(b) => emit('dblclickBranch', b)"
         @branch-context-menu="(ev, b) => emit('branchContextMenu', ev, b)"
+        @delete-remote="(n) => emit('deleteRemote', n)"
       />
     </template>
   </template>
@@ -180,5 +203,29 @@ const indentPx = (level: number) => 12 + level * 12 + 'px'
   white-space: nowrap;
   flex: 1;
   min-width: 0;
+}
+
+/* 顶层 remote folder 的删除按钮：默认隐藏，hover 时显示 */
+.remote-delete-btn {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px 3px;
+  border-radius: 3px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+  line-height: 0;
+}
+
+.tree-folder--remote-root:hover .remote-delete-btn {
+  display: inline-flex;
+}
+
+.remote-delete-btn:hover {
+  background: rgba(237, 135, 150, 0.18);
+  color: var(--accent-red);
 }
 </style>

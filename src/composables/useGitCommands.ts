@@ -305,6 +305,12 @@ export function useGitCommands() {
   const listRemotes = (repoId: string) =>
     call<string[]>('list_remotes', { repoId })
 
+  const addRemote = (repoId: string, name: string, url: string) =>
+    call<void>('add_remote', { repoId, name, url })
+
+  const removeRemote = (repoId: string, name: string) =>
+    call<void>('remove_remote', { repoId, name })
+
   // ---- Submodule ----
   const listSubmodules = (repoId: string) =>
     call<SubmoduleInfo[]>('list_submodules', { repoId })
@@ -323,6 +329,9 @@ export function useGitCommands() {
 
   const deinitSubmodule = (repoId: string, name: string) =>
     call<void>('deinit_submodule', { repoId, name })
+
+  const addSubmodule = (repoId: string, url: string, path: string) =>
+    call<void>('add_submodule', { repoId, url, path })
 
   // ---- Stash ----
   const stashPush = (repoId: string, message?: string) =>
@@ -472,12 +481,15 @@ export function useGitCommands() {
     pushTag,
     pullBranch,
     listRemotes,
+    addRemote,
+    removeRemote,
     listSubmodules,
     initSubmodule,
     updateSubmodule,
     setSubmoduleUrl,
     submoduleWorkdir,
     deinitSubmodule,
+    addSubmodule,
     stashPush,
     stashPop,
     stashApply,

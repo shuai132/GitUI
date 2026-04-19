@@ -4,6 +4,12 @@ const messages = {
     aboutTitle: 'About GitUI',
     operationFailed: 'Operation failed: {detail}',
     cancel: 'Cancel',
+    confirm: 'Confirm',
+    loading: 'Loading...',
+    delete: 'Delete',
+    deleting: 'Deleting...',
+    add: 'Add',
+    adding: 'Adding...',
   },
   app: {
     sidebar: {
@@ -192,6 +198,11 @@ const messages = {
       openFailed: 'Failed to open submodule: {detail}',
       hasChanges: 'Has uncommitted changes',
       menuTitle: 'Submodule actions',
+      addButton: 'Add submodule',
+    },
+    remote: {
+      addButton: 'Add remote',
+      deleteButton: 'Delete remote "{name}"',
     },
   },
    history: {
@@ -358,6 +369,39 @@ const messages = {
       hintPart3: '.',
       submit: 'Save',
       submitting: 'Saving...',
+    },
+    add: {
+      title: 'Add submodule',
+      urlLabel: 'URL:',
+      urlPlaceholder: 'https://example.com/repo.git',
+      pathLabel: 'Path:',
+      pathPlaceholder: 'e.g. vendor/my-lib',
+      urlRequired: 'Remote URL is required',
+      pathRequired: 'Local path is required',
+      hint: 'The submodule will be cloned into the specified path.',
+      submit: 'Add',
+      submitting: 'Cloning...',
+    },
+    confirmDelete: {
+      title: 'Delete submodule',
+      message: 'Delete submodule "{path}"?\n\nThis will remove the work directory, .git/modules entry, and .gitmodules entry. Remember to commit afterwards.',
+    },
+  },
+  remote: {
+    add: {
+      title: 'Add remote',
+      nameLabel: 'Name:',
+      namePlaceholder: 'e.g. origin',
+      urlLabel: 'URL:',
+      urlPlaceholder: 'https://example.com/repo.git',
+      nameRequired: 'Remote name is required',
+      urlRequired: 'Remote URL is required',
+      submit: 'Add',
+      submitting: 'Adding...',
+    },
+    confirmDelete: {
+      title: 'Delete remote',
+      message: 'Delete remote "{name}"?\n\nAll remote-tracking branches for this remote will also be removed.',
     },
   },
   reflog: {

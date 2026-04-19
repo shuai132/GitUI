@@ -4,6 +4,12 @@ const messages = {
     aboutTitle: '关于 GitUI',
     operationFailed: '操作失败：{detail}',
     cancel: '取消',
+    confirm: '确认',
+    loading: '加载中...',
+    delete: '删除',
+    deleting: '删除中...',
+    add: '添加',
+    adding: '添加中...',
   },
   app: {
     sidebar: {
@@ -192,6 +198,11 @@ const messages = {
       openFailed: '打开 submodule 失败：{detail}',
       hasChanges: '有未提交修改',
       menuTitle: 'Submodule 操作',
+      addButton: '添加 Submodule',
+    },
+    remote: {
+      addButton: '添加 Remote',
+      deleteButton: '删除 Remote "{name}"',
     },
   },
   history: {
@@ -357,6 +368,39 @@ const messages = {
       hintPart3: '。',
       submit: '保存',
       submitting: '保存中...',
+    },
+    add: {
+      title: '添加 Submodule',
+      urlLabel: 'URL：',
+      urlPlaceholder: 'https://example.com/repo.git',
+      pathLabel: '路径：',
+      pathPlaceholder: '例：vendor/my-lib',
+      urlRequired: '请填写远程 URL',
+      pathRequired: '请填写本地路径',
+      hint: 'Submodule 将被 clone 到指定路径。',
+      submit: '添加',
+      submitting: 'Clone 中...',
+    },
+    confirmDelete: {
+      title: '删除 Submodule',
+      message: '删除 Submodule "{path}"？\n\n将移除工作目录、.git/modules 条目及 .gitmodules 条目。删除后请提交变更。',
+    },
+  },
+  remote: {
+    add: {
+      title: '添加 Remote',
+      nameLabel: '名称：',
+      namePlaceholder: '例：origin',
+      urlLabel: 'URL：',
+      urlPlaceholder: 'https://example.com/repo.git',
+      nameRequired: '请填写 Remote 名称',
+      urlRequired: '请填写 Remote URL',
+      submit: '添加',
+      submitting: '添加中...',
+    },
+    confirmDelete: {
+      title: '删除 Remote',
+      message: '删除 Remote "{name}"？\n\n该 Remote 的所有 remote-tracking 分支也将一并移除。',
     },
   },
   reflog: {

@@ -80,3 +80,30 @@ pub async fn list_remotes(
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
     GitEngine::list_remotes(&meta.path)
 }
+
+#[tauri::command]
+pub async fn add_remote(
+    repo_id: String,
+    name: String,
+    url: String,
+    repo_manager: State<'_, RepoManager>,
+) -> Result<(), GitError> {
+    log::debug!("[add_remote] name={name} url={url}");
+    let meta = repo_manager
+        .get_meta(&repo_id)
+        .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
+    GitEngine::add_remote(&meta.path, &name, &url)
+}
+
+#[tauri::command]
+pub async fn remove_remote(
+    repo_id: String,
+    name: String,
+    repo_manager: State<'_, RepoManager>,
+) -> Result<(), GitError> {
+    log::debug!("[remove_remote] name={name}");
+    let meta = repo_manager
+        .get_meta(&repo_id)
+        .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
+    GitEngine::remove_remote(&meta.path, &name)
+}

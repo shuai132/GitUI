@@ -76,3 +76,17 @@ pub async fn deinit_submodule(
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
     GitEngine::deinit_submodule(&meta.path, &name)
 }
+
+#[tauri::command]
+pub async fn add_submodule(
+    repo_id: String,
+    url: String,
+    path: String,
+    repo_manager: State<'_, RepoManager>,
+) -> Result<(), GitError> {
+    log::debug!("[add_submodule] url={url} path={path}");
+    let meta = repo_manager
+        .get_meta(&repo_id)
+        .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
+    GitEngine::add_submodule(&meta.path, &url, &path)
+}

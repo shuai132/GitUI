@@ -15,6 +15,9 @@ import { useSidebarSectionState } from '@/composables/useSidebarSectionState'
 import ContextMenu, { type ContextMenuItem } from '@/components/common/ContextMenu.vue'
 import CheckoutRemoteDialog from '@/components/branch/CheckoutRemoteDialog.vue'
 import EditSubmoduleDialog from '@/components/submodule/EditSubmoduleDialog.vue'
+import AddSubmoduleDialog from '@/components/submodule/AddSubmoduleDialog.vue'
+import AddRemoteDialog from '@/components/remote/AddRemoteDialog.vue'
+import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import { useGitCommands } from '@/composables/useGitCommands'
 import { useRepoCreation } from '@/composables/useRepoCreation'
 import { usePickRemote } from '@/composables/usePickRemote'
@@ -429,13 +432,13 @@ async function onSubmoduleMenuAction(action: string) {
         editDialog.visible = true
         break
       case 'delete':
-        if (
-          confirm(
-            t('sidebar.submodule.confirmDelete', { path: s.path, name: s.name }),
-          )
-        ) {
-          await submodulesStore.deinit(s.name)
-        }
+        openConfirm(
+          t('submodule.confirmDelete.title'),
+          t('submodule.confirmDelete.message', { path: s.path, name: s.name }),
+          async () => {
+            await submodulesStore.deinit(s.name)
+          },
+        )
         break
     }
   } catch (err) {
@@ -607,6 +610,78 @@ async function onStashMenuAction(action: string) {
     alert(t('common.operationFailed', { detail: String(err) }))
   }
 }
+
+// ── ConfirmDialog（通用危险操作确认弹窗） ─────────────────────────────
+const confirmDlg = reactive({
+  visible: false,
+  title: '',
+  message: '',
+  loading: false,
+  _resolve: null as (() => Promise<void>) | null,
+})
+
+function openConfirm(title: string, message: string, action: () => Promise<void>) {
+  confirmDlg.title = title
+  confirmDlg.message = message
+  confirmDlg._resolve = action
+  confirmDlg.loading = false
+  confirmDlg.visible = true
+}
+
+async function onConfirmDialogConfirm() {
+  if (!confirmDlg._resolve) return
+  confirmDlg.loading = true
+  try {
+    await confirmDlg._resolve()
+  } catch (err) {
+    console.error(err)
+    alert(t('common.operationFailed', { detail: String(err) }))
+  } finally {
+    confirmDlg.loading = false
+    confirmDlg.visible = false
+  }
+}
+
+function onConfirmDialogCancel() {
+  confirmDlg.visible = false
+}
+
+// ── Add Remote / Delete Remote ────────────────────────────────────────
+const addRemoteDlg = reactive({ visible: false })
+
+function openAddRemoteDialog(e: MouseEvent) {
+  e.stopPropagation()
+  addRemoteDlg.visible = true
+}
+
+async function onAddRemoteSuccess() {
+  await historyStore.loadBranches()
+}
+
+function onDeleteRemote(remoteName: string) {
+  const repoId = repoStore.activeRepoId
+  if (!repoId) return
+  openConfirm(
+    t('remote.confirmDelete.title'),
+    t('remote.confirmDelete.message', { name: remoteName }),
+    async () => {
+      await git.removeRemote(repoId, remoteName)
+      await historyStore.loadBranches()
+    },
+  )
+}
+
+// ── Add Submodule ─────────────────────────────────────────────────────
+const addSubmoduleDlg = reactive({ visible: false })
+
+function openAddSubmoduleDialog(e: MouseEvent) {
+  e.stopPropagation()
+  addSubmoduleDlg.visible = true
+}
+
+async function onAddSubmoduleSuccess() {
+  await submodulesStore.loadSubmodules()
+}
 </script>
 
 <template>
@@ -740,7 +815,7 @@ async function onStashMenuAction(action: string) {
       </div>
 
       <!-- SUBMODULES section -->
-      <div class="section" v-if="submodules.length > 0 && repoStore.activeRepoId">
+      <div class="section" v-if="repoStore.activeRepoId">
         <div class="section-title collapsible" @click="sectionState.toggle('submodules')">
           <svg class="chevron" :class="{ open: !sectionState.isCollapsed('submodules') }"
                width="10" height="10" viewBox="0 0 24 24"
@@ -749,6 +824,11 @@ async function onStashMenuAction(action: string) {
           </svg>
           <span class="section-label">SUBMODULES</span>
           <span class="section-count">{{ submodules.length }}</span>
+          <button
+            class="section-add-btn"
+            :title="t('sidebar.submodule.addButton')"
+            @click.stop="openAddSubmoduleDialog"
+          >+</button>
         </div>
         <template v-if="!sectionState.isCollapsed('submodules')">
         <div
@@ -814,7 +894,7 @@ async function onStashMenuAction(action: string) {
       </div>
 
       <!-- REMOTE tree section -->
-      <div class="section" v-if="remoteTree.length > 0 && repoStore.activeRepoId">
+      <div class="section" v-if="repoStore.activeRepoId">
         <div class="section-title collapsible" @click="sectionState.toggle('remote')">
           <svg class="chevron" :class="{ open: !sectionState.isCollapsed('remote') }"
                width="10" height="10" viewBox="0 0 24 24"
@@ -823,6 +903,11 @@ async function onStashMenuAction(action: string) {
           </svg>
           <span class="section-label">REMOTE</span>
           <span class="section-count">{{ remoteBranchesFlat.length }}</span>
+          <button
+            class="section-add-btn"
+            :title="t('sidebar.remote.addButton')"
+            @click.stop="openAddRemoteDialog"
+          >+</button>
         </div>
         <template v-if="!sectionState.isCollapsed('remote')">
           <BranchTreeNode
@@ -830,9 +915,11 @@ async function onStashMenuAction(action: string) {
             :key="root.path"
             :node="root"
             :level="0"
+            :is-remote-root="true"
             @select-branch="onSelectRemoteBranch"
             @dblclick-branch="onDblclickRemoteBranch"
             @branch-context-menu="openContextMenu"
+            @delete-remote="onDeleteRemote"
           />
         </template>
       </div>
@@ -946,6 +1033,32 @@ async function onStashMenuAction(action: string) {
       :visible="editDialog.visible"
       :submodule="editDialog.target"
       @close="editDialog.visible = false"
+    />
+
+    <!-- Add remote dialog -->
+    <AddRemoteDialog
+      :visible="addRemoteDlg.visible"
+      @close="addRemoteDlg.visible = false"
+      @success="onAddRemoteSuccess"
+    />
+
+    <!-- Add submodule dialog -->
+    <AddSubmoduleDialog
+      :visible="addSubmoduleDlg.visible"
+      @close="addSubmoduleDlg.visible = false"
+      @success="onAddSubmoduleSuccess"
+    />
+
+    <!-- Generic confirm dialog (for remote / submodule delete) -->
+    <ConfirmDialog
+      :visible="confirmDlg.visible"
+      :title="confirmDlg.title"
+      :message="confirmDlg.message"
+      :loading="confirmDlg.loading"
+      :danger="true"
+      :confirm-label="t('common.delete')"
+      @confirm="onConfirmDialogConfirm"
+      @cancel="onConfirmDialogCancel"
     />
   </aside>
 </template>
@@ -1211,6 +1324,29 @@ async function onStashMenuAction(action: string) {
   color: var(--accent-blue);
   letter-spacing: 0;
   text-transform: none;
+}
+
+/* section header 的 + 按钮：默认隐藏，hover section-title 时显示 */
+.section-add-btn {
+  display: none;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: var(--font-lg);
+  line-height: 1;
+  padding: 0 2px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.section-title:hover .section-add-btn {
+  display: block;
+}
+
+.section-add-btn:hover {
+  color: var(--text-primary);
+  background: var(--bg-overlay);
 }
 
 .submodule-item {

@@ -111,6 +111,8 @@ pub fn run() {
             push_tag,
             pull_branch,
             list_remotes,
+            add_remote,
+            remove_remote,
             // Submodule
             list_submodules,
             init_submodule,
@@ -118,6 +120,7 @@ pub fn run() {
             set_submodule_url,
             submodule_workdir,
             deinit_submodule,
+            add_submodule,
             // Stash
             stash_push,
             stash_pop,

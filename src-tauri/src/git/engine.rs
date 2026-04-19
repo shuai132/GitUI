@@ -2031,6 +2031,21 @@ impl GitEngine {
         Ok(remotes.iter_bytes().map(decode_ref_name).collect())
     }
 
+    /// 添加一个新的 remote（等价于 `git remote add <name> <url>`）。
+    /// 若 name 已存在则返回 OperationFailed。
+    pub fn add_remote(path: &str, name: &str, url: &str) -> GitResult<()> {
+        let repo = Self::open(path)?;
+        repo.remote(name, url)?;
+        Ok(())
+    }
+
+    /// 删除一个 remote，同时移除所有 remote-tracking refs（等价于 `git remote remove <name>`）。
+    pub fn remove_remote(path: &str, name: &str) -> GitResult<()> {
+        let repo = Self::open(path)?;
+        repo.remote_delete(name)?;
+        Ok(())
+    }
+
     pub fn get_repo_state(path: &str) -> GitResult<RepoState> {
         let repo = Self::open(path)?;
         Ok(Self::build_repo_state(&repo))
@@ -2311,6 +2326,34 @@ impl GitEngine {
         }
         index.write()?;
 
+        Ok(())
+    }
+
+    /// 添加 submodule 并 clone 其内容（等价于 `git submodule add <url> <path>`）。
+    ///
+    /// - `url`：远程 URL
+    /// - `rel_path`：相对于仓库根目录的路径
+    ///
+    /// SSH URL 时 fallback 到系统 git（与 `update_submodule` 保持一致）。
+    pub fn add_submodule(path: &str, url: &str, rel_path: &str) -> GitResult<()> {
+        if is_ssh_url(url) {
+            run_git(path, &["submodule", "add", url, rel_path])?;
+            return Ok(());
+        }
+
+        let repo = Self::open(path)?;
+        let mut sub = repo.submodule(url, Path::new(rel_path), true)?;
+
+        let mut callbacks = git2::RemoteCallbacks::new();
+        callbacks.credentials(make_credentials_callback());
+        let mut fetch_opts = git2::FetchOptions::new();
+        fetch_opts.remote_callbacks(callbacks);
+        let mut update_opts = git2::SubmoduleUpdateOptions::new();
+        update_opts.fetch(fetch_opts);
+
+        sub.clone(Some(&mut update_opts))?;
+        sub.add_to_index(true)?;
+        sub.add_finalize()?;
         Ok(())
     }
 
