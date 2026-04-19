@@ -288,6 +288,8 @@ const messages = {
         confirm: '确认修改',
         rewordHint: '该提交不在 HEAD，将通过 rebase 重写历史（后续提交 SHA 会变化）。',
         autoStash: '开始前自动 stash 未提交改动，完成后恢复',
+        authorDate: '作者时间',
+        committerDate: '提交时间',
       },
     },
   },

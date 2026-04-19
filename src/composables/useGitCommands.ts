@@ -166,8 +166,12 @@ export function useGitCommands() {
   const amendCommit = (repoId: string, message: string) =>
     call<string>('amend_commit', { repoId, message })
 
-  const amendCommitMessage = (repoId: string, message: string) =>
-    call<string>('amend_commit_message', { repoId, message })
+  const amendCommitMessage = (
+    repoId: string,
+    message: string,
+    authorTime?: number,
+    committerTime?: number,
+  ) => call<string>('amend_commit_message', { repoId, message, authorTime, committerTime })
 
   const checkoutCommit = (repoId: string, oid: string) =>
     call<void>('checkout_commit', { repoId, oid })

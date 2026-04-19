@@ -141,6 +141,8 @@ pub async fn amend_commit(
 pub async fn amend_commit_message(
     repo_id: String,
     message: String,
+    author_time: Option<i64>,
+    committer_time: Option<i64>,
     repo_manager: State<'_, RepoManager>,
 ) -> Result<String, GitError> {
     let meta = repo_manager
@@ -153,7 +155,7 @@ pub async fn amend_commit_message(
         ));
     }
 
-    GitEngine::amend_commit_message(&meta.path, &message)
+    GitEngine::amend_commit_message(&meta.path, &message, author_time, committer_time)
 }
 
 #[tauri::command]

@@ -289,6 +289,8 @@ const messages = {
         confirm: 'Apply',
         rewordHint: 'This commit is not HEAD; history will be rewritten via rebase (later commit SHAs will change).',
         autoStash: 'Auto-stash uncommitted changes before and restore after',
+        authorDate: 'Author Date',
+        committerDate: 'Committer Date',
       },
     },
   },

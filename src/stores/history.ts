@@ -255,10 +255,10 @@ export const useHistoryStore = defineStore('history', () => {
     return await git.previewDropUnreachableCommit(repoStore.activeRepoId, oid)
   }
 
-  async function amendCommitMessage(message: string) {
+  async function amendCommitMessage(message: string, authorTime?: number, committerTime?: number) {
     const repoStore = useRepoStore()
     if (!repoStore.activeRepoId) return
-    await git.amendCommitMessage(repoStore.activeRepoId, message)
+    await git.amendCommitMessage(repoStore.activeRepoId, message, authorTime, committerTime)
     await Promise.all([loadLog(), loadBranches()])
     if (selectedCommit.value) {
       await selectCommit(selectedCommit.value.info.oid)

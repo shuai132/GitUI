@@ -70,6 +70,7 @@ MergeDialog / RebasePlanDialog / DragActionDialog
 
 - **三路合并编辑器按行粒度合并**：A/B 每行独立勾选决定是否进入 OUTPUT，不做字符级；不实现 `rebase --exec`
 - **Reword 暂停策略**：前端通过 `rebaseContinue(amendedMessage)` 补交新消息；squash 的最终消息在 plan 阶段就填好，执行过程中不打断
+- **Reword 时间覆盖**：`RebaseTodoItem` 携带可选的 `new_author_time` / `new_committer_time`（Unix 秒）；`run_rebase_loop` 在 reword 分支读取并调用 `GitEngine::sig_with_time` 构造自定义 sig 传给 `rebase.commit(author_override, committer, msg)`。`new_author_time` 缺省时传 `None`（libgit2 保留原 author），`new_committer_time` 缺省时沿用 `sig`（当前时间）。历史视图「修改提交信息」对话框始终展示这两个字段，从 `CommitInfo.author_time` 初始化。
 - **自动 stash pop 失败**时前端只提示"请手动处理 stash"，**不自动强合并**——避免进一步破坏工作区
 - **新 git2 方法**集中在 `merge.rs` / `rebase.rs` / `conflict.rs`，不再继续堆 `engine.rs`（已超 1600 行）
 - **拖拽语义**由弹窗让用户选合并或变基，避免默认行为猜错

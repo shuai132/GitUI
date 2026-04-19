@@ -129,6 +129,12 @@ pub struct RebaseTodoItem {
     pub subject: String,
     /// reword / squash 时前端填入的新消息；其它动作为 None
     pub new_message: Option<String>,
+    /// reword 时可选覆盖 author date（Unix 秒）；None = 保留原值
+    #[serde(default)]
+    pub new_author_time: Option<i64>,
+    /// reword 时可选覆盖 committer date（Unix 秒）；None = 当前时间
+    #[serde(default)]
+    pub new_committer_time: Option<i64>,
 }
 
 /// 冲突文件的三方数据（base=stage1, ours=stage2, theirs=stage3）。
@@ -154,6 +160,7 @@ pub struct CommitInfo {
     pub summary: String,
     pub author_name: String,
     pub author_email: String,
+    pub author_time: i64,
     pub time: i64,
     pub parent_oids: Vec<String>,
     /// 该提交在所有 ref 之外，仅通过 reflog 才能找到（"丢失引用"）

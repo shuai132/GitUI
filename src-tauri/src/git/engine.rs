@@ -58,6 +58,7 @@ fn build_commit_info(
         summary,
         author_name: signature_name(&author, hint),
         author_email: signature_email(&author, hint),
+        author_time: author.when().seconds(),
         time: commit.time().seconds(),
         parent_oids,
         is_unreachable,
@@ -2432,6 +2433,20 @@ impl GitEngine {
 
     // ── Amend ──────────────────────────────────────────────────────────
 
+    /// 保留原 signature 的 name / email / timezone offset，只替换 Unix 秒数。
+    /// 返回 `'static` lifetime 的 Signature（无借用 repo 生命期）。
+    pub(crate) fn sig_with_time(
+        orig: &git2::Signature<'_>,
+        unix_secs: i64,
+    ) -> GitResult<git2::Signature<'static>> {
+        let t = git2::Time::new(unix_secs, orig.when().offset_minutes());
+        Ok(git2::Signature::new(
+            orig.name().unwrap_or(""),
+            orig.email().unwrap_or(""),
+            &t,
+        )?)
+    }
+
     /// 在当前 HEAD 上 amend 一次提交：用 index 里的 tree + 新 message 替换
     /// HEAD commit。返回新 commit OID。
     pub fn amend_commit(path: &str, message: &str) -> GitResult<String> {
@@ -2440,15 +2455,18 @@ impl GitEngine {
             return Err(GitError::OperationFailed("提交信息不能为空".to_string()));
         }
         let head = repo.head()?.peel_to_commit()?;
-        let sig = repo.signature()?;
+        let committer = repo.signature()?;
         let mut index = repo.index()?;
         index.write()?;
         let tree_oid = index.write_tree()?;
         let tree = repo.find_tree(tree_oid)?;
+        // 保留原 author date，仅更新 committer 为当前时间
+        let orig_author = head.author();
+        let author = Self::sig_with_time(&orig_author, orig_author.when().seconds())?;
         let new_oid = head.amend(
             Some("HEAD"),
-            Some(&sig),
-            Some(&sig),
+            Some(&author),
+            Some(&committer),
             None,
             Some(message),
             Some(&tree),
@@ -2456,20 +2474,38 @@ impl GitEngine {
         Ok(new_oid.to_string())
     }
 
-    /// 仅修改 HEAD commit 的 message，不改变 tree（不引入新的暂存变更）。
+    /// 仅修改 HEAD commit 的 message（以及可选的时间戳），不改变 tree。
+    /// - `author_time`：None = 保留原 author date；Some(t) = 覆盖为指定 Unix 秒
+    /// - `committer_time`：None = 当前时间；Some(t) = 覆盖为指定 Unix 秒
     /// 返回新 commit OID。
-    pub fn amend_commit_message(path: &str, message: &str) -> GitResult<String> {
+    pub fn amend_commit_message(
+        path: &str,
+        message: &str,
+        author_time: Option<i64>,
+        committer_time: Option<i64>,
+    ) -> GitResult<String> {
         let repo = Self::open(path)?;
         if message.trim().is_empty() {
             return Err(GitError::OperationFailed("提交信息不能为空".to_string()));
         }
         let head = repo.head()?.peel_to_commit()?;
-        let sig = repo.signature()?;
+        // committer：有指定时间则覆盖，否则用当前时间（repo.signature()）
+        let committer_base = repo.signature()?;
+        let committer = match committer_time {
+            Some(t) => Self::sig_with_time(&committer_base, t)?,
+            None => committer_base,
+        };
+        // author：有指定时间则覆盖，否则保留原值
+        let orig_author = head.author();
+        let author = Self::sig_with_time(
+            &orig_author,
+            author_time.unwrap_or_else(|| orig_author.when().seconds()),
+        )?;
         let tree = head.tree()?;
         let new_oid = head.amend(
             Some("HEAD"),
-            Some(&sig),
-            Some(&sig),
+            Some(&author),
+            Some(&committer),
             None,
             Some(message),
             Some(&tree),

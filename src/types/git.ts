@@ -60,6 +60,10 @@ export interface RebaseTodoItem {
   action: RebaseActionKind
   subject: string
   new_message?: string
+  /** reword 时可选覆盖 author date（Unix 秒）；缺省 = 保留原值 */
+  new_author_time?: number
+  /** reword 时可选覆盖 committer date（Unix 秒）；缺省 = 当前时间 */
+  new_committer_time?: number
 }
 
 export interface ConflictFile {
@@ -78,6 +82,9 @@ export interface CommitInfo {
   summary: string
   author_name: string
   author_email: string
+  /** author date（Unix 秒），`git log` 默认展示此时间 */
+  author_time: number
+  /** committer date（Unix 秒），rebase/amend 后会更新 */
   time: number
   parent_oids: string[]
   /** 该提交不在任何 ref 的可达集合中（仅 reflog 可达） */

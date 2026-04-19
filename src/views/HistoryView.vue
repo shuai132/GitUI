@@ -141,6 +141,18 @@ function toRealIdx(virtualIdx: number): number {
   return virtualIdx
 }
 
+// Unix 秒 → datetime-local 输入框所需的本地时间字符串（YYYY-MM-DDTHH:mm）
+function toDatetimeLocal(unixSecs: number): string {
+  const d = new Date(unixSecs * 1000)
+  const p = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`
+}
+
+// datetime-local 字符串 → Unix 秒
+function fromDatetimeLocal(s: string): number {
+  return Math.floor(new Date(s).getTime() / 1000)
+}
+
 const scrollContainer = ref<HTMLElement | null>(null)
 // 列头水平滚动偏移：与 commit-list-body 的 scrollLeft 同步，用 transform 平移列头。
 // 这样列头不参与 .commit-panel 的水平滚动，body 的垂直滚动条始终贴在面板右缘。
@@ -604,6 +616,8 @@ const showCreateTagDialog = ref(false)
 const showEditMessageDialog = ref(false)
 const editMessageCommit = ref<CommitInfo | null>(null)
 const editMessageText = ref('')
+const editMessageAuthorTime = ref('')
+const editMessageCommitterTime = ref('')
 const editMessageAutoStash = ref(false)
 const editMessageSubmitting = ref(false)
 const createTagAnnotated = ref(false)
@@ -891,6 +905,8 @@ async function onCommitMenuAction(action: string) {
       case 'edit-message':
         editMessageCommit.value = c
         editMessageText.value = c.message.trim()
+        editMessageAuthorTime.value = toDatetimeLocal(c.author_time)
+        editMessageCommitterTime.value = toDatetimeLocal(Math.floor(Date.now() / 1000))
         editMessageAutoStash.value = false
         editMessageSubmitting.value = false
         showEditMessageDialog.value = true
@@ -978,9 +994,11 @@ async function onEditMessageConfirm() {
   const commit = editMessageCommit.value
   if (!text || !commit || editMessageSubmitting.value) return
   editMessageSubmitting.value = true
+  const authorTime = editMessageAuthorTime.value ? fromDatetimeLocal(editMessageAuthorTime.value) : undefined
+  const committerTime = editMessageCommitterTime.value ? fromDatetimeLocal(editMessageCommitterTime.value) : undefined
   try {
     if (commit.oid === headCommitOid.value) {
-      await historyStore.amendCommitMessage(text)
+      await historyStore.amendCommitMessage(text, authorTime, committerTime)
     } else {
       // 非 HEAD：通过 rebase 以 reword 方式重写该提交。
       // upstream = parent（已在菜单判定时校验为单父 & 祖先），rebase_plan 返回
@@ -993,7 +1011,13 @@ async function onEditMessageConfirm() {
         alert(t('errors.rebase.planMismatch', { shortOid: commit.short_oid }))
         return
       }
-      todo[idx] = { ...todo[idx], action: 'reword', new_message: text }
+      todo[idx] = {
+        ...todo[idx],
+        action: 'reword',
+        new_message: text,
+        new_author_time: authorTime,
+        new_committer_time: committerTime,
+      }
       await mergeRebaseStore.startRebase(parentOid, null, todo, editMessageAutoStash.value)
     }
     showEditMessageDialog.value = false
@@ -1554,6 +1578,24 @@ onUnmounted(() => {
       spellcheck="false"
       autocomplete="off"
     />
+    <div class="edit-message-times">
+      <label class="edit-message-time-row">
+        <span class="edit-message-time-label">{{ t('history.dialog.editMessage.authorDate') }}</span>
+        <input
+          v-model="editMessageAuthorTime"
+          type="datetime-local"
+          class="edit-message-time-input"
+        />
+      </label>
+      <label class="edit-message-time-row">
+        <span class="edit-message-time-label">{{ t('history.dialog.editMessage.committerDate') }}</span>
+        <input
+          v-model="editMessageCommitterTime"
+          type="datetime-local"
+          class="edit-message-time-input"
+        />
+      </label>
+    </div>
     <label v-if="!isEditingHeadCommit" class="edit-message-autostash">
       <input v-model="editMessageAutoStash" type="checkbox" />
       <span>{{ t('history.dialog.editMessage.autoStash') }}</span>
@@ -2240,6 +2282,45 @@ onUnmounted(() => {
 .edit-message-autostash input[type='checkbox'] {
   cursor: pointer;
   accent-color: var(--accent-blue);
+}
+
+.edit-message-times {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.edit-message-time-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: default;
+}
+
+.edit-message-time-label {
+  font-size: var(--font-sm);
+  color: var(--text-secondary);
+  min-width: 80px;
+  flex-shrink: 0;
+}
+
+.edit-message-time-input {
+  flex: 1;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: var(--font-sm);
+  padding: 4px 6px;
+  outline: none;
+  box-sizing: border-box;
+  color-scheme: dark;
+}
+
+.edit-message-time-input:focus {
+  border-color: var(--accent-blue);
 }
 
 .drop-unreachable-body {
