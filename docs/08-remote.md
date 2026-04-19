@@ -44,7 +44,7 @@ Fetch / Push / Pull 是三个独立命令。**远端 URL 是 SSH 时走系统 `g
 
 ## Pull 实现
 
-`GitEngine::pull(path, remote_name, branch_name)`：
+`GitEngine::pull(path, remote_name, branch_name, mode)`：
 
 ```rust
 1. remote.fetch(&[branch_name], opts)
@@ -52,10 +52,12 @@ Fetch / Push / Pull 是三个独立命令。**远端 URL 是 SSH 时走系统 `g
 3. merge_analysis(&[&fetch_commit])
 4. is_fast_forward → 把 refs/heads/<branch> 指到 fetch_commit.id
     + set_head + checkout_head(force)
-5. is_normal → Err("Merge required - not yet supported")
+5. ff_only + is_normal → Err("Cannot fast-forward: remote branch has diverged")
+6. ff + is_normal → pull_merge()：三方合并 → 无冲突则创建 merge commit → cleanup_state
+   有冲突 → 返回 "Merge 出现冲突" 让用户在工作区手动解决
 ```
 
-**只支持 fast-forward**。需要真正 merge 的情况直接报错，让用户去终端处理。这是目前的最大限制。
+`mode == "ff"`（默认）支持真正的 merge commit 创建。`mode == "ff_only"` 仍拒绝非快进。
 
 ## Push 实现
 
@@ -129,7 +131,5 @@ pub fn credential_callback(url, username, allowed_types) -> Result<Cred, Error> 
 ## 未来改进
 
 - 交互式凭据输入（HTTPS 密码 prompt；SSH 的 passphrase 由系统 ssh 直接处理）
-- Merge / rebase pull（不止 fast-forward）
 - `git push -u` 首次设置 upstream
 - Remote 选择下拉菜单（Pull 按钮上挂 chevron）
-- Force push with lease

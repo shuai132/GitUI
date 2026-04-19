@@ -589,10 +589,7 @@ impl GitEngine {
 
     /// 如果 `file_path` 是冲突文件，用 stage 2（ours）blob 与工作区内容做 diff。
     /// 非冲突返回 Ok(None)，让调用方继续走原路径。
-    fn try_conflict_diff(
-        repo: &Repository,
-        file_path: &str,
-    ) -> GitResult<Option<FileDiff>> {
+    fn try_conflict_diff(repo: &Repository, file_path: &str) -> GitResult<Option<FileDiff>> {
         let index = repo.index()?;
         let conflict = match index.conflicts() {
             Ok(iter) => {
@@ -867,10 +864,14 @@ impl GitEngine {
                 .as_deref()
                 .or(pending.old_path.as_deref())
                 .and_then(|p| {
-                    repo.get_attr(Path::new(p), "working-tree-encoding", AttrCheckFlags::default())
-                        .ok()
-                        .flatten()
-                        .map(|s| s.to_string())
+                    repo.get_attr(
+                        Path::new(p),
+                        "working-tree-encoding",
+                        AttrCheckFlags::default(),
+                    )
+                    .ok()
+                    .flatten()
+                    .map(|s| s.to_string())
                 });
 
             // 拼最多 64KB 字节作为 chardetng 的样本（attr 已声明时其实用不上）
@@ -1158,7 +1159,11 @@ impl GitEngine {
                 // git2 0.19 未暴露 Tag::message_encoding，hint=None 走 UTF-8 试解 + chardetng
                 let message = tag_obj.message_bytes().and_then(|b| {
                     let s = decode_commit_text(b, None).trim().to_string();
-                    if s.is_empty() { None } else { Some(s) }
+                    if s.is_empty() {
+                        None
+                    } else {
+                        Some(s)
+                    }
                 });
                 tags.push(TagInfo {
                     name: short,
@@ -1356,9 +1361,7 @@ impl GitEngine {
         }
         let mut index = repo.index()?;
         if index.has_conflicts() {
-            return Err(GitError::OperationFailed(
-                "仍有未解决的冲突".to_string(),
-            ));
+            return Err(GitError::OperationFailed("仍有未解决的冲突".to_string()));
         }
         let source_oid = read_single_oid_file(&repo.path().join("CHERRY_PICK_HEAD"))?;
         let source = repo.find_commit(source_oid)?;
@@ -1410,9 +1413,7 @@ impl GitEngine {
         }
         let mut index = repo.index()?;
         if index.has_conflicts() {
-            return Err(GitError::OperationFailed(
-                "仍有未解决的冲突".to_string(),
-            ));
+            return Err(GitError::OperationFailed("仍有未解决的冲突".to_string()));
         }
         let source_oid = read_single_oid_file(&repo.path().join("REVERT_HEAD"))?;
         let source = repo.find_commit(source_oid)?;
@@ -1620,10 +1621,8 @@ impl GitEngine {
                 "Cannot fast-forward: remote branch has diverged".to_string(),
             ));
         } else {
-            // mode == "ff": default behavior
-            return Err(GitError::OperationFailed(
-                "Merge required - not yet supported in this version".to_string(),
-            ));
+            // mode == "ff": 允许 merge commit（非快进时创建合并提交）
+            return Self::pull_merge(&repo, branch_name, &fetch_commit);
         }
 
         Ok(())
@@ -1689,9 +1688,79 @@ impl GitEngine {
         Ok(())
     }
 
-    // ── Clone / Init ────────────────────────────────────────────────────
+    /// Pull 的 merge 路径：远端分叉时创建 merge commit（`mode == "ff"`）。
+    ///
+    /// 流程：
+    /// 1. 检查工作区是否干净（有未提交变更则拒绝）
+    /// 2. `repo.merge()` 执行三方合并并写入 index
+    /// 3. 若 index 有冲突 → 保留 MERGE_HEAD 供用户手动解决，返回 conflict 错误
+    /// 4. 无冲突 → 从 index 生成 tree → 创建 merge commit（两个 parent）→ 更新 HEAD
+    fn pull_merge(
+        repo: &git2::Repository,
+        branch_name: &str,
+        fetch_commit: &git2::AnnotatedCommit<'_>,
+    ) -> GitResult<()> {
+        // 1. 工作区干净检查
+        let statuses = repo.statuses(Some(
+            git2::StatusOptions::new()
+                .include_untracked(false)
+                .include_ignored(false),
+        ))?;
+        if !statuses.is_empty() {
+            return Err(GitError::OperationFailed(
+                "Cannot merge: working tree has uncommitted changes. Commit or stash first."
+                    .to_string(),
+            ));
+        }
 
-    /// 克隆远程仓库到 `target_path`。
+        // 2. 执行三方合并
+        let mut merge_opts = git2::MergeOptions::new();
+        merge_opts.fail_on_conflict(false);
+        repo.merge(
+            &[fetch_commit],
+            Some(&mut merge_opts),
+            Some(git2::build::CheckoutBuilder::default().allow_conflicts(true)),
+        )?;
+
+        // 3. 冲突检查
+        let mut index = repo.index()?;
+        if index.has_conflicts() {
+            // 保留 MERGE_HEAD（用户需要在工作区手动解决冲突）
+            return Err(GitError::OperationFailed(
+                "Merge 出现冲突，请在工作区解决后继续".to_string(),
+            ));
+        }
+
+        // 4. 生成 merge commit
+        let sig = repo.signature()?;
+        let tree_oid = index.write_tree_to(repo)?;
+        let tree = repo.find_tree(tree_oid)?;
+
+        let head_commit = repo.head()?.peel_to_commit()?;
+        let fetch_commit_obj = repo.find_commit(fetch_commit.id())?;
+
+        let message = format!("Merge remote-tracking branch 'origin/{}'", branch_name);
+
+        repo.commit(
+            Some("HEAD"),
+            &sig,
+            &sig,
+            &message,
+            &tree,
+            &[&head_commit, &fetch_commit_obj],
+        )?;
+
+        // 5. 清理合并状态（删除 MERGE_HEAD / MERGE_MSG 等）
+        repo.cleanup_state()?;
+
+        // 6. 确保工作目录与 HEAD 一致
+        repo.checkout_head(Some(git2::build::CheckoutBuilder::default().force()))?;
+
+        log::debug!("[engine::pull_merge] merge commit created for branch={branch_name}");
+        Ok(())
+    }
+
+    // ── Clone / Init ────────────────────────────────────────────────────
     ///
     /// - 凭据回调复用 `make_credentials_callback`（SSH agent / ed25519 / rsa / git helper）
     /// - `depth` 传 `Some(n>0)` 走浅克隆（libgit2 0.19+ 支持）
@@ -1712,13 +1781,7 @@ impl GitEngine {
         use std::sync::Arc;
 
         if is_ssh_url(url) {
-            return Self::clone_repo_ssh(
-                url,
-                target_path,
-                depth,
-                recurse_submodules,
-                on_progress,
-            );
+            return Self::clone_repo_ssh(url, target_path, depth, recurse_submodules, on_progress);
         }
 
         let on_progress: Arc<dyn Fn(&str, u32, Option<String>) + Send + Sync> =
@@ -2499,7 +2562,9 @@ impl GitEngine {
                 continue;
             }
             // 判断 target 是否是 root 的祖先：从 root revwalk 看 target 能否被访问
-            let Ok(mut walk) = repo.revwalk() else { continue };
+            let Ok(mut walk) = repo.revwalk() else {
+                continue;
+            };
             if walk.push(root).is_err() {
                 continue;
             }
@@ -2616,9 +2681,9 @@ impl GitEngine {
         let repo = Self::open(path)?;
         let mut revwalk = repo.revwalk()?;
         revwalk.set_sorting(git2::Sort::TOPOLOGICAL | git2::Sort::TIME)?;
-        revwalk.push_head().map_err(|e| {
-            GitError::OperationFailed(format!("no HEAD: {}", e.message()))
-        })?;
+        revwalk
+            .push_head()
+            .map_err(|e| GitError::OperationFailed(format!("no HEAD: {}", e.message())))?;
 
         let mut results = Vec::new();
         let mut skipped = 0usize;
@@ -2691,11 +2756,7 @@ impl GitEngine {
 
         let diff = if commit.parent_count() > 0 {
             let parent_tree = commit.parent(0)?.tree()?;
-            repo.diff_tree_to_tree(
-                Some(&parent_tree),
-                Some(&commit_tree),
-                Some(&mut diff_opts),
-            )?
+            repo.diff_tree_to_tree(Some(&parent_tree), Some(&commit_tree), Some(&mut diff_opts))?
         } else {
             repo.diff_tree_to_tree(None, Some(&commit_tree), Some(&mut diff_opts))?
         };
@@ -2722,9 +2783,8 @@ impl GitEngine {
             .workdir()
             .ok_or_else(|| GitError::OperationFailed("bare repo not supported".to_string()))?;
         let full_path = workdir.join(file_path);
-        let content = std::fs::read_to_string(&full_path).map_err(|e| {
-            GitError::OperationFailed(format!("读取文件失败：{}", e))
-        })?;
+        let content = std::fs::read_to_string(&full_path)
+            .map_err(|e| GitError::OperationFailed(format!("读取文件失败：{}", e)))?;
         let lines: Vec<String> = content.lines().map(String::from).collect();
 
         // 计算 blame
@@ -2794,11 +2854,9 @@ impl GitEngine {
             .map_err(|e| GitError::OperationFailed(e.message().to_string()))?;
         let commit = repo.find_commit(oid)?;
         let tree = commit.tree()?;
-        let entry = tree
-            .get_path(Path::new(file_path))
-            .map_err(|_| {
-                GitError::OperationFailed(format!("文件 {} 在该提交中不存在", file_path))
-            })?;
+        let entry = tree.get_path(Path::new(file_path)).map_err(|_| {
+            GitError::OperationFailed(format!("文件 {} 在该提交中不存在", file_path))
+        })?;
         let blob = repo
             .find_blob(entry.id())
             .map_err(|e| GitError::OperationFailed(e.message().to_string()))?;
@@ -2817,7 +2875,10 @@ impl GitEngine {
 }
 
 fn read_trimmed_file(p: &Path) -> Option<String> {
-    std::fs::read_to_string(p).ok().map(|s| s.trim().to_string()).filter(|s| !s.is_empty())
+    std::fs::read_to_string(p)
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
 }
 
 /// 读取单行 OID 文件（如 CHERRY_PICK_HEAD / REVERT_HEAD）。
@@ -2851,8 +2912,8 @@ fn read_rebase_state(
     };
 
     let onto = read_trimmed_file(&dir.join("onto"));
-    let orig_head = read_trimmed_file(&dir.join("orig-head"))
-        .or_else(|| read_trimmed_file(&dir.join("head")));
+    let orig_head =
+        read_trimmed_file(&dir.join("orig-head")).or_else(|| read_trimmed_file(&dir.join("head")));
     let head_name = read_trimmed_file(&dir.join("head-name"));
     let current_oid = read_trimmed_file(&dir.join("stopped-sha"));
 
