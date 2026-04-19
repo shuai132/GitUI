@@ -78,7 +78,11 @@ pub fn run() {
             amend_commit_message,
             checkout_commit,
             cherry_pick_commit,
+            cherry_pick_continue,
+            cherry_pick_abort,
             revert_commit,
+            revert_continue,
+            revert_abort,
             reset_to_commit,
             create_tag,
             // Log

@@ -15,7 +15,7 @@
 | 历史视图 commit 右键菜单 | "将此提交所在分支合并到 <branch>..." → 打开 `MergeDialog`；"将 <branch> 变基到此提交..." → 打开 `RebasePlanDialog` |
 | 历史视图 commit 右键 "修改提交信息..." | HEAD 走 amend；**非 HEAD 且是单父祖先提交**时以 `reword` 预填消息启动 rebase（`parent..HEAD`），`new_message` 已填故 rebase 循环不会暂停——见 [04-history.md](./04-history.md) |
 | 历史视图 commit 拖拽 | 拖拽一条 commit 到另一条 commit，松开后打开 `DragActionDialog` 让用户选合并 / 变基 |
-| 顶部 `OngoingOpBanner` | 仓库处于 merge / rebase 中间态时显示；按钮：继续（merge 弹消息编辑框，rebase 直接推进）/ 跳过（仅 rebase）/ 中止 |
+| 顶部 `OngoingOpBanner` | 仓库处于 merge / rebase / cherry-pick / revert 中间态时显示；按钮：继续（merge 弹消息编辑框，其余直接推进）/ 跳过（仅 rebase）/ 中止 |
 | `WipPanel` 冲突文件右键 | 打开三路合并编辑器 / 使用 ours / 使用 theirs / 标记已解决 |
 
 关键组件：
@@ -60,6 +60,7 @@ MergeDialog / RebasePlanDialog / DragActionDialog
 - `src-tauri/src/git/merge.rs`：`merge_branch / merge_continue / merge_abort`
 - `src-tauri/src/git/rebase.rs`：`rebase_plan / rebase_start / rebase_continue / rebase_skip / rebase_abort`
 - `src-tauri/src/git/conflict.rs`：`get_conflict_file / mark_conflict_resolved / checkout_conflict_side`
+- `src-tauri/src/git/engine.rs`：`cherry_pick_commit / cherry_pick_continue / cherry_pick_abort / revert_commit / revert_continue / revert_abort`（cherry-pick continue 还原原作者签名，revert continue 沿用用户签名；abort 都是 `reset --hard HEAD` + `cleanup_state`）
 - `src-tauri/src/commands/merge_rebase.rs`：命令层薄封装
 - `src-tauri/src/git/engine.rs::build_repo_state`：读 `.git/MERGE_MSG / MERGE_HEAD / rebase-merge/*` 汇总到 `RepoState`，随 `get_status` 一起返回
 

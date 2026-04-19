@@ -1343,6 +1343,120 @@ impl GitEngine {
         Ok(())
     }
 
+    /// 冲突解决后继续 cherry-pick：读 CHERRY_PICK_HEAD 还原原提交作者，创建新 commit。
+    pub fn cherry_pick_continue(path: &str) -> GitResult<()> {
+        let repo = Self::open(path)?;
+        if !matches!(
+            repo.state(),
+            RepositoryState::CherryPick | RepositoryState::CherryPickSequence
+        ) {
+            return Err(GitError::OperationFailed(
+                "仓库当前不在 cherry-pick 状态".to_string(),
+            ));
+        }
+        let mut index = repo.index()?;
+        if index.has_conflicts() {
+            return Err(GitError::OperationFailed(
+                "仍有未解决的冲突".to_string(),
+            ));
+        }
+        let source_oid = read_single_oid_file(&repo.path().join("CHERRY_PICK_HEAD"))?;
+        let source = repo.find_commit(source_oid)?;
+        let head_commit = repo.head()?.peel_to_commit()?;
+        let tree_oid = index.write_tree()?;
+        let tree = repo.find_tree(tree_oid)?;
+        let signature = repo.signature()?;
+        let message = read_trimmed_file(&repo.path().join("MERGE_MSG"))
+            .unwrap_or_else(|| commit_message_decoded(&source));
+        repo.commit(
+            Some("HEAD"),
+            &source.author(),
+            &signature,
+            &message,
+            &tree,
+            &[&head_commit],
+        )?;
+        repo.cleanup_state()?;
+        Ok(())
+    }
+
+    /// 中止 cherry-pick：丢弃工作区/暂存区冲突改动并清理中间态。
+    pub fn cherry_pick_abort(path: &str) -> GitResult<()> {
+        let repo = Self::open(path)?;
+        if !matches!(
+            repo.state(),
+            RepositoryState::CherryPick | RepositoryState::CherryPickSequence
+        ) {
+            return Err(GitError::OperationFailed(
+                "仓库当前不在 cherry-pick 状态".to_string(),
+            ));
+        }
+        let head_commit = repo.head()?.peel_to_commit()?;
+        repo.reset(head_commit.as_object(), ResetType::Hard, None)?;
+        repo.cleanup_state()?;
+        Ok(())
+    }
+
+    /// 冲突解决后继续 revert：读 REVERT_HEAD 创建 revert commit。
+    pub fn revert_continue(path: &str) -> GitResult<()> {
+        let repo = Self::open(path)?;
+        if !matches!(
+            repo.state(),
+            RepositoryState::Revert | RepositoryState::RevertSequence
+        ) {
+            return Err(GitError::OperationFailed(
+                "仓库当前不在 revert 状态".to_string(),
+            ));
+        }
+        let mut index = repo.index()?;
+        if index.has_conflicts() {
+            return Err(GitError::OperationFailed(
+                "仍有未解决的冲突".to_string(),
+            ));
+        }
+        let source_oid = read_single_oid_file(&repo.path().join("REVERT_HEAD"))?;
+        let source = repo.find_commit(source_oid)?;
+        let head_commit = repo.head()?.peel_to_commit()?;
+        let tree_oid = index.write_tree()?;
+        let tree = repo.find_tree(tree_oid)?;
+        let signature = repo.signature()?;
+        let message = read_trimmed_file(&repo.path().join("MERGE_MSG")).unwrap_or_else(|| {
+            let original_summary = summary_from(&commit_message_decoded(&source));
+            format!(
+                "Revert \"{}\"\n\nThis reverts commit {}.",
+                original_summary,
+                source.id()
+            )
+        });
+        repo.commit(
+            Some("HEAD"),
+            &signature,
+            &signature,
+            &message,
+            &tree,
+            &[&head_commit],
+        )?;
+        repo.cleanup_state()?;
+        Ok(())
+    }
+
+    /// 中止 revert：丢弃工作区/暂存区冲突改动并清理中间态。
+    pub fn revert_abort(path: &str) -> GitResult<()> {
+        let repo = Self::open(path)?;
+        if !matches!(
+            repo.state(),
+            RepositoryState::Revert | RepositoryState::RevertSequence
+        ) {
+            return Err(GitError::OperationFailed(
+                "仓库当前不在 revert 状态".to_string(),
+            ));
+        }
+        let head_commit = repo.head()?.peel_to_commit()?;
+        repo.reset(head_commit.as_object(), ResetType::Hard, None)?;
+        repo.cleanup_state()?;
+        Ok(())
+    }
+
     /// Reset 当前 HEAD 到指定提交
     /// mode: "soft" | "mixed" | "hard"
     pub fn reset_to_commit(path: &str, oid: &str, mode: &str) -> GitResult<()> {
@@ -2704,6 +2818,14 @@ impl GitEngine {
 
 fn read_trimmed_file(p: &Path) -> Option<String> {
     std::fs::read_to_string(p).ok().map(|s| s.trim().to_string()).filter(|s| !s.is_empty())
+}
+
+/// 读取单行 OID 文件（如 CHERRY_PICK_HEAD / REVERT_HEAD）。
+fn read_single_oid_file(p: &Path) -> GitResult<git2::Oid> {
+    let content = std::fs::read_to_string(p)
+        .map_err(|e| GitError::OperationFailed(format!("读取 {} 失败：{e}", p.display())))?;
+    let first = content.lines().next().unwrap_or("").trim();
+    git2::Oid::from_str(first).map_err(|e| GitError::OperationFailed(e.message().to_string()))
 }
 
 /// 读取 `.git/rebase-merge/*` 或 `.git/rebase-apply/*` 下的 rebase 中间态。

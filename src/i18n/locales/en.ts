@@ -703,6 +703,14 @@ const messages = {
       detail: 'step {step} / {total} · {oid}',
       confirmAbort: 'Abort the rebase and restore the original HEAD?',
     },
+    cherryPick: {
+      inProgress: 'Cherry-pick in progress',
+      confirmAbort: 'Abort the cherry-pick and discard conflict changes?',
+    },
+    revert: {
+      inProgress: 'Revert in progress',
+      confirmAbort: 'Abort the revert and discard conflict changes?',
+    },
   },
   conflict: {
     view: {

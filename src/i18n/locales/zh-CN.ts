@@ -702,6 +702,14 @@ const messages = {
       detail: '第 {step} / {total} 步 · {oid}',
       confirmAbort: '中止变基并恢复原 HEAD？',
     },
+    cherryPick: {
+      inProgress: '正在 cherry-pick',
+      confirmAbort: '中止 cherry-pick 并丢弃冲突改动？',
+    },
+    revert: {
+      inProgress: '正在 revert',
+      confirmAbort: '中止 revert 并丢弃冲突改动？',
+    },
   },
   conflict: {
     view: {

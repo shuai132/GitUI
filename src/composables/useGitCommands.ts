@@ -175,8 +175,20 @@ export function useGitCommands() {
   const cherryPickCommit = (repoId: string, oid: string) =>
     call<void>('cherry_pick_commit', { repoId, oid })
 
+  const cherryPickContinue = (repoId: string) =>
+    call<void>('cherry_pick_continue', { repoId })
+
+  const cherryPickAbort = (repoId: string) =>
+    call<void>('cherry_pick_abort', { repoId })
+
   const revertCommit = (repoId: string, oid: string) =>
     call<void>('revert_commit', { repoId, oid })
+
+  const revertContinue = (repoId: string) =>
+    call<void>('revert_continue', { repoId })
+
+  const revertAbort = (repoId: string) =>
+    call<void>('revert_abort', { repoId })
 
   const resetToCommit = (
     repoId: string,
@@ -419,7 +431,11 @@ export function useGitCommands() {
     amendCommitMessage,
     checkoutCommit,
     cherryPickCommit,
+    cherryPickContinue,
+    cherryPickAbort,
     revertCommit,
+    revertContinue,
+    revertAbort,
     resetToCommit,
     createTag,
     getLog,

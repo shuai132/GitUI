@@ -62,6 +62,50 @@ pub async fn revert_commit(
 }
 
 #[tauri::command]
+pub async fn cherry_pick_continue(
+    repo_id: String,
+    repo_manager: State<'_, RepoManager>,
+) -> Result<(), GitError> {
+    let meta = repo_manager
+        .get_meta(&repo_id)
+        .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
+    GitEngine::cherry_pick_continue(&meta.path)
+}
+
+#[tauri::command]
+pub async fn cherry_pick_abort(
+    repo_id: String,
+    repo_manager: State<'_, RepoManager>,
+) -> Result<(), GitError> {
+    let meta = repo_manager
+        .get_meta(&repo_id)
+        .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
+    GitEngine::cherry_pick_abort(&meta.path)
+}
+
+#[tauri::command]
+pub async fn revert_continue(
+    repo_id: String,
+    repo_manager: State<'_, RepoManager>,
+) -> Result<(), GitError> {
+    let meta = repo_manager
+        .get_meta(&repo_id)
+        .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
+    GitEngine::revert_continue(&meta.path)
+}
+
+#[tauri::command]
+pub async fn revert_abort(
+    repo_id: String,
+    repo_manager: State<'_, RepoManager>,
+) -> Result<(), GitError> {
+    let meta = repo_manager
+        .get_meta(&repo_id)
+        .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
+    GitEngine::revert_abort(&meta.path)
+}
+
+#[tauri::command]
 pub async fn reset_to_commit(
     repo_id: String,
     oid: String,

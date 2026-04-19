@@ -9,7 +9,8 @@ import Modal from './Modal.vue'
 const { t } = useI18n()
 const mr = useMergeRebaseStore()
 const workspaceStore = useWorkspaceStore()
-const { repoState, isOngoing, isMerging, isRebasing, busy } = storeToRefs(mr)
+const { repoState, isOngoing, isMerging, isRebasing, isCherryPicking, isReverting, busy } =
+  storeToRefs(mr)
 
 const showContinueDialog = ref(false)
 const continueMessage = ref('')
@@ -24,6 +25,8 @@ const headline = computed(() => {
   if (hasConflicts.value) return t('ongoing.conflicts')
   if (isMerging.value) return t('ongoing.merge.inProgress')
   if (isRebasing.value) return t('ongoing.rebase.inProgress')
+  if (isCherryPicking.value) return t('ongoing.cherryPick.inProgress')
+  if (isReverting.value) return t('ongoing.revert.inProgress')
   const k = repoState.value?.kind ?? 'clean'
   return t(`ongoing.generic.${k}`)
 })
@@ -56,6 +59,22 @@ async function onContinue() {
     } catch {
       /* errorMap 已上屏 */
     }
+    return
+  }
+  if (isCherryPicking.value) {
+    try {
+      await mr.continueCherryPick()
+    } catch {
+      /* errorMap 已上屏 */
+    }
+    return
+  }
+  if (isReverting.value) {
+    try {
+      await mr.continueRevert()
+    } catch {
+      /* errorMap 已上屏 */
+    }
   }
 }
 
@@ -77,11 +96,18 @@ async function onSkip() {
 }
 
 async function onAbort() {
-  const msg = isMerging.value ? t('ongoing.merge.confirmAbort') : t('ongoing.rebase.confirmAbort')
+  let msg = ''
+  if (isMerging.value) msg = t('ongoing.merge.confirmAbort')
+  else if (isRebasing.value) msg = t('ongoing.rebase.confirmAbort')
+  else if (isCherryPicking.value) msg = t('ongoing.cherryPick.confirmAbort')
+  else if (isReverting.value) msg = t('ongoing.revert.confirmAbort')
+  else return
   if (!confirm(msg)) return
   try {
     if (isMerging.value) await mr.abortMerge()
     else if (isRebasing.value) await mr.abortRebase()
+    else if (isCherryPicking.value) await mr.abortCherryPick()
+    else if (isReverting.value) await mr.abortRevert()
   } catch {
     /* ignore */
   }

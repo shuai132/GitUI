@@ -34,6 +34,8 @@ export const useMergeRebaseStore = defineStore('mergeRebase', () => {
     const k = repoState.value?.kind
     return k === 'rebase' || k === 'rebase_interactive' || k === 'rebase_merge'
   })
+  const isCherryPicking = computed(() => repoState.value?.kind === 'cherry_pick')
+  const isReverting = computed(() => repoState.value?.kind === 'revert')
 
   function setRepoState(state: RepoState | null) {
     repoState.value = state
@@ -199,6 +201,56 @@ export const useMergeRebaseStore = defineStore('mergeRebase', () => {
     }
   }
 
+  // ── Cherry-pick / Revert ─────────────────────────────────────────────
+
+  async function continueCherryPick() {
+    const repoStore = useRepoStore()
+    if (!repoStore.activeRepoId) return
+    busy.value = true
+    try {
+      await git.cherryPickContinue(repoStore.activeRepoId)
+    } finally {
+      busy.value = false
+      await refreshAfterHeadChange()
+    }
+  }
+
+  async function abortCherryPick() {
+    const repoStore = useRepoStore()
+    if (!repoStore.activeRepoId) return
+    busy.value = true
+    try {
+      await git.cherryPickAbort(repoStore.activeRepoId)
+    } finally {
+      busy.value = false
+      await refreshAfterHeadChange()
+    }
+  }
+
+  async function continueRevert() {
+    const repoStore = useRepoStore()
+    if (!repoStore.activeRepoId) return
+    busy.value = true
+    try {
+      await git.revertContinue(repoStore.activeRepoId)
+    } finally {
+      busy.value = false
+      await refreshAfterHeadChange()
+    }
+  }
+
+  async function abortRevert() {
+    const repoStore = useRepoStore()
+    if (!repoStore.activeRepoId) return
+    busy.value = true
+    try {
+      await git.revertAbort(repoStore.activeRepoId)
+    } finally {
+      busy.value = false
+      await refreshAfterHeadChange()
+    }
+  }
+
   // ── Conflict ─────────────────────────────────────────────────────────
 
   async function loadConflictFile(filePath: string): Promise<ConflictFile | null> {
@@ -252,6 +304,8 @@ export const useMergeRebaseStore = defineStore('mergeRebase', () => {
     isOngoing,
     isMerging,
     isRebasing,
+    isCherryPicking,
+    isReverting,
     dragPayload,
     setRepoState,
     refreshFromServer,
@@ -263,6 +317,10 @@ export const useMergeRebaseStore = defineStore('mergeRebase', () => {
     continueRebase,
     skipRebase,
     abortRebase,
+    continueCherryPick,
+    abortCherryPick,
+    continueRevert,
+    abortRevert,
     loadConflictFile,
     resolveConflict,
     useConflictSide,
