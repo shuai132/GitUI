@@ -197,6 +197,7 @@ const messages = {
     loading: '加载中...',
     loadingMore: '加载更多...',
     totalCount: '共 {count} 条',
+    reflogTip: '此提交是 reflog 条目的直接引用（丢失引用链的入口）',
     empty: {
       noActiveRepo: '请从左侧打开一个 Git 仓库',
       noCommits: '暂无提交历史',
@@ -493,11 +494,12 @@ const messages = {
     resetAppearance: '恢复外观默认',
     resetFont: '恢复字体默认',
     resetExternalTools: '恢复外部工具默认',
-    tabs: {
+     tabs: {
       appearance: '外观',
       font: '字体',
       externalTools: '外部工具',
       advanced: '高级',
+      shortcuts: '快捷键',
       about: '关于',
     },
     appearance: {
@@ -591,11 +593,16 @@ const messages = {
       upcomingTitle: '即将推出',
       shortcuts: '快捷键',
       shortcutsHint: '自定义键盘快捷键即将推出',
-      gitPrefs: 'Git 操作偏好',
-      gitPrefsHint: '默认 pull 策略、自动 fetch 间隔即将推出',
       uiLanguageTitle: '界面语言',
       uiLanguageAuto: '跟随系统',
       uiLanguageHint: '切换后立即生效，无需重启',
+    },
+    gitPrefs: {
+      title: 'Git 操作偏好',
+      fetchIntervalLabel: '自动 Fetch 间隔',
+      fetchIntervalHint: '定期从所有远端静默 fetch，更新 ahead/behind 计数',
+      fetchIntervalDisabled: '禁用',
+      fetchIntervalMinute: '{n} 分钟',
     },
     about: {
       authorLabel: '作者：',
@@ -734,6 +741,22 @@ const messages = {
       saving: '保存中...',
     },
   },
+  shortcuts: {
+    title: '快捷键',
+    resetAll: '全部重置',
+    reset: '恢复默认',
+    clear: '清除绑定',
+    pressKey: '按下快捷键...',
+    refresh: '刷新仓库',
+    openSettings: '打开设置',
+    toggleTerminal: '切换终端面板',
+    fetchAll: 'Fetch 所有远端',
+    search: '聚焦搜索框',
+    prevCommit: '选中上一个提交',
+    nextCommit: '选中下一个提交',
+    commit: '提交',
+    toggleDiffLayout: '切换 Diff 布局',
+  },
   errors: {
     generic: {
       repoNotFound: '仓库不存在或不是 Git 仓库',
@@ -753,7 +776,7 @@ const messages = {
       forceWithLeaseRejected: 'Force-with-lease 被拒：远端已有新的 commit（他人已推送），请先 fetch',
     },
     pull: {
-      mergeRequired: 'Pull 需要合并（非 fast-forward），当前版本尚未支持——请在终端手动 merge',
+      mergeRequired: 'Pull 需要合并：无法 fast-forward，已创建 merge commit',
       diverged: 'Pull 失败：远端分支已分叉，无法 fast-forward。请使用 merge 或 rebase 模式',
     },
     rebase: {
@@ -767,6 +790,7 @@ const messages = {
     config: { missingUser: '当前 git config 缺少 user.name / user.email，请先在终端设置' },
     repo: { invalid: '不是 Git 仓库，或仓库已失效' },
     network: { failed: '网络错误：无法连接到远端' },
+    autoFetch: { failed: '自动 fetch 失败（{remote}），请检查网络或认证' },
   },
 } as const
 

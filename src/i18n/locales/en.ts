@@ -193,10 +193,11 @@ const messages = {
       menuTitle: 'Submodule actions',
     },
   },
-  history: {
+   history: {
     loading: 'Loading...',
     loadingMore: 'Loading more...',
     totalCount: '{count} commits total',
+    reflogTip: 'This commit is directly referenced by a reflog entry (entry point of a dangling chain)',
     empty: {
       noActiveRepo: 'Open a Git repository from the sidebar to get started',
       noCommits: 'No commit history',
@@ -494,11 +495,12 @@ const messages = {
     resetAppearance: 'Reset appearance',
     resetFont: 'Reset fonts',
     resetExternalTools: 'Reset external tools',
-    tabs: {
+     tabs: {
       appearance: 'Appearance',
       font: 'Font',
       externalTools: 'External tools',
       advanced: 'Advanced',
+      shortcuts: 'Shortcuts',
       about: 'About',
     },
     appearance: {
@@ -589,14 +591,19 @@ const messages = {
       debugLogHint: 'Show the debug log panel at the bottom of the main view',
       detailFilesFirst: 'File list on top',
       detailFilesFirstHint: 'Show changed files above commit info in the detail panel',
-      upcomingTitle: 'Coming soon',
+       upcomingTitle: 'Coming soon',
       shortcuts: 'Shortcuts',
       shortcutsHint: 'Custom keyboard shortcuts — coming soon',
-      gitPrefs: 'Git operation preferences',
-      gitPrefsHint: 'Default pull strategy and auto-fetch interval — coming soon',
       uiLanguageTitle: 'Interface language',
       uiLanguageAuto: 'System default',
       uiLanguageHint: 'Takes effect immediately, no restart required',
+    },
+    gitPrefs: {
+      title: 'Git preferences',
+      fetchIntervalLabel: 'Auto-fetch interval',
+      fetchIntervalHint: 'Silently fetch from all remotes on a schedule to update ahead/behind counts',
+      fetchIntervalDisabled: 'Disabled',
+      fetchIntervalMinute: '{n} minute(s)',
     },
     about: {
       authorLabel: 'Author:',
@@ -734,6 +741,22 @@ const messages = {
       save: 'Save & stage',
       saving: 'Saving…',
     },
+   },
+  shortcuts: {
+    title: 'Keyboard Shortcuts',
+    resetAll: 'Reset all',
+    reset: 'Reset to default',
+    clear: 'Clear binding',
+    pressKey: 'Press a key...',
+    refresh: 'Refresh repository',
+    openSettings: 'Open settings',
+    toggleTerminal: 'Toggle terminal panel',
+    fetchAll: 'Fetch all remotes',
+    search: 'Focus search box',
+    prevCommit: 'Select previous commit',
+    nextCommit: 'Select next commit',
+    commit: 'Commit changes',
+    toggleDiffLayout: 'Toggle diff layout',
   },
   errors: {
     generic: {
@@ -754,7 +777,7 @@ const messages = {
       forceWithLeaseRejected: 'Force-with-lease rejected: the remote has new commits (someone else pushed), fetch first',
     },
     pull: {
-      mergeRequired: 'Pull requires a merge (non fast-forward), which is not yet supported — please merge manually in the terminal',
+      mergeRequired: 'Pull requires a merge: fast-forward not possible, a merge commit was created',
       diverged: 'Pull failed: the remote branch has diverged and cannot be fast-forwarded. Use merge or rebase mode',
     },
     rebase: {
@@ -768,6 +791,7 @@ const messages = {
     config: { missingUser: 'git config is missing user.name / user.email, please configure it in the terminal first' },
     repo: { invalid: 'Not a Git repository, or the repository is no longer valid' },
     network: { failed: 'Network error: cannot reach the remote' },
+    autoFetch: { failed: 'Auto-fetch failed ({remote}), check network or credentials' },
   },
 } as const
 

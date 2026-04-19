@@ -1328,6 +1328,12 @@ onUnmounted(() => {
                     class="branch-tag"
                     :style="{ color: branchTagColor(tag), borderColor: branchTagColor(tag) }"
                   >{{ tag.name }}</span>
+                  <span
+                    v-if="filteredCommits[toRealIdx(vRow.index)]?.is_reflog_tip"
+                    class="reflog-tip-dot"
+                    :title="t('history.reflogTip')"
+                    aria-hidden="true"
+                  >◉ </span>
                   <span class="commit-msg">{{ filteredCommits[toRealIdx(vRow.index)]?.summary }}</span>
                 </div>
 
@@ -2065,7 +2071,16 @@ onUnmounted(() => {
   font-style: italic;
 }
 
-/* stash 行：略微淡化 message 颜色，与普通提交区分 */
+/* reflog tip 标识：未引用链路的入口提交，显示橙色小圆点 */
+.reflog-tip-dot {
+  color: var(--accent-yellow, #f5a97f);
+  font-size: 9px;
+  vertical-align: middle;
+  user-select: none;
+  -webkit-user-select: none;
+  flex-shrink: 0;
+}
+
 .commit-row.commit-stash .commit-msg {
   color: var(--text-secondary);
   font-style: italic;

@@ -17,7 +17,7 @@
 //! 失败策略：任何 commit 冲突时 Rebase::abort 不被调用——状态保留，前端看 `RepoState`
 //! 选择 continue/skip/abort。
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use git2::{AnnotatedCommit, Repository, RepositoryState};
 use serde::{Deserialize, Serialize};
@@ -170,9 +170,7 @@ impl GitEngine {
 
         let index = repo.index()?;
         if index.has_conflicts() {
-            return Err(GitError::OperationFailed(
-                "仍有未解决的冲突".to_string(),
-            ));
+            return Err(GitError::OperationFailed("仍有未解决的冲突".to_string()));
         }
 
         let mut stored = read_stored_state(&repo).unwrap_or(StoredRebaseState {
@@ -273,9 +271,7 @@ impl GitEngine {
 fn in_rebase_state(repo: &Repository) -> bool {
     matches!(
         repo.state(),
-        RepositoryState::Rebase
-            | RepositoryState::RebaseInteractive
-            | RepositoryState::RebaseMerge
+        RepositoryState::Rebase | RepositoryState::RebaseInteractive | RepositoryState::RebaseMerge
     )
 }
 
@@ -400,14 +396,7 @@ fn combine_with_previous(repo: &Repository, cur: &RebaseTodoItem) -> GitResult<(
 
     let parents: Vec<git2::Commit<'_>> = parent.parents().collect();
     let parent_refs: Vec<&git2::Commit<'_>> = parents.iter().collect();
-    let new_oid = repo.commit(
-        None,
-        &parent.author(),
-        &sig,
-        &msg,
-        &tree,
-        &parent_refs,
-    )?;
+    let new_oid = repo.commit(None, &parent.author(), &sig, &msg, &tree, &parent_refs)?;
     // 更新当前分支 head（rebase 过程中 HEAD 是 detached 的情况由 libgit2 维护；
     // 这里直接 set_head_detached 到新 commit）
     repo.set_head_detached(new_oid)?;
@@ -431,9 +420,4 @@ fn read_stored_state(repo: &Repository) -> Option<StoredRebaseState> {
     let p = stored_state_path(repo);
     let data = std::fs::read(&p).ok()?;
     serde_json::from_slice(&data).ok()
-}
-
-#[allow(dead_code)]
-fn _path_to_string(p: &Path) -> String {
-    p.to_string_lossy().to_string()
 }
