@@ -8,6 +8,8 @@ pub struct AutoFetchService {
     handle: Arc<Mutex<Option<JoinHandle<()>>>>,
     /// 间隔秒数，0 表示禁用自动 fetch。
     interval_secs: Arc<Mutex<u64>>,
+    /// 当前激活仓库的 id，None 表示无激活仓库（跳过 fetch）。
+    active_repo_id: Arc<Mutex<Option<String>>>,
 }
 
 impl AutoFetchService {
@@ -15,7 +17,13 @@ impl AutoFetchService {
         Self {
             handle: Arc::new(Mutex::new(None)),
             interval_secs: Arc::new(Mutex::new(5 * 60)),
+            active_repo_id: Arc::new(Mutex::new(None)),
         }
+    }
+
+    /// 前端切换激活仓库时调用，auto-fetch 只对该仓库生效。
+    pub fn set_active_repo(&self, repo_id: Option<String>) {
+        *self.active_repo_id.lock() = repo_id;
     }
 
     pub fn start(&self, app: AppHandle) {
@@ -24,7 +32,8 @@ impl AutoFetchService {
             return;
         }
         let interval_secs = Arc::clone(&self.interval_secs);
-        *lock = Some(Self::spawn_task(app, interval_secs));
+        let active_repo_id = Arc::clone(&self.active_repo_id);
+        *lock = Some(Self::spawn_task(app, interval_secs, active_repo_id));
     }
 
     /// 运行时更改自动 fetch 间隔（秒）。0 表示禁用。
@@ -40,12 +49,14 @@ impl AutoFetchService {
             return;
         }
         let interval_secs = Arc::clone(&self.interval_secs);
-        *lock = Some(Self::spawn_task(app, interval_secs));
+        let active_repo_id = Arc::clone(&self.active_repo_id);
+        *lock = Some(Self::spawn_task(app, interval_secs, active_repo_id));
     }
 
     fn spawn_task(
         app: AppHandle,
         interval_secs: Arc<Mutex<u64>>,
+        active_repo_id: Arc<Mutex<Option<String>>>,
     ) -> JoinHandle<()> {
         tauri::async_runtime::spawn(async move {
             loop {
@@ -62,33 +73,42 @@ impl AutoFetchService {
                     continue;
                 }
 
-                let repos = app.state::<RepoManager>().list_repos();
-                for meta in repos {
-                    match GitEngine::list_remotes(&meta.path) {
-                        Ok(remotes) => {
-                            for remote in &remotes {
-                                if let Err(e) = GitEngine::fetch(&meta.path, remote) {
-                                    log::warn!(
-                                        "[auto_fetch] fetch failed for {} remote={}: {e}",
-                                        meta.id, remote
-                                    );
-                                    let _ = app.emit(
-                                        "repo://error",
-                                        serde_json::json!({
-                                            "repoId": meta.id,
-                                            "msg": format!("Auto-fetch failed ({}): {e}", remote)
-                                        }),
-                                    );
-                                }
+                // 只 fetch 当前激活仓库，无激活仓库则跳过
+                let target_id = active_repo_id.lock().clone();
+                let Some(repo_id) = target_id else {
+                    continue;
+                };
+
+                let meta = app.state::<RepoManager>().get_meta(&repo_id);
+                let Some(meta) = meta else {
+                    log::warn!("[auto_fetch] active repo {repo_id} not found in RepoManager");
+                    continue;
+                };
+
+                match GitEngine::list_remotes(&meta.path) {
+                    Ok(remotes) => {
+                        for remote in &remotes {
+                            if let Err(e) = GitEngine::fetch(&meta.path, remote) {
+                                log::warn!(
+                                    "[auto_fetch] fetch failed for {} remote={}: {e}",
+                                    meta.id, remote
+                                );
+                                let _ = app.emit(
+                                    "repo://error",
+                                    serde_json::json!({
+                                        "repoId": meta.id,
+                                        "msg": format!("Auto-fetch failed ({}): {e}", remote)
+                                    }),
+                                );
                             }
-                            let _ = app.emit("repo://remote-updated", &meta.id);
                         }
-                        Err(e) => {
-                            log::warn!(
-                                "[auto_fetch] list_remotes failed for {}: {e}",
-                                meta.id
-                            );
-                        }
+                        let _ = app.emit("repo://remote-updated", &meta.id);
+                    }
+                    Err(e) => {
+                        log::warn!(
+                            "[auto_fetch] list_remotes failed for {}: {e}",
+                            meta.id
+                        );
                     }
                 }
             }

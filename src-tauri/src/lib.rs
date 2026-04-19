@@ -142,6 +142,7 @@ pub fn run() {
              checkout_file_at_commit,
              get_build_info,
              set_auto_fetch_interval,
+             set_active_repo_for_fetch,
             // Terminal
             terminal_spawn,
             terminal_write,

@@ -470,6 +470,17 @@ pub async fn set_auto_fetch_interval(
     Ok(())
 }
 
+/// 前端切换激活仓库时通知后端，auto-fetch 只对该仓库生效。
+/// repo_id 为 None 表示当前无激活仓库（应跳过 fetch）。
+#[tauri::command]
+pub async fn set_active_repo_for_fetch(
+    repo_id: Option<String>,
+    app: AppHandle,
+) -> Result<(), GitError> {
+    app.state::<AutoFetchService>().set_active_repo(repo_id);
+    Ok(())
+}
+
 /// 返回应用版本（`Cargo.toml` 中的 `version`）和编译时注入的短 commit hash。
 /// 用于「关于」面板等需要展示精确 build 标识的场景。
 #[tauri::command]

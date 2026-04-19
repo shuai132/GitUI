@@ -396,6 +396,9 @@ export function useGitCommands() {
   const setAutoFetchInterval = (secs: number) =>
     call<void>('set_auto_fetch_interval', { secs })
 
+  const setActiveRepoForFetch = (repoId: string | null) =>
+    call<void>('set_active_repo_for_fetch', { repoId })
+
   // ---- Terminal (in-app PTY) ----
   const terminalSpawn = (repoId: string, cols: number, rows: number) =>
     call<string>('terminal_spawn', { repoId, cols, rows })
@@ -494,6 +497,7 @@ export function useGitCommands() {
     checkoutFileAtCommit,
     getBuildInfo,
     setAutoFetchInterval,
+    setActiveRepoForFetch,
     terminalSpawn,
     terminalWrite,
     terminalResize,
