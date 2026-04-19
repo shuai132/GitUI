@@ -55,6 +55,9 @@
     --diff-add-bg: rgba(166, 218, 149, 0.18);
     --diff-del-bg: rgba(237, 135, 150, 0.18);
     --diff-empty-bg: rgba(54, 58, 79, 0.4);
+    /* Word-level diff：行内高亮片段底色（比行底色更深） */
+    --diff-word-add-bg: rgba(166, 218, 149, 0.55);
+    --diff-word-del-bg: rgba(237, 135, 150, 0.55);
 
     /* 提交历史行分隔线（由 settings store 动态覆盖 alpha / style）
        rgb 随主题走，alpha 默认 0.2（中档），最高档 0.4，最低档 0 = 无色 */
@@ -102,6 +105,8 @@
     --diff-add-bg: #dafbe1;
     --diff-del-bg: #ffebe9;
     --diff-empty-bg: #f6f8fa;
+    --diff-word-add-bg: #82e898;
+    --diff-word-del-bg: #f8b4b4;
 
     /* 行分隔线：浅色主题下用 --border (#d0d7de) 的 rgb 基调 */
     --row-separator-rgb: 208, 215, 222;
@@ -226,5 +231,19 @@
 
   .btn-danger:hover:not(:disabled) {
     filter: brightness(1.08);
+  }
+
+  /* Word-level diff 行内标注（<mark> 元素，由 wordDiff.ts tokensToHtml 生成） */
+  mark.word-del {
+    background: var(--diff-word-del-bg);
+    color: inherit;
+    border-radius: 2px;
+    padding: 0 1px;
+  }
+  mark.word-add {
+    background: var(--diff-word-add-bg);
+    color: inherit;
+    border-radius: 2px;
+    padding: 0 1px;
   }
 }

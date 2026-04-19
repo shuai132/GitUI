@@ -3,6 +3,7 @@ import { computed, ref, watch, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { FileDiff, DiffLine } from '@/types/git'
 import { highlightLine } from '@/lib/highlight'
+import { diffChars, tokensToHtml } from '@/lib/wordDiff'
 
 const { t } = useI18n()
 
@@ -17,6 +18,8 @@ interface AlignedLine {
   lineNo?: number
   content: string
   kind: 'del' | 'add' | 'ctx' | 'empty' | 'header'
+  /** 开启 word-diff 时替代 content 的 HTML（已转义 + <mark> 标注）；null = 用 content */
+  wordHtml?: string
 }
 
 interface AlignedRow {
@@ -44,12 +47,24 @@ const alignedRows = computed((): AlignedRow[] => {
       for (let i = 0; i < maxLen; i++) {
         const dl = delBuf[i]
         const al = addBuf[i]
+        const dlContent = dl ? dl.content.replace(/\n$/, '') : ''
+        const alContent = al ? al.content.replace(/\n$/, '') : ''
+
+        // Word-diff：仅当左右都有内容时配对计算（语法高亮关闭时生效，避免与 v-html 冲突）
+        let leftWordHtml: string | undefined
+        let rightWordHtml: string | undefined
+        if (dl && al && !props.syntaxLang) {
+          const { leftTokens, rightTokens } = diffChars(dlContent, alContent)
+          leftWordHtml = tokensToHtml(leftTokens)
+          rightWordHtml = tokensToHtml(rightTokens)
+        }
+
         rows.push({
           left: dl
-            ? { lineNo: dl.old_lineno, content: dl.content.replace(/\n$/, ''), kind: 'del' }
+            ? { lineNo: dl.old_lineno, content: dlContent, kind: 'del', wordHtml: leftWordHtml }
             : { content: '', kind: 'empty' },
           right: al
-            ? { lineNo: al.new_lineno, content: al.content.replace(/\n$/, ''), kind: 'add' }
+            ? { lineNo: al.new_lineno, content: alContent, kind: 'add', wordHtml: rightWordHtml }
             : { content: '', kind: 'empty' },
         })
       }
@@ -226,16 +241,17 @@ defineExpose({ goNextChange, goPrevChange })
               @wheel="onWheel"
             >
               <div class="sbs-lines">
-                <div
-                  v-for="(row, i) in alignedRows"
-                  :key="'l' + i"
-                  class="sbs-line"
-                  :class="'line-' + row.left.kind"
-                  :data-row="i"
-                >
-                  <span v-if="syntaxLang" class="code" v-html="highlightLine(row.left.content, syntaxLang)" />
-                  <span v-else class="code">{{ row.left.content }}</span>
-                </div>
+                   <div
+                   v-for="(row, i) in alignedRows"
+                   :key="'l' + i"
+                   class="sbs-line"
+                   :class="'line-' + row.left.kind"
+                   :data-row="i"
+                 >
+                   <span v-if="syntaxLang" class="code" v-html="highlightLine(row.left.content, syntaxLang)" />
+                   <span v-else-if="row.left.wordHtml" class="code" v-html="row.left.wordHtml" />
+                   <span v-else class="code">{{ row.left.content }}</span>
+                 </div>
               </div>
             </div>
           </div>
@@ -262,15 +278,16 @@ defineExpose({ goNextChange, goPrevChange })
               @wheel="onWheel"
             >
               <div class="sbs-lines">
-                <div
-                  v-for="(row, i) in alignedRows"
-                  :key="'r' + i"
-                  class="sbs-line"
-                  :class="'line-' + row.right.kind"
-                >
-                  <span v-if="syntaxLang" class="code" v-html="highlightLine(row.right.content, syntaxLang)" />
-                  <span v-else class="code">{{ row.right.content }}</span>
-                </div>
+                   <div
+                   v-for="(row, i) in alignedRows"
+                   :key="'r' + i"
+                   class="sbs-line"
+                   :class="'line-' + row.right.kind"
+                 >
+                   <span v-if="syntaxLang" class="code" v-html="highlightLine(row.right.content, syntaxLang)" />
+                   <span v-else-if="row.right.wordHtml" class="code" v-html="row.right.wordHtml" />
+                   <span v-else class="code">{{ row.right.content }}</span>
+                 </div>
               </div>
             </div>
           </div>

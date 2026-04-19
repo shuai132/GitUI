@@ -105,5 +105,10 @@ export const EXT_TO_LANG: Record<string, string> = {
 
 ## 行动项（未完成）
 
-- [ ] Word-level 高亮（增删行的相似片段对比）
+- [x] Word-level 高亮（增删行的相似片段对比）
+  - 实现：`src/lib/wordDiff.ts`（Myers LCS 字符级 diff）
+  - `SideBySideDiff.vue`：配对 del/add 行调用 `diffChars`，用 `<mark class="word-del/add">` 标注
+  - `InlineDiff.vue`：连续 del+add 行两两配对做 word-diff
+  - 语法高亮开启时禁用 word-diff（两者用 `v-html` 互斥，保持实现简单）
+  - CSS 变量：`--diff-word-del-bg` / `--diff-word-add-bg`（全局 `mark.word-del/add`）
 - [ ] 大图滚动缩放 / 叠加对比视图

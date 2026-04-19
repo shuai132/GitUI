@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { FileDiff } from '@/types/git'
 import { highlightLine } from '@/lib/highlight'
+import { diffChars, tokensToHtml } from '@/lib/wordDiff'
 
 const { t } = useI18n()
 
@@ -21,9 +22,11 @@ interface InlineRow {
   newLineNo?: number
   content: string
   hunkIndex: number
+  /** Word-diff HTML（语法高亮关闭时对配对 del/add 生效）*/
+  wordHtml?: string
 }
 
-/** 扁平化所有 hunk → InlineRow[] */
+/** 扁平化所有 hunk → InlineRow[]，并为配对 del/add 行计算 word-diff */
 const rows = computed<InlineRow[]>(() => {
   if (!props.diff) return []
   const result: InlineRow[] = []
@@ -33,31 +36,36 @@ const rows = computed<InlineRow[]>(() => {
       content: hunk.header.trimEnd(),
       hunkIndex: hi,
     })
+    // 收集本 hunk 所有行，之后做一次 word-diff 配对
+    const hunkRows: InlineRow[] = []
     for (const line of hunk.lines) {
       const content = line.content.replace(/\n$/, '')
       if (line.origin === '-') {
-        result.push({
-          kind: 'del',
-          oldLineNo: line.old_lineno,
-          content,
-          hunkIndex: hi,
-        })
+        hunkRows.push({ kind: 'del', oldLineNo: line.old_lineno, content, hunkIndex: hi })
       } else if (line.origin === '+') {
-        result.push({
-          kind: 'add',
-          newLineNo: line.new_lineno,
-          content,
-          hunkIndex: hi,
-        })
+        hunkRows.push({ kind: 'add', newLineNo: line.new_lineno, content, hunkIndex: hi })
       } else {
-        result.push({
-          kind: 'ctx',
-          oldLineNo: line.old_lineno,
-          newLineNo: line.new_lineno,
-          content,
-          hunkIndex: hi,
-        })
+        hunkRows.push({ kind: 'ctx', oldLineNo: line.old_lineno, newLineNo: line.new_lineno, content, hunkIndex: hi })
       }
+    }
+
+    // Word-diff 配对：在语法高亮关闭时，把紧邻的 del+add 行两两配对
+    if (!props.syntaxLang) {
+      for (let i = 0; i < hunkRows.length; i++) {
+        const cur = hunkRows[i]
+        const nxt = hunkRows[i + 1]
+        if (cur.kind === 'del' && nxt?.kind === 'add') {
+          const { leftTokens, rightTokens } = diffChars(cur.content, nxt.content)
+          cur.wordHtml = tokensToHtml(leftTokens)
+          nxt.wordHtml = tokensToHtml(rightTokens)
+          i++ // 跳过已配对的 add 行（正常推入）
+          result.push(cur, nxt)
+          continue
+        }
+        result.push(cur)
+      }
+    } else {
+      result.push(...hunkRows)
     }
   })
   return result
@@ -170,6 +178,7 @@ defineExpose({ goNextChange, goPrevChange })
               row.kind === 'del' ? '-' : row.kind === 'add' ? '+' : ' '
             }}</span>
             <span v-if="syntaxLang" class="code" v-html="highlightLine(row.content, syntaxLang)" />
+            <span v-else-if="row.wordHtml" class="code" v-html="row.wordHtml" />
             <span v-else class="code">{{ row.content }}</span>
           </template>
         </div>
