@@ -115,14 +115,6 @@ async function onFetchIntervalChange(e: Event) {
       </div>
     </div>
 
-    <!-- 快捷键（占位保留） -->
-    <div class="section-title section-title--spaced">{{ t('settings.advanced.upcomingTitle') }}</div>
-    <div class="placeholder-list">
-      <div class="placeholder-row">
-        <div class="placeholder-label">{{ t('settings.advanced.shortcuts') }}</div>
-        <div class="placeholder-hint">{{ t('settings.advanced.shortcutsHint') }}</div>
-      </div>
-    </div>
   </div>
 </template>
 
@@ -248,33 +240,4 @@ async function onFetchIntervalChange(e: Event) {
   outline: 1px solid var(--accent-blue);
 }
 
-/* ── 占位列表（快捷键等待实现） ──────────────────────────────── */
-.placeholder-list {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  border: 1px solid var(--border);
-  border-radius: 5px;
-  overflow: hidden;
-  background: var(--border);
-}
-
-.placeholder-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 12px;
-  background: var(--bg-primary);
-  opacity: 0.55;
-}
-
-.placeholder-label {
-  font-size: var(--font-md);
-  color: var(--text-primary);
-}
-
-.placeholder-hint {
-  font-size: var(--font-sm);
-  color: var(--text-muted);
-}
 </style>

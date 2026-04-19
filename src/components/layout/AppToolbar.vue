@@ -11,6 +11,7 @@ import { useUiStore } from '@/stores/ui'
 import { useErrorsStore } from '@/stores/errors'
 import { useRepoOpsStore } from '@/stores/repoOps'
 import { resolveExternalTerminalApp, useSettingsStore } from '@/stores/settings'
+import { useShortcutsStore, bindingToLabel, type ShortcutActionId } from '@/stores/shortcuts'
 import { useGitCommands } from '@/composables/useGitCommands'
 import { useRepoCreation } from '@/composables/useRepoCreation'
 import ReflogDialog from '@/components/common/ReflogDialog.vue'
@@ -28,10 +29,17 @@ const uiStore = useUiStore()
 const errorsStore = useErrorsStore()
 const repoOpsStore = useRepoOpsStore()
 const settingsStore = useSettingsStore()
+const shortcutsStore = useShortcutsStore()
 const git = useGitCommands()
 const repoCreation = useRepoCreation()
 const appWindow = getCurrentWindow()
 const { t } = useI18n()
+
+/** 在 tooltip 文本后追加快捷键标注，如 "Fetch (⌘+Shift+F)"。绑定为空时原样返回。 */
+function withShortcut(label: string, actionId: ShortcutActionId): string {
+  const b = shortcutsStore.bindings[actionId]
+  return b ? `${label} (${bindingToLabel(b)})` : label
+}
 
 // ── IPC 错误自动弹 toast ─────────────────────────────────────────
 // errorsStore 由 useGitCommands.call() 统一 push。watch latestId 即可。
@@ -711,7 +719,7 @@ async function handleDblClick(e: MouseEvent) {
       <!-- Fetch：抓取远端但不合并 -->
       <button
         class="btn-tool"
-        :title="t('toolbar.title.fetch')"
+        :title="withShortcut(t('toolbar.title.fetch'), 'fetchAll')"
         :disabled="!hasRepo || busy.fetch"
         @click="onFetch($event)"
       >
@@ -773,7 +781,7 @@ async function handleDblClick(e: MouseEvent) {
         class="search-box"
         :class="{ 'search-box--expanded': searchExpanded || uiStore.historySearchQuery }"
       >
-        <button class="search-icon-btn" tabindex="-1" @click="expandSearch">
+        <button class="search-icon-btn" tabindex="-1" :title="withShortcut(t('toolbar.title.search'), 'search')" @click="expandSearch">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="11" cy="11" r="8"/>
             <line x1="21" y1="21" x2="16.65" y2="16.65"/>
@@ -820,7 +828,7 @@ async function handleDblClick(e: MouseEvent) {
         v-if="hasRepo"
         class="btn-icon-only"
         :class="{ 'btn-icon-only--active': uiStore.terminalVisible }"
-        :title="uiStore.terminalVisible ? t('toolbar.title.terminalToggleHide') : t('toolbar.title.terminalToggleShow')"
+        :title="withShortcut(uiStore.terminalVisible ? t('toolbar.title.terminalToggleHide') : t('toolbar.title.terminalToggleShow'), 'toggleTerminal')"
         @click="onToggleInAppTerminal"
       >
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -832,7 +840,7 @@ async function handleDblClick(e: MouseEvent) {
       <button
         v-if="hasRepo"
         class="btn-icon-only"
-        :title="{ custom: t('toolbar.title.layoutCustom'), vertical: t('toolbar.title.layoutVertical'), horizontal: t('toolbar.title.layoutHorizontal') }[uiStore.layoutPreset]"
+        :title="withShortcut(({ custom: t('toolbar.title.layoutCustom'), vertical: t('toolbar.title.layoutVertical'), horizontal: t('toolbar.title.layoutHorizontal') })[uiStore.layoutPreset], 'toggleDiffLayout')"
         @click="uiStore.toggleHistoryLayout()"
       >
         <!-- 自定义布局：田字格图标 -->
@@ -855,7 +863,7 @@ async function handleDblClick(e: MouseEvent) {
 
       <button
         class="btn-icon-only"
-        :title="t('toolbar.title.settings')"
+        :title="withShortcut(t('toolbar.title.settings'), 'openSettings')"
         @click="showSettingsDialog = true"
       >
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">

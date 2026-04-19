@@ -36,6 +36,7 @@ const messages = {
       themeSwitchLight: '切换为浅色主题',
       themeSwitchDark: '切换为深色主题',
       settings: '设置',
+      search: '搜索提交',
       actions: '更多操作',
     },
     pullMode: {
@@ -551,6 +552,7 @@ const messages = {
       resetUi: '恢复 UI 字体和字号默认',
       resetCode: '恢复代码字体和字号默认',
       hint: '提示：若系统未安装所选字体，会自动回退到下一个候选。UI 字号仅影响根级别文本，部分面板/工具栏使用固定字号。',
+      preview: '预览',
       preset: {
         default: '默认',
         systemUi: '系统界面',
@@ -592,9 +594,6 @@ const messages = {
       debugLogHint: '在主界面底部展示调试日志面板',
       detailFilesFirst: '文件列表置顶',
       detailFilesFirstHint: '提交详情面板中将变更文件列表显示在提交信息上方',
-      upcomingTitle: '即将推出',
-      shortcuts: '快捷键',
-      shortcutsHint: '自定义键盘快捷键即将推出',
       uiLanguageTitle: '界面语言',
       uiLanguageAuto: '跟随系统',
       uiLanguageHint: '切换后立即生效，无需重启',

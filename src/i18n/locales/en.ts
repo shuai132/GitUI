@@ -36,6 +36,7 @@ const messages = {
       themeSwitchLight: 'Switch to light theme',
       themeSwitchDark: 'Switch to dark theme',
       settings: 'Settings',
+      search: 'Search commits',
       actions: 'More actions',
     },
     pullMode: {
@@ -552,6 +553,7 @@ const messages = {
       resetUi: 'Reset UI font and size to default',
       resetCode: 'Reset code font and size to default',
       hint: 'Tip: if a selected font is not installed, it falls back to the next candidate. UI size only affects root-level text; some panels and toolbars use fixed sizes.',
+      preview: 'Preview',
       preset: {
         default: 'Default',
         systemUi: 'System UI',
@@ -593,9 +595,6 @@ const messages = {
       debugLogHint: 'Show the debug log panel at the bottom of the main view',
       detailFilesFirst: 'File list on top',
       detailFilesFirstHint: 'Show changed files above commit info in the detail panel',
-       upcomingTitle: 'Coming soon',
-      shortcuts: 'Shortcuts',
-      shortcutsHint: 'Custom keyboard shortcuts — coming soon',
       uiLanguageTitle: 'Interface language',
       uiLanguageAuto: 'System default',
       uiLanguageHint: 'Takes effect immediately, no restart required',

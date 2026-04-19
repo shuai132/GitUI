@@ -8,6 +8,7 @@ import { useDiffStore } from '@/stores/diff'
 import { useUiStore } from '@/stores/ui'
 import { useRepoStore } from '@/stores/repos'
 import { resolveExternalTerminalApp, useSettingsStore } from '@/stores/settings'
+import { useShortcutsStore, bindingToLabel, matchesBinding } from '@/stores/shortcuts'
 import { useGitCommands } from '@/composables/useGitCommands'
 import type { FileEntry } from '@/types/git'
 import FileChangeList from '@/components/workspace/FileChangeList.vue'
@@ -22,6 +23,7 @@ const diffStore = useDiffStore()
 const uiStore = useUiStore()
 const repoStore = useRepoStore()
 const settingsStore = useSettingsStore()
+const shortcutsStore = useShortcutsStore()
 const git = useGitCommands()
 const mergeRebaseStore = useMergeRebaseStore()
 
@@ -403,7 +405,7 @@ async function onCommit() {
 }
 
 function onMessageKeydown(e: KeyboardEvent) {
-  if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+  if (matchesBinding(e, shortcutsStore.bindings.commit)) {
     e.preventDefault()
     onCommit()
   }
@@ -613,6 +615,7 @@ watch(
         <button
           class="btn-commit"
           :disabled="!canCommit"
+          :title="shortcutsStore.bindings.commit ? bindingToLabel(shortcutsStore.bindings.commit) : undefined"
           @click="onCommit"
         >
           {{ commitButtonLabel }}
