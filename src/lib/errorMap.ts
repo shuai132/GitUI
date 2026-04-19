@@ -76,6 +76,18 @@ function extractKindAndMessage(raw: unknown): { kind?: GitErrorKind; message: st
 
 /** 按子串命中的模式规则，越靠前优先级越高。build(msg) 返回 FriendlyError。 */
 const PATTERNS: Array<{ test: (msg: string) => boolean; build: (msg: string) => FriendlyError }> = [
+  // Auto-fetch 后台失败
+  {
+    test: (m) => /Auto-fetch failed/i.test(m),
+    build: (m) => {
+      const remote = m.match(/Auto-fetch failed \(([^)]+)\)/)?.[1] ?? ''
+      return {
+        key: 'errors.autoFetch.failed',
+        params: { remote },
+        fallbackText: m,
+      }
+    },
+  },
   // 认证失败
   {
     test: (m) => /authentication required|authentication failed|401|403/i.test(m),
@@ -106,7 +118,7 @@ const PATTERNS: Array<{ test: (msg: string) => boolean; build: (msg: string) => 
     test: (m) => /non[- ]?fast[- ]?forward|cannot fast-forward/i.test(m),
     build: () => ({ key: 'errors.push.nonFastForward' }),
   },
-  // Pull 需要 merge
+  // Pull 需要 merge（已弃用路径，保留兜底）
   {
     test: (m) => /Merge required/i.test(m),
     build: () => ({ key: 'errors.pull.mergeRequired' }),
