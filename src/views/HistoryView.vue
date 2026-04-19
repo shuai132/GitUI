@@ -141,11 +141,11 @@ function toRealIdx(virtualIdx: number): number {
   return virtualIdx
 }
 
-// Unix 秒 → datetime-local 输入框所需的本地时间字符串（YYYY-MM-DDTHH:mm）
+// Unix 秒 → datetime-local 输入框所需的本地时间字符串（YYYY-MM-DDTHH:mm:ss）
 function toDatetimeLocal(unixSecs: number): string {
   const d = new Date(unixSecs * 1000)
   const p = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`
 }
 
 // datetime-local 字符串 → Unix 秒
@@ -1580,18 +1580,20 @@ onUnmounted(() => {
     />
     <div class="edit-message-times">
       <label class="edit-message-time-row">
-        <span class="edit-message-time-label">{{ t('history.dialog.editMessage.authorDate') }}</span>
-        <input
-          v-model="editMessageAuthorTime"
-          type="datetime-local"
-          class="edit-message-time-input"
-        />
-      </label>
-      <label class="edit-message-time-row">
         <span class="edit-message-time-label">{{ t('history.dialog.editMessage.committerDate') }}</span>
         <input
           v-model="editMessageCommitterTime"
           type="datetime-local"
+          step="1"
+          class="edit-message-time-input"
+        />
+      </label>
+      <label class="edit-message-time-row">
+        <span class="edit-message-time-label">{{ t('history.dialog.editMessage.authorDate') }}</span>
+        <input
+          v-model="editMessageAuthorTime"
+          type="datetime-local"
+          step="1"
           class="edit-message-time-input"
         />
       </label>
