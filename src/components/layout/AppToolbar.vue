@@ -174,6 +174,16 @@ const showSettingsDialog = ref(false)
 const searchInputEl = ref<HTMLInputElement | null>(null)
 const searchExpanded = ref(false)
 
+// 响应来自全局快捷键的「打开设置」信号
+watch(() => uiStore.openSettingsSignal, () => {
+  showSettingsDialog.value = true
+})
+
+// 响应来自全局快捷键的「聚焦搜索」信号
+watch(() => uiStore.openSearchSignal, () => {
+  expandSearch()
+})
+
 onMounted(() => {
   // 监听系统菜单栏的"关于"菜单
   listen('show-about', () => {

@@ -6,6 +6,7 @@ import AppearanceSection from './AppearanceSection.vue'
 import FontSection from './FontSection.vue'
 import ExternalToolsSection from './ExternalToolsSection.vue'
 import AdvancedSection from './AdvancedSection.vue'
+import ShortcutsSection from './ShortcutsSection.vue'
 import AboutInfo from '@/components/common/AboutInfo.vue'
 import { useSettingsStore } from '@/stores/settings'
 
@@ -15,7 +16,7 @@ const emit = defineEmits<{ close: [] }>()
 const store = useSettingsStore()
 const { t } = useI18n()
 
-type Tab = 'appearance' | 'font' | 'tools' | 'advanced' | 'about'
+type Tab = 'appearance' | 'font' | 'tools' | 'advanced' | 'shortcuts' | 'about'
 const activeTab = ref<Tab>('appearance')
 
 const tabs = computed<Array<{ id: Tab; label: string }>>(() => [
@@ -23,6 +24,7 @@ const tabs = computed<Array<{ id: Tab; label: string }>>(() => [
   { id: 'font', label: t('settings.tabs.font') },
   { id: 'tools', label: t('settings.tabs.externalTools') },
   { id: 'advanced', label: t('settings.tabs.advanced') },
+  { id: 'shortcuts', label: t('settings.tabs.shortcuts') },
   { id: 'about', label: t('settings.tabs.about') },
 ])
 
@@ -42,7 +44,7 @@ function onReset() {
 }
 
 const resetDisabled = computed(() =>
-  activeTab.value === 'advanced' || activeTab.value === 'about',
+  activeTab.value === 'advanced' || activeTab.value === 'shortcuts' || activeTab.value === 'about',
 )
 </script>
 
@@ -65,6 +67,7 @@ const resetDisabled = computed(() =>
         <FontSection v-else-if="activeTab === 'font'" />
         <ExternalToolsSection v-else-if="activeTab === 'tools'" />
         <AdvancedSection v-else-if="activeTab === 'advanced'" />
+        <ShortcutsSection v-else-if="activeTab === 'shortcuts'" />
         <div v-else class="about-wrap">
           <AboutInfo />
         </div>

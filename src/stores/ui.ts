@@ -289,6 +289,18 @@ export const useUiStore = defineStore('ui', () => {
     shouldOpenDiscardAll.value = false
   }
 
+  // ── 全局面板打开信号 ────────────────────────────────────────────
+  // 使用 counter 而非 boolean，这样同一面板可以重复触发而不需要手动 reset
+  const openSettingsSignal = ref(0)
+  function requestOpenSettings() {
+    openSettingsSignal.value++
+  }
+
+  const openSearchSignal = ref(0)
+  function requestOpenSearch() {
+    openSearchSignal.value++
+  }
+
   return {
     // state
     shouldOpenDiscardAll,
@@ -331,5 +343,9 @@ export const useUiStore = defineStore('ui', () => {
     // transient
     requestDiscardAll,
     consumeDiscardAllRequest,
+    openSettingsSignal,
+    requestOpenSettings,
+    openSearchSignal,
+    requestOpenSearch,
   }
 })
