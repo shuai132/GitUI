@@ -76,6 +76,8 @@ impl GitEngine {
                 new_message: None,
                 new_author_time: None,
                 new_committer_time: None,
+                new_author_name: None,
+                new_author_email: None,
             });
         }
         Ok(items)
@@ -352,18 +354,28 @@ fn run_rebase_loop(
                         .new_committer_time
                         .unwrap_or_else(|| sig.when().seconds());
                     let committer = GitEngine::sig_with_time(&sig, ct)?;
-                    // author：有 new_author_time 则从原 commit 取 name/email + 新时间；
+                    // author：有 new_author_time / new_author_name / new_author_email 任一则覆盖；
                     // 否则传 None，让 libgit2 保留原提交的 author（含原 date）
-                    let author_override: Option<git2::Signature<'_>> =
-                        if let Some(at) = cur.new_author_time {
-                            let orig_oid = git2::Oid::from_str(&cur.oid)
-                                .map_err(|e| GitError::OperationFailed(e.to_string()))?;
-                            let orig_commit = repo.find_commit(orig_oid)?;
-                            let orig_author = orig_commit.author();
-                            Some(GitEngine::sig_with_time(&orig_author, at)?)
-                        } else {
-                            None
-                        };
+                    let has_author_override = cur.new_author_time.is_some()
+                        || cur.new_author_name.is_some()
+                        || cur.new_author_email.is_some();
+                    let author_override: Option<git2::Signature<'_>> = if has_author_override {
+                        let orig_oid = git2::Oid::from_str(&cur.oid)
+                            .map_err(|e| GitError::OperationFailed(e.to_string()))?;
+                        let orig_commit = repo.find_commit(orig_oid)?;
+                        let orig_author = orig_commit.author();
+                        let at = cur
+                            .new_author_time
+                            .unwrap_or_else(|| orig_author.when().seconds());
+                        Some(GitEngine::sig_with_overrides(
+                            &orig_author,
+                            at,
+                            cur.new_author_name.as_deref(),
+                            cur.new_author_email.as_deref(),
+                        )?)
+                    } else {
+                        None
+                    };
                     rebase.commit(author_override.as_ref(), &committer, Some(msg))?;
                 } else {
                     // 暂停，等前端补消息

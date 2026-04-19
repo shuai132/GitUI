@@ -2494,6 +2494,22 @@ impl GitEngine {
         )?)
     }
 
+    /// 同 `sig_with_time`，但可额外覆盖 name / email。
+    /// `name_override` / `email_override` 为 None 时保留 orig 中的原值。
+    pub(crate) fn sig_with_overrides(
+        orig: &git2::Signature<'_>,
+        unix_secs: i64,
+        name_override: Option<&str>,
+        email_override: Option<&str>,
+    ) -> GitResult<git2::Signature<'static>> {
+        let t = git2::Time::new(unix_secs, orig.when().offset_minutes());
+        Ok(git2::Signature::new(
+            name_override.unwrap_or_else(|| orig.name().unwrap_or("")),
+            email_override.unwrap_or_else(|| orig.email().unwrap_or("")),
+            &t,
+        )?)
+    }
+
     /// 在当前 HEAD 上 amend 一次提交：用 index 里的 tree + 新 message 替换
     /// HEAD commit。返回新 commit OID。
     pub fn amend_commit(path: &str, message: &str) -> GitResult<String> {
@@ -2521,15 +2537,18 @@ impl GitEngine {
         Ok(new_oid.to_string())
     }
 
-    /// 仅修改 HEAD commit 的 message（以及可选的时间戳），不改变 tree。
+    /// 仅修改 HEAD commit 的 message（以及可选的时间戳 / author 信息），不改变 tree。
     /// - `author_time`：None = 保留原 author date；Some(t) = 覆盖为指定 Unix 秒
     /// - `committer_time`：None = 当前时间；Some(t) = 覆盖为指定 Unix 秒
+    /// - `author_name` / `author_email`：None = 保留原值；Some(s) = 覆盖
     /// 返回新 commit OID。
     pub fn amend_commit_message(
         path: &str,
         message: &str,
         author_time: Option<i64>,
         committer_time: Option<i64>,
+        author_name: Option<&str>,
+        author_email: Option<&str>,
     ) -> GitResult<String> {
         let repo = Self::open(path)?;
         if message.trim().is_empty() {
@@ -2542,11 +2561,13 @@ impl GitEngine {
             Some(t) => Self::sig_with_time(&committer_base, t)?,
             None => committer_base,
         };
-        // author：有指定时间则覆盖，否则保留原值
+        // author：name/email/time 任一有覆盖则用 sig_with_overrides；否则保留原值
         let orig_author = head.author();
-        let author = Self::sig_with_time(
+        let author = Self::sig_with_overrides(
             &orig_author,
             author_time.unwrap_or_else(|| orig_author.when().seconds()),
+            author_name,
+            author_email,
         )?;
         let tree = head.tree()?;
         let new_oid = head.amend(

@@ -618,6 +618,8 @@ const editMessageCommit = ref<CommitInfo | null>(null)
 const editMessageText = ref('')
 const editMessageAuthorTime = ref('')
 const editMessageCommitterTime = ref('')
+const editMessageAuthorName = ref('')
+const editMessageAuthorEmail = ref('')
 const editMessageAutoStash = ref(false)
 const editMessageSubmitting = ref(false)
 const createTagAnnotated = ref(false)
@@ -907,6 +909,8 @@ async function onCommitMenuAction(action: string) {
         editMessageText.value = c.message.trim()
         editMessageAuthorTime.value = toDatetimeLocal(c.author_time)
         editMessageCommitterTime.value = toDatetimeLocal(Math.floor(Date.now() / 1000))
+        editMessageAuthorName.value = c.author_name
+        editMessageAuthorEmail.value = c.author_email
         editMessageAutoStash.value = false
         editMessageSubmitting.value = false
         showEditMessageDialog.value = true
@@ -996,9 +1000,11 @@ async function onEditMessageConfirm() {
   editMessageSubmitting.value = true
   const authorTime = editMessageAuthorTime.value ? fromDatetimeLocal(editMessageAuthorTime.value) : undefined
   const committerTime = editMessageCommitterTime.value ? fromDatetimeLocal(editMessageCommitterTime.value) : undefined
+  const authorName = editMessageAuthorName.value.trim() || undefined
+  const authorEmail = editMessageAuthorEmail.value.trim() || undefined
   try {
     if (commit.oid === headCommitOid.value) {
-      await historyStore.amendCommitMessage(text, authorTime, committerTime)
+      await historyStore.amendCommitMessage(text, authorTime, committerTime, authorName, authorEmail)
     } else {
       // 非 HEAD：通过 rebase 以 reword 方式重写该提交。
       // upstream = parent（已在菜单判定时校验为单父 & 祖先），rebase_plan 返回
@@ -1017,6 +1023,8 @@ async function onEditMessageConfirm() {
         new_message: text,
         new_author_time: authorTime,
         new_committer_time: committerTime,
+        new_author_name: authorName,
+        new_author_email: authorEmail,
       }
       await mergeRebaseStore.startRebase(parentOid, null, todo, editMessageAutoStash.value)
     }
@@ -1595,6 +1603,26 @@ onUnmounted(() => {
           type="datetime-local"
           step="1"
           class="edit-message-time-input"
+        />
+      </label>
+      <label class="edit-message-time-row">
+        <span class="edit-message-time-label">{{ t('history.dialog.editMessage.authorName') }}</span>
+        <input
+          v-model="editMessageAuthorName"
+          type="text"
+          class="edit-message-time-input"
+          autocomplete="off"
+          spellcheck="false"
+        />
+      </label>
+      <label class="edit-message-time-row">
+        <span class="edit-message-time-label">{{ t('history.dialog.editMessage.authorEmail') }}</span>
+        <input
+          v-model="editMessageAuthorEmail"
+          type="email"
+          class="edit-message-time-input"
+          autocomplete="off"
+          spellcheck="false"
         />
       </label>
     </div>

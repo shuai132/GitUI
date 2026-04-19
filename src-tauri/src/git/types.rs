@@ -135,6 +135,12 @@ pub struct RebaseTodoItem {
     /// reword 时可选覆盖 committer date（Unix 秒）；None = 当前时间
     #[serde(default)]
     pub new_committer_time: Option<i64>,
+    /// reword 时可选覆盖 author name；None = 保留原值
+    #[serde(default)]
+    pub new_author_name: Option<String>,
+    /// reword 时可选覆盖 author email；None = 保留原值
+    #[serde(default)]
+    pub new_author_email: Option<String>,
 }
 
 /// 冲突文件的三方数据（base=stage1, ours=stage2, theirs=stage3）。

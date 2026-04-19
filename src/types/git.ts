@@ -64,6 +64,10 @@ export interface RebaseTodoItem {
   new_author_time?: number
   /** reword 时可选覆盖 committer date（Unix 秒）；缺省 = 当前时间 */
   new_committer_time?: number
+  /** reword 时可选覆盖 author name；缺省 = 保留原值 */
+  new_author_name?: string
+  /** reword 时可选覆盖 author email；缺省 = 保留原值 */
+  new_author_email?: string
 }
 
 export interface ConflictFile {

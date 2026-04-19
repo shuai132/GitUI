@@ -302,6 +302,8 @@ const messages = {
         autoStash: '开始前自动 stash 未提交改动，完成后恢复',
         authorDate: '作者时间',
         committerDate: '提交时间',
+        authorName: '作者姓名',
+        authorEmail: '作者邮箱',
       },
     },
   },
