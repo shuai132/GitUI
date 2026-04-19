@@ -1886,6 +1886,8 @@ impl GitEngine {
         on_progress: impl Fn(&str, u32, Option<String>),
     ) -> GitResult<String> {
         use std::io::Read;
+        #[cfg(windows)]
+        use std::os::windows::process::CommandExt;
         use std::process::{Command, Stdio};
 
         let depth_str;
@@ -1904,21 +1906,23 @@ impl GitEngine {
         args.push(url);
         args.push(target_path);
 
-        let mut child = Command::new("git")
+        let mut child_cmd = Command::new("git");
+        child_cmd
             .args(&args)
             .stdout(Stdio::null())
-            .stderr(Stdio::piped())
-            .spawn()
-            .map_err(|e| {
-                if e.kind() == std::io::ErrorKind::NotFound {
-                    GitError::OperationFailed(
-                        "git binary not found in PATH. SSH remotes require a system git install."
-                            .to_string(),
-                    )
-                } else {
-                    GitError::OperationFailed(format!("failed to spawn git clone: {e}"))
-                }
-            })?;
+            .stderr(Stdio::piped());
+        #[cfg(windows)]
+        child_cmd.creation_flags(0x08000000);
+        let mut child = child_cmd.spawn().map_err(|e| {
+            if e.kind() == std::io::ErrorKind::NotFound {
+                GitError::OperationFailed(
+                    "git binary not found in PATH. SSH remotes require a system git install."
+                        .to_string(),
+                )
+            } else {
+                GitError::OperationFailed(format!("failed to spawn git clone: {e}"))
+            }
+        })?;
 
         let mut stderr = child.stderr.take().expect("stderr piped");
         let mut buf: Vec<u8> = Vec::with_capacity(256);

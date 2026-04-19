@@ -7,6 +7,15 @@
 
 use std::process::Command;
 
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
+
+/// Windows: 抑制子进程弹出黑色 CMD 控制台窗口。
+/// GUI 子系统进程 spawn 控制台应用（git.exe）时，系统默认会为子进程新建控制台窗口，
+/// 加此标志可阻止。macOS/Linux 编译时此常量不存在，由 cfg 隔离。
+#[cfg(windows)]
+const CREATE_NO_WINDOW: u32 = 0x08000000;
+
 use crate::git::{
     engine::GitEngine,
     error::{GitError, GitResult},
@@ -60,21 +69,20 @@ pub fn get_remote_url(path: &str, remote_name: &str) -> GitResult<String> {
 ///
 /// 专门处理 spawn 失败的 `NotFound` 情况，给出明确提示而不是裸 IO 错误。
 pub fn run_git(path: &str, args: &[&str]) -> GitResult<String> {
-    let output = Command::new("git")
-        .arg("-C")
-        .arg(path)
-        .args(args)
-        .output()
-        .map_err(|e| {
-            if e.kind() == std::io::ErrorKind::NotFound {
-                GitError::OperationFailed(
-                    "git binary not found in PATH. SSH remotes require a system git install."
-                        .to_string(),
-                )
-            } else {
-                GitError::OperationFailed(format!("failed to spawn git: {e}"))
-            }
-        })?;
+    let mut cmd = Command::new("git");
+    cmd.arg("-C").arg(path).args(args);
+    #[cfg(windows)]
+    cmd.creation_flags(CREATE_NO_WINDOW);
+    let output = cmd.output().map_err(|e| {
+        if e.kind() == std::io::ErrorKind::NotFound {
+            GitError::OperationFailed(
+                "git binary not found in PATH. SSH remotes require a system git install."
+                    .to_string(),
+            )
+        } else {
+            GitError::OperationFailed(format!("failed to spawn git: {e}"))
+        }
+    })?;
 
     if output.status.success() {
         Ok(String::from_utf8_lossy(&output.stdout).to_string())
