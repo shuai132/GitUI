@@ -444,7 +444,8 @@ async function onFileMenuAction(action: string) {
 .file-tab {
   display: flex;
   align-items: center;
-  padding: 1px 3px 1px 3px;
+  padding: 2px 3px;
+  height: var(--file-list-row-height);
   cursor: pointer;
   font-size: var(--font-sm);
   transition: background 0.1s;
@@ -460,8 +461,9 @@ async function onFileMenuAction(action: string) {
 }
 
 .file-tab.active {
-  background: rgba(138, 173, 244, 0.15);
+  background: var(--row-selected-bg);
   border-left: 2px solid var(--accent-blue);
+  color: var(--row-selected-fg);
 }
 
 .file-name {
@@ -481,7 +483,12 @@ async function onFileMenuAction(action: string) {
 }
 
 .file-tab.active .file-name {
-  color: var(--text-primary);
+  color: var(--row-selected-fg);
+}
+
+.file-tab.active .add,
+.file-tab.active .del {
+  color: var(--row-selected-fg);
 }
 
 .file-stats {

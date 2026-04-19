@@ -3,9 +3,12 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
   DEFAULT_SETTINGS,
+  FILE_LIST_ROW_HEIGHT_MAX,
+  FILE_LIST_ROW_HEIGHT_MIN,
   HISTORY_ROW_HEIGHT_MAX,
   HISTORY_ROW_HEIGHT_MIN,
   ROW_SEPARATOR_MAX,
+  clampFileListRowHeight,
   clampHistoryRowHeight,
   clampSeparatorStrength,
   useSettingsStore,
@@ -83,6 +86,25 @@ const historyRowHeightIsDefault = computed(
 
 function resetHistoryRowHeight() {
   store.historyRowHeight = DEFAULT_SETTINGS.historyRowHeight
+}
+
+function onFileListRowHeightInput(e: Event) {
+  const v = Number((e.target as HTMLInputElement).value)
+  store.fileListRowHeight = clampFileListRowHeight(v)
+}
+
+const fileListRowHeightFillPercent = computed(() => {
+  const range = FILE_LIST_ROW_HEIGHT_MAX - FILE_LIST_ROW_HEIGHT_MIN
+  const offset = store.fileListRowHeight - FILE_LIST_ROW_HEIGHT_MIN
+  return `${(offset / range) * 100}%`
+})
+
+const fileListRowHeightIsDefault = computed(
+  () => store.fileListRowHeight === DEFAULT_SETTINGS.fileListRowHeight,
+)
+
+function resetFileListRowHeight() {
+  store.fileListRowHeight = DEFAULT_SETTINGS.fileListRowHeight
 }
 
 interface AccentRow {
@@ -271,7 +293,7 @@ const hasAnyOverride = computed(() => Object.keys(store.accentOverrides).length 
       <span class="section-title-hint">{{ t('settings.appearance.rowHeightHint') }}</span>
     </div>
     <div class="row-height-row">
-      <span class="separator-label">{{ t('settings.appearance.rowHeightLabel') }}</span>
+      <span class="separator-label">{{ t('settings.appearance.rowHeightHistoryLabel') }}</span>
       <input
         type="range"
         class="separator-range"
@@ -297,6 +319,37 @@ const hasAnyOverride = computed(() => Object.keys(store.accentOverrides).length 
         :disabled="historyRowHeightIsDefault"
         :title="historyRowHeightIsDefault ? t('settings.appearance.rowHeightResetAlready') : t('settings.appearance.rowHeightResetHint', { value: DEFAULT_SETTINGS.historyRowHeight })"
         @click="resetHistoryRowHeight"
+      >
+        ×
+      </button>
+    </div>
+    <div class="row-height-row">
+      <span class="separator-label">{{ t('settings.appearance.rowHeightFileListLabel') }}</span>
+      <input
+        type="range"
+        class="separator-range"
+        :style="{ '--fill': fileListRowHeightFillPercent }"
+        :min="FILE_LIST_ROW_HEIGHT_MIN"
+        :max="FILE_LIST_ROW_HEIGHT_MAX"
+        :step="1"
+        :value="store.fileListRowHeight"
+        @input="onFileListRowHeightInput"
+      />
+      <input
+        type="number"
+        class="row-height-number"
+        :min="FILE_LIST_ROW_HEIGHT_MIN"
+        :max="FILE_LIST_ROW_HEIGHT_MAX"
+        :step="1"
+        :value="store.fileListRowHeight"
+        @input="onFileListRowHeightInput"
+      />
+      <span class="row-height-unit">px</span>
+      <button
+        class="accent-reset"
+        :disabled="fileListRowHeightIsDefault"
+        :title="fileListRowHeightIsDefault ? t('settings.appearance.rowHeightResetAlready') : t('settings.appearance.rowHeightResetHint', { value: DEFAULT_SETTINGS.fileListRowHeight })"
+        @click="resetFileListRowHeight"
       >
         ×
       </button>

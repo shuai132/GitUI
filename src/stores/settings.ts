@@ -55,9 +55,14 @@ export const ROW_SEPARATOR_ALPHA_PEAK = 1.0
 const ROW_SEPARATOR_LEGACY_SCALE = 4
 
 /** 历史提交行高（px）下限 */
-export const HISTORY_ROW_HEIGHT_MIN = 20
+export const HISTORY_ROW_HEIGHT_MIN = 10
 /** 历史提交行高（px）上限 */
-export const HISTORY_ROW_HEIGHT_MAX = 36
+export const HISTORY_ROW_HEIGHT_MAX = 30
+
+/** 文件列表行高（px）下限 */
+export const FILE_LIST_ROW_HEIGHT_MIN = 10
+/** 文件列表行高（px）上限 */
+export const FILE_LIST_ROW_HEIGHT_MAX = 30
 
 export interface ExternalTerminalPreset {
   value: ExternalTerminal
@@ -90,6 +95,8 @@ export interface SettingsData {
   rowSeparatorStyle: RowSeparatorStyle
   /** 提交历史每行高度（px），范围 HISTORY_ROW_HEIGHT_MIN..MAX */
   historyRowHeight: number
+  /** 文件列表每行高度（px），范围 FILE_LIST_ROW_HEIGHT_MIN..MAX */
+  fileListRowHeight: number
   /** UI 语言；默认 'auto' 跟随系统 */
   uiLanguage: UiLanguage
 }
@@ -106,7 +113,8 @@ export const DEFAULT_SETTINGS: SettingsData = {
   graphStyle: 'rounded',
   rowSeparatorStrength: 30,
   rowSeparatorStyle: 'solid',
-  historyRowHeight: 28,
+  historyRowHeight: 20,
+  fileListRowHeight: 20,
   uiLanguage: 'auto',
 }
 
@@ -236,6 +244,10 @@ export function applySettingsToDom(data: SettingsData) {
   // 历史提交行高：CSS 变量下发给 HistoryView / CommitGraphRow / WipRow 消费
   const rowH = clampHistoryRowHeight(data.historyRowHeight)
   root.style.setProperty('--history-row-height', `${rowH}px`)
+
+  // 文件列表行高：CSS 变量下发给 FileChangeList / CommitInfoPanel 的文件 tab
+  const fileRowH = clampFileListRowHeight(data.fileListRowHeight)
+  root.style.setProperty('--file-list-row-height', `${fileRowH}px`)
 }
 
 // ── 模块顶层 side-effect：import 就同步 apply（防 FOUC） ──────────────
@@ -275,6 +287,7 @@ export const useSettingsStore = defineStore('settings', () => {
   const rowSeparatorStrength = ref<number>(clampSeparatorStrength(__initialData.rowSeparatorStrength))
   const rowSeparatorStyle = ref<RowSeparatorStyle>(__initialData.rowSeparatorStyle)
   const historyRowHeight = ref<number>(clampHistoryRowHeight(__initialData.historyRowHeight))
+  const fileListRowHeight = ref<number>(clampFileListRowHeight(__initialData.fileListRowHeight))
   const uiLanguage = ref<UiLanguage>(normalizeUiLanguage(__initialData.uiLanguage))
 
   function snapshot(): SettingsData {
@@ -291,6 +304,7 @@ export const useSettingsStore = defineStore('settings', () => {
       rowSeparatorStrength: rowSeparatorStrength.value,
       rowSeparatorStyle: rowSeparatorStyle.value,
       historyRowHeight: historyRowHeight.value,
+      fileListRowHeight: fileListRowHeight.value,
       uiLanguage: uiLanguage.value,
     }
   }
@@ -320,6 +334,7 @@ export const useSettingsStore = defineStore('settings', () => {
       rowSeparatorStrength,
       rowSeparatorStyle,
       historyRowHeight,
+      fileListRowHeight,
       uiLanguage,
     ],
     () => {
@@ -359,6 +374,7 @@ export const useSettingsStore = defineStore('settings', () => {
     rowSeparatorStrength.value = DEFAULT_SETTINGS.rowSeparatorStrength
     rowSeparatorStyle.value = DEFAULT_SETTINGS.rowSeparatorStyle
     historyRowHeight.value = DEFAULT_SETTINGS.historyRowHeight
+    fileListRowHeight.value = DEFAULT_SETTINGS.fileListRowHeight
   }
 
   function resetUiFont() {
@@ -410,6 +426,7 @@ export const useSettingsStore = defineStore('settings', () => {
     rowSeparatorStrength,
     rowSeparatorStyle,
     historyRowHeight,
+    fileListRowHeight,
     uiLanguage,
     uiFontIsDefault,
     codeFontIsDefault,
@@ -436,6 +453,11 @@ export function clampSeparatorStrength(n: number): number {
 export function clampHistoryRowHeight(n: number): number {
   if (!Number.isFinite(n)) return DEFAULT_SETTINGS.historyRowHeight
   return Math.max(HISTORY_ROW_HEIGHT_MIN, Math.min(HISTORY_ROW_HEIGHT_MAX, Math.round(n)))
+}
+
+export function clampFileListRowHeight(n: number): number {
+  if (!Number.isFinite(n)) return DEFAULT_SETTINGS.fileListRowHeight
+  return Math.max(FILE_LIST_ROW_HEIGHT_MIN, Math.min(FILE_LIST_ROW_HEIGHT_MAX, Math.round(n)))
 }
 
 function normalizeUiLanguage(v: unknown): UiLanguage {

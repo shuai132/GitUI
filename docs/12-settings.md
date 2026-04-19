@@ -30,6 +30,7 @@
 - `rowSeparatorStrength: number`（0..`ROW_SEPARATOR_MAX`，直接代表 alpha 百分比；默认 20 = 20% 不透明度；0 = 无色，100 = 完全不透明）
 - `rowSeparatorStyle: 'solid' | 'dashed' | 'dotted'`（行分隔线样式）
 - `historyRowHeight: number`（提交历史每行高度 px，范围 `HISTORY_ROW_HEIGHT_MIN..MAX`）
+- `fileListRowHeight: number`（文件列表每行高度 px，范围 `FILE_LIST_ROW_HEIGHT_MIN..MAX`）
 
 字体的预设下拉候选见 `UI_FONT_PRESETS` / `CODE_FONT_PRESETS`（同文件），每项 `value` 是完整 `font-family` fallback 串。
 
@@ -55,9 +56,14 @@ Accent 覆盖：store 对每个 accent 键调用 `setProperty('--accent-<key>', 
 
 提交历史 `.commit-row` 的 `border-bottom` 抽成三个 CSS 变量：`--row-separator-rgb`（基础色，主题相关，在 `main.css` 里由 `:root` / `[data-theme="light"]` 分别定义）、`--row-separator-alpha`（由 store 按 `strength / ROW_SEPARATOR_MAX * ROW_SEPARATOR_ALPHA_PEAK` 写入，当前配置下就是 `strength / 100`）、`--row-separator-style`（直接写字符串）。0 档 alpha 为 0，border 虽透明但仍占 1px，保持布局稳定。旧版持久化值（0..10 档位）在 `loadSync` 里 ×4 迁移到新尺度，保留视觉观感。
 
-## 历史行高
+## 行高
 
-`historyRowHeight` 通过 CSS 变量 `--history-row-height` 下发，`HistoryView` 的每行 `div.height` 用 `var(--history-row-height)` 直接消费，滚动热路径不订阅 Vue 响应式。`CommitGraphRow` / `WipRow` 的 SVG 高度与中点（path `d` 属性无法用 CSS 变量）走 store computed。虚拟化器 (`@tanstack/vue-virtual`) 的 `estimateSize` 读 `settings.historyRowHeight.value`，值变化时 `watch` 调 `virtualizer.measure()` 丢弃已缓存 size，按新值重排。`graph.ts::ROW_H` 保留为默认常量 / fallback，不再被渲染层直接使用。
+两项独立配置，分别由 `historyRowHeight` / `fileListRowHeight` 下发到两个 CSS 变量：
+
+- `--history-row-height`：驱动 `HistoryView` 的提交行与 WIP 行。每行高度直接用 `var(--history-row-height)`，滚动热路径不订阅 Vue 响应式。`CommitGraphRow` / `WipRow` 的 SVG 高度与中点（path `d` 属性无法用 CSS 变量）走 store computed。
+- `--file-list-row-height`：驱动 WIP 文件列表（`FileChangeList`）以及历史详情里的文件 tab（`CommitInfoPanel` `.file-tab`）。`FileChangeList` 的虚拟化器 (`@tanstack/vue-virtual`) 的 `estimateSize` 读 `settings.fileListRowHeight.value`，值变化时 `watch` 调 `virtualizer.measure()` 丢弃已缓存 size 按新值重排。
+
+`graph.ts::ROW_H` 保留为默认常量 / fallback，不再被渲染层直接使用。
 
 ## 持久化与启动
 

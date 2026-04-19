@@ -4,6 +4,7 @@ import { useVirtualizer } from '@tanstack/vue-virtual'
 import { useI18n } from 'vue-i18n'
 import type { FileEntry, FileStatusKind } from '@/types/git'
 import { fileStatusColor } from '@/utils/format'
+import { useSettingsStore } from '@/stores/settings'
 
 const { t } = useI18n()
 
@@ -102,8 +103,8 @@ const statusIconMap: Record<FileStatusKind, { d: string; stroke?: boolean }> = {
   conflicted: { d: 'M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z M12 9v4 M12 17h.01' },
 }
 
-// 每行固定高度：padding 1px top+bottom + 内容约 18px = 20px
-const ROW_H = 20
+const settings = useSettingsStore()
+const rowHeight = computed(() => settings.fileListRowHeight)
 
 const scrollEl = ref<HTMLElement | null>(null)
 
@@ -111,10 +112,14 @@ const virtualizer = useVirtualizer(
   computed(() => ({
     count: props.files.length,
     getScrollElement: () => scrollEl.value,
-    estimateSize: () => ROW_H,
+    estimateSize: () => rowHeight.value,
     overscan: 5,
   }))
 )
+
+watch(rowHeight, () => {
+  virtualizer.value.measure()
+})
 
 function scrollToIndex(idx: number) {
   virtualizer.value.scrollToIndex(idx, { align: 'auto' })
@@ -152,7 +157,7 @@ defineExpose({ scrollToIndex, clearMultiSelect })
           :style="{
             position: 'absolute',
             top: vRow.start + 'px',
-            height: ROW_H + 'px',
+            height: rowHeight + 'px',
             width: '100%',
           }"
           @click="onRowClick($event, files[vRow.index], vRow.index)"
@@ -244,7 +249,7 @@ defineExpose({ scrollToIndex, clearMultiSelect })
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 0 4px;
+  padding: 2px 4px;
   cursor: pointer;
   transition: background 0.1s;
   box-sizing: border-box;
@@ -255,15 +260,23 @@ defineExpose({ scrollToIndex, clearMultiSelect })
 }
 
 .file-entry.selected {
-  background: rgba(138, 173, 244, 0.18);
+  background: var(--row-selected-bg);
+  color: var(--row-selected-fg);
+}
+
+.file-entry.selected .file-path,
+.file-entry.selected .file-stats .add,
+.file-entry.selected .file-stats .del {
+  color: var(--row-selected-fg);
 }
 
 .file-entry.multi-selected {
-  background: rgba(138, 173, 244, 0.13);
+  background: color-mix(in srgb, var(--row-selected-bg) 45%, transparent);
 }
 
 .file-entry.selected.multi-selected {
-  background: rgba(138, 173, 244, 0.22);
+  background: var(--row-selected-bg);
+  color: var(--row-selected-fg);
 }
 
 .row-action {
