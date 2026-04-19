@@ -73,7 +73,7 @@ function onPrevChange() {
     <!-- Toolbar -->
     <div class="diff-toolbar" v-if="diff">
       <span class="diff-file-path" :title="diff.new_path ?? diff.old_path">
-        {{ diff.new_path ?? diff.old_path }}
+        <span class="diff-file-path-text"><bdi>{{ diff.new_path ?? diff.old_path }}</bdi></span>
       </span>
       <span class="diff-file-stats" v-if="!isImageView">
         <span class="add">+{{ diff.additions }}</span>
@@ -251,9 +251,17 @@ function onPrevChange() {
   color: var(--text-secondary);
   font-family: var(--code-font-family, 'SF Mono', monospace);
   overflow: hidden;
+  min-width: 0;
+}
+
+.diff-file-path-text {
+  display: inline-block;
+  vertical-align: middle;
+  max-width: 100%;
+  direction: rtl;
+  overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  min-width: 0;
 }
 
 .diff-file-stats {

@@ -319,6 +319,7 @@ defineExpose({ scrollToIndex, clearMultiSelect })
 
 .path-text {
   display: inline-block;
+  vertical-align: middle;
   max-width: 100%;
   direction: rtl;
   overflow: hidden;

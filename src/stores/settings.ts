@@ -114,7 +114,7 @@ export const DEFAULT_SETTINGS: SettingsData = {
   rowSeparatorStrength: 30,
   rowSeparatorStyle: 'solid',
   historyRowHeight: 20,
-  fileListRowHeight: 20,
+  fileListRowHeight: 18,
   uiLanguage: 'auto',
 }
 
