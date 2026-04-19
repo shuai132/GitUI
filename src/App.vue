@@ -20,8 +20,11 @@ import { useStashStore } from '@/stores/stash'
 import { useDiffStore } from '@/stores/diff'
 import { useUiStore } from '@/stores/ui'
 import { useDebugStore } from '@/stores/debug'
+import { useErrorsStore } from '@/stores/errors'
+import { useGitPrefsStore } from '@/stores/gitPrefs'
 import { useGitEvents } from '@/composables/useGitEvents'
 import { useGitCommands } from '@/composables/useGitCommands'
+import { useShortcuts } from '@/composables/useShortcuts'
 import { listen } from '@tauri-apps/api/event'
 
 const { t } = useI18n()
@@ -34,8 +37,13 @@ const stashStore = useStashStore()
 const diffStore = useDiffStore()
 const uiStore = useUiStore()
 const debugStore = useDebugStore()
-const { onStatusChanged, onRemoteUpdated } = useGitEvents()
+const errorsStore = useErrorsStore()
+const gitPrefsStore = useGitPrefsStore()
+const { onStatusChanged, onRemoteUpdated, onError } = useGitEvents()
 const git = useGitCommands()
+
+// 全局键盘快捷键
+useShortcuts()
 
 // 「添加仓库」下拉菜单 + clone/init 对话框：菜单和对话框都挂在 App 顶层，
 // AppToolbar/AppSidebar 通过 useRepoCreation() 触发显示。
@@ -98,6 +106,12 @@ onMounted(async () => {
     }
   } catch (e) {
     console.error(e)
+  }
+  // 将持久化的 auto-fetch 间隔同步到后端（后端默认 5 分钟，以前端存储为准）
+  try {
+    await git.setAutoFetchInterval(gitPrefsStore.autoFetchInterval)
+  } catch (e) {
+    console.error('[gitPrefs] sync auto-fetch interval failed', e)
   }
 })
 
@@ -193,6 +207,16 @@ onStatusChanged(async (repoId) => {
 onRemoteUpdated((repoId) => {
   if (repoId !== repoStore.activeRepoId) return
   historyStore.loadBranches()
+})
+
+// 后端后台操作（如 auto-fetch）产生的错误 → 推入 errorsStore，由 AppToolbar toast 统一展示
+onError(({ repoId, msg }) => {
+  // 只展示当前活跃仓库的错误，其他仓库的静默写日志
+  if (repoId !== repoStore.activeRepoId) {
+    console.warn(`[repo:${repoId}] background error: ${msg}`)
+    return
+  }
+  errorsStore.push('background_error', msg)
 })
 
 // Terminal 面板 mount-once：首次显示后一直保留在 DOM 里，

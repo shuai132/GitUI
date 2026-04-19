@@ -2,8 +2,12 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useUiStore } from '@/stores/ui'
+import { useGitPrefsStore, FETCH_INTERVAL_OPTIONS } from '@/stores/gitPrefs'
+import { useGitCommands } from '@/composables/useGitCommands'
 
 const uiStore = useUiStore()
+const gitPrefsStore = useGitPrefsStore()
+const git = useGitCommands()
 const { t } = useI18n()
 
 interface ToggleRow {
@@ -45,16 +49,23 @@ const viewToggles = computed<ToggleRow[]>(() => [
   },
 ])
 
-interface PlaceholderItem {
-  key: string
-  label: string
-  hint: string
-}
+const fetchIntervalLabel = computed(() => {
+  const opt = FETCH_INTERVAL_OPTIONS.find(
+    (o) => o.value === gitPrefsStore.autoFetchInterval,
+  )
+  if (!opt) return String(gitPrefsStore.autoFetchInterval)
+  return t(opt.labelKey, 'params' in opt ? opt.params : {})
+})
 
-const placeholders = computed<PlaceholderItem[]>(() => [
-  { key: 'shortcuts', label: t('settings.advanced.shortcuts'), hint: t('settings.advanced.shortcutsHint') },
-  { key: 'gitPrefs', label: t('settings.advanced.gitPrefs'), hint: t('settings.advanced.gitPrefsHint') },
-])
+async function onFetchIntervalChange(e: Event) {
+  const secs = Number((e.target as HTMLSelectElement).value)
+  gitPrefsStore.setAutoFetchInterval(secs)
+  try {
+    await git.setAutoFetchInterval(secs)
+  } catch (err) {
+    console.error('[gitPrefs] set_auto_fetch_interval failed', err)
+  }
+}
 </script>
 
 <template>
@@ -79,11 +90,37 @@ const placeholders = computed<PlaceholderItem[]>(() => [
       </label>
     </div>
 
+    <!-- Git 操作偏好 -->
+    <div class="section-title section-title--spaced">{{ t('settings.gitPrefs.title') }}</div>
+    <div class="prefs-list">
+      <!-- Auto-fetch 间隔 -->
+      <div class="pref-row">
+        <div class="pref-text">
+          <div class="pref-label">{{ t('settings.gitPrefs.fetchIntervalLabel') }}</div>
+          <div class="pref-hint">{{ t('settings.gitPrefs.fetchIntervalHint') }}</div>
+        </div>
+        <select
+          class="pref-select"
+          :value="gitPrefsStore.autoFetchInterval"
+          @change="onFetchIntervalChange"
+        >
+          <option
+            v-for="opt in FETCH_INTERVAL_OPTIONS"
+            :key="opt.value"
+            :value="opt.value"
+          >
+            {{ t(opt.labelKey, 'params' in opt ? opt.params : {}) }}
+          </option>
+        </select>
+      </div>
+    </div>
+
+    <!-- 快捷键（占位保留） -->
     <div class="section-title section-title--spaced">{{ t('settings.advanced.upcomingTitle') }}</div>
     <div class="placeholder-list">
-      <div v-for="item in placeholders" :key="item.key" class="placeholder-row">
-        <div class="placeholder-label">{{ item.label }}</div>
-        <div class="placeholder-hint">{{ item.hint }}</div>
+      <div class="placeholder-row">
+        <div class="placeholder-label">{{ t('settings.advanced.shortcuts') }}</div>
+        <div class="placeholder-hint">{{ t('settings.advanced.shortcutsHint') }}</div>
       </div>
     </div>
   </div>
@@ -159,6 +196,59 @@ const placeholders = computed<PlaceholderItem[]>(() => [
   margin: 0;
 }
 
+/* ── Git 偏好列表 ─────────────────────────────────────────────── */
+.prefs-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  overflow: hidden;
+  background: var(--border);
+}
+
+.pref-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 12px;
+  background: var(--bg-primary);
+}
+
+.pref-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.pref-label {
+  font-size: var(--font-md);
+  color: var(--text-primary);
+}
+
+.pref-hint {
+  font-size: var(--font-sm);
+  color: var(--text-muted);
+}
+
+.pref-select {
+  flex-shrink: 0;
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 3px 6px;
+  font-size: var(--font-sm);
+  cursor: pointer;
+}
+
+.pref-select:focus {
+  outline: 1px solid var(--accent-blue);
+}
+
+/* ── 占位列表（快捷键等待实现） ──────────────────────────────── */
 .placeholder-list {
   display: flex;
   flex-direction: column;

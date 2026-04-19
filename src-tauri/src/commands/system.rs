@@ -1,8 +1,9 @@
 use std::process::Command;
 use std::sync::Mutex;
-use tauri::State;
+use tauri::{AppHandle, Manager, State};
 
 use crate::{
+    auto_fetch::AutoFetchService,
     git::{engine::GitEngine, error::GitError, types::{BuildInfo, ReflogEntry}},
     repo_manager::RepoManager,
 };
@@ -456,6 +457,17 @@ pub async fn checkout_file_at_commit(
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
     GitEngine::checkout_file_at_commit(&meta.path, &sha, &file_path)
+}
+
+/// 设置自动 fetch 间隔（秒），0 表示禁用自动 fetch。
+/// 会中止当前后台任务并以新间隔重新启动。
+#[tauri::command]
+pub async fn set_auto_fetch_interval(
+    secs: u64,
+    app: AppHandle,
+) -> Result<(), GitError> {
+    app.state::<AutoFetchService>().set_interval(secs, app.clone());
+    Ok(())
 }
 
 /// 返回应用版本（`Cargo.toml` 中的 `version`）和编译时注入的短 commit hash。
