@@ -1,4 +1,4 @@
-import { onMounted, onUnmounted } from 'vue'
+import { onUnmounted } from 'vue'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 
 export function useGitEvents() {
@@ -46,6 +46,15 @@ export function useGitEvents() {
     })
   }
 
+  // macOS `open -a GitUI <path>` 热启动：app 已在运行时打开新路径
+  const onOpenPath = (handler: (path: string) => void) => {
+    listen<string>('repo://open-path', (event) => {
+      handler(event.payload)
+    }).then((unlisten) => {
+      unlisteners.push(unlisten)
+    })
+  }
+
   onUnmounted(() => {
     unlisteners.forEach((fn) => fn())
   })
@@ -55,5 +64,6 @@ export function useGitEvents() {
     onOperationProgress,
     onError,
     onRemoteUpdated,
+    onOpenPath,
   }
 }

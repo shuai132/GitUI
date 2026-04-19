@@ -39,7 +39,7 @@ const uiStore = useUiStore()
 const debugStore = useDebugStore()
 const errorsStore = useErrorsStore()
 const gitPrefsStore = useGitPrefsStore()
-const { onStatusChanged, onRemoteUpdated, onError } = useGitEvents()
+const { onStatusChanged, onRemoteUpdated, onError, onOpenPath } = useGitEvents()
 const git = useGitCommands()
 
 // 全局键盘快捷键
@@ -217,6 +217,15 @@ onStatusChanged(async (repoId) => {
   historyStore.loadBranches()
   historyStore.loadTags()
   stashStore.refresh()
+})
+
+// macOS `open -a GitUI <path>`：热启动时后端推来路径，直接打开仓库
+onOpenPath(async (path) => {
+  try {
+    await repoStore.openRepo(path)
+  } catch (e) {
+    console.error('[openPath] failed to open repo:', e)
+  }
 })
 
 // 定时后台 fetch 完成后静默刷新分支列表（ahead/behind 数字）

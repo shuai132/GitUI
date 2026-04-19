@@ -22,6 +22,8 @@ use tauri::{Manager, WindowEvent};
 // 在 Linux / Windows 上该变体不存在，需要 cfg 隔离 use 和匹配逻辑。
 #[cfg(target_os = "macos")]
 use tauri::RunEvent;
+#[cfg(target_os = "macos")]
+use tauri::Emitter;
 use watcher::WatcherService;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -179,6 +181,29 @@ pub fn run() {
                 if let Some(window) = _app.get_webview_window("main") {
                     let _ = window.show();
                     let _ = window.set_focus();
+                }
+            }
+            // macOS: `open -a GitUI <path>` 或 Finder 拖拽打开时触发。
+            // URL 形如 file:///path/to/dir，取第一个 file:// URL 转换为本地路径。
+            #[cfg(target_os = "macos")]
+            if let RunEvent::Opened { urls } = &_event {
+                if let Some(window) = _app.get_webview_window("main") {
+                    let _ = window.show();
+                    let _ = window.set_focus();
+                }
+                let path = urls.iter().find_map(|u| {
+                    if u.scheme() == "file" { u.to_file_path().ok() } else { None }
+                });
+                if let Some(p) = path {
+                    let path_str = p.to_string_lossy().into_owned();
+                    // 冷启动：前端尚未挂载，存入 StartupRepo 供 consumeStartupRepo 取走
+                    if let Ok(mut guard) = _app.state::<StartupRepo>().0.lock() {
+                        if guard.is_none() {
+                            *guard = Some(path_str.clone());
+                        }
+                    }
+                    // 热启动：前端已就绪，直接推事件
+                    let _ = _app.emit("repo://open-path", path_str);
                 }
             }
         });
