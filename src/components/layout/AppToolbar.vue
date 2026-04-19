@@ -139,6 +139,9 @@ const pushModeMenu = reactive({
   x: 0,
   y: 0,
 })
+// 记住 chevron 的 rect：多 remote 时 pickRemote 用它定位，
+// 避免落到 toolbar 最右的 actions 按钮兜底上
+let pushChevronRect: DOMRect | null = null
 
 const pushModeMenuItems = computed<ContextMenuItem[]>(() => [
   { label: t('toolbar.pushMode.forceWithLease'), action: 'force_with_lease' },
@@ -153,6 +156,7 @@ function onPushChevronClick(e: MouseEvent) {
   }
   const el = e.currentTarget as HTMLElement
   const rect = el.getBoundingClientRect()
+  pushChevronRect = rect
   pushModeMenu.x = rect.left
   pushModeMenu.y = rect.bottom + 4
   pushModeMenu.visible = true
@@ -160,7 +164,7 @@ function onPushChevronClick(e: MouseEvent) {
 
 function onPushModeSelect(action: string) {
   pushModeMenu.visible = false
-  doPush(action as PushMode)
+  doPush(action as PushMode, pushChevronRect ?? undefined)
 }
 
 const showReflogDialog = ref(false)
