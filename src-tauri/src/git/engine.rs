@@ -585,6 +585,7 @@ impl GitEngine {
             deletions: 0,
             old_blob_oid: None,
             new_blob_oid: None,
+            encoding: "UTF-8".to_owned(),
         }))
     }
 
@@ -639,19 +640,33 @@ impl GitEngine {
         let mut additions = 0usize;
         let mut deletions = 0usize;
 
-        if !is_binary {
-            // 按文件确定编码：attr → 工作区内容（current state）UTF-8 试解 → chardetng
-            let attr_encoding: Option<String> = repo
-                .get_attr(
-                    Path::new(file_path),
-                    "working-tree-encoding",
-                    AttrCheckFlags::default(),
-                )
-                .ok()
-                .flatten()
-                .map(|s| s.to_string());
-            let enc = detect_file_encoding(&new_bytes, attr_encoding.as_deref(), None);
+        // 先确定编码（二进制文件兜底 UTF-8，非二进制才真正用到）
+        let attr_encoding: Option<String> = repo
+            .get_attr(
+                Path::new(file_path),
+                "working-tree-encoding",
+                AttrCheckFlags::default(),
+            )
+            .ok()
+            .flatten()
+            .map(|s| s.to_string());
+        // 检测 BOM（new 优先，其次 old）
+        let bom_enc = encoding_rs::Encoding::for_bom(&new_bytes)
+            .map(|(e, _)| e)
+            .or_else(|| encoding_rs::Encoding::for_bom(&old_bytes).map(|(e, _)| e));
+        let enc = if is_binary {
+            encoding_rs::UTF_8
+        } else {
+            detect_file_encoding(&new_bytes, attr_encoding.as_deref(), bom_enc)
+        };
+        // UTF-8 有 BOM 时显示 "UTF-8 BOM" 以示区分
+        let encoding_name = if enc == encoding_rs::UTF_8 && bom_enc == Some(encoding_rs::UTF_8) {
+            "UTF-8 BOM".to_owned()
+        } else {
+            enc.name().to_owned()
+        };
 
+        if !is_binary {
             let mut diff_opts = git2::DiffOptions::new();
             diff_opts.context_lines(3).interhunk_lines(0);
             let patch = git2::Patch::from_buffers(
@@ -700,6 +715,7 @@ impl GitEngine {
             deletions,
             old_blob_oid,
             new_blob_oid: None,
+            encoding: encoding_name,
         }))
     }
 
@@ -915,6 +931,12 @@ impl GitEngine {
             }
 
             let enc = detect_file_encoding(&sample, attr_encoding.as_deref(), file_bom_enc);
+            // UTF-8 有 BOM 时显示 "UTF-8 BOM" 以示区分
+            let encoding_name = if enc == encoding_rs::UTF_8 && file_bom_enc == Some(encoding_rs::UTF_8) {
+                "UTF-8 BOM".to_owned()
+            } else {
+                enc.name().to_owned()
+            };
 
             let hunks: Vec<DiffHunk> = pending
                 .hunks
@@ -947,6 +969,7 @@ impl GitEngine {
                 deletions: pending.deletions,
                 old_blob_oid: pending.old_blob_oid,
                 new_blob_oid: pending.new_blob_oid,
+                encoding: encoding_name,
             });
         }
 
@@ -2903,6 +2926,7 @@ impl GitEngine {
             deletions: 0,
             old_blob_oid: None,
             new_blob_oid: None,
+            encoding: "UTF-8".to_owned(),
         }))
     }
 

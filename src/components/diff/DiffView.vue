@@ -79,6 +79,12 @@ function onPrevChange() {
         <span class="add">+{{ diff.additions }}</span>
         <span class="del">-{{ diff.deletions }}</span>
       </span>
+      <span
+        v-if="!isImageView && diff.encoding"
+        class="diff-encoding"
+        :class="{ 'diff-encoding--non-utf8': diff.encoding !== 'UTF-8' }"
+        :title="`File encoding: ${diff.encoding}`"
+      >{{ diff.encoding }}</span>
 
       <div class="toolbar-spacer" />
 
@@ -272,6 +278,24 @@ function onPrevChange() {
 
 .add { color: var(--accent-green); }
 .del { color: var(--accent-red); }
+
+.diff-encoding {
+  font-size: 10px;
+  font-family: var(--code-font-family, 'SF Mono', monospace);
+  color: var(--text-muted);
+  flex-shrink: 0;
+  letter-spacing: 0.02em;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 1px 5px;
+}
+
+.diff-encoding--non-utf8 {
+  color: #f5a623;
+  background: rgba(245, 166, 35, 0.12);
+  border-color: rgba(245, 166, 35, 0.28);
+  font-weight: 500;
+}
 
 .toolbar-spacer {
   flex: 1;

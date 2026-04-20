@@ -146,6 +146,8 @@ export interface FileDiff {
   old_blob_oid?: string
   /** 新侧 blob oid；删除或 WIP 未暂存修改侧为空 */
   new_blob_oid?: string
+  /** 检测到的文件编码名，如 "UTF-8" / "GBK" / "Shift_JIS" */
+  encoding: string
 }
 
 /** 二进制 blob 的字节数据（base64 编码），用于图片预览等 */

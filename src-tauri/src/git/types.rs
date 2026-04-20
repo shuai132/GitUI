@@ -244,6 +244,14 @@ pub struct FileDiff {
     /// 新侧 blob oid；删除场景或工作区未暂存的修改侧为 None
     #[serde(default)]
     pub new_blob_oid: Option<String>,
+    /// 检测到的文件编码名（如 "UTF-8" / "GBK" / "Shift_JIS"），
+    /// 由 detect_file_encoding 按优先级链（gitattributes → BOM → UTF-8 试解 → chardetng）推断
+    #[serde(default = "default_encoding")]
+    pub encoding: String,
+}
+
+fn default_encoding() -> String {
+    "UTF-8".to_owned()
 }
 
 /// 二进制 blob 的字节数据（base64 编码），用于图片预览等场景。
