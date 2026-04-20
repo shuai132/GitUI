@@ -487,7 +487,7 @@ pub async fn set_active_repo_for_fetch(
 pub fn get_build_info() -> BuildInfo {
     BuildInfo {
         version: env!("CARGO_PKG_VERSION").to_string(),
-        git_hash: option_env!("GIT_HASH").map(str::to_string),
+        git_hash: option_env!("GIT_HASH").filter(|s| !s.is_empty()).map(str::to_string),
     }
 }
 

@@ -10,7 +10,7 @@ const gitHash = ref<string | null>(null)
 
 const versionLabel = computed(() => {
   if (!appVersion.value) return ''
-  return gitHash.value ? `v${appVersion.value}-${gitHash.value}` : `v${appVersion.value}`
+  return gitHash.value ? `v${appVersion.value} (${gitHash.value})` : `v${appVersion.value}`
 })
 
 onMounted(async () => {
@@ -73,6 +73,13 @@ async function openUrl(url: string) {
 </template>
 
 <style scoped>
+/* 盖过全局 * { user-select: none }：需要连子孙一起覆写 */
+.about-content,
+.about-content * {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
 .about-content {
   display: flex;
   flex-direction: column;

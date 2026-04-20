@@ -1,13 +1,21 @@
 fn main() {
     if std::env::var("GIT_HASH").is_err() {
-        if let Ok(output) = std::process::Command::new("git")
-            .args(["rev-parse", "--short", "HEAD"])
+        let is_release = std::process::Command::new("git")
+            .args(["describe", "--exact-match", "--match", "v*"])
             .output()
-        {
-            if output.status.success() {
-                let hash = String::from_utf8_lossy(&output.stdout).trim().to_string();
-                if !hash.is_empty() {
-                    println!("cargo:rustc-env=GIT_HASH={}", hash);
+            .map(|o| o.status.success())
+            .unwrap_or(false);
+
+        if !is_release {
+            if let Ok(output) = std::process::Command::new("git")
+                .args(["rev-parse", "--short", "HEAD"])
+                .output()
+            {
+                if output.status.success() {
+                    let hash = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                    if !hash.is_empty() {
+                        println!("cargo:rustc-env=GIT_HASH={}", hash);
+                    }
                 }
             }
         }
