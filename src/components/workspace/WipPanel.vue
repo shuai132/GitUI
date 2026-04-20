@@ -257,7 +257,12 @@ async function onFileMenuAction(action: string) {
     } else if (action === 'mark-resolved') {
       // 工作区当前内容直接作为解决方案
       const content = await git.readWorktreeFile(repoStore.activeRepoId!, f.path, true)
-        .then(b => atob(b.bytes_base64))
+        .then(b => {
+          const binary = atob(b.bytes_base64)
+          const bytes = new Uint8Array(binary.length)
+          for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+          return new TextDecoder().decode(bytes)
+        })
         .catch(() => '')
       await mergeRebaseStore.resolveConflict(f.path, content)
     } else if (action === 'toggle') {

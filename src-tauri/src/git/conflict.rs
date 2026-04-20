@@ -10,6 +10,7 @@
 use git2::{IndexConflict, Repository};
 
 use crate::git::{
+    encoding::{decode_with, detect_file_encoding},
     engine::GitEngine,
     error::{GitError, GitResult},
     types::ConflictFile,
@@ -24,15 +25,15 @@ impl GitEngine {
 
         let conflict = find_conflict(&index, file_path)?;
 
-        let base = conflict
+        let base_bytes = conflict
             .ancestor
             .as_ref()
             .and_then(|e| read_blob(&repo, &e.id).ok());
-        let ours = conflict
+        let ours_bytes = conflict
             .our
             .as_ref()
             .and_then(|e| read_blob(&repo, &e.id).ok());
-        let theirs = conflict
+        let theirs_bytes = conflict
             .their
             .as_ref()
             .and_then(|e| read_blob(&repo, &e.id).ok());
@@ -42,18 +43,34 @@ impl GitEngine {
             .workdir()
             .ok_or_else(|| GitError::OperationFailed("裸仓库不支持冲突文件".to_string()))?;
         let disk = workdir.join(file_path);
-        let merged_preview = std::fs::read(&disk)
-            .ok()
-            .and_then(|b| String::from_utf8(b).ok())
-            .unwrap_or_default();
+        let disk_bytes = std::fs::read(&disk).unwrap_or_default();
 
-        let is_binary = any_binary(&[base.as_deref(), ours.as_deref(), theirs.as_deref()]);
+        let is_binary = any_binary(&[
+            base_bytes.as_deref(),
+            ours_bytes.as_deref(),
+            theirs_bytes.as_deref(),
+            Some(&disk_bytes),
+        ]);
+
+        let mut merged_preview = String::new();
+        let mut base = None;
+        let mut ours = None;
+        let mut theirs = None;
+
+        if !is_binary {
+            // 按文件确定编码：暂时不支持从 conflict 侧取 attr，直接探测磁盘内容
+            let enc = detect_file_encoding(&disk_bytes, None, None);
+            merged_preview = decode_with(enc, &disk_bytes);
+            base = base_bytes.map(|b| decode_with(enc, &b));
+            ours = ours_bytes.map(|b| decode_with(enc, &b));
+            theirs = theirs_bytes.map(|b| decode_with(enc, &b));
+        }
 
         Ok(ConflictFile {
             path: file_path.to_string(),
-            base: base_as_str(base, is_binary),
-            ours: base_as_str(ours, is_binary),
-            theirs: base_as_str(theirs, is_binary),
+            base,
+            ours,
+            theirs,
             merged_preview,
             is_binary,
         })
@@ -177,15 +194,4 @@ fn any_binary(sides: &[Option<&[u8]>]) -> bool {
 fn is_likely_binary(bytes: &[u8]) -> bool {
     let len = bytes.len().min(BINARY_PROBE_BYTES);
     bytes[..len].contains(&0)
-}
-
-/// 二进制场景下不把原始字节塞给前端（会炸 JSON）；返回 None。
-fn base_as_str(bytes: Option<Vec<u8>>, is_binary: bool) -> Option<String> {
-    bytes.and_then(|b| {
-        if is_binary {
-            None
-        } else {
-            Some(String::from_utf8_lossy(&b).into_owned())
-        }
-    })
 }

@@ -650,7 +650,7 @@ impl GitEngine {
                 .ok()
                 .flatten()
                 .map(|s| s.to_string());
-            let enc = detect_file_encoding(&new_bytes, attr_encoding.as_deref());
+            let enc = detect_file_encoding(&new_bytes, attr_encoding.as_deref(), None);
 
             let mut diff_opts = git2::DiffOptions::new();
             diff_opts.context_lines(3).interhunk_lines(0);
@@ -886,7 +886,35 @@ impl GitEngine {
                 }
             }
 
-            let enc = detect_file_encoding(&sample, attr_encoding.as_deref());
+            let mut file_bom_enc: Option<&'static encoding_rs::Encoding> = None;
+            for oid_str in [&pending.new_blob_oid, &pending.old_blob_oid] {
+                if let Some(oid_str) = oid_str {
+                    if let Ok(oid) = git2::Oid::from_str(oid_str) {
+                        if let Ok(blob) = repo.find_blob(oid) {
+                            if let Some((enc, _)) = encoding_rs::Encoding::for_bom(blob.content()) {
+                                file_bom_enc = Some(enc);
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+
+            if file_bom_enc.is_none() && pending.new_blob_oid.is_none() {
+                if let (Some(workdir), Some(path)) = (repo.workdir(), pending.new_path.as_deref()) {
+                    let full_path = workdir.join(path);
+                    if let Ok(mut f) = std::fs::File::open(full_path) {
+                        use std::io::Read;
+                        let mut buf = [0u8; 3];
+                        let read_len = f.read(&mut buf).unwrap_or(0);
+                        if let Some((enc, _)) = encoding_rs::Encoding::for_bom(&buf[..read_len]) {
+                            file_bom_enc = Some(enc);
+                        }
+                    }
+                }
+            }
+
+            let enc = detect_file_encoding(&sample, attr_encoding.as_deref(), file_bom_enc);
 
             let hunks: Vec<DiffHunk> = pending
                 .hunks
@@ -2882,13 +2910,26 @@ impl GitEngine {
     pub fn get_file_blame(path: &str, file_path: &str) -> GitResult<FileBlame> {
         let repo = Self::open(path)?;
 
-        // 读工作区文件内容作为 lines
+        // 读工作区文件内容作为 lines (使用二进制读取 + 编码自适应)
         let workdir = repo
             .workdir()
             .ok_or_else(|| GitError::OperationFailed("bare repo not supported".to_string()))?;
         let full_path = workdir.join(file_path);
-        let content = std::fs::read_to_string(&full_path)
+        let bytes = std::fs::read(&full_path)
             .map_err(|e| GitError::OperationFailed(format!("读取文件失败：{}", e)))?;
+        
+        let attr_encoding: Option<String> = repo
+            .get_attr(
+                Path::new(file_path),
+                "working-tree-encoding",
+                git2::AttrCheckFlags::default(),
+            )
+            .ok()
+            .flatten()
+            .map(|s| s.to_string());
+
+        let enc = detect_file_encoding(&bytes, attr_encoding.as_deref(), None);
+        let content = decode_with(enc, &bytes);
         let lines: Vec<String> = content.lines().map(String::from).collect();
 
         // 计算 blame

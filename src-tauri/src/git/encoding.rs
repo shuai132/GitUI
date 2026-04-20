@@ -21,69 +21,85 @@ fn lookup_encoding(name: &str) -> Option<&'static Encoding> {
     Encoding::for_label(name.as_bytes())
 }
 
-fn try_utf8(bytes: &[u8]) -> Option<String> {
-    std::str::from_utf8(bytes).ok().map(|s| s.to_string())
+/// 手动剥离 BOM 并返回对应的编码提示。
+/// 返回：(剥离后的字节切片, BOM 识别出的编码)
+fn strip_bom(bytes: &[u8]) -> (&[u8], Option<&'static Encoding>) {
+    if let Some((enc, bom_len)) = Encoding::for_bom(bytes) {
+        return (&bytes[bom_len..], Some(enc));
+    }
+    (bytes, None)
 }
 
 /// 用指定 encoding 解码字节流；非法序列会自动用替换字符代替（不会 panic）。
+/// 注意：此函数会手动剥离 BOM，并强制使用指定编码解码剩余内容，不允许自动切换编码。
 pub fn decode_with(encoding: &'static Encoding, bytes: &[u8]) -> String {
-    let (cow, _, _) = encoding.decode(bytes);
+    let (clean_bytes, _bom_enc) = strip_bom(bytes);
+    // 使用 decode_without_bom_handling 确保不因为内容里的误导性 BOM 自动跳转编码
+    let (cow, _) = encoding.decode_without_bom_handling(clean_bytes);
     cow.into_owned()
 }
 
 fn detect_and_decode(bytes: &[u8]) -> String {
+    let (clean_bytes, bom_enc) = strip_bom(bytes);
+    if let Some(enc) = bom_enc {
+        return decode_with(enc, bytes);
+    }
     let mut det = EncodingDetector::new();
-    det.feed(bytes, true);
-    // allow_utf8=false：调用方已经确认 UTF-8 试解失败（或显式声明非 UTF-8），
-    // 这里禁止 chardetng 再返回 UTF-8 以避免 0xFFFD 替换字符
+    det.feed(clean_bytes, true);
     let encoding = det.guess(None, false);
     decode_with(encoding, bytes)
 }
 
 /// commit message / summary / author 名 / email 的解码入口。
-///
-/// `hint` 取自 `Commit::message_encoding()`：
-/// - `None` 表示 commit 头未声明 encoding（按 git 规范视作 UTF-8）
-/// - `Some("utf-8")` 等显式声明会被严格遵循；若声明 UTF-8 但实际不合法则回退到检测
 pub fn decode_commit_text(bytes: &[u8], hint: Option<&str>) -> String {
     if bytes.is_empty() {
         return String::new();
     }
     if let Some(name) = hint {
         if let Some(enc) = lookup_encoding(name) {
-            if enc == UTF_8 {
-                if let Some(s) = try_utf8(bytes) {
-                    return s;
-                }
-                return detect_and_decode(bytes);
-            }
+            // 如果显式声明了 UTF-8，我们依然先看是否有 BOM
             return decode_with(enc, bytes);
         }
-        // 未识别的 hint 名称（生僻别名）→ 走通用 fallback
     }
-    if let Some(s) = try_utf8(bytes) {
-        return s;
+    
+    let (clean_bytes, bom_enc) = strip_bom(bytes);
+    if let Some(enc) = bom_enc {
+        return decode_with(enc, bytes);
+    }
+    
+    if std::str::from_utf8(clean_bytes).is_ok() {
+        return decode_with(UTF_8, bytes);
     }
     detect_and_decode(bytes)
 }
 
-/// 选定一段连续字节流的最佳解码 Encoding（不立即解码，便于多段共用同一编码）。
-///
-/// 用于 diff 解码：把同一个文件的所有行 content 拼起来跑一次检测，再用结果分别
-/// decode 各 line / hunk header。拼接后的字节量比单行准确得多。
-///
-/// `attr_encoding` 来自 `.gitattributes` 的 `working-tree-encoding`，`None` 表示未设置。
-pub fn detect_file_encoding(bytes: &[u8], attr_encoding: Option<&str>) -> &'static Encoding {
+/// 选定一段连续字节流的最佳解码 Encoding。
+pub fn detect_file_encoding(
+    bytes: &[u8],
+    attr_encoding: Option<&str>,
+    file_bom_enc: Option<&'static Encoding>,
+) -> &'static Encoding {
+    if let Some(enc) = file_bom_enc {
+        return enc;
+    }
+
+    let (clean_bytes, bom_enc) = strip_bom(bytes);
+    if let Some(enc) = bom_enc {
+        return enc;
+    }
+
     if let Some(name) = attr_encoding {
         if let Some(enc) = lookup_encoding(name) {
             return enc;
         }
     }
-    if std::str::from_utf8(bytes).is_ok() {
+    
+    if std::str::from_utf8(clean_bytes).is_ok() {
         return UTF_8;
     }
+    
     let mut det = EncodingDetector::new();
-    det.feed(bytes, true);
+    det.feed(clean_bytes, true);
     det.guess(None, false)
 }
 
@@ -132,15 +148,45 @@ mod tests {
     #[test]
     fn detect_file_encoding_picks_utf8_for_ascii() {
         let bytes = b"hello world\n";
-        let enc = detect_file_encoding(bytes, None);
+        let enc = detect_file_encoding(bytes, None, None);
         assert_eq!(enc, UTF_8);
     }
 
     #[test]
     fn detect_file_encoding_respects_attribute() {
         let bytes = b"hello"; // ASCII，UTF-8 也可以读，但 attr 优先
-        let enc = detect_file_encoding(bytes, Some("Shift_JIS"));
+        let enc = detect_file_encoding(bytes, Some("Shift_JIS"), None);
         assert_eq!(enc.name(), "Shift_JIS");
+    }
+
+    #[test]
+    fn utf8_with_bom() {
+        let original = "BOM test 中文";
+        let mut bytes = vec![0xef, 0xbb, 0xbf];
+        bytes.extend_from_slice(original.as_bytes());
+        
+        // decode_commit_text should strip BOM
+        assert_eq!(decode_commit_text(&bytes, None), original);
+        
+        // detect_file_encoding should return UTF_8
+        let enc = detect_file_encoding(&bytes, None, None);
+        assert_eq!(enc, UTF_8);
+    }
+
+    #[test]
+    fn utf16_with_bom() {
+        let original = "ABC 中文";
+        // Manual UTF-16LE bytes for "ABC 中文"
+        // A: 41 00, B: 42 00, C: 43 00, space: 20 00
+        // 中: 2D 4E, 文: 87 65  (U+4E2D, U+6587)
+        let mut bytes = vec![0xff, 0xfe]; // LE BOM
+        bytes.extend_from_slice(&[0x41, 0x00, 0x42, 0x00, 0x43, 0x00, 0x20, 0x00, 0x2D, 0x4E, 0x87, 0x65]);
+        
+        // detect_file_encoding should return UTF_16LE
+        let enc = detect_file_encoding(&bytes, None, None);
+        assert_eq!(enc, encoding_rs::UTF_16LE);
+        
+        assert_eq!(decode_with(enc, &bytes), original);
     }
 
     #[test]

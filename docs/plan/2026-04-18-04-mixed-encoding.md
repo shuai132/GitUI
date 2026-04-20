@@ -54,10 +54,11 @@ GitUI 现状：
 4. `from_utf8_lossy` 兜底
 
 **优先级链（diff 文件内容，按 `DiffDelta` 边界）**：
-1. `.gitattributes` 的 `working-tree-encoding`（用 `Repository::get_attr` 读，libgit2 不自动转码但能读到这个属性）
-2. UTF-8 试解
-3. `chardetng` 在该文件**全部行字节拼接后**做检测（不是按 line 检测）
-4. `from_utf8_lossy` 兜底
+1. **文件 BOM 标记**：通过 `old_blob_oid` / `new_blob_oid` 或工作区文件读取前三个字节探测 BOM（拥有最高优先级，无视 `.gitattributes`，防止纯 UTF-8 with BOM 文件被误导性配置按 GBK 解码导致乱码）
+2. `.gitattributes` 的 `working-tree-encoding`（用 `Repository::get_attr` 读，libgit2 不自动转码但能读到这个属性）
+3. UTF-8 试解
+4. `chardetng` 在该文件**全部行字节拼接后**做检测（不是按 line 检测）
+5. `from_utf8_lossy` 兜底
 
 **为什么不暴露 UI 切换器**：跟用户讨论过，全自动方案在 99% 情况下能正常，且符合「轻量易用」目标；保留之后按需扩展的余地。
 
@@ -88,3 +89,11 @@ GitUI 现状：
    - 选中 commit → 右侧 diff：main.c 内容显示 `GBK 源码内容`
 4. **纯 UTF-8 大仓库回归**：在已有 vue 仓库（数千 commit）上对比改造前后 `loadLog` 时长，要求 < 5% 退化
 5. **`.gitattributes` 路径**：在测试仓库加 `.gitattributes` 设 `*.txt working-tree-encoding=GBK`，验证 attr 路径生效
+
+## 2026-04-21 更新：UTF-8 with BOM 文件 Diff 乱码修复
+
+- **现象**：存量项目（如 C++）中常含 UTF-8 with BOM 文件，且 `.gitattributes` 可能统一错误配置为 `working-tree-encoding=GBK`。在局部 Diff 时，生成的 sample 因为不包含首行 BOM，导致探测退回至 GBK 解码，造成纯 UTF-8 with BOM 文本产生严重中文乱码（如 `涓荤獥鍙`）。
+- **修复**：
+  1. 修复了 Tuple 析构导致的编译错误。
+  2. 引入前置探针：跳过不可靠的 hunk sample，通过 `old_blob_oid` / `new_blob_oid` 直接读取 Git 内部 blob 或工作区未追踪文件的前三个字节。
+  3. 将识别到的 BOM 标记置于最高优先级链（无视 `.gitattributes` 覆盖），成功将其与文件 diff 检测脱钩，实现跨行跨变更的安全识别。
