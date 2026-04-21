@@ -1,135 +1,42 @@
 # 10. Stash / Reflog / GC
 
-三个围绕"临时状态管理 + 仓库维护"的小功能，放在一起。
+本模块涵盖了仓库的临时状态管理、操作追溯及底层维护功能。
 
-## Stash
+## 贮藏 (Stash)
 
-### 涉及模块
+Stash 允许用户在不创建正式提交的情况下暂存当前工作区的改动，以便于快速切换上下文。
 
-- 后端：`commands/stash.rs`、`GitEngine::stash_push / stash_pop / stash_apply / stash_drop / stash_list`
-- 前端：
-  - `stores/stash.ts`
-  - `components/layout/AppToolbar.vue`（Stash / Pop 按钮）
-  - `components/layout/AppSidebar.vue`（STASH section）
-- 可选显示在历史图里：`uiStore.showStashCommits`
+### 核心功能
+- **创建与应用**：支持将未提交的改动（包括未追踪文件）推入贮藏栈。支持应用（Apply）、弹出（Pop）及删除（Drop）特定贮藏条目。
+- **历史集成**：贮藏条目可以作为特殊的提交点出现在历史图中，允许用户像查看普通提交一样预览其差异内容。
+- **关联操作**：支持直接从侧边栏或历史图触发贮藏管理动作。
 
-### 后端
+### 结构优化策略
+尽管 Git 内部将 Stash 存储为具有多个父节点的复杂结构，后端在提供数据时会进行逻辑修剪，将其简化为单父节点形式。这种简化使得 Stash 能以直观的方式挂载在历史基准点上，避免了冗余分支线对拓扑结构的干扰。
 
-`GitEngine::stash_push / stash_pop / stash_apply / stash_drop / stash_list`（见 `git/engine.rs`）。数据结构 `StashEntry` 见 `git/types.rs`。行为要点：
+## 引用日志 (Reflog)
 
-- `stash_push` 使用 `StashFlags::INCLUDE_UNTRACKED`，新文件会一起被 stash
-- `stash_pop / stash_apply / stash_drop` 接收 `index` 参数（UI 侧按 `StashEntry.index` 传入）：
-  - `pop` = apply + drop，工具栏 "Pop" 按钮传 0（最新一条）
-  - `apply` 只应用不移除；`drop` 只移除不应用
-  - drop 之后其他 stash 的 index 会顺位前移，前端 `stashStore` 在操作后统一 `refresh()` 重新拉取
-- `stash_list` 通过 `stash_foreach` 只读遍历，不触发写操作
-- 没有 branch（`git stash branch`）等操作
+Reflog 记录了本地 HEAD 引用的所有变更历史，是找回“丢失”提交的关键工具。
 
-### UI
+### 使用场景
+- **操作追溯**：展示最近的 Commit、Reset、Checkout、Merge 等操作的详细记录与触发时间。
+- **丢失引用回收**：结合历史视图，用户可以查看并重新激活那些不再被任何分支引用的“孤儿提交”。
+- **定向清理**：支持从 Reflog 中移除特定的操作条目，从而使相关的不达提交从视图中消失。
 
-**工具栏**：
+### 剥链算法 (Pruning)
+为了确保删除操作在视觉上即时生效，系统采用“剥链”语义：当用户选择移除一个不再可达的提交时，系统会同步清理 Reflog 中所有以该提交为祖先的后续条目，确保其彻底从“丢失引用”视图中移除。
 
-- `Stash` 按钮：仓库存在即可用。message 优先取 WipPanel 提交信息输入框里当前的内容（`workspaceStore.commitDraft`），用作 stash 描述；输入框为空则回退到 libgit2 默认的 "WIP on \<branch\>: ..."。stash 成功后清空草稿（变更和 message 都已转移到 stash 里）
-- `Pop` 按钮：有至少一条 stash 才启用
+## 仓库清理 (GC)
 
-**侧边栏 STASH section**：
+`git gc` 负责清理仓库中的冗余对象并优化存储结构。
 
-- 总数显示在 section title 上
-- 每条显示 `{index}` + message
-- 点击 stash 行 → `historyStore.selectCommit(stash.commit_oid)` 把该 stash commit 当普通 commit 展开到详情面板
-- 右键菜单（侧边栏 STASH 行 / 历史图里 `is_stash === true` 的提交共用同一组语义）：
-  - `Apply Stash` —— 应用但保留条目
-  - `Pop Stash` —— 应用并移除
-  - `Delete Stash` —— 仅移除（带二次确认；不使用 danger 红色样式，和其他 stash 项保持同等视觉权重）
+### 实现策略
+- **工具链联动**：鉴于垃圾回收操作的复杂性，系统通过调用宿主环境的 Git 工具链来执行这一维护任务。
+- **触发机制**：提供手动触发入口，后端执行过程中会通过 UI 反馈进度状态。
+- **注意事项**：执行清理操作可能会根据 Git 配置的过期策略移除较旧的 Reflog 条目与不达对象，从而影响“丢失引用”视图的可见范围。
 
-### 历史图里的 stash
+## 关键技术决策
 
-`uiStore.showStashCommits`（默认 **开**）控制是否把 stash 推入 `get_log` 的 revwalk。当开启时：
-
-- stash 的根 commit 会出现在提交图里
-- 标记为 `is_stash = true`，message 用斜体 + 次要色
-- 选中后显示详情和 diff，支持查看 stash 的内容
-
-**DAG 里把 stash 当普通 commit 处理**。git 内部的 stash 对象是一个特殊的 3-parent commit：
-
-- `parent[0]` = HEAD（stash 创建时的基准提交）
-- `parent[1]` = `index on <branch>: ...` 的快照 commit（暂存区内容）
-- `parent[2]` = `untracked files on <branch>` 的快照 commit（仅当 `INCLUDE_UNTRACKED` 时存在）
-
-如果把这三个 parent 原样交给前端 lane 算法，`index on...` 和 `untracked files on...` 会作为两行独立的孤儿 commit 出现在图里，从 stash 斜拉出两条 lane，视觉上和真正的 merge 分叉混在一起。对用户而言这是 git 存储细节的泄漏。
-
-因此 `get_log` 在构造 `CommitInfo` 时对 stash 做两步裁剪：
-
-1. 收集所有 stash 的 `parent[1]` / `parent[2]` 进一个 `stash_aux_set`，主 revwalk 遍历时跳过 `stash_aux_set` 里的 oid（不作为独立行输出）
-2. 对 `is_stash == true` 的 commit，`parent_oids` 只保留 `parent[0]`，即 HEAD
-
-这样 stash 在 DAG 里就是一个挂在 HEAD 上的 1-parent 普通 commit，lane 算法一视同仁。**唯一的区别是渲染图标**：`CommitGraphRow.vue` 在 `isStash` 时把圆点画成"空心 + 分支色描边"，和实心的普通 commit 区分开（见 [05-commit-graph.md](./05-commit-graph.md)）。
-
-## Reflog
-
-### 涉及模块
-
-- 后端：`commands/system.rs::get_reflog`、`GitEngine::get_reflog`
-- 前端：
-  - `components/common/ReflogDialog.vue`
-  - `components/layout/AppToolbar.vue` 的 Actions 菜单 → "显示 Reflog..."
-- 数据结构：`ReflogEntry`（见 `git/types.rs`）
-
-### 后端
-
-`GitEngine::get_reflog(path, limit)` 读取 `HEAD` 的 reflog 并转成 `Vec<ReflogEntry>`（最新在前）。调用点 `commands/system.rs::get_reflog` 固定 `limit = 500`，由前端 `ReflogDialog.vue` 触发。
-
-### 作用
-
-- 展示 HEAD 最近的操作记录：commit、reset、checkout、merge、pull 等
-- 每条带动作描述（"commit: fix bug" / "reset: moving to HEAD~1"）和 committer + 时间
-- 点击条目可以复制 oid 或跳转到该提交（具体交互参考 `ReflogDialog.vue`）
-
-### 与 "显示丢失引用" 的关系
-
-`uiStore.showUnreachableCommits` 开启时，`get_log` 会额外把 HEAD reflog 里那些既不在任何 ref 也不在 stash 集合里的 oid 推进 revwalk 展示。Reflog 对话框是纯查看工具，不改变历史图；丢失引用开关则是把 reflog 里的"孤儿 commit"画到图上。两者互补。
-
-### 从 reflog 中移除单个丢失引用
-
-历史图在 `is_unreachable === true` 的提交上提供"从 reflog 中移除"菜单项，对应命令 `drop_unreachable_commit`（见 `GitEngine::drop_unreachable_commit`），语义是**剥链**：
-
-- 遍历 HEAD reflog 的每条 entry；设其 `new_oid == x`
-- 若 `x == target` 或 target 是 x 的祖先（从 x 出发 revwalk 能遇到 target），该 entry 命中
-- 所有命中 entry 一并删除，再 `reflog.write()` 落盘
-- 返回实际删除数；幂等（重复执行返回 0，不报错）
-- 对象本身仍停留在 `.git/objects/`，由后续 `git gc` 按默认过期策略自然回收
-
-#### 为什么是剥链而不是单条
-
-GitUI 的"丢失引用"视图是"HEAD reflog 闭包"——`get_log` 把 reflog 里的每个 oid 都 push 成 revwalk 起点，显示的是这些起点的**祖先闭包**。因此只删目标自己的 reflog entry 常常看不到视觉变化：它仍能从"以目标为祖先"的更年轻 reflog 起点递归可达。
-
-剥链算法把这些后代入口一并移除，确保目标从视图上真正消失。代价是：点击中间 / 尾端的 commit 时，它的所有 unreachable 后代的 reflog 入口也会被一起清掉。二次确认对话框通过 `preview_drop_unreachable_commit`（dry-run）事前告知具体数量（"将从 HEAD reflog 中移除 N 条引用"），用户据此决定是否继续。
-
-#### `is_reflog_tip` 字段
-
-`CommitInfo.is_reflog_tip` 在 `get_log` 里计算：一个 unreachable commit 是 tip 当且仅当 **oid 在 HEAD reflog 里出现过**（即本身就是 revwalk 起点之一）**且不是任何其他 reflog oid 的严格祖先**。实现上在 `include_unreachable` 分支里对每个 `reflog_oid` 单独跑一次辅助 revwalk、跳过自身后的遍历结果并入 `strict_ancestors` 集合，然后 `is_reflog_tip = reflog_oids.contains(oid) && !strict_ancestors.contains(oid)`。
-
-该字段**当前前端不消费**——视觉上所有 unreachable 共享一档 dim，右键菜单对任何 unreachable 都启用，点击后由 `preview_drop_unreachable_commit` 精确告知影响数。早期版本曾用它做视觉分级（tip 深、ancestor 浅）和菜单禁用，经用户反馈过于费解已全部撤回。字段保留是为了未来可能的微 UI 提示（hover 角标等）。
-
-#### 和整仓 `run_gc` 的分工
-
-- **`drop_unreachable_commit`**：定向剥链，只处理目标及其后代的 reflog 入口；立即生效、零等待
-- **`run_gc`**：仓库维护操作，批量回收物理空间；会连带清掉所有符合 gc 策略的 unreachable 对象
-
-## git gc
-
-### 入口
-
-Actions 菜单 → "清理仓库 (git gc)"，按钮变成 `清理中...`。成功/失败通过工具栏 toast 提示。
-
-### 实现
-
-GitUI 不用 git2 做 gc（libgit2 的 gc 支持有限），而是直接 **fork 系统的 git CLI**：`GitEngine::run_gc` 用 `std::process::Command` 调 `git -C <path> gc --quiet`，按退出码返回成功消息或错误。这是整个后端唯一一个 fork 外部 git 的地方。原因：
-
-- 真实 gc 需要跑 pack / prune / repack，libgit2 不是为此优化
-- gc 属于"偶尔手动触发"的维护操作，依赖系统 git 是合理代价
-- 输出直接返回给前端当成功消息展示
-
-### 副作用注意
-
-`git gc` 可能会清理 unreachable objects（包括 stash 和 reflog 的一部分）。若用户开了"显示丢失引用"正在依赖这些 commit，gc 后它们会从 reflog 里消失。**目前没有专门的警告**——仅依赖 git gc 的默认行为（默认保留 30 天 reflog）。
+1. **Stash 消息关联**：Stash 的默认描述会优先关联当前工作区的提交草稿，提升操作效率。
+2. **Reflog 深度管理**：系统仅读取最近一定数量的引用日志，以平衡大仓库下的加载性能。
+3. **维护操作的隔离性**：将 GC 等重量级维护操作与日常 Git 逻辑分离，确保主业务流程的响应速度。

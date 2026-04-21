@@ -1,130 +1,47 @@
 # 03. 工作区与提交
 
-工作区视图显示未提交的改动并完成提交。**不占独立路由**，而是融合在 `/history` 视图里：虚拟列表顶部放一条 **WIP 行**，点击切换右侧面板到 `WipPanel`。这样改代码、查看 diff、提交、继续看历史都在同一个屏幕里。
+工作区模块负责管理未提交的改动、暂存操作以及最终的提交执行。为了保持操作连贯性，该模块与历史视图深度整合。
 
-## 涉及模块
+## 核心职责
 
-- 后端：`commands/status.rs`、`commands/commit.rs`、`commands/system.rs`（discard）、`git/engine.rs`
-- 前端：
-  - `stores/workspace.ts`、`stores/diff.ts`
-  - `views/HistoryView.vue`（承载 WIP 行）
-  - `components/history/WipRow.vue`
-  - `components/workspace/WipPanel.vue`、`FileChangeList.vue`
-- 数据类型：`WorkspaceStatus`、`FileEntry`、`FileStatusKind`
+- **状态感知**：实时感知工作区（Working Directory）与暂存区（Index）的变动。
+- **改动管理**：提供灵活的暂存（Stage）、取消暂存（Unstage）以及丢弃改动（Discard）操作。
+- **提交执行**：支持创建新提交、修补 HEAD 提交（Amend）以及提交信息的草稿管理。
 
-## 状态模型
+## 视图整合策略
 
-`GitEngine::get_status(path)` 把 `git2::Repository::statuses` 的结果分成三类：
+工作区视图不占用独立路由，而是作为历史列表顶部的**虚拟项 (WIP 行)** 存在。
+- **入口**：点击 WIP 行会激活详情面板的工作区模式。
+- **联动**：在工作区模式下选中文件，会触发右侧 Diff 查看器的实时加载。
+- **自动显隐**：当工作区完全干净（无任何未暂存或暂存变动）时，WIP 入口自动隐藏。
 
-| 字段 | 含义 |
-|------|------|
-| `staged` | index 中的变更（相对 HEAD） |
-| `unstaged` | 工作区中的变更（相对 index，已 tracked） |
-| `untracked` | 未追踪文件 |
-| `head_branch` | 当前分支名（若 HEAD 指向分支） |
-| `head_commit` | HEAD commit OID（unborn 时为 None） |
-| `head_commit_message` | HEAD commit 的完整 message（供 amend 回填用；unborn 时为 None） |
-| `is_detached` | HEAD detached 标志 |
+## 数据模型
 
-每个 `FileEntry` 带：
+后端提供的状态数据包括以下核心维度（详情见 `src/types/git.ts::WorkspaceStatus`）：
+- **分类清单**：区分已暂存（Staged）、未暂存（Unstaged）及未追踪（Untracked）文件。
+- **文件元数据**：包含路径、状态标识（新增/修改/删除/重命名/冲突）以及基础的行列差异统计。
+- **上下文信息**：当前分支名、是否处于游离（Detached）状态、HEAD 提交信息（用于 Amend 回填）。
 
-```rust
-{
-  path: String,
-  old_path: Option<String>,  // renamed 才有
-  status: FileStatusKind,    // added | modified | deleted | renamed | untracked | conflicted
-  staged: bool,
-  additions: usize,          // 批量 diff 填充的行数统计
-  deletions: usize,
-}
-```
-
-## WIP 行
-
-`WipRow.vue` 在历史列表顶部以"虚拟行"的形式出现：
-
-- 只有当 `staged + unstaged + untracked > 0` 时才显示
-- 显示格式：一个变更徽章（绿/蓝/橙三段）+ `on <branch>`
-- 点击进入 WIP 模式：`selectedWip.value = true`，右侧面板显示 `WipPanel`，隐藏 `CommitInfoPanel`
-- 再次点击折叠详情面板
-- 搜索框有内容时不显示（搜索只针对提交）
-- 工作区变干净时自动取消 WIP 选中 + 隐藏详情
-
-实现位置：`views/HistoryView.vue` 的虚拟行渲染逻辑（`showWipRow` / `selectWipRow` / `selectRow` / `toVirtualIdx` / `toRealIdx`）。
-
-## WipPanel
-
-`components/workspace/WipPanel.vue` 是右侧面板，结构：
-
-```
-┌──────────────────────────────────┐
-│ 🗑️  N 个文件变更 on <branch>      │ ← Header（trash 按钮触发丢弃全部）
-├──────────────────────────────────┤
-│ 未暂存 [全部暂存 | 暂存N个/丢弃N个] │  ┐
-│   ✏️  src/foo.ts                  │  │ flex 上半（百分比可拖拽调整）
-│   ➕  new-file.md                 │  │ unstaged + untracked 合并展示
-│────────── 拖拽分割线 ────────────│  ┘
-│ 已暂存 [全部取消暂存 | 取消暂存N个] │  ┐ flex 下半
-│   ➕  bar.rs                      │  ┘
-├──────────────────────────────────┤
-│ ┌──────────────────────────────┐ │
-│ │  提交信息（单行初始，自动增长）│ │
-│ └──────────────────────────────┘ │
-│ ☐ Amend    [ 提交 N 个变更 ]     │
-└──────────────────────────────────┘
-```
-
-`[全部暂存 | 暂存N个/丢弃N个]` 表示：无多选时显示"全部暂存"；有 ≥ 2 个文件被多选时替换为"暂存 N 个"和"丢弃 N 个"两个按钮。
+## 交互设计要点
 
 ### 文件操作
-
-- **单击**文件行 → `diffStore.loadFileDiff(path, staged)` → 左侧（或上方）diff 区展示，同时清空多选
-- **Ctrl/Cmd + 单击**文件行 → 切换该文件加入 / 移出多选集合，不切换 diff
-- **Shift + 单击**文件行 → 从上次点击位置到当前行区间全选
-- 多选状态下 section header 的"全部暂存/取消暂存"按钮替换为"暂存 N 个 / 丢弃 N 个 / 取消暂存 N 个"批量按钮
-- 复选框切换（行尾小按钮）→ `stageFile` / `unstageFile`
-- 右键菜单（单选）：复制文件名 / 相对路径 / 绝对路径；在 Finder 中显示；在编辑器中打开；在此打开终端；添加到 `.gitignore`（仅 untracked）；暂存 / 取消暂存；丢弃此文件的变更（仅未暂存）
-- 右键菜单（多选，右键落在已多选文件上）：暂存选中 N 个 / 丢弃选中 N 个 / 取消暂存选中 N 个（按来源区决定显示哪组）
+- **选择与多选**：支持单选查看 Diff，以及通过组合键或拖拽范围进行多选批量操作。
+- **快捷动作**：行内提供快速暂存/撤销按钮；右键菜单提供路径复制、文件系统跳转、编辑器关联及忽略（`.gitignore`）管理。
+- **批量管理**：支持一键暂存所有、取消所有以及丢弃所有改动的全局操作。
 
 ### 提交表单
+- **弹性输入**：支持自动增长的提交信息输入框，并提供草稿自动保存功能。
+- **Amend 机制**：勾选 Amend 时，表单会自动回填上一条提交的信息，并允许在不产生新暂存变动的情况下仅修改提交信息。
+- **提交准则**：根据暂存区是否为空、HEAD 是否存在等状态，动态控制提交按钮的可用性。
 
-- **单行 textarea（自动增长）**：初始 1 行，输入内容后自动扩展高度（最大 120px），Enter 换行、Cmd/Ctrl + Enter 提交。绑定到 `workspaceStore.commitDraft`（按仓库切换自动重置），便于工具栏 Stash 复用为 stash message（见 [10-stash-reflog.md](./10-stash-reflog.md)）
-- **Amend 勾选 + 提交按钮**：放在输入框下方同一行，Amend 在左、提交按钮在右
-  - `isUnborn`（HEAD 不存在）时禁用
-  - 勾上后即使没有暂存变更也可提交，只改 message
-  - 勾选时若输入框为空，自动回填 `head_commit_message`；取消勾选时若内容仍等于该 message 则清空（允许连续勾/取消而不丢用户编辑）
-- `canCommit` 逻辑：普通提交要求 staged 非空；amend 要求 HEAD 存在
-- 提交成功后清空表单 + `historyStore.loadLog()` + `loadBranches()`
-- 未暂存/已暂存两个文件列表区之间有一条可拖拽分割线，调整上下比例；百分比持久化到 localStorage（key: `wip-split-pct`）
+## 后端集成
 
-### 丢弃全部
+- **状态获取**：调用 Git 引擎，结合文件监听系统实现状态的按需刷新。
+- **暂存逻辑**：通过索引操作实现文件级的精细化管理。
+- **提交构建**：负责生成包含作者/提交者签名、Tree 对象及 Parent 链接的提交实体。
+- **丢弃操作**：通过强制检出机制实现改动的彻底移除（受限于安全逻辑，不移除已忽略文件）。
 
-Trash 按钮弹 Modal，列出会影响的三类文件数量。确认后调 `discard_all_changes`，内部用 `CheckoutBuilder::force().remove_untracked(true)` 强制检出 HEAD，同时删除未追踪文件。**不会删 `.gitignore` 里的 ignored 文件**（git2 默认行为）。
+## 性能与刷新机制
 
-外部调用方（如顶部"更多 → 丢弃所有变更"）通过 `uiStore.requestDiscardAll()` 设置一个粘性标志，`WipPanel` 通过 `watch(() => uiStore.shouldOpenDiscardAll)` 响应并弹框。
-
-## 后端命令
-
-| 命令 | 用途 | 备注 |
-|------|------|------|
-| `get_status` | 取 `WorkspaceStatus` | `include_untracked + recurse_untracked_dirs + update_index` |
-| `stage_file` / `unstage_file` | 单文件暂存/撤销 | unstage 通过 `reset_default` 实现，unborn HEAD 时直接 `index.remove_path` |
-| `stage_all` / `unstage_all` | 全部暂存/撤销 | `index.add_all(["*"])` / `reset Mixed` |
-| `create_commit` | 新建提交 | 使用当前 `repo.signature()`，parent 为 HEAD（unborn 时为空） |
-| `amend_commit` | 修补 HEAD | 用 `Commit::amend()`，新 tree 来自 index |
-| `amend_commit_message` | 仅改 HEAD message | `Commit::amend()` 但 tree 不变，不引入暂存变更 |
-| `discard_all_changes` | 丢弃全部 | `CheckoutBuilder::force().remove_untracked(true)` |
-| `discard_file` | 丢弃单文件 | 同上 + `.path(file_path)` |
-| `get_file_diff(path, staged)` | 单文件 diff | `staged=true` 时 tree→index，否则 index→workdir（含 untracked 内容） |
-
-## Diff 加载
-
-`WipPanel` 通过 `diffStore.loadFileDiff(path, staged)` 加载当前选中文件的 diff。`HistoryView` 的 `currentDiff` computed 根据 `selectedWip` 决定用 `diffStore.currentDiff`（WIP 时）还是 `historyStore.selectedCommit.diffs[idx]`（查看提交时）。
-
-选择/切换 WIP → 真实 commit 时，`watch(selectedWip)` 会 `diffStore.clear()` 避免残留。
-
-### Diff 的文件监听自动刷新
-
-`diffStore` 记住当前加载的 `currentPath` 和 `currentStaged`（unstaged/staged 哪一侧），并暴露一个 `refresh()`：若 `currentPath` 非空则用保存的 `staged` 重新调 `loadFileDiff` 一次。`App.vue` 的 `onStatusChanged` 监听器在收到 `repo://status-changed` 时，除了刷新 `workspaceStore + submodulesStore` 外还会调 `diffStore.refresh()`，这样用户在外部编辑器修改文件内容、或通过 CLI 暂存/取消暂存文件时，WIP 模式下右侧 diff 面板会跟着工作区实际状态自动刷新，避免 stale diff。
-
-非 WIP 模式（查看某条 commit 的 diff）不受影响——那是 `historyStore.selectedCommit.diffs[idx]`，是提交内部 immutable 的数据。切换出 WIP 时 `diffStore.clear()` 会把 `currentPath` 清掉，`refresh()` 就变成 no-op。
+- **自动刷新**：通过订阅后端的文件变动事件，工作区状态与当前 Diff 视图会自动保持最新，无需用户手动刷新。
+- **缓存快照**：在多仓库切换过程中，各仓库的工作区状态会被临时快照，以实现秒级的切换回访。

@@ -1,140 +1,41 @@
-# 09. Submodule
+# 09. 子模块管理 (Submodule)
 
-GitUI 对 submodule 的目标是"让父仓库 + 子仓库像两个独立仓库那样操作"。侧边栏显示当前仓库的所有 submodule，可以 init / update / 改 URL / 完整 deinit，也可以直接把一个已克隆的 submodule 当作新仓库打开。
+GitUI 对子模块的管理目标是实现父仓库与子仓库的无缝联动，使其在操作体验上接近于两个独立的对等仓库。
 
-## 涉及模块
+## 核心职责
 
-- 后端：`commands/submodule.rs`、`GitEngine` 的 submodule 系列方法
-- 前端：
-  - `stores/submodules.ts`
-  - `components/layout/AppSidebar.vue` 的 SUBMODULES section
-  - `components/submodule/EditSubmoduleDialog.vue`
-- 数据类型：`SubmoduleInfo`、`SubmoduleState`
+- **状态监测**：实时识别子模块的初始化状态、克隆进度及本地修改情况。
+- **生命周期维护**：提供子模块的初始化（Init）、更新（Update）、URL 变更及彻底移除（Deinit）功能。
+- **关联导航**：支持将已克隆的子模块作为独立的仓库实例在系统中激活并管理。
 
-## 状态分类
+## 状态分类与逻辑
 
-```rust
-pub enum SubmoduleState {
-    Uninitialized,  // .gitmodules 有但 .git/config 没注册
-    NotCloned,      // init 了但工作区没 clone（WD_UNINITIALIZED）
-    UpToDate,       // workdir commit == 父记录 && 工作区干净
-    Modified,       // workdir commit 偏离 && / || 工作区有本地修改
-    NotFound,       // .gitmodules 有但磁盘上完全找不到
-}
-```
+系统对子模块的状态进行多维度评估，包括：
+- **一致性**：当前子模块提交是否与父仓库记录相匹配。
+- **活跃度**：子模块是否已在本地配置文件中注册并完成克隆。
+- **存在性**：子模块路径在磁盘上的真实存在情况。
+- **脏改动感知**：监控子模块内部是否有未暂存或未提交的本地修改，并在 UI 上通过视觉提示进行反馈。
 
-分类逻辑在 `GitEngine::classify_submodule_state`：
+## 关键管理动作
 
-1. 既不在 `wd / config / index / head` → `NotFound`
-2. 不在 `config` → `Uninitialized`
-3. `wd_uninitialized` → `NotCloned`
-4. 任何 wd / index 的 dirty 标志 → `Modified`
-5. 否则 → `UpToDate`
+### 初始化与同步 (Init / Update)
+- **Init**：在本地配置中注册子模块信息。
+- **Update**：负责将子模块同步至父仓库指定的版本。在缺失时，系统会自动执行克隆逻辑并协调身份验证。
 
-`SubmoduleInfo` 同时附带 `has_workdir_modifications`（`wd_wd_modified || wd_index_modified || wd_untracked`）供 UI 显示橙色小点。
+### 深度移除 (Deinit)
+与标准的 Git 命令相比，GitUI 的“删除子模块”动作为用户执行了更彻底的清理：
+- **文件清理**：移除工作区目录及内部存储的 Git 模块元数据。
+- **配置剥离**：从项目及全局配置中彻底移除相关条目。
+- **索引更新**：自动更新父仓库的索引，用户只需执行一次提交即可完成清理闭环。
 
-## 侧边栏 UI
+## 交互设计
 
-```
-SUBMODULES   N
-  📦 path/to/sub        •     ⋮
-  ⚠️ path/to/sub              ⋮   ← uninit/not_cloned/not_found
-```
+- **侧边栏集成**：子模块以列表形式展示在侧边栏，通过图标状态反映其健康程度。
+- **独立管理**：点击已克隆的子模块可将其直接“激活”为系统的主操作仓库，实现父子仓库间的秒级切换。
+- **便捷编辑**：支持直接通过对话框修改子模块的远程 URL 并自动执行同步（Sync）。
 
-- 立方体图标（正常） vs 警告三角（未 init / 未 clone / 找不到）
-- `has_workdir_modifications` 时右侧显示橙色圆点
-- hover 时显示三点 kebab 按钮（避免视觉噪声）
-- kebab 定位在按钮右下方（不跟随鼠标），视觉更稳定
-- 悬停 tooltip 显示 path + URL
+## 技术决策
 
-### 点击行为
-
-```ts
-async function onSubmoduleClick(s) {
-  if (未初始化 / 未 clone / 不存在) return
-  const absPath = await submodulesStore.workdir(s.name)
-  await repoStore.openRepo(absPath)
-}
-```
-
-点击已克隆的 submodule 会通过后端 `submodule_workdir(parent, name)` 拿到绝对路径，然后调 `open_repo` 把它加到仓库列表里，自动变成第二个仓库可独立切换。
-
-### kebab 菜单
-
-| 菜单项 | 条件 | 动作 |
-|--------|------|------|
-| Initialize `<path>` | 未初始化才可用 | `init_submodule` |
-| Update `<path>` | 总可用 | `update_submodule`（含 clone + checkout） |
-| Edit `<path>` | 总可用 | 打开 `EditSubmoduleDialog` |
-| Delete this submodule | 总可用，danger | `deinit_submodule` |
-
-## 后端命令
-
-### `init_submodule(name)`
-
-仅注册到 `.git/config`，不 clone。调 `sub.init(false)`。
-
-### `update_submodule(name)`
-
-克隆缺失的 submodule 并 checkout 到父记录的 commit。走 `SubmoduleUpdateOptions` + 凭据回调（复用 `credential_callback`）。
-
-### `set_submodule_url(name, new_url)`
-
-```rust
-repo.submodule_set_url(name, new_url)?;
-if let Ok(mut sub) = repo.find_submodule(name) {
-    let _ = sub.sync();  // 把 .gitmodules 的 url 同步到 .git/config
-}
-```
-
-对应 `EditSubmoduleDialog.vue` 的 URL 编辑流程。
-
-### `submodule_workdir(name) -> String`
-
-```rust
-let sub = repo.find_submodule(name)?;
-let abs = repo.workdir()?.join(sub.path());
-if !abs.exists() {
-    return Err("Submodule 工作区不存在");
-}
-Ok(abs.to_string_lossy().to_string())
-```
-
-### `deinit_submodule(name)` — 完整清理
-
-普通 `git submodule deinit` 会留下残留（`.git/modules/<name>`、`.gitmodules` 的 section），GitUI 的 deinit 做了一次性完整清理：
-
-1. **删 `.git/modules/<name>/`**：`fs::remove_dir_all`
-2. **删工作区目录**：`fs::remove_dir_all(workdir.join(sub_path))`
-3. **改 `.gitmodules`**：`strip_gitmodules_section` 按 `[submodule "<name>"]` header 剥离那一段
-   - 若剩余内容全是空白 / 注释 → 整个文件删掉
-4. **改 `.git/config`**：遍历所有 `submodule.<name>.*` 条目删除
-5. **更新 index**：`index.remove_path(sub_rel_path)` + 根据 `.gitmodules` 是否还存在决定 `add_path` 还是 `remove_path`
-
-操作完成后 index 是一个待提交状态，用户手动 commit 即可得到一个"删除 submodule"的提交。提示语在前端 confirm 里明确说明了：
-
-```
-这将删除：
-  • 工作区目录 path/
-  • .git/modules/<name>/
-  • .gitmodules 中对应条目
-  • .git/config 中对应条目
-
-操作完成后请手动 commit 这次变更。
-```
-
-### `list_submodules(path)`
-
-遍历 `repo.submodules()`，每条跑 `submodule_status` 和分类函数，返回 `Vec<SubmoduleInfo>`。
-
-## 刷新时机
-
-- 切换仓库（`App.vue` 的 watcher）
-- 文件系统变更事件（`useGitEvents.onStatusChanged`）
-- init / update / setUrl / deinit 后由 store 内部 await `loadSubmodules`
-
-## 关键决策
-
-- **点击 submodule 打开为新仓库，而不是 "跳进子目录"**：两个仓库并存在侧边栏，可以随时切换 / 并排看 diff，符合多仓库定位
-- **deinit 是真删除，不是 git 原生的 "deinit"**：原生 deinit 只清工作区 + `.git/config`，但留下 `.git/modules/<name>` 和 `.gitmodules` 条目。GitUI 一次性清干净，配合 UI 说明让用户知道发生了什么
-- **不递归追踪嵌套 submodule**：只列当前仓库的直接 submodule，嵌套的子子模块需要用户自己打开上一级处理
+1. **扁平化管理**：系统目前专注于当前活跃仓库的直接子模块管理，对于嵌套的深层子模块，建议用户切换到对应的父级仓库进行操作。
+2. **安全优先**：在执行删除等破坏性操作前，系统会提供详尽的影响范围说明，确保用户知悉后续需要执行的提交动作。
+3. **性能平衡**：子模块状态的刷新策略与主仓库工作区保持一致，通过订阅变动事件实现按需加载，避免在大规模项目下的无效资源消耗。

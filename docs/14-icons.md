@@ -1,28 +1,27 @@
-# 应用图标
+# 应用图标规范
 
-## 源图
+本文档描述 GitUI 图标的设计源、适配逻辑及构建流程。
 
-- `src-tauri/icons/source.svg` — 原始设计稿，512×512 无 padding。只保留作为"干净"版本，不直接喂给打包工具。
-- `src-tauri/icons/source-macos.svg` — **打包实际使用的源图**。1024×1024 画布，将 `source.svg` 居中缩放到 ~824×824，四周留约 100px 透明 padding。
+## 资源管理
 
-两份都提交到仓库。改图标时同时更新这两份，保证设计稿和带 padding 版本一致。
+- **通用源图**：存储原始的设计稿，保持无边距的纯净版本。
+- **打包源图**：专门用于打包工具的输入。该版本在画布基础上预留了比例合适的内边距，以适配不同操作系统的显示特性。
 
-## 为什么需要 padding
+## 平台适配逻辑
 
-Apple HIG 要求 macOS app 图标在 1024 画布中把主体收到 ~824×824，四周透明，让 Dock / Launchpad 里的图标和系统其他应用视觉大小一致。满画布图在 `tauri build` 产物里看着偏大一圈，在 `tauri dev`（直接跑裸二进制、通过 NSApplication 设 Dock 图标）下尤其明显——NSImage 从单张 PNG 拿不到 scale factor 提示，Dock 基本按原始像素展示。
+为了在各平台（macOS、Windows、Linux）达到最佳视觉平衡，系统采用以下策略：
 
-所以跨平台图标统一以带 padding 的 `source-macos.svg` 为源。Windows / Linux 下主体略小一圈，属于可接受的折中，比给每个平台单独维护一套图标的成本低。
+1. **内边距规范**：macOS Dock 与 Launchpad 习惯于带内边距的图标以实现视觉统一。我们通过在打包源图中内置透明边距来满足这一 HIG 要求。
+2. **单一源策略**：虽然 Windows/Linux 通常偏好满画布图标，但为了降低维护成本并简化 Tauri 打包流程，我们统一使用带内边距的源图。这在非 macOS 平台上会导致图标主体略小，但在视觉一致性与流程简洁度之间是一个合理的折中。
+3. **开发一致性**：通过将内边距内置于源文件而非通过运行时代码处理，确保在 `dev` 模式与 `build` 模式下图标表现一致。
 
-## 重建整套图标
+## 图标构建流程
 
-```bash
-npx tauri icon src-tauri/icons/source-macos.svg
-```
-
-这个命令会覆盖 `src-tauri/icons/` 下全部 PNG / ICO / ICNS / iOS / Android 资源。如果只想看预览而不覆盖，先用 `rsvg-convert` 导出单张 PNG 检查。
+使用内置的图标生成工具处理打包源图：
+- 该工具会自动将源图转换为各平台所需的 PNG、ICO、ICNS 等格式。
+- 当图标设计更新时，必须同时更新通用源图与打包源图，并重新执行构建命令。
 
 ## 关键取舍
 
-- **只维护一份带 padding 的源图，不分平台**：`tauri icon` 不支持按平台指定不同源图，硬要分平台得手工拼 `.icns` / `.ico`，维护成本高。当前方案牺牲 Windows / Linux 下主体大小，换取流程简单。
-- **不在 `tauri::Builder::setup` 里对 Dock 图标做特殊处理**：dev 模式 Dock 偏大的根因是 NSImage 拿不到 scale factor，运行时代码绕不过去——与其写一段 `#[cfg(debug_assertions)]` 换图，不如把源图本身做对，dev / build 都自然正常。
-- **不迁移到 1024×1024 无 padding 的新设计**：会让 build 产物在 Dock 里继续偏大。padding 是规范，不是设计上的妥协。
+- **流程优先**：优先保证 Tauri 标准工作流的顺畅，不为特定平台引入复杂的运行时逻辑或手动维护特定格式。
+- **规范优先**：将内边距视为图标规范的一部分而非设计妥协，以确保在 macOS 等对图标一致性要求极高的系统上具有原生感。

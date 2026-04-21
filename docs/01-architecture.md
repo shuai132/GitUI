@@ -2,112 +2,61 @@
 
 ## 设计目标
 
-- **轻量级**：极低的资源占用：保证低RAM占用、静默时CPU占用率要接近0
-- **高性能**：Git 操作通过 `git2-rs`（libgit2）in-process 执行
-- **跨平台**：桌面端基于 Tauri v2，macOS / Linux / Windows 一套代码
-- **响应式**：`.git/` 与工作区变动通过文件监控推送，前端自动刷新
+- **轻量级**：极低的资源占用，保证空闲时极低的 CPU 和内存消耗。
+- **高性能**：Git 操作通过 `libgit2` (via `git2-rs`) 在进程内高效执行。
+- **跨平台**：基于 Tauri v2 构建，支持 macOS、Linux 和 Windows。
+- **实时响应**：通过文件系统监控感知变动，实现前端自动刷新。
 
-## 分层
+## 分层架构
 
-```
-┌──────────────────────────────────────────────┐
-│ Vue 3 前端（WebView）                        │
-│  Views / Components / Pinia Stores          │
-│  composables: useGitCommands / useGitEvents │
-└──────────────┬───────────────────────────────┘
-               │ Tauri IPC: invoke() / event
-┌──────────────┴───────────────────────────────┐
-│ Rust 后端（Tauri v2）                        │
-│  commands/*        ── IPC 命令层             │
-│  git/engine.rs     ── GitEngine 静态方法     │
-│  repo_manager.rs   ── 多仓库状态中心         │
-│  watcher.rs        ── 文件系统监控           │
-│  tray.rs           ── 系统托盘               │
-└──────────────┬───────────────────────────────┘
-               │
-┌──────────────┴───────────────────────────────┐
-│ git2-rs（libgit2）                           │
-└──────────────────────────────────────────────┘
-```
+### 系统概览
 
-### Rust 后端模块
+项目采用经典的前后端分离架构，通过 Tauri IPC 进行通信：
+
+- **前端 (Vue 3)**：负责 UI 渲染、状态管理 (Pinia) 和用户交互。
+- **后端 (Rust)**：负责 Git 逻辑封装、多仓库状态维护、文件监控和系统集成。
+- **底层 (libgit2)**：提供底层的 Git 核心能力。
+
+### 后端模块职责
 
 | 模块 | 职责 |
 |------|------|
-| `git/engine.rs` | `GitEngine` 静态方法集合，对 `git2::Repository` 的封装。每个方法接收 `path: &str`，内部调用 `Repository::open()`。`Repository` 不是 `Send`，不能跨线程持有 |
-| `git/types.rs` | 所有 IPC 数据结构，`serde::Serialize + Deserialize`，字段命名为 `snake_case` |
-| `git/error.rs` | `GitError` 枚举，实现 `Serialize + thiserror::Error`，可直接作为 Tauri command 的 `Err` 类型 |
-| `git/credentials.rs` | SSH agent → `~/.ssh/id_ed25519` → `~/.ssh/id_rsa` 的凭据回调链 |
-| `commands/*.rs` | 每个文件对应一个功能域（repo / status / commit / branch / remote / diff / log / stash / submodule / system）。统一通过 `State<'_, RepoManager>` 拿到 `repo_id → path`，再调 `GitEngine` |
-| `repo_manager.rs` | 进程内的 `Arc<Mutex<HashMap<repo_id, RepoCacheEntry>>>`，通过 `.manage()` 注册为 Tauri 全局状态 |
-| `watcher.rs` | 每个仓库一个 `notify-debouncer-mini`（300ms 防抖），监控整个工作目录 |
-| `tray.rs` | 系统托盘菜单 + 左键点击显示窗口 |
-| `lib.rs` | Tauri `Builder` 装配、`invoke_handler!` 注册、窗口 `CloseRequested` 拦截 |
+| `git/engine.rs` | 对 libgit2 的高级封装，提供面向业务的静态方法集合。 |
+| `git/types.rs` | 统一定义 IPC 通信使用的数据结构，确保前后端类型一致。 |
+| `git/error.rs` | 结构化的错误处理，支持将底层 Git 错误映射为可序列化的业务错误。 |
+| `commands/` | 按功能域划分的 IPC 命令处理器，负责接收前端请求并调用引擎。 |
+| `repo_manager.rs` | 全局仓库名册，管理已打开仓库的路径与状态标识。 |
+| `watcher.rs` | 文件系统监控服务，负责捕获仓库及工作区变动并推送事件。 |
 
-### 前端分层
+### 前端模块职责
 
-| 层 | 内容 |
-|----|------|
-| `views/` | 路由页面：`HistoryView.vue`、`BranchesView.vue` |
-| `components/` | 按功能域组织：`layout/` `history/` `workspace/` `diff/` `branch/` `commit/` `submodule/` `common/` |
-| `stores/` (Pinia) | `repos` `workspace` `history` `diff` `stash` `submodules` `ui` `errors` |
-| `composables/` | `useGitCommands`（所有 `invoke` 封装 + 错误统一映射）、`useGitEvents`（Tauri Events 订阅）、`useBranchTreeState` |
-| `utils/` | `graph.ts`（提交图 lane 算法）、`branchTree.ts`（远程分支树形构造）、`format.ts` |
-| `lib/highlight.ts` | highlight.js 子集注册 + 扩展名到语言映射 |
-| `lib/errorMap.ts` | `GitError` 和 git2 原始消息 → 中文友好提示 |
-| `types/git.ts` | 与 `git/types.rs` 一一对应的 TypeScript 接口 |
+| 层级 | 职责 |
+|------|------|
+| `views/` | 页面级组件，负责整体布局路由。 |
+| `components/` | 按域组织的 UI 组件，实现具体的交互细节。 |
+| `stores/` | 状态中心，负责数据缓存及复杂的业务逻辑组合。 |
+| `composables/` | 逻辑抽象层，封装 IPC 调用 (`useGitCommands`) 和事件监听 (`useGitEvents`)。 |
+| `utils/` | 工具函数，包含提交图算法、格式化工具等独立逻辑。 |
 
-### 错误处理
+## 错误处理流
 
-所有 IPC 调用都经过 `useGitCommands` 里的 `wrap(op, fn)` helper：
+系统建立了从底层到 UI 的完整错误映射链：
+1. **捕获**：后端捕获 libgit2 错误。
+2. **转换**：将原始错误转换为带上下文的业务错误。
+3. **映射**：前端拦截错误，根据错误码映射为用户友好的中文提示。
+4. **回溯**：原始错误信息被保留在错误历史中，供排查使用。
 
-1. 成功 → 原值返回
-2. 失败 → 把 `(op, rawError)` 推入 `errorsStore`（保留最近 N 条）
-3. 失败 → 再用 `lib/errorMap.ts` 把原始消息映射成中文友好消息，rethrow 一个 `Error(friendlyMessage)`
+## 数据流向
 
-调用方只需要 `catch (e) { showError(String(e)) }`——拿到的 `e.message` 已经是用户能读懂的中文。想看原始错误时翻 `errorsStore` 的历史列表（Actions 菜单提供入口）。这样：
+### 主动调用
+UI 事件触发 Store 方法，通过 `useGitCommands` 发起 IPC 请求，后端执行后返回结果，Store 更新状态驱动 UI 重绘。
 
-- 原始的 `"Git2(reference 'refs/heads/foo' already exists; class=Reference (4); code=Exists (-4))"` 不会直接摔到用户脸上
-- toast 消失后失败记录仍然能查
-- 映射规则集中在一个文件，方便维护
+### 被动更新
+文件系统产生变动，监控服务捕获并防抖处理后，通过全局事件告知前端。前端根据当前活跃仓库判断是否需要刷新相关 Store。
 
-## 数据流
+## 关键技术决策
 
-### 主动操作
-
-```
-UI → store 方法 → useGitCommands.invoke() → Rust command
-    → GitEngine::... → git2 → 返回值
-    → store 更新 state → Vue 响应式渲染
-```
-
-### 文件系统反向推送
-
-```
-.git/ 或工作区变更
-  → WatcherService（300ms 防抖）
-  → app.emit("repo://status-changed", repo_id)
-  → 前端 useGitEvents.onStatusChanged
-  → 若 repoId === activeRepoId → workspaceStore.refresh() + submodulesStore.loadSubmodules()
-```
-
-当前只订阅了 `repo://status-changed`，后续可扩展 `repo://operation-progress`、`repo://error`（前端 composables 已留接口）。
-
-## 路由
-
-Hash 模式，两个主要路由：
-
-| 路径 | 视图 | 说明 |
-|------|------|------|
-| `/` | redirect → `/history` | 默认落地页 |
-| `/history` | `HistoryView.vue` | 提交图 + 详情 + WIP 行，承担了"工作区"的职责 |
-| `/branches` | `BranchesView.vue` | 分支列表视图（次级） |
-
-**工作区和历史合并到同一个视图**：在 `HistoryView` 的虚拟列表顶部插入一条 `WipRow`（有未提交变更时显示），点击后右侧面板切换为 `WipPanel`（文件列表 + 提交表单）。这样不需要单独的 `/workspace` 路由，用户可以把"改代码 → 提交 → 看历史"串在一个视图里完成。
-
-## 关键决策
-
-- **`Repository` 每次临时打开**：`git2::Repository` 不是 `Send`，而且 libgit2 内部会缓存索引；所以每次命令都 `open(path)` 而不是跨调用持有。开销可接受（纳秒级）
-- **主要状态放在前端 Pinia，而不是后端 `RepoManager`**：后端的 `RepoCacheEntry.status` 目前只是冗余字段，真实可视状态都从命令返回后缓存在 Pinia store。前端是单一事实来源
-- **关闭窗口 = 隐藏**：`lib.rs` 在 `WindowEvent::CloseRequested` 中调 `window.hide()` 并 `prevent_close()`；只有托盘菜单 "退出" 才真正退出。恢复窗口的三条路径：托盘左键（关闭默认菜单弹出，直接唤回）、托盘菜单 "显示窗口"、macOS Dock 图标点击（监听 `RunEvent::Reopen`）
-- **watcher 监控整个工作目录而非仅 `.git/`**：只监听 `.git/` 会漏掉 tracked 文件的手动编辑，无法触发状态刷新
+1. **进程内执行**：绝大多数 Git 操作直接在进程内通过库调用完成，仅在极少数特殊维护操作下才调用外部二进制。
+2. **多仓库隔离**：每个仓库拥有独立的监控 session 和状态缓存。
+3. **按需加载**：日志、Diff 和内容预览均采用分页或延迟加载策略。
+4. **UI 持久化**：用户界面状态（如侧栏宽度、查看模式）与仓库列表分别采用不同的持久化机制。
