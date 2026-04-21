@@ -34,13 +34,14 @@ pub async fn create_branch(
 pub async fn switch_branch(
     repo_id: String,
     name: String,
+    force: bool,
     repo_manager: State<'_, RepoManager>,
 ) -> Result<(), GitError> {
-    log::debug!("[switch_branch] name={name}");
+    log::debug!("[switch_branch] name={name} force={force}");
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    GitEngine::switch_branch(&meta.path, &name)
+    GitEngine::switch_branch(&meta.path, &name, force)
 }
 
 #[tauri::command]

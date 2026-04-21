@@ -165,19 +165,23 @@ const messages = {
       menu: {
         checkoutRemote: 'Checkout...',
         switchTo: 'Switch to this branch',
+        switchForce: 'Force switch to this branch (-f)',
         copyName: 'Copy branch name',
         delete: 'Delete...',
       },
       confirmDelete: 'Delete branch "{name}"? This cannot be undone.',
+      confirmSwitchForce: 'Force switching will discard all uncommitted changes in the working directory. Switch to branch "{name}"?',
     },
     tag: {
       menu: {
         copyName: 'Copy tag name',
         copyOid: 'Copy commit hash',
         push: 'Push to remote…',
+        pushForce: 'Force push to remote (-f)…',
         delete: 'Delete tag...',
       },
       confirmDelete: 'Delete tag "{name}"? This cannot be undone.',
+      confirmPushForce: 'Force push tag "{name}"? This will overwrite the tag on the remote if it already exists.',
     },
     stash: {
       menu: {

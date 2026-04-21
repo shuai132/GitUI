@@ -254,8 +254,8 @@ export function useGitCommands() {
   const createBranch = (repoId: string, name: string, fromOid?: string) =>
     call<void>('create_branch', { repoId, name, fromOid })
 
-  const switchBranch = (repoId: string, name: string) =>
-    call<void>('switch_branch', { repoId, name })
+  const switchBranch = (repoId: string, name: string, force = false) =>
+    call<void>('switch_branch', { repoId, name, force })
 
   const deleteBranch = (repoId: string, name: string) =>
     call<void>('delete_branch', { repoId, name })
@@ -294,8 +294,8 @@ export function useGitCommands() {
     mode: 'normal' | 'force' | 'force_with_lease',
   ) => call<void>('push_branch', { repoId, remoteName, branchName, mode })
 
-  const pushTag = (repoId: string, remoteName: string, tagName: string) =>
-    call<void>('push_tag', { repoId, remoteName, tagName })
+  const pushTag = (repoId: string, remoteName: string, tagName: string, force = false) =>
+    call<void>('push_tag', { repoId, remoteName, tagName, force })
 
   const pullBranch = (
     repoId: string,

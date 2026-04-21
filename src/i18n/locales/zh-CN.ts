@@ -165,19 +165,23 @@ const messages = {
       menu: {
         checkoutRemote: '检出...',
         switchTo: '切换到此分支',
+        switchForce: '强制切换到此分支 (-f)',
         copyName: '复制分支名字',
         delete: '删除...',
       },
       confirmDelete: '确认删除分支 "{name}"？此操作无法撤销。',
+      confirmSwitchForce: '强制切换将丢弃工作区所有未提交的更改。确认强制切换到分支 "{name}"？',
     },
     tag: {
       menu: {
         copyName: '复制标签名',
         copyOid: '复制 commit hash',
         push: '推送到远程…',
+        pushForce: '强推到远程 (-f)…',
         delete: '删除标签...',
       },
       confirmDelete: '确认删除标签 "{name}"？此操作不可撤销。',
+      confirmPushForce: '确认强制推送标签 "{name}"？如果远程已存在同名标签且指向不同 commit，将会被覆盖。',
     },
     stash: {
       menu: {

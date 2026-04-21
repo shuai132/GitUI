@@ -264,6 +264,7 @@ const contextMenuItems = computed<ContextMenuItem[]>(() => {
     items.push({ label: t('sidebar.branch.menu.checkoutRemote'), action: 'checkout-remote' })
   } else if (!b.is_head) {
     items.push({ label: t('sidebar.branch.menu.switchTo'), action: 'switch' })
+    items.push({ label: t('sidebar.branch.menu.switchForce'), action: 'switch-force', danger: true })
   }
 
   items.push({ label: t('sidebar.branch.menu.copyName'), action: 'copy-name' })
@@ -296,8 +297,14 @@ async function onContextAction(action: string) {
   try {
     switch (action) {
       case 'switch':
-        await historyStore.switchBranch(b.name)
+      case 'switch-force': {
+        const force = action === 'switch-force'
+        if (force) {
+          if (!confirm(t('sidebar.branch.confirmSwitchForce', { name: b.name }))) break
+        }
+        await historyStore.switchBranch(b.name, force)
         break
+      }
       case 'checkout-remote':
         openCheckoutDialog(b.name)
         break
@@ -501,6 +508,7 @@ const tagMenuItems = computed<ContextMenuItem[]>(() => {
     { label: t('sidebar.tag.menu.copyOid'), action: 'copy-oid' },
     { separator: true },
     { label: t('sidebar.tag.menu.push'), action: 'push' },
+    { label: t('sidebar.tag.menu.pushForce'), action: 'push-force', danger: true },
     { separator: true },
     { label: t('sidebar.tag.menu.delete'), action: 'delete', danger: true },
   ]
@@ -529,14 +537,19 @@ async function onTagMenuAction(action: string) {
       case 'copy-oid':
         await navigator.clipboard.writeText(tag.commit_oid)
         break
-      case 'push': {
+      case 'push':
+      case 'push-force': {
         const id = repoStore.activeRepoId
         if (!id) break
         // 多 remote 时弹菜单让用户选；无 remote / 用户取消则 no-op。
         // 失败由 useGitCommands.call() 统一推到 errorsStore + 顶栏 toast。
         const remote = await pickRemote(id)
         if (!remote) break
-        await git.pushTag(id, remote, tag.name)
+        const force = action === 'push-force'
+        if (force) {
+          if (!confirm(t('sidebar.tag.confirmPushForce', { name: tag.name }))) break
+        }
+        await git.pushTag(id, remote, tag.name, force)
         // 乐观更新：push 成功后该 tag 一定在该远端存在
         historyStore.markTagPushed(tag.name)
         break

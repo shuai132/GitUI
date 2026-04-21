@@ -1157,12 +1157,18 @@ impl GitEngine {
         Ok(())
     }
 
-    pub fn switch_branch(path: &str, name: &str) -> GitResult<()> {
+    pub fn switch_branch(path: &str, name: &str, force: bool) -> GitResult<()> {
         let repo = Self::open(path)?;
         let obj = repo
             .revparse_single(&format!("refs/heads/{}", name))
             .map_err(|e| GitError::OperationFailed(e.message().to_string()))?;
-        repo.checkout_tree(&obj, None)?;
+        let mut co = git2::build::CheckoutBuilder::new();
+        if force {
+            co.force();
+        } else {
+            co.safe();
+        }
+        repo.checkout_tree(&obj, Some(&mut co))?;
         repo.set_head(&format!("refs/heads/{}", name))?;
         Ok(())
     }
@@ -1608,9 +1614,13 @@ impl GitEngine {
     /// 推送一个本地 tag 到远端。refspec `refs/tags/<name>:refs/tags/<name>`。
     /// 不带 force：已存在同名远端 tag 时 git2 会返回 non-fast-forward 错误，
     /// 由前端错误映射（`errors.push.nonFastForward`）给出中文提示。
-    pub fn push_tag(path: &str, remote_name: &str, tag_name: &str) -> GitResult<()> {
-        log::debug!("[engine::push_tag] remote={remote_name} tag={tag_name}");
-        let refspec = format!("refs/tags/{name}:refs/tags/{name}", name = tag_name);
+    pub fn push_tag(path: &str, remote_name: &str, tag_name: &str, force: bool) -> GitResult<()> {
+        log::debug!("[engine::push_tag] remote={remote_name} tag={tag_name} force={force}");
+        let refspec = if force {
+            format!("+refs/tags/{name}:refs/tags/{name}", name = tag_name)
+        } else {
+            format!("refs/tags/{name}:refs/tags/{name}", name = tag_name)
+        };
 
         let url = get_remote_url(path, remote_name)?;
         if is_ssh_url(&url) {

@@ -180,10 +180,10 @@ export const useHistoryStore = defineStore('history', () => {
     await loadBranches()
   }
 
-  async function switchBranch(name: string) {
+  async function switchBranch(name: string, force = false) {
     const repoStore = useRepoStore()
     if (!repoStore.activeRepoId) return
-    await git.switchBranch(repoStore.activeRepoId, name)
+    await git.switchBranch(repoStore.activeRepoId, name, force)
     await Promise.all([loadLog(), loadBranches()])
   }
 
