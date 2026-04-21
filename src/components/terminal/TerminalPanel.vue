@@ -1,46 +1,32 @@
 <script setup lang="ts">
 import { onMounted, onBeforeUnmount, reactive, ref, watch, computed, nextTick } from 'vue'
-import { Terminal } from '@xterm/xterm'
-import { FitAddon } from '@xterm/addon-fit'
-import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 import '@xterm/xterm/css/xterm.css'
 import { useI18n } from 'vue-i18n'
 import { useUiStore } from '@/stores/ui'
 import { useRepoStore } from '@/stores/repos'
-import { useGitCommands } from '@/composables/useGitCommands'
+import { useTerminalStore, type TerminalTab } from '@/stores/terminal'
 import ContextMenu, { type ContextMenuItem } from '@/components/common/ContextMenu.vue'
+import { useGitCommands } from '@/composables/useGitCommands'
 
 const { t } = useI18n()
 const uiStore = useUiStore()
 const repoStore = useRepoStore()
+const terminalStore = useTerminalStore()
 const git = useGitCommands()
 
-// ── 每仓库独立的 xterm 实例和 PTY session ────────────────────────────
-interface RepoTerminal {
-  term: Terminal
-  fit: FitAddon
-  sessionId: string | null
-}
-
-const repoTerminals = new Map<string, RepoTerminal>()
-const hostEls = new Map<string, HTMLDivElement>()
+const hostEls = new Map<string, HTMLDivElement>() // key: tabId
 let activeResizeObs: ResizeObserver | null = null
 let resizeDebounce: number | null = null
 let themeObs: MutationObserver | null = null
-let unlistenData: UnlistenFn | null = null
-let unlistenExit: UnlistenFn | null = null
 let disposed = false
 
-// ── 右键菜单 ────────────────────────────────────────────────────────
-const ctxMenu = reactive({
-  visible: false,
-  x: 0,
-  y: 0,
-})
-const hasSelection = ref(false)
+const currentRepoId = computed(() => repoStore.activeRepoId)
+const currentTabs = computed(() => currentRepoId.value ? terminalStore.getTabsForRepo(currentRepoId.value) : [])
+const activeTab = computed(() => currentRepoId.value ? terminalStore.getActiveTab(currentRepoId.value) : undefined)
 
+const ctxMenu = reactive({ visible: false, x: 0, y: 0 })
 const ctxMenuItems = computed<ContextMenuItem[]>(() => [
-  { label: t('terminal.menu.copy'), action: 'copy', disabled: !hasSelection.value },
+  { label: t('terminal.menu.copy'), action: 'copy', disabled: !activeTab.value?.hasSelection },
   { label: t('terminal.menu.paste'), action: 'paste' },
   { separator: true },
   { label: t('terminal.menu.selectAll'), action: 'select-all' },
@@ -49,7 +35,6 @@ const ctxMenuItems = computed<ContextMenuItem[]>(() => [
   { label: t('terminal.menu.close'), action: 'close' },
 ])
 
-// ── base64 编解码 ────────────────────────────────────────────────────
 function b64encode(s: string): string {
   const bytes = new TextEncoder().encode(s)
   let bin = ''
@@ -57,568 +42,289 @@ function b64encode(s: string): string {
   return btoa(bin)
 }
 
-function b64decodeToBytes(s: string): Uint8Array {
-  const bin = atob(s)
-  const out = new Uint8Array(bin.length)
-  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i)
-  return out
-}
-
-// ── 主题（从 CSS 变量取） ───────────────────────────────────────────
-function isLightTheme(): boolean {
-  return document.documentElement.getAttribute('data-theme') === 'light'
-}
-
 function readTheme() {
   const s = getComputedStyle(document.documentElement)
-  const light = isLightTheme()
-  const base = light
-    ? {
-        black: '#32383f',
-        red: '#cf222e',
-        green: '#1a7f37',
-        yellow: '#9a6700',
-        blue: '#0969da',
-        magenta: '#8250df',
-        cyan: '#0550ae',
-        white: '#6e7781',
-        brightBlack: '#57606a',
-        brightRed: '#cf222e',
-        brightGreen: '#116329',
-        brightYellow: '#633c01',
-        brightBlue: '#0550ae',
-        brightMagenta: '#8250df',
-        brightCyan: '#1b7c83',
-        brightWhite: '#1d1d1f',
-      }
-    : {
-        black: '#494d64',
-        red: '#ed8796',
-        green: '#a6da95',
-        yellow: '#eed49f',
-        blue: '#8aadf4',
-        magenta: '#c6a0f6',
-        cyan: '#7dc4e4',
-        white: '#b8c0e0',
-        brightBlack: '#5b6078',
-        brightRed: '#ed8796',
-        brightGreen: '#a6da95',
-        brightYellow: '#eed49f',
-        brightBlue: '#8aadf4',
-        brightMagenta: '#c6a0f6',
-        brightCyan: '#7dc4e4',
-        brightWhite: '#f5f7fa',
-      }
-  const accentRed = s.getPropertyValue('--accent-red').trim()
-  const accentGreen = s.getPropertyValue('--accent-green').trim()
-  const accentYellow = s.getPropertyValue('--accent-yellow').trim()
+  const isLight = document.documentElement.getAttribute('data-theme') === 'light'
   const accentBlue = s.getPropertyValue('--accent-blue').trim()
   return {
-    background: s.getPropertyValue('--bg-primary').trim() || (light ? '#ffffff' : '#13151f'),
-    foreground: s.getPropertyValue('--text-primary').trim() || (light ? '#1d1d1f' : '#f5f7fa'),
-    cursor: accentBlue || (light ? '#0969da' : '#4a9eff'),
-    selectionBackground: light ? 'rgba(9, 105, 218, 0.25)' : 'rgba(138, 173, 244, 0.35)',
-    ...base,
-    red: accentRed || base.red,
-    green: accentGreen || base.green,
-    yellow: accentYellow || base.yellow,
-    blue: accentBlue || base.blue,
+    background: s.getPropertyValue('--bg-primary').trim(),
+    foreground: s.getPropertyValue('--text-primary').trim(),
+    cursor: accentBlue,
+    selectionBackground: isLight ? 'rgba(9, 105, 218, 0.25)' : 'rgba(138, 173, 244, 0.35)',
+    black: '#32383f',
+    red: s.getPropertyValue('--accent-red').trim(),
+    green: s.getPropertyValue('--accent-green').trim(),
+    yellow: s.getPropertyValue('--accent-yellow').trim(),
+    blue: accentBlue,
+    magenta: '#8250df',
+    cyan: '#0550ae',
+    white: '#6e7781',
   }
 }
 
 function applyTheme() {
   const theme = readTheme()
-  for (const rt of repoTerminals.values()) {
-    rt.term.options.theme = theme
+  for (const tabs of terminalStore.repoTabs.values()) {
+    for (const tab of tabs) tab.term.options.theme = theme
   }
 }
 
-// ── 动态 ref callback（v-for 使用）──────────────────────────────────
-function setHostEl(repoId: string, el: HTMLDivElement | null) {
+function setHostEl(tabId: string, el: HTMLDivElement | null) {
   if (el) {
-    hostEls.set(repoId, el)
-  } else {
-    hostEls.delete(repoId)
-  }
-}
-
-// ── 创建/获取/销毁仓库终端 ──────────────────────────────────────────
-function createTerminalFor(repoId: string): RepoTerminal {
-  const el = hostEls.get(repoId)
-  if (!el) throw new Error(`No host element for repo ${repoId}`)
-
-  const theme = readTheme()
-  const term = new Terminal({
-    fontFamily: getComputedStyle(document.documentElement).getPropertyValue('--code-font-family').trim() || 'Menlo, monospace',
-    fontSize: 13,
-    cursorBlink: true,
-    theme,
-    scrollback: 5000,
-    allowProposedApi: true,
-  })
-  const fit = new FitAddon()
-  term.loadAddon(fit)
-  term.open(el)
-  try { fit.fit() } catch {}
-
-  // 键盘输入 → PTY
-  term.onData((d) => {
-    const rt = repoTerminals.get(repoId)
-    if (!rt?.sessionId) return
-    git.terminalWrite(rt.sessionId, b64encode(d)).catch(() => {})
-  })
-
-  // 选区变化（仅对当前激活仓库更新选区状态）
-  term.onSelectionChange(() => {
-    if (repoStore.activeRepoId === repoId) {
-      hasSelection.value = !!term.hasSelection()
+    hostEls.set(tabId, el)
+    if (tabId === activeTab.value?.id && uiStore.terminalVisible) {
+      nextTick(() => mountTerminal(tabId))
     }
-  })
-
-  const rt: RepoTerminal = { term, fit, sessionId: null }
-  repoTerminals.set(repoId, rt)
-  return rt
-}
-
-async function spawnSessionFor(repoId: string) {
-  // 等待 DOM 更新，确保 hostEl 已渲染
-  await nextTick()
-  const el = hostEls.get(repoId)
-  if (!el || disposed) return
-
-  let rt = repoTerminals.get(repoId)
-  if (!rt) {
-    rt = createTerminalFor(repoId)
-  }
-  if (rt.sessionId) return // 已有活跃 session
-
-  try { rt.fit.fit() } catch {}
-  const cols = rt.term.cols || 80
-  const rows = rt.term.rows || 24
-  try {
-    rt.sessionId = await git.terminalSpawn(repoId, cols, rows)
-  } catch (e) {
-    rt.term.write(`\r\n[${t('terminal.spawnFailed')}] ${(e as Error).message}\r\n`)
+  } else {
+    hostEls.delete(tabId)
   }
 }
 
-async function closeSessionFor(repoId: string) {
-  const rt = repoTerminals.get(repoId)
-  if (!rt?.sessionId) return
-  const id = rt.sessionId
-  rt.sessionId = null
-  try { await git.terminalClose(id) } catch {}
+function mountTerminal(tabId: string) {
+  const el = hostEls.get(tabId)
+  const tab = currentTabs.value.find(t => t.id === tabId)
+  if (!el || !tab) return
+  if ((tab.term as any)._core?.element === el) return
+
+  // Prevent xterm.js from falling into an infinite ResizeObserver/Refresh loop 
+  // by never opening it inside a hidden (display: none) container.
+  if (el.clientWidth === 0 || el.clientHeight === 0) return
+
+  tab.term.options.theme = readTheme()
+  tab.term.open(el)
+  nextTick(() => { if (!disposed) try { tab.fit.fit() } catch {} })
 }
 
-function disposeRepoTerminal(repoId: string) {
-  closeSessionFor(repoId)
-  const rt = repoTerminals.get(repoId)
-  if (rt) {
-    rt.term.dispose()
-    repoTerminals.delete(repoId)
-  }
-}
-
-// ── ResizeObserver（只观察当前激活仓库的宿主 div）────────────────────
 function scheduleResize() {
   if (resizeDebounce !== null) window.clearTimeout(resizeDebounce)
   resizeDebounce = window.setTimeout(() => {
-    const id = repoStore.activeRepoId
-    if (!id) return
-    const rt = repoTerminals.get(id)
-    if (!rt) return
-    try { rt.fit.fit() } catch {}
-    if (rt.sessionId) {
-      git.terminalResize(rt.sessionId, rt.term.cols, rt.term.rows).catch(() => {})
-    }
-  }, 80)
+    const tab = activeTab.value
+    if (!tab || disposed || !uiStore.terminalVisible) return
+    const el = hostEls.get(tab.id)
+    if (!el || el.clientWidth === 0 || el.clientHeight === 0) return
+    try {
+      tab.fit.fit()
+      if (tab.sessionId) {
+        git.terminalResize(tab.sessionId, tab.term.cols, tab.term.rows).catch(() => {})
+      }
+    } catch (e) {}
+  }, 100)
 }
 
-function setupResizeObserver(repoId: string) {
-  if (activeResizeObs) {
-    activeResizeObs.disconnect()
-    activeResizeObs = null
-  }
-  const el = hostEls.get(repoId)
-  if (!el) return
+function setupResizeObserver(tabId: string) {
+  if (activeResizeObs) { activeResizeObs.disconnect(); activeResizeObs = null }
+  const el = hostEls.get(tabId)
+  if (!el || disposed) return
   activeResizeObs = new ResizeObserver(() => scheduleResize())
   activeResizeObs.observe(el)
 }
 
-// ── 生命周期 ────────────────────────────────────────────────────────
 onMounted(async () => {
-  // PTY 输出 → 路由到对应仓库的 xterm
-  unlistenData = await listen<{ session_id: string; data: string }>(
-    'terminal://data',
-    (event) => {
-      for (const rt of repoTerminals.values()) {
-        if (rt.sessionId === event.payload.session_id) {
-          rt.term.write(b64decodeToBytes(event.payload.data))
-          break
-        }
-      }
-    },
-  )
-  // shell 退出 → 清除 sessionId；若是当前激活仓库则隐藏面板
-  unlistenExit = await listen<{ session_id: string }>(
-    'terminal://exit',
-    (event) => {
-      for (const [repoId, rt] of repoTerminals) {
-        if (rt.sessionId === event.payload.session_id) {
-          rt.sessionId = null
-          if (repoId === repoStore.activeRepoId) {
-            uiStore.setTerminalVisible(false)
-          }
-          break
-        }
-      }
-    },
-  )
-
-  // 主题切换（:root[data-theme] 变化）→ 同步所有 xterm 主题
-  themeObs = new MutationObserver((muts) => {
-    for (const m of muts) {
-      if (m.type === 'attributes' && m.attributeName === 'data-theme') {
-        applyTheme()
-        break
-      }
-    }
-  })
+  await terminalStore.initEvents()
+  themeObs = new MutationObserver(() => applyTheme())
   themeObs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
 
-  // 首次 mount 时若面板可见，立即为当前仓库开 session
-  const id = repoStore.activeRepoId
+  const id = currentRepoId.value
   if (id && uiStore.terminalVisible) {
-    await spawnSessionFor(id)
-    setupResizeObserver(id)
-    scheduleResize()
-  }
-})
-
-onBeforeUnmount(async () => {
-  disposed = true
-  if (activeResizeObs) { activeResizeObs.disconnect(); activeResizeObs = null }
-  if (themeObs) { themeObs.disconnect(); themeObs = null }
-  if (resizeDebounce !== null) window.clearTimeout(resizeDebounce)
-  if (unlistenData) { unlistenData(); unlistenData = null }
-  if (unlistenExit) { unlistenExit(); unlistenExit = null }
-  // 关闭所有 session，dispose 所有 xterm 实例
-  for (const repoId of [...repoTerminals.keys()]) {
-    await closeSessionFor(repoId)
-    const rt = repoTerminals.get(repoId)
-    if (rt) rt.term.dispose()
-  }
-  repoTerminals.clear()
-})
-
-// 切换仓库：不关闭旧 session，切换 ResizeObserver，若新仓库无 session 则 spawn
-watch(
-  () => repoStore.activeRepoId,
-  async (id, old) => {
-    if (disposed || !id || id === old) return
-    setupResizeObserver(id)
-    if (uiStore.terminalVisible) {
-      const rt = repoTerminals.get(id)
-      if (!rt?.sessionId) {
-        if (rt) rt.term.reset()
-        await spawnSessionFor(id)
-      }
-      try { repoTerminals.get(id)?.fit.fit() } catch {}
-      scheduleResize()
+    if (terminalStore.getTabsForRepo(id).length === 0) await terminalStore.createTerminal(id)
+    const tab = terminalStore.getActiveTab(id)
+    if (tab) { 
+      nextTick(() => {
+        mountTerminal(tab.id)
+        setupResizeObserver(tab.id)
+        scheduleResize()
+      })
     }
-  },
-)
+  }
+})
 
-// 停靠切换：下一 tick 触发 fit+resize
-watch(() => uiStore.terminalDock, () => scheduleResize())
+onBeforeUnmount(() => {
+  disposed = true
+  if (activeResizeObs) activeResizeObs.disconnect()
+  if (themeObs) themeObs.disconnect()
+  if (resizeDebounce !== null) window.clearTimeout(resizeDebounce)
+})
 
-// 面板显示：为当前仓库 spawn session（若尚无）
-watch(
-  () => uiStore.terminalVisible,
-  async (v) => {
-    if (disposed) return
-    const id = repoStore.activeRepoId
-    if (!id) return
-    if (v) {
-      const rt = repoTerminals.get(id)
-      if (!rt?.sessionId) {
-        if (rt) rt.term.reset()
-        await spawnSessionFor(id)
-      }
+watch(() => repoStore.activeRepoId, async (id) => {
+  if (disposed || !id || !uiStore.terminalVisible) return
+  if (terminalStore.getTabsForRepo(id).length === 0) await terminalStore.createTerminal(id)
+  const tab = terminalStore.getActiveTab(id)
+  if (tab) { 
+    nextTick(() => {
+      mountTerminal(tab.id)
+      setupResizeObserver(tab.id)
+      scheduleResize()
+    })
+  }
+})
+
+watch(() => activeTab.value?.id, (id) => {
+  if (id) {
+    nextTick(() => {
+      mountTerminal(id)
       setupResizeObserver(id)
       scheduleResize()
-    }
-  },
-)
+      activeTab.value?.term.focus()
+    })
+  }
+})
 
-// 仓库从列表移除：清理对应 session 和 xterm 实例
-watch(
-  () => repoStore.repos.map((r) => r.id),
-  (newIds, oldIds) => {
-    if (!oldIds) return
-    for (const id of oldIds) {
-      if (!newIds.includes(id)) {
-        disposeRepoTerminal(id)
-      }
+watch(() => uiStore.terminalVisible, async (v) => {
+  const id = currentRepoId.value
+  if (v && id) {
+    if (terminalStore.getTabsForRepo(id).length === 0) await terminalStore.createTerminal(id)
+    const tab = terminalStore.getActiveTab(id)
+    if (tab) { 
+      nextTick(() => {
+        mountTerminal(tab.id)
+        setupResizeObserver(tab.id)
+        scheduleResize()
+        tab.term.focus()
+      })
     }
-  },
-)
+  }
+})
 
-// ── 停靠 resize handle ──────────────────────────────────────────────
+watch(() => uiStore.terminalDock, () => scheduleResize())
+
+async function onAddTab() { if (currentRepoId.value) await terminalStore.createTerminal(currentRepoId.value) }
+function onCloseTab(tabId: string) { if (currentRepoId.value) terminalStore.closeTab(currentRepoId.value, tabId) }
+function onSelectTab(tabId: string) { if (currentRepoId.value) terminalStore.setActiveTab(currentRepoId.value, tabId) }
+function onToggleDock() { uiStore.toggleTerminalDock() }
+function onClosePanel() { uiStore.setTerminalVisible(false) }
+
 function startResize(e: PointerEvent) {
   e.preventDefault()
   const dock = uiStore.terminalDock
-  const startY = e.clientY
-  const startX = e.clientX
-  const startH = uiStore.terminalHeight
-  const startW = uiStore.terminalWidth
-  const MIN = 120
-  const MAX_H = Math.max(200, window.innerHeight - 200)
-  const MAX_W = Math.max(260, window.innerWidth - 320)
+  const startPos = dock === 'bottom' ? e.clientY : e.clientX
+  const startSize = dock === 'bottom' ? uiStore.terminalHeight : uiStore.terminalWidth
   const onMove = (ev: PointerEvent) => {
-    if (dock === 'bottom') {
-      const next = Math.max(MIN, Math.min(MAX_H, startH - (ev.clientY - startY)))
-      uiStore.terminalHeight = next
-    } else {
-      const next = Math.max(MIN, Math.min(MAX_W, startW - (ev.clientX - startX)))
-      uiStore.terminalWidth = next
-    }
+    const delta = (dock === 'bottom' ? ev.clientY : ev.clientX) - startPos
+    const next = Math.max(120, startSize - delta)
+    if (dock === 'bottom') uiStore.terminalHeight = next
+    else uiStore.terminalWidth = next
     scheduleResize()
   }
   const onUp = () => {
     window.removeEventListener('pointermove', onMove)
     window.removeEventListener('pointerup', onUp)
-    document.body.style.cursor = ''
-    document.body.style.userSelect = ''
     if (dock === 'bottom') uiStore.persistTerminalHeight()
     else uiStore.persistTerminalWidth()
   }
-  window.addEventListener('pointermove', onMove)
-  window.addEventListener('pointerup', onUp)
-  document.body.style.cursor = dock === 'bottom' ? 'row-resize' : 'col-resize'
-  document.body.style.userSelect = 'none'
+  window.addEventListener('pointermove', onMove); window.addEventListener('pointerup', onUp)
 }
 
-const dockClass = computed(() => `terminal-panel--${uiStore.terminalDock}`)
-
-function onToggleDock() {
-  uiStore.toggleTerminalDock()
-}
-
-async function onClose() {
-  // 关闭当前仓库的 PTY session，隐藏面板；其他仓库的 session 保留
-  const id = repoStore.activeRepoId
-  if (id) {
-    await closeSessionFor(id)
-    const rt = repoTerminals.get(id)
-    if (rt) rt.term.reset()
-  }
-  uiStore.setTerminalVisible(false)
-}
-
-// ── 右键菜单 handlers ───────────────────────────────────────────────
 function onContextMenu(e: MouseEvent) {
-  e.preventDefault()
-  const id = repoStore.activeRepoId
-  if (id) {
-    const rt = repoTerminals.get(id)
-    hasSelection.value = !!rt?.term.hasSelection()
-  }
-  ctxMenu.x = e.clientX
-  ctxMenu.y = e.clientY
-  ctxMenu.visible = true
+  e.preventDefault(); ctxMenu.x = e.clientX; ctxMenu.y = e.clientY; ctxMenu.visible = true
 }
 
 async function onCtxSelect(action: string) {
   ctxMenu.visible = false
-  const id = repoStore.activeRepoId
-  const rt = id ? repoTerminals.get(id) : null
-  if (!rt) return
-  switch (action) {
-    case 'copy': {
-      const sel = rt.term.getSelection()
-      if (sel) {
-        try { await navigator.clipboard.writeText(sel) } catch {}
-      }
-      break
-    }
-    case 'paste': {
-      try {
-        const text = await navigator.clipboard.readText()
-        if (text && rt.sessionId) {
-          await git.terminalWrite(rt.sessionId, b64encode(text))
-        }
-      } catch {}
-      break
-    }
-    case 'select-all':
-      rt.term.selectAll()
-      hasSelection.value = !!rt.term.hasSelection()
-      break
-    case 'clear':
-      rt.term.clear()
-      break
-    case 'close':
-      onClose()
-      break
-  }
+  const tab = activeTab.value
+  if (!tab) return
+  if (action === 'copy') {
+    const sel = tab.term.getSelection()
+    if (sel) await navigator.clipboard.writeText(sel)
+  } else if (action === 'paste') {
+    const text = await navigator.clipboard.readText()
+    if (text && tab.sessionId) git.terminalWrite(tab.sessionId, b64encode(text))
+  } else if (action === 'select-all') tab.term.selectAll()
+  else if (action === 'clear') tab.term.clear()
+  else if (action === 'close') onClosePanel()
 }
 </script>
 
 <template>
-  <div class="terminal-panel" :class="dockClass">
+  <div class="terminal-panel" :class="`terminal-panel--${uiStore.terminalDock}`">
     <div class="terminal-resize" @pointerdown="startResize" />
     <div class="terminal-header">
-      <span class="terminal-title">Terminal</span>
-      <div class="terminal-actions">
-        <button
-          class="term-btn"
-          :title="uiStore.terminalDock === 'bottom' ? t('terminal.dockRight') : t('terminal.dockBottom')"
-          @click="onToggleDock"
-        >
-          <svg v-if="uiStore.terminalDock === 'bottom'" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <rect x="3" y="3" width="18" height="18" rx="1"/>
-            <line x1="15" y1="3" x2="15" y2="21"/>
-          </svg>
-          <svg v-else width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <rect x="3" y="3" width="18" height="18" rx="1"/>
-            <line x1="3" y1="15" x2="21" y2="15"/>
+      <div class="terminal-tabs">
+        <div v-for="tab in currentTabs" :key="tab.id" class="terminal-tab"
+          :class="{ active: tab.id === activeTab?.id }" @click="onSelectTab(tab.id)">
+          <span class="tab-title">{{ tab.title }}</span>
+          <button class="tab-close" @click.stop="onCloseTab(tab.id)">
+            <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
+        </div>
+        <button class="add-tab-btn" :title="t('terminal.newTab')" @click="onAddTab">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
           </svg>
         </button>
-        <button class="term-btn" :title="t('terminal.close')" @click="onClose">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <line x1="18" y1="6" x2="6" y2="18"/>
-            <line x1="6" y1="6" x2="18" y2="18"/>
+      </div>
+      <div class="terminal-actions">
+        <button class="term-btn" @click="onToggleDock">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="3" width="18" height="18" rx="1"/>
+            <line v-if="uiStore.terminalDock === 'bottom'" x1="15" y1="3" x2="15" y2="21"/>
+            <line v-else x1="3" y1="15" x2="21" y2="15"/>
+          </svg>
+        </button>
+        <button class="term-btn" @click="onClosePanel">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
           </svg>
         </button>
       </div>
     </div>
-
-    <!-- 每个仓库一个宿主 div，只显示当前激活仓库的终端 -->
-    <div
-      v-for="repo in repoStore.repos"
-      :key="repo.id"
-      class="terminal-host"
-      :ref="(el) => setHostEl(repo.id, el as HTMLDivElement | null)"
-      :style="{ display: repo.id === repoStore.activeRepoId ? undefined : 'none' }"
-      @contextmenu="onContextMenu"
-    />
-
-    <ContextMenu
-      :visible="ctxMenu.visible"
-      :x="ctxMenu.x"
-      :y="ctxMenu.y"
-      :items="ctxMenuItems"
-      @close="ctxMenu.visible = false"
-      @select="onCtxSelect"
-    />
+    <div class="terminal-content">
+      <!-- 使用 v-show 保持所有实例，确保切换顺畅且不丢失状态 -->
+      <div v-for="tab in currentTabs" :key="tab.id" class="terminal-host"
+        v-show="tab.id === activeTab?.id" :ref="el => setHostEl(tab.id, el as HTMLDivElement)"
+        @contextmenu="onContextMenu" />
+    </div>
+    <ContextMenu :visible="ctxMenu.visible" :x="ctxMenu.x" :y="ctxMenu.y" :items="ctxMenuItems"
+      @close="ctxMenu.visible = false" @select="onCtxSelect" />
   </div>
 </template>
 
 <style scoped>
 .terminal-panel {
-  display: flex;
-  flex-direction: column;
-  background: var(--bg-primary);
-  border-color: var(--border);
-  border-style: solid;
-  border-width: 0;
-  overflow: hidden;
-  position: relative;
-  flex-shrink: 0;
+  display: flex; flex-direction: column; background: var(--bg-primary);
+  border-color: var(--border); border-style: solid; border-width: 0;
+  overflow: hidden; position: relative; flex-shrink: 0;
 }
-
-.terminal-panel--bottom {
-  border-top-width: 1px;
-  width: 100%;
-}
-
-.terminal-panel--right {
-  border-left-width: 1px;
-  height: 100%;
-}
-
-/* Resize handle 贴在面板的「远离主内容」一侧之反面，即紧贴靠近主内容那条边 */
-.terminal-resize {
-  position: absolute;
-  background: transparent;
-  z-index: 5;
-  transition: background 0.15s;
-}
-.terminal-panel--bottom .terminal-resize {
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 5px;
-  margin-top: -2px;
-  cursor: row-resize;
-}
-.terminal-panel--right .terminal-resize {
-  top: 0;
-  bottom: 0;
-  left: 0;
-  width: 5px;
-  margin-left: -2px;
-  cursor: col-resize;
-}
-.terminal-resize:hover,
-.terminal-resize:active {
-  background: rgba(138, 173, 244, 0.3);
-}
-
+.terminal-panel--bottom { border-top-width: 1px; width: 100%; }
+.terminal-panel--right { border-left-width: 1px; height: 100%; }
+.terminal-resize { position: absolute; background: transparent; z-index: 5; transition: background 0.15s; }
+.terminal-panel--bottom .terminal-resize { top: 0; left: 0; right: 0; height: 5px; margin-top: -2px; cursor: row-resize; }
+.terminal-panel--right .terminal-resize { top: 0; bottom: 0; left: 0; width: 5px; margin-left: -2px; cursor: col-resize; }
+.terminal-resize:hover { background: rgba(138, 173, 244, 0.3); }
 .terminal-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 4px 8px;
-  background: var(--bg-secondary);
-  border-bottom: 1px solid var(--border);
-  font-size: var(--font-sm);
-  color: var(--text-secondary);
-  flex-shrink: 0;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 2px 0 0; background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border); height: 20px;
 }
+.terminal-tabs { display: flex; align-items: center; height: 100%; overflow: hidden; }
+.terminal-tab {
+  display: flex; align-items: center; height: 100%; padding: 0 4px 0 8px;
+  cursor: pointer; background: var(--bg-secondary); color: var(--text-muted);
+  font-size: 10px; max-width: 120px; min-width: 40px; position: relative;
+  border-right: 1px solid var(--border); transition: background 0.1s;
+}
+.terminal-tab.active { background: var(--bg-primary); color: var(--text-primary); }
+.terminal-tab.active::after {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px; background: var(--accent-blue);
+}
+.tab-title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-right: 2px; }
+.tab-close {
+  display: inline-flex; align-items: center; justify-content: center; width: 11px; height: 11px;
+  border: none; background: transparent; color: var(--text-muted); border-radius: 2px;
+  opacity: 0; transition: opacity 0.1s;
+}
+.terminal-tab:hover .tab-close, .terminal-tab.active .tab-close { opacity: 1; }
+.tab-close:hover { background: var(--bg-overlay); color: var(--text-primary); }
+.add-tab-btn, .term-btn {
+  display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px;
+  border: none; background: transparent; color: var(--text-muted); cursor: pointer; border-radius: 3px;
+}
+.add-tab-btn:hover, .term-btn:hover { background: var(--bg-overlay); color: var(--text-primary); }
 
-.terminal-title {
-  font-weight: 600;
-  letter-spacing: 0.5px;
-  text-transform: uppercase;
-}
+.terminal-content { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.terminal-host { flex: 1; min-height: 0; min-width: 0; padding: 4px 6px 6px; overflow: hidden; }
 
-.terminal-actions {
-  display: flex;
-  gap: 2px;
-}
-
-.term-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  border: none;
-  background: transparent;
-  color: var(--text-muted);
-  cursor: pointer;
-  border-radius: 3px;
-}
-.term-btn:hover {
-  background: var(--bg-overlay);
-  color: var(--text-primary);
-}
-
-.terminal-host {
-  flex: 1;
-  min-height: 0;
-  min-width: 0;
-  padding: 4px 6px 6px;
-  overflow: hidden;
-}
-
-/* xterm 自身会渲染 canvas，给它留充足空间 */
-:deep(.xterm) {
-  height: 100%;
-}
-:deep(.xterm-viewport) {
-  background-color: transparent !important;
-}
+:deep(.xterm) { height: 100%; }
+:deep(.xterm-viewport) { background-color: transparent !important; }
 </style>

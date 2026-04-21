@@ -519,10 +519,12 @@ const messages = {
     },
   },
   terminal: {
-    close: 'Close terminal',
-    dockRight: 'Dock to the right',
-    dockBottom: 'Dock to the bottom',
-    spawnFailed: 'spawn failed',
+    close: 'Close Terminal',
+    dockRight: 'Dock to Right',
+    dockBottom: 'Dock to Bottom',
+    spawnFailed: 'Spawn failed',
+    newTab: 'New Tab',
+    closeTab: 'Close Tab',
     menu: {
       copy: 'Copy',
       paste: 'Paste',

@@ -524,6 +524,8 @@ const messages = {
     dockRight: '停靠到右侧',
     dockBottom: '停靠到底部',
     spawnFailed: 'spawn 失败',
+    newTab: '新建标签页',
+    closeTab: '关闭标签页',
     menu: {
       copy: '复制',
       paste: '粘贴',
