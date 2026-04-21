@@ -88,17 +88,8 @@ watch(
 // 切换自动返回对应桶，模板沿用 busy.pull / busy.push 等写法。
 const busy = computed(() => repoOpsStore.getBusy(repoStore.activeRepoId))
 
-// ── Pull 模式 ─────────────────────────────────────────────────────
+// ── Pull 下拉（单次执行，不持久化） ────────────────────────────────
 type PullMode = 'ff' | 'ff_only' | 'rebase'
-const PULL_MODE_KEY = 'gitui.pull.mode'
-const pullMode = ref<PullMode>(
-  (localStorage.getItem(PULL_MODE_KEY) as PullMode) || 'ff',
-)
-
-function setPullMode(mode: PullMode) {
-  pullMode.value = mode
-  localStorage.setItem(PULL_MODE_KEY, mode)
-}
 
 const pullModeMenu = reactive({
   visible: false,
@@ -107,19 +98,13 @@ const pullModeMenu = reactive({
 })
 
 const pullModeMenuItems = computed<ContextMenuItem[]>(() => [
-  {
-    label: `${pullMode.value === 'ff' ? '● ' : '○ '}${t('toolbar.pullMode.ff')}`,
-    action: 'ff',
-  },
-  {
-    label: `${pullMode.value === 'ff_only' ? '● ' : '○ '}${t('toolbar.pullMode.ffOnly')}`,
-    action: 'ff_only',
-  },
-  {
-    label: `${pullMode.value === 'rebase' ? '● ' : '○ '}${t('toolbar.pullMode.rebase')}`,
-    action: 'rebase',
-  },
+  { label: t('toolbar.pullMode.ff'), action: 'ff' },
+  { label: t('toolbar.pullMode.ffOnly'), action: 'ff_only' },
+  { label: t('toolbar.pullMode.rebase'), action: 'rebase' },
 ])
+
+// 记住 chevron 的 rect：多 remote 时 pickRemote 用它定位
+let pullChevronRect: DOMRect | null = null
 
 function onPullChevronClick(e: MouseEvent) {
   e.stopPropagation()
@@ -129,6 +114,7 @@ function onPullChevronClick(e: MouseEvent) {
   }
   const el = e.currentTarget as HTMLElement
   const rect = el.getBoundingClientRect()
+  pullChevronRect = rect
   pullModeMenu.x = rect.left
   pullModeMenu.y = rect.bottom + 4
   pullModeMenu.visible = true
@@ -136,7 +122,7 @@ function onPullChevronClick(e: MouseEvent) {
 
 function onPullModeSelect(action: string) {
   pullModeMenu.visible = false
-  setPullMode(action as PullMode)
+  doPull(action as PullMode, pullChevronRect ?? undefined)
 }
 
 // ── Push 下拉（单次执行，不持久化） ────────────────────────────────
@@ -332,21 +318,22 @@ function showAddRepoMenu(e: MouseEvent) {
 
 // ── Pull ────────────────────────────────────────────────────────────
 async function onPull(e: MouseEvent) {
+  await doPull('ff', (e.currentTarget as HTMLElement | null)?.getBoundingClientRect())
+}
+
+async function doPull(mode: PullMode, anchorRect?: DOMRect) {
   const id = repoStore.activeRepoId
   const branch = currentBranch.value
   if (!id || !branch) return
-  const rect = (e.currentTarget as HTMLElement | null)?.getBoundingClientRect()
-  const remote = await pickRemote(rect)
+  const remote = await pickRemote(anchorRect)
   if (!remote) {
-    // 区分 "没配 remote" 与 "用户取消选择"：只有 remotes 为空时才显示错误。
-    // 这里简单处理：listRemotes 返回 0 时 showError；取消不提示。
     const remotes = await git.listRemotes(id).catch(() => [])
     if (remotes.length === 0) showError(t('toolbar.noRemoteConfigured'))
     return
   }
   repoOpsStore.setBusy(id, 'pull', true)
   try {
-    await git.pullBranch(id, remote, branch, pullMode.value)
+    await git.pullBranch(id, remote, branch, mode)
     await Promise.all([historyStore.loadLog(), historyStore.loadBranches()])
     showToast('success', t('toolbar.opSuccess', { label: t('toolbar.opLabels.pull') }))
   } catch {
