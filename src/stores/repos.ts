@@ -54,11 +54,24 @@ export const useRepoStore = defineStore('repos', () => {
     error.value = null
     try {
       const rawPaths = (await store.get<string[]>(KEY_PATHS)) ?? []
-      // 去重：历史持久化数据可能包含重复 path
-      const paths = Array.from(new Set(rawPaths))
-      const activePath = (await store.get<string | null>(KEY_ACTIVE_PATH)) ?? null
+      // 去重并规范化：历史持久化数据可能包含重复 path 及带尾随斜杠的 path
+      const normalizedPaths = rawPaths.map((p) => {
+        let np = p
+        while (np.length > 1 && (np.endsWith('/') || np.endsWith('\\'))) {
+          np = np.slice(0, -1)
+        }
+        return np
+      })
+      const paths = Array.from(new Set(normalizedPaths))
+      
+      let activePath = (await store.get<string | null>(KEY_ACTIVE_PATH)) ?? null
+      if (activePath) {
+        while (activePath.length > 1 && (activePath.endsWith('/') || activePath.endsWith('\\'))) {
+          activePath = activePath.slice(0, -1)
+        }
+      }
 
-      let hasFailed = rawPaths.length !== paths.length // 去重本身算一次清理
+      let hasFailed = rawPaths.length !== paths.length || rawPaths.some((p, i) => p !== normalizedPaths[i]) // 去重或规范化本身算一次清理
       for (const path of paths) {
         try {
           const meta = await git.openRepo(path)
@@ -98,10 +111,15 @@ export const useRepoStore = defineStore('repos', () => {
     }
   }
 
-  async function openRepo(path: string) {
+  async function openRepo(rawPath: string) {
     loading.value = true
     error.value = null
     try {
+      let path = rawPath
+      while (path.length > 1 && (path.endsWith('/') || path.endsWith('\\'))) {
+        path = path.slice(0, -1)
+      }
+
       // 按 path 去重：相同路径已打开则直接激活，避免后端重复注册 watcher
       const existing = repos.value.find((r) => r.path === path)
       if (existing) {
