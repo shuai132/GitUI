@@ -200,10 +200,14 @@ function onSearchBlur() {
 
 function onSearchKeydown(e: KeyboardEvent) {
   if (e.key === 'Escape') {
-    uiStore.historySearchQuery = ''
-    searchExpanded.value = false
-    searchInputEl.value?.blur()
+    clearSearch()
   }
+}
+
+function clearSearch() {
+  uiStore.historySearchQuery = ''
+  searchExpanded.value = false
+  searchInputEl.value?.blur()
 }
 
 // ── 主题切换 ─────────────────────────────────────────────────────
@@ -785,6 +789,18 @@ async function handleDblClick(e: MouseEvent) {
           @blur="onSearchBlur"
           @keydown="onSearchKeydown"
         />
+        <button
+          v-show="uiStore.historySearchQuery"
+          class="search-clear-btn"
+          tabindex="-1"
+          @mousedown.prevent
+          @click="clearSearch"
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"/>
+            <line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
       </div>
 
       <!-- 主题切换：深色显示太阳（点击切浅色），浅色显示月亮（点击切深色） -->
@@ -1040,6 +1056,28 @@ async function handleDblClick(e: MouseEvent) {
 
 .search-input::placeholder {
   color: var(--text-muted);
+}
+
+.search-clear-btn {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  margin-right: 4px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-muted);
+  border-radius: 50%;
+  padding: 0;
+  transition: color 0.15s, background 0.15s;
+}
+
+.search-clear-btn:hover {
+  color: var(--text-primary);
+  background: var(--bg-overlay);
 }
 
 .btn-tool {
