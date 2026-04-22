@@ -148,9 +148,9 @@ function showTooltip(e: MouseEvent, c: CommitInfo) {
   const text = [
     c.message.trim(),
     '',
-    `作者：${c.author_name} <${c.author_email}>`,
-    `时间：${formatAbsoluteTime(c.time)}`,
-    `提交：${c.oid}`,
+    `${t('history.tooltip.author')}: ${c.author_name} <${c.author_email}>`,
+    `${t('history.tooltip.date')}: ${formatAbsoluteTime(c.time)}`,
+    `${t('history.tooltip.commit')}: ${c.oid}`,
   ].join('\n')
   tooltipTimer = setTimeout(() => {
     tooltip.text = text

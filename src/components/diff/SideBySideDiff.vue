@@ -260,13 +260,13 @@ defineExpose({ goNextChange, goPrevChange })
                    <span v-else-if="row.left.wordHtml" class="code" v-html="row.left.wordHtml" />
                    <span v-else class="code">{{ row.left.content }}</span>
                    
-                   <button
-                     v-if="allowRevert && row.left.kind === 'header'"
-                     class="hunk-revert-btn"
-                     @click.stop="emit('revert-hunk', row.left.hunkIndex!)"
-                   >
-                     回滚区块
-                   </button>
+                     <button
+                       v-if="allowRevert && row.left.kind === 'header'"
+                       class="hunk-revert-btn"
+                       @click.stop="emit('revert-hunk', row.left.hunkIndex!)"
+                     >
+                       {{ t('diff.hunk.rollback') }}
+                     </button>
                  </div>
               </div>
             </div>
@@ -464,6 +464,7 @@ defineExpose({ goNextChange, goPrevChange })
   cursor: pointer;
   transition: all 0.2s;
   user-select: none;
+  white-space: nowrap;
 }
 
 .hunk-revert-btn:hover {

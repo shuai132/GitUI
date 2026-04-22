@@ -181,7 +181,7 @@ defineExpose({ goNextChange, goPrevChange })
               class="hunk-revert-btn"
               @click.stop="emit('revert-hunk', row.hunkIndex)"
             >
-              回滚区块
+              {{ t('diff.hunk.rollback') }}
             </button>
           </template>
           <template v-else>
@@ -222,7 +222,7 @@ defineExpose({ goNextChange, goPrevChange })
                 class="hunk-revert-btn"
                 @click.stop="emit('revert-hunk', row.hunkIndex)"
               >
-                回滚区块
+                {{ t('diff.hunk.rollback') }}
               </button>
             </div>
             <div
@@ -326,6 +326,7 @@ defineExpose({ goNextChange, goPrevChange })
   cursor: pointer;
   transition: all 0.2s;
   user-select: none;
+  white-space: nowrap;
 }
 
 .hunk-revert-btn:hover {

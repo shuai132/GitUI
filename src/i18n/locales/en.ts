@@ -94,6 +94,14 @@ const messages = {
       deinitSubmodule: 'Deinit submodule',
     },
   },
+  time: {
+    justNow: 'Just now',
+    minutesAgo: '{n}m ago',
+    hoursAgo: '{n}h ago',
+    daysAgo: '{n}d ago',
+    today: 'Today {time}',
+    date: '{year}-{month}-{day} {time}',
+  },
   repo: {
     menu: {
       title: 'Add repository',
@@ -246,6 +254,7 @@ const messages = {
       date: 'Date',
       email: 'Email',
       parents: 'Parents',
+      changedFiles: 'Changed files',
       empty: 'Select a commit to see details',
     },
     fileMenu: {
@@ -510,6 +519,9 @@ const messages = {
       selectFile: 'Select a file to view changes',
       binaryFile: 'Binary file',
       noChanges: 'No content changes',
+    },
+    hunk: {
+      rollback: 'Rollback hunk',
     },
     image: {
       oldSide: 'Before',
@@ -846,6 +858,7 @@ const messages = {
     repo: { invalid: 'Not a Git repository, or the repository is no longer valid' },
     network: { failed: 'Network error: cannot reach the remote' },
     autoFetch: { failed: 'Auto-fetch failed ({remote}), check network or credentials' },
+    autoStash: { popFailed: 'Auto stash pop failed, please resolve manually: {detail}' },
   },
 } as const
 

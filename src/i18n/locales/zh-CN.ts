@@ -94,6 +94,14 @@ const messages = {
       deinitSubmodule: '删除 submodule',
     },
   },
+  time: {
+    justNow: '刚刚',
+    minutesAgo: '{n} 分钟前',
+    hoursAgo: '{n} 小时前',
+    daysAgo: '{n} 天前',
+    today: '今天 {time}',
+    date: '{year}年{month}月{day}日 {time}',
+  },
   repo: {
     menu: {
       title: '添加仓库',
@@ -246,6 +254,7 @@ const messages = {
       date: '日期',
       email: '邮箱',
       parents: '父提交',
+      changedFiles: '变更文件',
       empty: '选择提交查看详情',
     },
     fileMenu: {
@@ -509,6 +518,9 @@ const messages = {
       selectFile: '选择文件查看变更',
       binaryFile: '二进制文件',
       noChanges: '无内容变更',
+    },
+    hunk: {
+      rollback: '回滚区块',
     },
     image: {
       oldSide: '旧版',
@@ -845,6 +857,7 @@ const messages = {
     repo: { invalid: '不是 Git 仓库，或仓库已失效' },
     network: { failed: '网络错误：无法连接到远端' },
     autoFetch: { failed: '自动 fetch 失败（{remote}），请检查网络或认证' },
+    autoStash: { popFailed: '自动 stash pop 失败，请手动处理：{detail}' },
   },
 } as const
 

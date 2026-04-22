@@ -10,6 +10,7 @@ import { useGitCommands } from '@/composables/useGitCommands'
 import { useRepoStore } from './repos'
 import { useHistoryStore } from './history'
 import { useWorkspaceStore } from './workspace'
+import { t } from '@/i18n'
 
 /**
  * Merge / Rebase 相关状态与操作。
@@ -91,7 +92,7 @@ export const useMergeRebaseStore = defineStore('mergeRebase', () => {
         try {
           await git.stashPop(id, 0)
         } catch (e) {
-          lastError.value = `自动 stash pop 失败，请手动处理：${String(e)}`
+          lastError.value = t('errors.autoStash.popFailed', { detail: String(e) })
         }
       }
     }
@@ -159,7 +160,7 @@ export const useMergeRebaseStore = defineStore('mergeRebase', () => {
         try {
           await git.stashPop(id, 0)
         } catch (e) {
-          lastError.value = `自动 stash pop 失败，请手动处理：${String(e)}`
+          lastError.value = t('errors.autoStash.popFailed', { detail: String(e) })
         }
       }
     }

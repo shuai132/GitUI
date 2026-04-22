@@ -1,23 +1,26 @@
+import { t, i18n } from '@/i18n'
+
 export function formatTime(seconds: number): string {
   const now = Math.floor(Date.now() / 1000)
   const diff = now - seconds
 
-  if (diff < 60) return '刚刚'
-  if (diff < 3600) return `${Math.floor(diff / 60)} 分钟前`
-  if (diff < 86400) return `${Math.floor(diff / 3600)} 小时前`
-  if (diff < 604800) return `${Math.floor(diff / 86400)} 天前`
+  if (diff < 60) return t('time.justNow')
+  if (diff < 3600) return t('time.minutesAgo', { n: Math.floor(diff / 60) })
+  if (diff < 86400) return t('time.hoursAgo', { n: Math.floor(diff / 3600) })
+  if (diff < 604800) return t('time.daysAgo', { n: Math.floor(diff / 86400) })
 
   const date = new Date(seconds * 1000)
-  return date.toLocaleDateString('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  })
+  return t('time.date', {
+    year: date.getFullYear(),
+    month: date.getMonth() + 1,
+    day: date.getDate(),
+    time: '',
+  }).trim()
 }
 
 export function formatAbsoluteTime(seconds: number): string {
   const date = new Date(seconds * 1000)
-  return date.toLocaleString('zh-CN')
+  return date.toLocaleString(i18n.global.locale.value as string)
 }
 
 /**
@@ -32,8 +35,13 @@ export function formatHistoryTime(seconds: number): string {
     d.getFullYear() === now.getFullYear() &&
     d.getMonth() === now.getMonth() &&
     d.getDate() === now.getDate()
-  if (sameDay) return `今天 ${hh}:${mm}`
-  return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日 ${hh}:${mm}`
+  if (sameDay) return t('time.today', { time: `${hh}:${mm}` })
+  return t('time.date', {
+    year: d.getFullYear(),
+    month: d.getMonth() + 1,
+    day: d.getDate(),
+    time: `${hh}:${mm}`,
+  })
 }
 
 /**
