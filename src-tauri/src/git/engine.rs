@@ -2664,6 +2664,15 @@ impl GitEngine {
         Ok(())
     }
 
+    /// 还原一个 patch 到工作区（用于回滚 hunk）
+    pub fn apply_patch(path: &str, patch_text: &str) -> GitResult<()> {
+        let repo = Self::open(path)?;
+        let diff = git2::Diff::from_buffer(patch_text.as_bytes())?;
+        let mut opts = git2::ApplyOptions::new();
+        repo.apply(&diff, git2::ApplyLocation::WorkDir, Some(&mut opts))?;
+        Ok(())
+    }
+
     /// 读取 HEAD 的 reflog，返回最多 `limit` 条记录（最新在前）。
     pub fn get_reflog(path: &str, limit: usize) -> GitResult<Vec<ReflogEntry>> {
         let repo = Self::open(path)?;

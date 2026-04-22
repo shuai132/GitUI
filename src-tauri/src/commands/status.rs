@@ -74,3 +74,15 @@ pub async fn get_repo_state(
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
     GitEngine::get_repo_state(&meta.path)
 }
+
+#[tauri::command]
+pub async fn apply_patch(
+    repo_id: String,
+    patch_text: String,
+    repo_manager: State<'_, RepoManager>,
+) -> Result<(), GitError> {
+    let meta = repo_manager
+        .get_meta(&repo_id)
+        .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
+    GitEngine::apply_patch(&meta.path, &patch_text)
+}

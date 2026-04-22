@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { FileDiff } from '@/types/git'
 import SideBySideDiff from './SideBySideDiff.vue'
@@ -9,6 +9,8 @@ import ConflictView from './ConflictView.vue'
 import { EXT_TO_LANG } from '@/lib/highlight'
 import { detectPreviewKind } from '@/lib/preview'
 import { useUiStore } from '@/stores/ui'
+import { useShortcutsStore, bindingToLabel, type ShortcutActionId } from '@/stores/shortcuts'
+import { useGitCommands } from '@/composables/useGitCommands'
 
 const { t } = useI18n()
 
@@ -25,6 +27,13 @@ const props = defineProps<{
 const emit = defineEmits<{ close: [] }>()
 
 const uiStore = useUiStore()
+const shortcutsStore = useShortcutsStore()
+const { applyPatch } = useGitCommands()
+
+function withShortcut(label: string, actionId: ShortcutActionId): string {
+  const b = shortcutsStore.bindings[actionId]
+  return b ? `${label} (${bindingToLabel(b)})` : label
+}
 
 const syntaxLang = computed<string | null>(() => {
   if (!uiStore.diffHighlightEnabled || !props.diff) return null
@@ -59,6 +68,93 @@ function onNextChange() {
 function onPrevChange() {
   diffRef.value?.goPrevChange()
 }
+
+// 仅在非 WIP 场景下允许回滚（历史 diff 回滚 = 反向应用该 hunk）
+const allowRevert = computed(() => !props.wip && props.diff != null)
+
+async function onRevertHunk(hunkIndex: number) {
+  if (!props.repoId || !props.diff) return
+  const diff = props.diff
+  const hunk = diff.hunks[hunkIndex]
+  if (!hunk) return
+  
+  const oldPath = diff.old_path ?? diff.new_path
+  const newPath = diff.new_path ?? diff.old_path
+  
+  const lines: string[] = []
+  lines.push(`diff --git a/${oldPath} b/${newPath}\n`)
+  lines.push(`--- a/${oldPath}\n`)
+  lines.push(`+++ b/${newPath}\n`)
+  
+  // 提取原始 hunk header 中的上下文信息（例如函数名）
+  const match = hunk.header.match(/^@@[^@]+@@(.*)$/)
+  const ctx = match ? match[1] : ''
+  lines.push(`@@ -${hunk.new_start},${hunk.new_lines} +${hunk.old_start},${hunk.old_lines} @@${ctx}`)
+  if (!lines[lines.length - 1].endsWith('\n')) {
+    lines[lines.length - 1] += '\n'
+  }
+  
+  for (const line of hunk.lines) {
+    let prefix = ' '
+    if (line.origin === '-') prefix = '+'
+    else if (line.origin === '+') prefix = '-'
+    
+    const c = line.content.endsWith('\n') ? line.content : line.content + '\n'
+    lines.push(`${prefix}${c}`)
+  }
+  
+  const patchText = lines.join('')
+  
+  try {
+    await applyPatch(props.repoId, patchText)
+    // Watcher 会自动感知工作区变更并触发刷新
+  } catch (err) {
+    console.error('Failed to revert hunk:', err)
+  }
+}
+
+const searchInputEl = ref<HTMLInputElement | null>(null)
+const searchExpanded = ref(false)
+
+watch(() => uiStore.openDiffSearchSignal, () => {
+  expandSearch()
+})
+
+function expandSearch() {
+  searchExpanded.value = true
+  setTimeout(() => searchInputEl.value?.focus(), 0)
+}
+
+function onSearchBlur() {
+  if (!uiStore.diffSearchQuery) {
+    searchExpanded.value = false
+  }
+}
+
+function onSearchKeydown(e: KeyboardEvent) {
+  if (e.key === 'Escape') {
+    uiStore.diffSearchQuery = ''
+    searchExpanded.value = false
+    searchInputEl.value?.blur()
+    // 焦点交还给 .diff-view 以支持连续快捷键
+    const el = searchInputEl.value?.closest('.diff-view') as HTMLElement | null
+    if (el) el.focus()
+  } else if (e.key === 'Enter') {
+    // 触发原生查找
+    if (uiStore.diffSearchQuery) {
+      (window as any).find(uiStore.diffSearchQuery, false, e.shiftKey, true, false, false, false)
+    }
+  }
+}
+
+// 搜索词变化时，如果非空且没有被回车触发，自动查找第一个
+watch(() => uiStore.diffSearchQuery, (query) => {
+  if (query) {
+    // 消除先前的选择
+    window.getSelection()?.removeAllRanges()
+    ;(window as any).find(query, false, false, true, false, false, false)
+  }
+})
 </script>
 
 <template>
@@ -69,7 +165,7 @@ function onPrevChange() {
     @close="emit('close')"
   />
 
-  <div v-else class="diff-view">
+  <div v-else class="diff-view" tabindex="-1">
     <!-- Toolbar -->
     <div class="diff-toolbar" v-if="diff">
       <span class="diff-file-path" :title="diff.new_path ?? diff.old_path">
@@ -87,6 +183,33 @@ function onPrevChange() {
       >{{ diff.encoding }}</span>
 
       <div class="toolbar-spacer" />
+
+      <!-- 搜索框 -->
+      <div
+        v-if="!isImageView"
+        class="search-box"
+        :class="{ 'search-box--expanded': searchExpanded || uiStore.diffSearchQuery }"
+      >
+        <button class="search-icon-btn" tabindex="-1" :title="withShortcut(t('toolbar.title.search'), 'search')" @click="expandSearch">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="11" cy="11" r="8"/>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+        </button>
+        <input
+          v-show="searchExpanded || uiStore.diffSearchQuery"
+          ref="searchInputEl"
+          v-model="uiStore.diffSearchQuery"
+          class="search-input"
+          :placeholder="t('toolbar.search.placeholder')"
+          spellcheck="false"
+          autocomplete="off"
+          @blur="onSearchBlur"
+          @keydown="onSearchKeydown"
+        />
+      </div>
+
+      <div class="toolbar-divider" v-if="!isImageView" />
 
       <!-- 文本模式下才显示变更跳转、语法高亮、三种视图切换 -->
       <template v-if="!isImageView">
@@ -218,6 +341,8 @@ function onPrevChange() {
         :diff="diff"
         :loading="loading"
         :syntax-lang="syntaxLang"
+        :allow-revert="allowRevert"
+        @revert-hunk="onRevertHunk"
       />
       <InlineDiff
         v-else
@@ -226,6 +351,8 @@ function onPrevChange() {
         :loading="loading"
         :group-by-hunk="uiStore.diffViewMode === 'by-hunk'"
         :syntax-lang="syntaxLang"
+        :allow-revert="allowRevert"
+        @revert-hunk="onRevertHunk"
       />
     </div>
   </div>
@@ -239,6 +366,65 @@ function onPrevChange() {
   overflow: hidden;
   min-width: 0;
   min-height: 0;
+  outline: none; /* remove focus outline for tabindex=-1 */
+}
+
+/* Search Box (copied from AppToolbar) */
+.search-box {
+  display: flex;
+  align-items: center;
+  border-radius: 4px;
+  overflow: hidden;
+  transition: width 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+  width: 26px;
+  border: 1px solid transparent;
+  background: transparent;
+}
+
+.search-box--expanded {
+  width: 136px;
+  border-color: var(--border);
+  background: var(--bg-surface);
+  padding-right: 6px;
+}
+
+.search-icon-btn {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-muted);
+  border-radius: 4px;
+  padding: 0;
+  transition: color 0.15s;
+}
+
+.search-icon-btn:hover {
+  color: var(--text-primary);
+}
+
+.search-box--expanded .search-icon-btn {
+  cursor: default;
+}
+
+.search-input {
+  flex: 1;
+  min-width: 0;
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  font-size: var(--font-sm);
+  font-family: inherit;
+  outline: none;
+}
+
+.search-input::placeholder {
+  color: var(--text-muted);
 }
 
 .diff-toolbar {

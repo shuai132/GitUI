@@ -12,6 +12,12 @@ const props = defineProps<{
   loading?: boolean
   /** 语法高亮语言（null 表示关闭高亮） */
   syntaxLang?: string | null
+  /** 是否允许回滚变动行 */
+  allowRevert?: boolean
+}>()
+
+const emit = defineEmits<{
+  'revert-hunk': [hunkIndex: number]
 }>()
 
 interface AlignedLine {
@@ -20,6 +26,7 @@ interface AlignedLine {
   kind: 'del' | 'add' | 'ctx' | 'empty' | 'header'
   /** 开启 word-diff 时替代 content 的 HTML（已转义 + <mark> 标注）；null = 用 content */
   wordHtml?: string
+  hunkIndex?: number
 }
 
 interface AlignedRow {
@@ -31,10 +38,11 @@ const alignedRows = computed((): AlignedRow[] => {
   if (!props.diff) return []
   const rows: AlignedRow[] = []
 
-  for (const hunk of props.diff.hunks) {
+  for (let hi = 0; hi < props.diff.hunks.length; hi++) {
+    const hunk = props.diff.hunks[hi]
     // Hunk header row
     rows.push({
-      left: { content: hunk.header.trimEnd(), kind: 'header' },
+      left: { content: hunk.header.trimEnd(), kind: 'header', hunkIndex: hi },
       right: { content: '', kind: 'header' },
     })
 
@@ -251,6 +259,14 @@ defineExpose({ goNextChange, goPrevChange })
                    <span v-if="syntaxLang" class="code" v-html="highlightLine(row.left.content, syntaxLang)" />
                    <span v-else-if="row.left.wordHtml" class="code" v-html="row.left.wordHtml" />
                    <span v-else class="code">{{ row.left.content }}</span>
+                   
+                   <button
+                     v-if="allowRevert && row.left.kind === 'header'"
+                     class="hunk-revert-btn"
+                     @click.stop="emit('revert-hunk', row.left.hunkIndex!)"
+                   >
+                     回滚区块
+                   </button>
                  </div>
               </div>
             </div>
@@ -433,5 +449,26 @@ defineExpose({ goNextChange, goPrevChange })
 
 .line-ctx {
   color: var(--text-secondary);
+}
+
+.hunk-revert-btn {
+  position: sticky;
+  right: 12px;
+  margin-left: auto;
+  padding: 2px 8px;
+  font-size: 11px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s;
+  user-select: none;
+}
+
+.hunk-revert-btn:hover {
+  background: var(--bg-overlay);
+  color: var(--text-primary);
+  border-color: var(--text-muted);
 }
 </style>

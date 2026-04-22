@@ -14,6 +14,12 @@ const props = defineProps<{
   groupByHunk: boolean
   /** 语法高亮语言（null 表示关闭高亮） */
   syntaxLang?: string | null
+  /** 是否允许回滚变动行 */
+  allowRevert?: boolean
+}>()
+
+const emit = defineEmits<{
+  'revert-hunk': [hunkIndex: number]
 }>()
 
 interface InlineRow {
@@ -170,6 +176,13 @@ defineExpose({ goNextChange, goPrevChange })
         >
           <template v-if="row.kind === 'header'">
             <span class="line-header-content">{{ row.content }}</span>
+            <button
+              v-if="allowRevert"
+              class="hunk-revert-btn"
+              @click.stop="emit('revert-hunk', row.hunkIndex)"
+            >
+              回滚区块
+            </button>
           </template>
           <template v-else>
             <span class="ln">{{ row.oldLineNo ?? '' }}</span>
@@ -203,7 +216,14 @@ defineExpose({ goNextChange, goPrevChange })
               class="hunk-header"
               :data-row="rows.indexOf(row)"
             >
-              {{ row.content }}
+              <span class="hunk-header-title">{{ row.content }}</span>
+              <button
+                v-if="allowRevert"
+                class="hunk-revert-btn"
+                @click.stop="emit('revert-hunk', row.hunkIndex)"
+              >
+                回滚区块
+              </button>
             </div>
             <div
               v-else
@@ -285,7 +305,33 @@ defineExpose({ goNextChange, goPrevChange })
   border-bottom: 1px solid var(--border);
   color: var(--text-muted);
   font-size: var(--font-sm);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.hunk-header-title {
   white-space: pre;
+}
+
+.hunk-revert-btn {
+  position: sticky;
+  right: 12px;
+  padding: 2px 8px;
+  font-size: 11px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s;
+  user-select: none;
+}
+
+.hunk-revert-btn:hover {
+  background: var(--bg-overlay);
+  color: var(--text-primary);
+  border-color: var(--text-muted);
 }
 
 /* ── 行结构 ───────────────────────────────────────────────────── */

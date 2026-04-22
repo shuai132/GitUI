@@ -92,6 +92,9 @@ export function useGitCommands() {
   const getRepoState = (repoId: string) =>
     call<RepoState>('get_repo_state', { repoId })
 
+  const applyPatch = (repoId: string, patchText: string) =>
+    call<void>('apply_patch', { repoId, patchText })
+
   // ---- Merge / Rebase / Conflict ----
   const mergeBranch = (
     repoId: string,
@@ -439,6 +442,7 @@ export function useGitCommands() {
     stageAll,
     unstageAll,
     getRepoState,
+    applyPatch,
     mergeBranch,
     mergeContinue,
     mergeAbort,
