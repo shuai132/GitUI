@@ -11,6 +11,7 @@ const PAGE_SIZE = 200
 export const useHistoryStore = defineStore('history', () => {
   const commits = ref<CommitInfo[]>([])
   const branches = ref<BranchInfo[]>([])
+  const remotes = ref<string[]>([])
   const tags = ref<TagInfo[]>([])
   // 远端已存在的 tag 短名集合（任一 remote 命中即算已同步）。
   // 通过 list_remote_tags 懒加载，失败时 remoteTagsChecked 保持 false，UI 显示"未知"。
@@ -121,7 +122,10 @@ export const useHistoryStore = defineStore('history', () => {
     if (!repoStore.activeRepoId) return
 
     try {
-      const next = await git.listBranches(repoStore.activeRepoId)
+      const [next, nextRemotes] = await Promise.all([
+        git.listBranches(repoStore.activeRepoId),
+        git.listRemotes(repoStore.activeRepoId).catch(() => [] as string[])
+      ])
       // 分支列表结构未变（数量、名称、指向的 oid、ahead/behind 都一样）时跳过
       const prev = branches.value
       const unchanged =
@@ -134,6 +138,12 @@ export const useHistoryStore = defineStore('history', () => {
           b.behind === prev[i].behind,
         )
       if (!unchanged) branches.value = next
+
+      const prevRemotes = remotes.value
+      const remotesUnchanged =
+        nextRemotes.length === prevRemotes.length &&
+        nextRemotes.every((r, i) => r === prevRemotes[i])
+      if (!remotesUnchanged) remotes.value = nextRemotes
     } catch (e: unknown) {
       error.value = String(e)
     }
@@ -341,6 +351,7 @@ export const useHistoryStore = defineStore('history', () => {
   function reset() {
     commits.value = []
     branches.value = []
+    remotes.value = []
     tags.value = []
     remoteTagNames.value = new Set()
     remoteTagsChecked.value = false
@@ -356,6 +367,7 @@ export const useHistoryStore = defineStore('history', () => {
   return {
     commits,
     branches,
+    remotes,
     tags,
     remoteTagNames,
     remoteTagsChecked,

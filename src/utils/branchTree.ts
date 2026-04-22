@@ -65,9 +65,16 @@ function freezeFolder(f: MutableFolder): FolderNode {
  * - 返回的根节点数组 = 按第一段命名分组得到的若干 folder（通常就是 `origin`）
  * - 若某条分支只有一段（如本地分支 `main`），会归到一个隐式的根 folder，
  *   但典型用法只传远程分支进来，所以至少会有两段
+ * - `predefinedRoots` 用于预先注入已知的 remote（例如没 fetch 过的空 remote）
  */
-export function buildBranchTree(branches: BranchInfo[]): FolderNode[] {
+export function buildBranchTree(branches: BranchInfo[], predefinedRoots?: string[]): FolderNode[] {
   const roots = new Map<string, MutableFolder>()
+
+  if (predefinedRoots) {
+    for (const name of predefinedRoots) {
+      roots.set(name, newFolder(name, name))
+    }
+  }
 
   for (const b of branches) {
     const parts = b.name.split('/')

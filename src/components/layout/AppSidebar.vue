@@ -65,7 +65,7 @@ const currentUpstream = computed(() => {
 
 // Remote branch tree（按 / 分层，第一层是 origin / upstream 等 remote 名）
 const remoteTree = computed(() =>
-  buildBranchTree(historyStore.branches.filter((b) => b.is_remote))
+  buildBranchTree(historyStore.branches.filter((b) => b.is_remote), historyStore.remotes)
 )
 
 // 侧栏空间紧张，+ 按钮直接弹「添加仓库」菜单（打开 / 克隆 / 新建），
