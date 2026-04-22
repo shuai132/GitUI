@@ -75,16 +75,7 @@ export function useShortcuts() {
 
     if (matchesBinding(e, b.fetchAll)) {
       e.preventDefault()
-      const id = repoStore.activeRepoId
-      if (id) {
-        try {
-          await git.fetchRemote(id, '--all')
-          historyStore.loadLog()
-          historyStore.loadBranches()
-        } catch {
-          // errors handled by errorsStore via useGitCommands
-        }
-      }
+      uiStore.requestFetch('--all')
       return
     }
 

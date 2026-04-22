@@ -19,6 +19,12 @@ pub enum FileStatusKind {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RemoteInfo {
+    pub name: String,
+    pub url: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FileEntry {
     pub path: String,
     pub old_path: Option<String>,

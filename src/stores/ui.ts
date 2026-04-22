@@ -309,6 +309,13 @@ export const useUiStore = defineStore('ui', () => {
     openDiffSearchSignal.value++
   }
 
+  const fetchSignal = ref(0)
+  const fetchTarget = ref<string | null>(null)
+  function requestFetch(target: string | null = null) {
+    fetchTarget.value = target
+    fetchSignal.value++
+  }
+
   return {
     // state
     shouldOpenDiscardAll,
@@ -358,5 +365,8 @@ export const useUiStore = defineStore('ui', () => {
     requestOpenSearch,
     openDiffSearchSignal,
     requestOpenDiffSearch,
+    fetchSignal,
+    fetchTarget,
+    requestFetch,
   }
 })

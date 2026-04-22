@@ -759,25 +759,9 @@ async function onRemoteMenuAction(action: string) {
 
   try {
     if (action === 'fetch-all') {
-      const { useRepoOpsStore } = await import('@/stores/repoOps')
-      useRepoOpsStore().setBusy(repoId, 'fetch', true)
-      try {
-        await git.fetchRemote(repoId, '--all')
-        await Promise.all([historyStore.loadLog(), historyStore.loadBranches()])
-        historyStore.loadRemoteTags().catch(() => {})
-      } finally {
-        useRepoOpsStore().setBusy(repoId, 'fetch', false)
-      }
+      uiStore.requestFetch('--all')
     } else if (action === 'fetch' && target) {
-      const { useRepoOpsStore } = await import('@/stores/repoOps')
-      useRepoOpsStore().setBusy(repoId, 'fetch', true)
-      try {
-        await git.fetchRemote(repoId, target)
-        await Promise.all([historyStore.loadLog(), historyStore.loadBranches()])
-        historyStore.loadRemoteTags().catch(() => {})
-      } finally {
-        useRepoOpsStore().setBusy(repoId, 'fetch', false)
-      }
+      uiStore.requestFetch(target)
     } else if (action === 'edit' && target) {
       const remote = historyStore.remotes.find(r => r.name === target)
       if (remote) {
@@ -1043,6 +1027,7 @@ async function onAddSubmoduleSuccess() {
             @dblclick-branch="onDblclickRemoteBranch"
             @branch-context-menu="openContextMenu"
             @delete-remote="onDeleteRemote"
+            @remote-context-menu="openRemoteItemMenu"
           />
         </template>
       </div>
@@ -1174,11 +1159,11 @@ async function onAddSubmoduleSuccess() {
 
     <!-- Generic confirm dialog (for remote / submodule delete) -->
     <ContextMenu
-      v-model:visible="remoteMenu.visible"
+      :visible="remoteMenu.visible"
       :x="remoteMenu.x"
       :y="remoteMenu.y"
       :items="remoteMenuItems"
-      @action="onRemoteMenuAction"
+      @select="onRemoteMenuAction"
       @close="closeRemoteMenu"
     />
 

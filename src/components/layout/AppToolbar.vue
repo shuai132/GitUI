@@ -411,11 +411,24 @@ async function onPop() {
 }
 
 // ── Fetch ───────────────────────────────────────────────────────────
-async function onFetch(e: MouseEvent) {
+const fetchBtnRef = ref<HTMLButtonElement | null>(null)
+
+watch(() => uiStore.fetchSignal, () => {
+  onFetch()
+})
+
+async function onFetch(e?: MouseEvent) {
   const id = repoStore.activeRepoId
   if (!id) return
-  const rect = (e.currentTarget as HTMLElement | null)?.getBoundingClientRect()
-  const remote = await pickRemote(rect)
+  
+  let remote = uiStore.fetchTarget
+  if (!remote) {
+    const rect = e 
+      ? (e.currentTarget as HTMLElement).getBoundingClientRect()
+      : fetchBtnRef.value?.getBoundingClientRect()
+    remote = await pickRemote(rect)
+  }
+  
   if (!remote) {
     const remotes = await git.listRemotes(id).catch(() => [])
     if (remotes.length === 0) showError(t('toolbar.noRemoteConfigured'))
@@ -712,6 +725,7 @@ async function handleDblClick(e: MouseEvent) {
 
       <!-- Fetch：抓取远端但不合并 -->
       <button
+        ref="fetchBtnRef"
         class="btn-tool"
         :title="withShortcut(t('toolbar.title.fetch'), 'fetchAll')"
         :disabled="!hasRepo || busy.fetch"

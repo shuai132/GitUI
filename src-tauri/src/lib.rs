@@ -115,6 +115,7 @@ pub fn run() {
             pull_branch,
             list_remotes,
             add_remote,
+            edit_remote,
             remove_remote,
             // Submodule
             list_submodules,

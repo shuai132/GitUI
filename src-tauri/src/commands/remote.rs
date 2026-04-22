@@ -15,9 +15,18 @@ pub async fn fetch_remote(
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    let result = GitEngine::fetch(&meta.path, &remote_name);
-    log::debug!("[fetch_remote] result={result:?}");
-    result
+    
+    if remote_name == "--all" {
+        let remotes = GitEngine::list_remotes(&meta.path)?;
+        for remote in remotes {
+            let _ = GitEngine::fetch(&meta.path, &remote.name);
+        }
+        Ok(())
+    } else {
+        let result = GitEngine::fetch(&meta.path, &remote_name);
+        log::debug!("[fetch_remote] result={result:?}");
+        result
+    }
 }
 
 #[tauri::command]
@@ -75,7 +84,7 @@ pub async fn pull_branch(
 pub async fn list_remotes(
     repo_id: String,
     repo_manager: State<'_, RepoManager>,
-) -> Result<Vec<String>, GitError> {
+) -> Result<Vec<crate::git::types::RemoteInfo>, GitError> {
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
@@ -107,4 +116,19 @@ pub async fn remove_remote(
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
     GitEngine::remove_remote(&meta.path, &name)
+}
+
+#[tauri::command]
+pub async fn edit_remote(
+    repo_id: String,
+    old_name: String,
+    new_name: String,
+    new_url: String,
+    repo_manager: State<'_, RepoManager>,
+) -> Result<(), GitError> {
+    log::debug!("[edit_remote] old={old_name} new={new_name} url={new_url}");
+    let meta = repo_manager
+        .get_meta(&repo_id)
+        .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
+    GitEngine::edit_remote(&meta.path, &old_name, &new_name, &new_url)
 }

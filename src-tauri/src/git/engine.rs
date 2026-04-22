@@ -2089,11 +2089,19 @@ impl GitEngine {
         Ok(())
     }
 
-    pub fn list_remotes(path: &str) -> GitResult<Vec<String>> {
+    pub fn list_remotes(path: &str) -> GitResult<Vec<RemoteInfo>> {
         let repo = Self::open(path)?;
-        let remotes = repo.remotes()?;
-        // iter_bytes 拿原始字节走 lossy，避免 git2 严格 UTF-8 检查跳过非法 ref 名
-        Ok(remotes.iter_bytes().map(decode_ref_name).collect())
+        let remotes_list = repo.remotes()?;
+        let mut result = Vec::new();
+        for name_bytes in remotes_list.iter_bytes() {
+            let name = decode_ref_name(name_bytes);
+            if name.is_empty() {
+                continue;
+            }
+            let url = repo.find_remote(&name).ok().and_then(|r| r.url().map(|s| s.to_string()));
+            result.push(RemoteInfo { name, url });
+        }
+        Ok(result)
     }
 
     /// 添加一个新的 remote（等价于 `git remote add <name> <url>`）。
@@ -2108,6 +2116,21 @@ impl GitEngine {
     pub fn remove_remote(path: &str, name: &str) -> GitResult<()> {
         let repo = Self::open(path)?;
         repo.remote_delete(name)?;
+        Ok(())
+    }
+
+    /// 修改 remote 的名称和/或 URL。
+    pub fn edit_remote(
+        path: &str,
+        old_name: &str,
+        new_name: &str,
+        new_url: &str,
+    ) -> GitResult<()> {
+        let repo = Self::open(path)?;
+        if old_name != new_name {
+            repo.remote_rename(old_name, new_name)?;
+        }
+        repo.remote_set_url(new_name, new_url)?;
         Ok(())
     }
 

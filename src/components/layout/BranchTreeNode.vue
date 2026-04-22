@@ -16,6 +16,7 @@ const emit = defineEmits<{
   dblclickBranch: [branch: BranchInfo]
   branchContextMenu: [event: MouseEvent, branch: BranchInfo]
   deleteRemote: [remoteName: string]
+  remoteContextMenu: [event: MouseEvent, remoteName: string]
 }>()
 
 const treeState = useBranchTreeState()
@@ -47,6 +48,15 @@ function onDeleteRemote(e: MouseEvent) {
   emit('deleteRemote', props.node.name)
 }
 
+function onFolderContextMenu(e: MouseEvent) {
+  if (props.node.kind !== 'folder') return
+  if (props.isRemoteRoot) {
+    e.preventDefault()
+    e.stopPropagation()
+    emit('remoteContextMenu', e, props.node.name)
+  }
+}
+
 // 缩进：level=0 与 section-title 的 padding-left (12px) 对齐，
 // 之后每层再缩进 12px
 const indentPx = (level: number) => 12 + level * 12 + 'px'
@@ -60,6 +70,7 @@ const indentPx = (level: number) => 12 + level * 12 + 'px'
       :class="{ 'tree-folder--remote-root': isRemoteRoot }"
       :style="{ paddingLeft: indentPx(level) }"
       @click="onFolderClick"
+      @contextmenu="onFolderContextMenu"
     >
       <svg
         class="chevron"
@@ -102,6 +113,7 @@ const indentPx = (level: number) => 12 + level * 12 + 'px'
         @dblclick-branch="(b) => emit('dblclickBranch', b)"
         @branch-context-menu="(ev, b) => emit('branchContextMenu', ev, b)"
         @delete-remote="(n) => emit('deleteRemote', n)"
+        @remote-context-menu="(ev, n) => emit('remoteContextMenu', ev, n)"
       />
     </template>
   </template>
