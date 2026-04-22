@@ -307,6 +307,8 @@ const messages = {
         autoStash: 'Auto-stash uncommitted changes before and restore after',
         authorDate: 'Author Date',
         committerDate: 'Committer Date',
+        authorName: 'Author Name',
+        authorEmail: 'Author Email',
       },
     },
   },

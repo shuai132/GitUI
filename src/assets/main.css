@@ -5,6 +5,7 @@
      :root 继续作为深色默认，避免破坏所有未 opt-in 的存量组件。
      浅色主题通过 [data-theme="light"] 覆盖。*/
   :root {
+    color-scheme: dark;
     --bg-primary: #13151f;
     --bg-secondary: #181b27;
     --bg-surface: #20242f;
@@ -76,6 +77,7 @@
 
   /* 浅色主题（GitHub Primer Light 风格：冷灰白 + 工程化配色） */
   :root[data-theme="light"] {
+    color-scheme: light;
     --bg-primary: #ffffff;
     --bg-secondary: #f6f8fa;
     --bg-surface: #eaeef2;

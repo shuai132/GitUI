@@ -2331,7 +2331,7 @@ onUnmounted(() => {
 .edit-message-time-label {
   font-size: var(--font-sm);
   color: var(--text-secondary);
-  min-width: 80px;
+  min-width: 120px;
   flex-shrink: 0;
 }
 
@@ -2346,7 +2346,6 @@ onUnmounted(() => {
   padding: 4px 6px;
   outline: none;
   box-sizing: border-box;
-  color-scheme: dark;
 }
 
 .edit-message-time-input:focus {
