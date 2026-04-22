@@ -7,6 +7,7 @@ import { useHistoryStore } from '@/stores/history'
 import { useSubmodulesStore } from '@/stores/submodules'
 import { useStashStore } from '@/stores/stash'
 import { useUiStore } from '@/stores/ui'
+import { useWorkspaceStore } from '@/stores/workspace'
 import { resolveExternalTerminalApp, useSettingsStore } from '@/stores/settings'
 import { buildBranchTree } from '@/utils/branchTree'
 import type { BranchInfo, SubmoduleInfo, StashEntry, TagInfo } from '@/types/git'
@@ -35,13 +36,32 @@ const historyStore = useHistoryStore()
 const submodulesStore = useSubmodulesStore()
 const stashStore = useStashStore()
 const uiStore = useUiStore()
+const workspaceStore = useWorkspaceStore()
 const settingsStore = useSettingsStore()
 const sectionState = useSidebarSectionState()
 
 // Local branches
-const localBranches = computed(() =>
-  historyStore.branches.filter((b) => !b.is_remote)
-)
+const localBranches = computed(() => {
+  const branches = historyStore.branches.filter((b) => !b.is_remote)
+  if (workspaceStore.status?.is_detached) {
+    const detachedBranch: BranchInfo = {
+      name: 'HEAD',
+      is_remote: false,
+      is_head: true,
+      upstream: undefined,
+      commit_oid: workspaceStore.status.head_commit,
+      ahead: 0,
+      behind: 0
+    }
+    return [detachedBranch, ...branches]
+  }
+  return branches
+})
+
+const currentUpstream = computed(() => {
+  const current = localBranches.value.find((b) => b.is_head)
+  return current?.upstream
+})
 
 // Remote branch tree（按 / 分层，第一层是 origin / upstream 等 remote 名）
 const remoteTree = computed(() =>
@@ -929,6 +949,7 @@ async function onAddSubmoduleSuccess() {
             :node="root"
             :level="0"
             :is-remote-root="true"
+            :current-upstream="currentUpstream"
             @select-branch="onSelectRemoteBranch"
             @dblclick-branch="onDblclickRemoteBranch"
             @branch-context-menu="openContextMenu"
@@ -1229,7 +1250,9 @@ async function onAddSubmoduleSuccess() {
 }
 
 .branch-item--current {
-  color: var(--text-primary);
+  color: var(--accent-blue);
+  background: var(--bg-overlay);
+  font-weight: 500;
 }
 
 .branch-item--remote {

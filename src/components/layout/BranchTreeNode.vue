@@ -8,6 +8,7 @@ const props = defineProps<{
   level: number
   /** 仅顶层 remote folder（remote name 行）传 true，用于显示删除按钮 */
   isRemoteRoot?: boolean
+  currentUpstream?: string
 }>()
 
 const emit = defineEmits<{
@@ -96,6 +97,7 @@ const indentPx = (level: number) => 12 + level * 12 + 'px'
         :key="child.kind === 'folder' ? 'f:' + child.path : 'b:' + child.fullName"
         :node="child"
         :level="level + 1"
+        :current-upstream="currentUpstream"
         @select-branch="(b) => emit('selectBranch', b)"
         @dblclick-branch="(b) => emit('dblclickBranch', b)"
         @branch-context-menu="(ev, b) => emit('branchContextMenu', ev, b)"
@@ -108,7 +110,10 @@ const indentPx = (level: number) => 12 + level * 12 + 'px'
   <template v-else>
     <div
       class="tree-row tree-branch"
-      :class="{ 'tree-branch--current': node.branch.is_head }"
+      :class="{
+        'tree-branch--current': node.branch.is_head,
+        'tree-branch--upstream': currentUpstream && node.branch.name === currentUpstream
+      }"
       :style="{ paddingLeft: indentPx(level) }"
       :title="node.fullName"
       @click="onBranchClick"
@@ -155,8 +160,11 @@ const indentPx = (level: number) => 12 + level * 12 + 'px'
   color: var(--text-secondary);
 }
 
-.tree-branch--current {
-  color: var(--text-primary);
+.tree-branch--current,
+.tree-branch--upstream {
+  color: var(--accent-blue);
+  background: var(--bg-overlay);
+  font-weight: 500;
 }
 
 .chevron {

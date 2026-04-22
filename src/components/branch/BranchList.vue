@@ -13,12 +13,30 @@ const showNewBranch = ref(false)
 const switchingTo = ref<string | null>(null)
 const error = ref<string | null>(null)
 
-const localBranches = computed(() =>
-  historyStore.branches.filter((b) => !b.is_remote)
-)
+const localBranches = computed(() => {
+  const branches = historyStore.branches.filter((b) => !b.is_remote)
+  if (workspaceStore.status?.is_detached) {
+    const detachedBranch = {
+      name: 'HEAD',
+      is_remote: false,
+      is_head: true,
+      upstream: undefined,
+      commit_oid: workspaceStore.status.head_commit,
+      ahead: 0,
+      behind: 0
+    }
+    return [detachedBranch, ...branches]
+  }
+  return branches
+})
 const remoteBranches = computed(() =>
   historyStore.branches.filter((b) => b.is_remote)
 )
+
+const currentUpstream = computed(() => {
+  const current = localBranches.value.find((b) => b.is_head)
+  return current?.upstream
+})
 
 async function switchBranch(name: string) {
   switchingTo.value = name
@@ -102,6 +120,7 @@ async function deleteBranch(name: string) {
         v-for="branch in remoteBranches"
         :key="branch.name"
         class="branch-item remote"
+        :class="{ upstream: currentUpstream === branch.name }"
       >
         <span class="branch-name">{{ branch.name }}</span>
       </div>
@@ -226,6 +245,14 @@ async function deleteBranch(name: string) {
 .branch-item.current .branch-name {
   color: var(--accent-green);
   cursor: default;
+}
+
+.branch-item.upstream {
+  background: var(--bg-surface);
+}
+
+.branch-item.upstream .branch-name {
+  color: var(--accent-green);
 }
 
 .branch-item.remote .branch-name {
