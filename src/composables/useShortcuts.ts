@@ -58,7 +58,12 @@ export function useShortcuts() {
 
     if (matchesBinding(e, b.search)) {
       e.preventDefault()
-      uiStore.requestOpenSearch()
+      const activeEl = document.activeElement
+      if (activeEl && activeEl.closest('.diff-view')) {
+        uiStore.requestOpenDiffSearch()
+      } else {
+        uiStore.requestOpenSearch()
+      }
       return
     }
 

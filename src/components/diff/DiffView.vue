@@ -131,29 +131,44 @@ function onSearchBlur() {
   }
 }
 
+let lastSelection: Range | null = null
+
+function findNext(backward = false) {
+  if (!uiStore.diffSearchQuery) return
+  
+  const sel = window.getSelection()
+  if (lastSelection && sel) {
+    sel.removeAllRanges()
+    sel.addRange(lastSelection)
+  }
+
+  const found = (window as any).find(uiStore.diffSearchQuery, false, backward, true, false, false, false)
+  
+  if (found && sel && sel.rangeCount > 0) {
+    lastSelection = sel.getRangeAt(0).cloneRange()
+  } else {
+    lastSelection = null
+  }
+}
+
 function onSearchKeydown(e: KeyboardEvent) {
   if (e.key === 'Escape') {
     uiStore.diffSearchQuery = ''
     searchExpanded.value = false
+    lastSelection = null
     searchInputEl.value?.blur()
     // 焦点交还给 .diff-view 以支持连续快捷键
     const el = searchInputEl.value?.closest('.diff-view') as HTMLElement | null
     if (el) el.focus()
   } else if (e.key === 'Enter') {
-    // 触发原生查找
-    if (uiStore.diffSearchQuery) {
-      (window as any).find(uiStore.diffSearchQuery, false, e.shiftKey, true, false, false, false)
-    }
+    e.preventDefault()
+    findNext(e.shiftKey)
   }
 }
 
-// 搜索词变化时，如果非空且没有被回车触发，自动查找第一个
-watch(() => uiStore.diffSearchQuery, (query) => {
-  if (query) {
-    // 消除先前的选择
-    window.getSelection()?.removeAllRanges()
-    ;(window as any).find(query, false, false, true, false, false, false)
-  }
+// 当搜索词改变时，清除上次的查找状态
+watch(() => uiStore.diffSearchQuery, () => {
+  lastSelection = null
 })
 </script>
 
@@ -207,6 +222,18 @@ watch(() => uiStore.diffSearchQuery, (query) => {
           @blur="onSearchBlur"
           @keydown="onSearchKeydown"
         />
+        <div v-show="searchExpanded || uiStore.diffSearchQuery" class="search-nav">
+          <button class="search-nav-btn" title="Previous (Shift+Enter)" @click="findNext(true)">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="18 15 12 9 6 15"/>
+            </svg>
+          </button>
+          <button class="search-nav-btn" title="Next (Enter)" @click="findNext(false)">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="6 9 12 15 18 9"/>
+            </svg>
+          </button>
+        </div>
       </div>
 
       <div class="toolbar-divider" v-if="!isImageView" />
@@ -382,10 +409,10 @@ watch(() => uiStore.diffSearchQuery, (query) => {
 }
 
 .search-box--expanded {
-  width: 136px;
+  width: 180px;
   border-color: var(--border);
   background: var(--bg-surface);
-  padding-right: 6px;
+  padding-right: 4px;
 }
 
 .search-icon-btn {
@@ -426,6 +453,34 @@ watch(() => uiStore.diffSearchQuery, (query) => {
 .search-input::placeholder {
   color: var(--text-muted);
 }
+
+.search-nav {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  margin-left: 4px;
+}
+
+.search-nav-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-muted);
+  border-radius: 4px;
+  padding: 0;
+  transition: color 0.15s, background 0.15s;
+}
+
+.search-nav-btn:hover {
+  color: var(--text-primary);
+  background: var(--bg-overlay);
+}
+
 
 .diff-toolbar {
   display: flex;

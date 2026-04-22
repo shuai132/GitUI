@@ -122,6 +122,9 @@ export const useUiStore = defineStore('ui', () => {
   // 提交历史搜索词（不持久化）
   const historySearchQuery = ref('')
 
+  // Diff 搜索词（不持久化）
+  const diffSearchQuery = ref('')
+
   // ── 持久化字段 ────────────────────────────────────────────────────
   const sidebarWidth = ref<number>(loadNumber(KEYS.sidebarWidth, 220))
   const reposHeight = ref<number>(loadNumber(KEYS.reposHeight, 160))
@@ -301,10 +304,16 @@ export const useUiStore = defineStore('ui', () => {
     openSearchSignal.value++
   }
 
+  const openDiffSearchSignal = ref(0)
+  function requestOpenDiffSearch() {
+    openDiffSearchSignal.value++
+  }
+
   return {
     // state
     shouldOpenDiscardAll,
     historySearchQuery,
+    diffSearchQuery,
     sidebarWidth,
     reposHeight,
     dockLayout,
@@ -347,5 +356,7 @@ export const useUiStore = defineStore('ui', () => {
     requestOpenSettings,
     openSearchSignal,
     requestOpenSearch,
+    openDiffSearchSignal,
+    requestOpenDiffSearch,
   }
 })
