@@ -15,8 +15,18 @@ import FileChangeList from '@/components/workspace/FileChangeList.vue'
 import Modal from '@/components/common/Modal.vue'
 import ContextMenu, { type ContextMenuItem } from '@/components/common/ContextMenu.vue'
 import { useMergeRebaseStore } from '@/stores/mergeRebase'
+import type { ContextMenuPayload } from '@/components/workspace/FileChangeList.vue'
 
 const { t } = useI18n()
+
+// ── 视图模式 (List / Tree) ──────────────────────────────────────
+const WIP_VIEW_MODE_KEY = 'wip-view-mode'
+const viewMode = ref<'list' | 'tree'>((localStorage.getItem(WIP_VIEW_MODE_KEY) as 'list' | 'tree') || 'list')
+
+function toggleViewMode() {
+  viewMode.value = viewMode.value === 'list' ? 'tree' : 'list'
+  localStorage.setItem(WIP_VIEW_MODE_KEY, viewMode.value)
+}
 const workspaceStore = useWorkspaceStore()
 const historyStore = useHistoryStore()
 const diffStore = useDiffStore()
@@ -67,6 +77,18 @@ const panelListsRef = ref<HTMLElement | null>(null)
 const unstagedListRef = ref<InstanceType<typeof FileChangeList> | null>(null)
 const stagedListRef = ref<InstanceType<typeof FileChangeList> | null>(null)
 
+const isAllExpanded = ref(false)
+function toggleExpandCollapseAll() {
+  isAllExpanded.value = !isAllExpanded.value
+  if (isAllExpanded.value) {
+    unstagedListRef.value?.expandAll()
+    stagedListRef.value?.expandAll()
+  } else {
+    unstagedListRef.value?.collapseAll()
+    stagedListRef.value?.collapseAll()
+  }
+}
+
 /** 合并的文件列表（未暂存 + 已暂存），与视觉顺序一致 */
 const allFiles = computed<FileEntry[]>(() => [...unstagedAll.value, ...stagedAll.value])
 
@@ -77,11 +99,24 @@ function onSelectFile(file: FileEntry) {
   panelListsRef.value?.focus()
 }
 
-async function onToggleFile(file: FileEntry) {
-  if (file.staged) {
-    await workspaceStore.unstageFile(file.path)
+async function onToggleFile(fileOrPath: FileEntry | string, isDir: boolean) {
+  if (isDir) {
+    const dirPath = fileOrPath as string
+    const prefix = dirPath + '/'
+    const toStage = unstagedAll.value.filter(f => f.path.startsWith(prefix))
+    if (toStage.length > 0) {
+      for (const f of toStage) await workspaceStore.stageFile(f.path)
+    } else {
+      const toUnstage = stagedAll.value.filter(f => f.path.startsWith(prefix))
+      for (const f of toUnstage) await workspaceStore.unstageFile(f.path)
+    }
   } else {
-    await workspaceStore.stageFile(file.path)
+    const file = fileOrPath as FileEntry
+    if (file.staged) {
+      await workspaceStore.unstageFile(file.path)
+    } else {
+      await workspaceStore.stageFile(file.path)
+    }
   }
 }
 
@@ -173,9 +208,25 @@ const fileMenu = reactive({
   x: 0,
   y: 0,
   file: null as FileEntry | null,
+  path: '',
+  isDir: false,
 })
 
 const fileMenuItems = computed<ContextMenuItem[]>(() => {
+  if (fileMenu.isDir) {
+     return [
+       { label: t('workspace.fileList.rowAction.stage'), action: 'toggle' },
+       { separator: true },
+       { label: t('workspace.wip.menu.copyRelativePath'), action: 'copy-relative' },
+       { label: t('workspace.wip.menu.copyAbsolutePath'), action: 'copy-absolute' },
+       { separator: true },
+       { label: t('workspace.wip.menu.revealInFinder'), action: 'reveal' },
+       { label: t('workspace.wip.menu.openTerminalHere'), action: 'open-terminal' },
+       { separator: true },
+       { label: t('fileHistory.menu.history'), action: 'file-history' }
+     ]
+  }
+
   const f = fileMenu.file
   if (!f) return []
   if (f.status === 'conflicted') {
@@ -221,12 +272,12 @@ const fileMenuItems = computed<ContextMenuItem[]>(() => {
   ]
 })
 
-function onFileContext(e: MouseEvent, file: FileEntry) {
+function onFileContext(e: MouseEvent, payload: ContextMenuPayload) {
   // 右键落在多选区时，显示批量菜单
-  const inUnstagedMulti = unstagedMultiPaths.value.length > 1 &&
-    unstagedMultiPaths.value.includes(file.path)
-  const inStagedMulti = stagedMultiPaths.value.length > 1 &&
-    stagedMultiPaths.value.includes(file.path)
+  const inUnstagedMulti = !payload.isDir && unstagedMultiPaths.value.length > 1 &&
+    unstagedMultiPaths.value.includes(payload.path)
+  const inStagedMulti = !payload.isDir && stagedMultiPaths.value.length > 1 &&
+    stagedMultiPaths.value.includes(payload.path)
   if (inUnstagedMulti || inStagedMulti) {
     batchMenu.source = inUnstagedMulti ? 'unstaged' : 'staged'
     batchMenu.x = e.clientX
@@ -234,29 +285,33 @@ function onFileContext(e: MouseEvent, file: FileEntry) {
     batchMenu.visible = true
     return
   }
-  fileMenu.file = file
+  fileMenu.file = payload.file ?? null
+  fileMenu.path = payload.path
+  fileMenu.isDir = payload.isDir
   fileMenu.x = e.clientX
   fileMenu.y = e.clientY
   fileMenu.visible = true
 }
 
 async function onFileMenuAction(action: string) {
+  const isDir = fileMenu.isDir
   const f = fileMenu.file
-  if (!f) return
+  const targetPath = fileMenu.path
+  if (!f && !isDir) return
   fileMenu.visible = false
 
   const repoPath = repoStore.activeRepo()?.path ?? ''
-  const absPath = repoPath ? `${repoPath}/${f.path}` : f.path
-  const dirPath = absPath.substring(0, absPath.lastIndexOf('/')) || repoPath
+  const absPath = repoPath ? `${repoPath}/${targetPath}` : targetPath
+  const dirPath = isDir ? absPath : (absPath.substring(0, absPath.lastIndexOf('/')) || repoPath)
 
   try {
     if (action === 'use-ours') {
-      await mergeRebaseStore.useConflictSide(f.path, 'ours')
+      await mergeRebaseStore.useConflictSide(targetPath, 'ours')
     } else if (action === 'use-theirs') {
-      await mergeRebaseStore.useConflictSide(f.path, 'theirs')
+      await mergeRebaseStore.useConflictSide(targetPath, 'theirs')
     } else if (action === 'mark-resolved') {
       // 工作区当前内容直接作为解决方案
-      const content = await git.readWorktreeFile(repoStore.activeRepoId!, f.path, true)
+      const content = await git.readWorktreeFile(repoStore.activeRepoId!, targetPath, true)
         .then(b => {
           const binary = atob(b.bytes_base64)
           const bytes = new Uint8Array(binary.length)
@@ -264,13 +319,13 @@ async function onFileMenuAction(action: string) {
           return new TextDecoder().decode(bytes)
         })
         .catch(() => '')
-      await mergeRebaseStore.resolveConflict(f.path, content)
+      await mergeRebaseStore.resolveConflict(targetPath, content)
     } else if (action === 'toggle') {
-      await onToggleFile(f)
+      await onToggleFile(isDir ? targetPath : f!, isDir)
     } else if (action === 'copy-name') {
-      await navigator.clipboard.writeText(f.path.split('/').pop() ?? f.path)
+      await navigator.clipboard.writeText(targetPath.split('/').pop() ?? targetPath)
     } else if (action === 'copy-relative') {
-      await navigator.clipboard.writeText(f.path)
+      await navigator.clipboard.writeText(targetPath)
     } else if (action === 'copy-absolute') {
       await navigator.clipboard.writeText(absPath)
     } else if (action === 'reveal') {
@@ -282,19 +337,19 @@ async function onFileMenuAction(action: string) {
     } else if (action === 'add-gitignore') {
       const repoId = repoStore.activeRepoId
       if (repoId) {
-        await git.addToGitignore(repoId, f.path)
+        await git.addToGitignore(repoId, targetPath)
         await workspaceStore.refresh(repoId)
       }
     } else if (action === 'discard') {
-      if (!confirm(t('workspace.confirmDiscard.file', { file: f.path }))) return
-      await workspaceStore.discardFile(f.path)
-      if (selectedPath.value === f.path) {
+      if (!confirm(t('workspace.confirmDiscard.file', { file: targetPath }))) return
+      await workspaceStore.discardFile(targetPath)
+      if (selectedPath.value === targetPath) {
         selectedPath.value = null
       }
     } else if (action === 'file-history') {
-      emit('showFileHistory', { filePath: f.path, mode: 'history' })
+      emit('showFileHistory', { filePath: targetPath, mode: 'history' })
     } else if (action === 'file-blame') {
-      emit('showFileHistory', { filePath: f.path, mode: 'blame' })
+      emit('showFileHistory', { filePath: targetPath, mode: 'blame' })
     }
   } catch (e) {
     alert(String(e))
@@ -520,6 +575,42 @@ watch(
         {{ t('workspace.wip.headerTitle', { count: totalCount }) }}
         <span class="header-branch">{{ t('workspace.wip.onBranch', { branch: branchLabel }) }}</span>
       </span>
+      <div class="header-actions">
+        <button
+          v-if="viewMode === 'tree'"
+          class="btn-icon"
+          :title="isAllExpanded ? t('workspace.wip.collapseAllTitle', 'Collapse All') : t('workspace.wip.expandAllTitle', 'Expand All')"
+          @click="toggleExpandCollapseAll"
+        >
+          <svg v-if="isAllExpanded" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="17 11 12 6 7 11"></polyline>
+            <polyline points="17 18 12 13 7 18"></polyline>
+          </svg>
+          <svg v-else width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="7 13 12 18 17 13"></polyline>
+            <polyline points="7 6 12 11 17 6"></polyline>
+          </svg>
+        </button>
+        <button
+          class="btn-icon"
+          :class="{ active: viewMode === 'tree' }"
+          title="Toggle Tree View"
+          @click="toggleViewMode"
+        >
+          <svg v-if="viewMode === 'list'" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="3" y1="6" x2="21" y2="6"/>
+            <line x1="3" y1="12" x2="21" y2="12"/>
+            <line x1="3" y1="18" x2="21" y2="18"/>
+          </svg>
+          <svg v-else width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="21" y1="10" x2="10" y2="10" />
+            <line x1="21" y1="6" x2="10" y2="6" />
+            <line x1="21" y1="14" x2="10" y2="14" />
+            <line x1="21" y1="18" x2="10" y2="18" />
+            <path d="M3 6l3 3-3 3" />
+          </svg>
+        </button>
+      </div>
     </div>
 
     <!-- 文件列表区 -->
@@ -533,6 +624,7 @@ watch(
           :show-row-actions="true"
           :selected-path="selectedPath"
           variant="unstaged"
+          :view-mode="viewMode"
           @select="onSelectFile"
           @toggle="onToggleFile"
           @context-menu="onFileContext"
@@ -569,6 +661,7 @@ watch(
           :show-row-actions="true"
           :selected-path="selectedPath"
           variant="staged"
+          :view-mode="viewMode"
           @select="onSelectFile"
           @toggle="onToggleFile"
           @context-menu="onFileContext"
@@ -698,17 +791,32 @@ watch(
   height: 18px;
 }
 
-.btn-trash {
+.btn-trash, .btn-icon {
   background: none;
   border: 1px solid var(--border);
   border-radius: 3px;
-  color: var(--accent-red);
+  color: var(--text-secondary);
   cursor: pointer;
   padding: 0 3px;
   display: flex;
   align-items: center;
   transition: background 0.15s, border-color 0.15s;
   line-height: 1;
+}
+
+.btn-icon:hover {
+  background: var(--bg-overlay);
+  color: var(--text-primary);
+}
+
+.btn-icon.active {
+  background: var(--bg-surface);
+  color: var(--accent-blue);
+  border-color: var(--accent-blue);
+}
+
+.btn-trash {
+  color: var(--accent-red);
 }
 
 .btn-trash:hover:not(:disabled) {
@@ -725,6 +833,12 @@ watch(
   font-size: var(--font-xs);
   color: var(--text-primary);
   font-weight: 500;
+  flex: 1;
+}
+
+.header-actions {
+  display: flex;
+  gap: 4px;
 }
 
 .header-branch {

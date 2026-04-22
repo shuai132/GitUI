@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { CommitDetail, FileDiff, FileStatusKind } from '@/types/git'
 import { formatAbsoluteTime, fileStatusColor } from '@/utils/format'
@@ -9,6 +9,7 @@ import { useRepoStore } from '@/stores/repos'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useGitCommands } from '@/composables/useGitCommands'
 import ContextMenu, { type ContextMenuItem } from '@/components/common/ContextMenu.vue'
+import { buildFileTree, flattenTree } from '@/utils/fileTree'
 
 const { t } = useI18n()
 
@@ -107,6 +108,102 @@ const bodyText = computed(() => {
   const firstLine = msg.indexOf('\n')
   return firstLine !== -1 ? msg.slice(firstLine + 1).trim() : ''
 })
+
+// ── 视图模式与文件树 ──────────────────────────────────────────────
+const HISTORY_VIEW_MODE_KEY = 'history-view-mode'
+const viewMode = ref<'list' | 'tree'>((localStorage.getItem(HISTORY_VIEW_MODE_KEY) as 'list' | 'tree') || 'list')
+
+function toggleViewMode() {
+  viewMode.value = viewMode.value === 'list' ? 'tree' : 'list'
+  localStorage.setItem(HISTORY_VIEW_MODE_KEY, viewMode.value)
+}
+
+const isAllExpanded = ref(false)
+const expandedDirs = ref(new Set<string>())
+
+function toggleExpandCollapseAll() {
+  isAllExpanded.value = !isAllExpanded.value
+  if (isAllExpanded.value) {
+    const tree = buildFileTree(props.commit?.diffs ?? [], d => d.new_path ?? d.old_path ?? '')
+    const stack = [...tree]
+    while (stack.length > 0) {
+      const node = stack.pop()!
+      if (node.isDir) {
+        expandedDirs.value.add(node.path)
+        stack.push(...node.children)
+      }
+    }
+  } else {
+    expandedDirs.value.clear()
+  }
+}
+
+watch(() => viewMode.value, (mode) => {
+  if (mode === 'tree' && expandedDirs.value.size === 0) {
+    const tree = buildFileTree(props.commit?.diffs ?? [], d => d.new_path ?? d.old_path ?? '')
+    tree.forEach(n => {
+      if (n.isDir) expandedDirs.value.add(n.path)
+    })
+  }
+})
+
+watch(() => props.commit?.info.oid, () => {
+  // Clear expanded dirs on commit change? Or maybe auto-expand roots.
+  if (viewMode.value === 'tree') {
+    expandedDirs.value.clear()
+    const tree = buildFileTree(props.commit?.diffs ?? [], d => d.new_path ?? d.old_path ?? '')
+    tree.forEach(n => {
+      if (n.isDir) expandedDirs.value.add(n.path)
+    })
+    isAllExpanded.value = false
+  }
+})
+
+type DisplayItem =
+  | { type: 'file'; path: string; file: FileDiff; depth: number; index: number }
+  | { type: 'dir'; path: string; name: string; depth: number; expanded: boolean }
+
+const displayItems = computed<DisplayItem[]>(() => {
+  const diffs = props.commit?.diffs ?? []
+  if (viewMode.value === 'tree') {
+    const tree = buildFileTree(diffs, d => d.new_path ?? d.old_path ?? '')
+    const flat = flattenTree(tree, expandedDirs.value)
+    return flat.map(node => {
+      if (node.isDir) {
+        return { type: 'dir', path: node.path, name: node.name, depth: node.depth, expanded: expandedDirs.value.has(node.path) }
+      } else {
+        const idx = diffs.findIndex(d => (d.new_path ?? d.old_path ?? '') === node.path)
+        return { type: 'file', path: node.path, file: node.file!, depth: node.depth, index: idx }
+      }
+    })
+  }
+  return diffs.map((d, i) => ({ type: 'file', path: d.new_path ?? d.old_path ?? '', file: d, depth: 0, index: i }))
+})
+
+function onRowClick(item: DisplayItem) {
+  if (item.type === 'dir') {
+    if (expandedDirs.value.has(item.path)) {
+      expandedDirs.value.delete(item.path)
+    } else {
+      expandedDirs.value.add(item.path)
+    }
+  } else {
+    emit('selectFile', item.index)
+  }
+}
+
+function onRowContext(e: MouseEvent, item: DisplayItem) {
+  if (item.type === 'dir') return
+  onFileTabContext(e, item.index)
+}
+
+function getFile(item: DisplayItem): FileDiff {
+  return (item as any).file
+}
+
+function getDir(item: DisplayItem): { name: string; expanded: boolean } {
+  return item as any
+}
 
 // ── 文件右键菜单 ─────────────────────────────────────────────────
 const fileMenu = reactive({
@@ -236,38 +333,104 @@ async function onFileMenuAction(action: string) {
 
     <!-- Changed files tab strip -->
     <div
-      class="file-tabs"
+      class="file-tabs-container"
       :style="filesFirst ? { order: 0 } : {}"
       v-if="commit.diffs.length"
     >
-      <div
-        v-for="(d, idx) in commit.diffs"
-        :key="idx"
-        class="file-tab"
-        :class="{ active: idx === selectedFileIdx }"
-        @click="emit('selectFile', idx)"
-        @contextmenu="onFileTabContext($event, idx)"
-        :title="d.new_path ?? d.old_path ?? ''"
-      >
-        <svg
-          class="status-icon"
-          :style="{ color: fileStatusColor(diffStatus(d)) }"
-          width="13"
-          height="13"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
+      <div class="file-tabs-header">
+        <span class="file-tabs-title">{{ t('history.detailsPanel.changedFiles', { count: commit.diffs.length }) }}</span>
+        <div class="header-actions">
+          <button
+            v-if="viewMode === 'tree'"
+            class="btn-icon"
+            :title="isAllExpanded ? t('workspace.wip.collapseAllTitle', 'Collapse All') : t('workspace.wip.expandAllTitle', 'Expand All')"
+            @click="toggleExpandCollapseAll"
+          >
+            <svg v-if="isAllExpanded" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="17 11 12 6 7 11"></polyline>
+              <polyline points="17 18 12 13 7 18"></polyline>
+            </svg>
+            <svg v-else width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="7 13 12 18 17 13"></polyline>
+              <polyline points="7 6 12 11 17 6"></polyline>
+            </svg>
+          </button>
+          <button
+            class="btn-icon"
+            :class="{ active: viewMode === 'tree' }"
+            title="Toggle Tree View"
+            @click="toggleViewMode"
+          >
+            <svg v-if="viewMode === 'list'" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="3" y1="6" x2="21" y2="6"/>
+              <line x1="3" y1="12" x2="21" y2="12"/>
+              <line x1="3" y1="18" x2="21" y2="18"/>
+            </svg>
+            <svg v-else width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="21" y1="10" x2="10" y2="10" />
+              <line x1="21" y1="6" x2="10" y2="6" />
+              <line x1="21" y1="14" x2="10" y2="14" />
+              <line x1="21" y1="18" x2="10" y2="18" />
+              <path d="M3 6l3 3-3 3" />
+            </svg>
+          </button>
+        </div>
+      </div>
+      <div class="file-tabs">
+        <div
+          v-for="(item, idx) in displayItems"
+          :key="idx"
+          class="file-tab"
+          :class="{ active: item.type === 'file' && item.index === selectedFileIdx, 'is-dir': item.type === 'dir' }"
+          @click="onRowClick(item)"
+          @contextmenu="onRowContext($event, item)"
+          :title="item.path"
         >
-          <path :d="statusIconMap[diffStatus(d)]?.d ?? statusIconMap.modified.d" />
-        </svg>
-        <span class="file-name"><span class="path-text"><bdi>{{ d.new_path ?? d.old_path ?? '' }}</bdi></span></span>
-        <span class="file-stats">
-          <span class="add">+{{ d.additions }}</span>
-          <span class="del">-{{ d.deletions }}</span>
-        </span>
+          <!-- Indent for tree view -->
+          <div v-if="viewMode === 'tree' && item.depth > 0" :style="{ width: (item.depth * 14) + 'px' }" class="tree-indent" />
+
+          <!-- Directory Item -->
+          <template v-if="item.type === 'dir'">
+            <svg
+              class="folder-icon"
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              :style="{ transform: getDir(item).expanded ? 'rotate(90deg)' : 'rotate(0deg)' }"
+            >
+              <polyline points="9 18 15 12 9 6" />
+            </svg>
+            <span class="file-name"><span class="path-text"><bdi>{{ getDir(item).name }}</bdi></span></span>
+          </template>
+
+          <!-- File Item -->
+          <template v-else>
+            <svg
+              class="status-icon"
+              :style="{ color: fileStatusColor(diffStatus(getFile(item))) }"
+              width="13"
+              height="13"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path :d="statusIconMap[diffStatus(getFile(item))]?.d ?? statusIconMap.modified.d" />
+            </svg>
+            <span class="file-name"><span class="path-text"><bdi>{{ viewMode === 'tree' ? (item.path.split('/').pop() || item.path) : item.path }}</bdi></span></span>
+            <span class="file-stats">
+              <span class="add" v-if="getFile(item).additions > 0">+{{ getFile(item).additions }}</span>
+              <span class="del" v-if="getFile(item).deletions > 0">-{{ getFile(item).deletions }}</span>
+            </span>
+          </template>
+        </div>
       </div>
     </div>
   </div>
@@ -433,6 +596,58 @@ async function onFileMenuAction(action: string) {
   cursor: pointer;
 }
 
+.file-tabs-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.file-tabs-header {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 6px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  user-select: none;
+}
+
+.file-tabs-title {
+  font-size: var(--font-xs);
+  color: var(--text-muted);
+  flex: 1;
+}
+
+.header-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.btn-icon {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 0 3px;
+  display: flex;
+  align-items: center;
+  transition: background 0.15s, border-color 0.15s;
+  line-height: 1;
+}
+
+.btn-icon:hover {
+  background: var(--bg-overlay);
+  color: var(--text-primary);
+}
+
+.btn-icon.active {
+  background: var(--bg-surface);
+  color: var(--accent-blue);
+  border-color: var(--accent-blue);
+}
+
 .file-tabs {
   flex: 1;
   overflow-y: auto;
@@ -452,7 +667,17 @@ async function onFileMenuAction(action: string) {
   gap: 4px;
 }
 
-.file-tab .status-icon {
+.file-tab .status-icon,
+.file-tab .folder-icon {
+  flex-shrink: 0;
+}
+
+.folder-icon {
+  color: var(--text-secondary);
+  transition: transform 0.1s;
+}
+
+.tree-indent {
   flex-shrink: 0;
 }
 
@@ -464,6 +689,11 @@ async function onFileMenuAction(action: string) {
   background: var(--row-selected-bg);
   border-left: 2px solid var(--accent-blue);
   color: var(--row-selected-fg);
+}
+
+.file-tab.is-dir {
+  font-weight: 500;
+  color: var(--text-primary);
 }
 
 .file-name {

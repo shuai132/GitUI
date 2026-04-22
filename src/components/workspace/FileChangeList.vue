@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 import type { FileEntry, FileStatusKind } from '@/types/git'
 import { fileStatusColor } from '@/utils/format'
 import { useSettingsStore } from '@/stores/settings'
+import { buildFileTree, flattenTree } from '@/utils/fileTree'
 
 const { t } = useI18n()
 
@@ -15,15 +16,70 @@ const props = defineProps<{
   showRowActions?: boolean
   selectedPath?: string | null
   variant?: 'unstaged' | 'staged'
+  viewMode?: 'list' | 'tree'
 }>()
+
+export type ContextMenuPayload = {
+  file?: FileEntry
+  path: string
+  isDir: boolean
+}
 
 const emit = defineEmits<{
   select: [file: FileEntry]
-  toggle: [file: FileEntry]
+  toggle: [pathOrFile: FileEntry | string, isDir: boolean]
   toggleAll: []
-  contextMenu: [event: MouseEvent, file: FileEntry]
+  contextMenu: [event: MouseEvent, payload: ContextMenuPayload]
   multiSelectChange: [paths: string[]]
 }>()
+
+// ── Tree 状态 ───────────────────────────────────────────────────────
+const expandedDirs = ref(new Set<string>())
+
+watch(() => props.viewMode, (mode) => {
+  if (mode === 'tree' && expandedDirs.value.size === 0) {
+    const tree = buildFileTree(props.files, f => f.path)
+    tree.forEach(n => {
+      if (n.isDir) expandedDirs.value.add(n.path)
+    })
+  }
+})
+
+// 添加展开所有和折叠所有的便捷方法（可选）
+function expandAll() {
+  const tree = buildFileTree(props.files, f => f.path)
+  const stack = [...tree]
+  while (stack.length > 0) {
+    const node = stack.pop()!
+    if (node.isDir) {
+      expandedDirs.value.add(node.path)
+      stack.push(...node.children)
+    }
+  }
+}
+
+function collapseAll() {
+  expandedDirs.value.clear()
+}
+
+export type DisplayItem = 
+  | { type: 'file'; path: string; file: FileEntry; depth: number }
+  | { type: 'dir'; path: string; name: string; depth: number; expanded: boolean }
+
+const displayItems = computed<DisplayItem[]>(() => {
+  if (props.viewMode === 'tree') {
+    const tree = buildFileTree(props.files, f => f.path)
+    const flat = flattenTree(tree, expandedDirs.value)
+    return flat.map(node => {
+      if (node.isDir) {
+        return { type: 'dir', path: node.path, name: node.name, depth: node.depth, expanded: expandedDirs.value.has(node.path) }
+      } else {
+        return { type: 'file', path: node.path, file: node.file!, depth: node.depth }
+      }
+    })
+  }
+  return props.files.map(f => ({ type: 'file', path: f.path, file: f, depth: 0 }))
+})
 
 // ── 多选状态 ──────────────────────────────────────────────────────
 const multiSelectedPaths = ref(new Set<string>())
@@ -51,7 +107,18 @@ function clearMultiSelect() {
   emit('multiSelectChange', [])
 }
 
-function onRowClick(e: MouseEvent, file: FileEntry, idx: number) {
+function onRowClick(e: MouseEvent, item: DisplayItem, idx: number) {
+  if (item.type === 'dir') {
+    if (expandedDirs.value.has(item.path)) {
+      expandedDirs.value.delete(item.path)
+    } else {
+      expandedDirs.value.add(item.path)
+    }
+    return
+  }
+
+  const file = item.file
+
   if (e.ctrlKey || e.metaKey) {
     // 从单选状态切入多选时，先把当前单选项加入多选集
     if (multiSelectedPaths.value.size === 0 && props.selectedPath) {
@@ -74,7 +141,8 @@ function onRowClick(e: MouseEvent, file: FileEntry, idx: number) {
     const start = Math.min(lastClickedIdx.value, idx)
     const end = Math.max(lastClickedIdx.value, idx)
     for (let i = start; i <= end; i++) {
-      if (props.files[i]) multiSelectedPaths.value.add(props.files[i].path)
+      const iter = displayItems.value[i]
+      if (iter && iter.type === 'file') multiSelectedPaths.value.add(iter.file.path)
     }
     emit('multiSelectChange', [...multiSelectedPaths.value])
   } else {
@@ -88,10 +156,22 @@ function onRowClick(e: MouseEvent, file: FileEntry, idx: number) {
   }
 }
 
-function onRowContext(e: MouseEvent, file: FileEntry) {
+function onRowContext(e: MouseEvent, item: DisplayItem) {
   if (!props.showRowActions) return
   e.preventDefault()
-  emit('contextMenu', e, file)
+  emit('contextMenu', e, {
+    file: item.type === 'file' ? item.file : undefined,
+    path: item.path,
+    isDir: item.type === 'dir'
+  })
+}
+
+function getFile(item: DisplayItem): FileEntry {
+  return (item as any).file
+}
+
+function getDir(item: DisplayItem): { name: string; expanded: boolean } {
+  return item as any
 }
 
 const statusIconMap: Record<FileStatusKind, { d: string; stroke?: boolean }> = {
@@ -110,7 +190,7 @@ const scrollEl = ref<HTMLElement | null>(null)
 
 const virtualizer = useVirtualizer(
   computed(() => ({
-    count: props.files.length,
+    count: displayItems.value.length,
     getScrollElement: () => scrollEl.value,
     estimateSize: () => rowHeight.value,
     overscan: 5,
@@ -125,7 +205,7 @@ function scrollToIndex(idx: number) {
   virtualizer.value.scrollToIndex(idx, { align: 'auto' })
 }
 
-defineExpose({ scrollToIndex, clearMultiSelect })
+defineExpose({ scrollToIndex, clearMultiSelect, expandAll, collapseAll })
 </script>
 
 <template>
@@ -151,8 +231,9 @@ defineExpose({ scrollToIndex, clearMultiSelect })
           :key="vRow.index"
           class="file-entry"
           :class="{
-            selected: selectedPath === files[vRow.index].path,
-            'multi-selected': multiSelectedPaths.has(files[vRow.index].path),
+            selected: displayItems[vRow.index].type === 'file' && selectedPath === displayItems[vRow.index].path,
+            'multi-selected': displayItems[vRow.index].type === 'file' && multiSelectedPaths.has(displayItems[vRow.index].path),
+            'is-dir': displayItems[vRow.index].type === 'dir'
           }"
           :style="{
             position: 'absolute',
@@ -160,41 +241,76 @@ defineExpose({ scrollToIndex, clearMultiSelect })
             height: rowHeight + 'px',
             width: '100%',
           }"
-          @click="onRowClick($event, files[vRow.index], vRow.index)"
-          @contextmenu="onRowContext($event, files[vRow.index])"
+          @click="onRowClick($event, displayItems[vRow.index], vRow.index)"
+          @contextmenu="onRowContext($event, displayItems[vRow.index])"
         >
-          <svg
-            class="status-icon"
-            :style="{ color: fileStatusColor(files[vRow.index].status) }"
-            width="13"
-            height="13"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
-            <path :d="statusIconMap[files[vRow.index].status]?.d ?? statusIconMap.untracked.d" />
-          </svg>
-          <span class="file-path" :title="files[vRow.index].path">
-            <span class="path-text"><bdi>{{ files[vRow.index].path }}</bdi></span>
-          </span>
-          <span
-            class="file-stats"
-            v-if="files[vRow.index].additions > 0 || files[vRow.index].deletions > 0"
-          >
-            <span class="add" v-if="files[vRow.index].additions > 0">+{{ files[vRow.index].additions }}</span>
-            <span class="del" v-if="files[vRow.index].deletions > 0">-{{ files[vRow.index].deletions }}</span>
-          </span>
-          <button
-            v-if="showRowActions"
-            class="row-action"
-            :title="files[vRow.index].staged ? t('workspace.fileList.rowAction.unstageTitle') : t('workspace.fileList.rowAction.stageTitle')"
-            @click.stop="emit('toggle', files[vRow.index])"
-          >
-            {{ files[vRow.index].staged ? t('workspace.fileList.rowAction.unstage') : t('workspace.fileList.rowAction.stage') }}
-          </button>
+          <!-- Indent for tree view -->
+          <div v-if="viewMode === 'tree' && displayItems[vRow.index].depth > 0" :style="{ width: (displayItems[vRow.index].depth * 14) + 'px' }" class="tree-indent" />
+
+          <!-- Directory Item -->
+          <template v-if="displayItems[vRow.index].type === 'dir'">
+            <svg
+              class="folder-icon"
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              :style="{ transform: getDir(displayItems[vRow.index]).expanded ? 'rotate(90deg)' : 'rotate(0deg)' }"
+            >
+              <polyline points="9 18 15 12 9 6" />
+            </svg>
+            <span class="file-path" :title="displayItems[vRow.index].path">
+              <span class="path-text"><bdi>{{ getDir(displayItems[vRow.index]).name }}</bdi></span>
+            </span>
+            <button
+              v-if="showRowActions"
+              class="row-action"
+              :title="variant === 'staged' ? t('workspace.fileList.rowAction.unstageTitle') : t('workspace.fileList.rowAction.stageTitle')"
+              @click.stop="emit('toggle', displayItems[vRow.index].path, true)"
+            >
+              {{ variant === 'staged' ? t('workspace.fileList.rowAction.unstage') : t('workspace.fileList.rowAction.stage') }}
+            </button>
+          </template>
+
+          <!-- File Item -->
+          <template v-else>
+            <svg
+              class="status-icon"
+              :style="{ color: fileStatusColor(getFile(displayItems[vRow.index]).status) }"
+              width="13"
+              height="13"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path :d="statusIconMap[getFile(displayItems[vRow.index]).status]?.d ?? statusIconMap.untracked.d" />
+            </svg>
+            <span class="file-path" :title="displayItems[vRow.index].path">
+              <span class="path-text"><bdi>{{ viewMode === 'tree' ? (displayItems[vRow.index].path.split('/').pop() || displayItems[vRow.index].path) : displayItems[vRow.index].path }}</bdi></span>
+            </span>
+            <span
+              class="file-stats"
+              v-if="getFile(displayItems[vRow.index]).additions > 0 || getFile(displayItems[vRow.index]).deletions > 0"
+            >
+              <span class="add" v-if="getFile(displayItems[vRow.index]).additions > 0">+{{ getFile(displayItems[vRow.index]).additions }}</span>
+              <span class="del" v-if="getFile(displayItems[vRow.index]).deletions > 0">-{{ getFile(displayItems[vRow.index]).deletions }}</span>
+            </span>
+            <button
+              v-if="showRowActions"
+              class="row-action"
+              :title="getFile(displayItems[vRow.index]).staged ? t('workspace.fileList.rowAction.unstageTitle') : t('workspace.fileList.rowAction.stageTitle')"
+              @click.stop="emit('toggle', getFile(displayItems[vRow.index]), false)"
+            >
+              {{ getFile(displayItems[vRow.index]).staged ? t('workspace.fileList.rowAction.unstage') : t('workspace.fileList.rowAction.stage') }}
+            </button>
+          </template>
         </div>
       </div>
     </div>
@@ -259,6 +375,11 @@ defineExpose({ scrollToIndex, clearMultiSelect })
   background: var(--bg-overlay);
 }
 
+.file-entry.is-dir {
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
 .file-entry.selected {
   background: var(--row-selected-bg);
   color: var(--row-selected-fg);
@@ -306,7 +427,16 @@ defineExpose({ scrollToIndex, clearMultiSelect })
   border-color: var(--accent-blue);
 }
 
-.status-icon {
+.status-icon, .folder-icon {
+  flex-shrink: 0;
+  color: var(--text-secondary);
+}
+
+.folder-icon {
+  transition: transform 0.1s;
+}
+
+.tree-indent {
   flex-shrink: 0;
 }
 
