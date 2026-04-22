@@ -199,12 +199,14 @@ onStatusChanged(async (repoId) => {
   // WIP diff 刷新：currentPath 仍在新 status 里才 refresh，否则 clear
   if (diffStore.currentPath) {
     const s = workspaceStore.status
-    const allPaths = [
+    const allFiles = [
       ...(s?.staged ?? []),
       ...(s?.unstaged ?? []),
       ...(s?.untracked ?? []),
-    ].map((f) => f.path)
-    if (allPaths.includes(diffStore.currentPath)) {
+    ]
+    const wipFile = allFiles.find((f) => f.path === diffStore.currentPath)
+    if (wipFile) {
+      diffStore.currentStaged = wipFile.staged
       diffStore.refresh()
     } else {
       diffStore.clear()
