@@ -78,6 +78,11 @@ const showWipLoading = computed(() =>
   !uiStore.historySearchQuery.trim() && workspaceStore.loading && !workspaceStore.status,
 )
 
+// 是否在列表中渲染 WIP / Loading 占位行（搜索时隐藏）
+const isWipVisible = computed(() =>
+  !uiStore.historySearchQuery.trim() && (showWipRow.value || showWipLoading.value)
+)
+
 // 当前是否选中的是 WIP 行（而不是某条 commit）
 // WIP 文件统计（用于详情面板标题栏）
 const wipStats = computed(() => {
@@ -125,17 +130,17 @@ const commitStats = computed(() => {
 
 // 虚拟行数 = 过滤后 commits + (WIP 行或 WIP 加载占位各占 1 个，搜索时隐藏)
 const virtualRowCount = computed(() =>
-  filteredCommits.value.length + (!uiStore.historySearchQuery.trim() && (showWipRow.value || showWipLoading.value) ? 1 : 0),
+  filteredCommits.value.length + (isWipVisible.value ? 1 : 0),
 )
 
 // 真实 commit 索引 → 虚拟行索引
 function toVirtualIdx(realIdx: number): number {
-  return (showWipRow.value || showWipLoading.value) ? realIdx + 1 : realIdx
+  return isWipVisible.value ? realIdx + 1 : realIdx
 }
 
 // 虚拟行索引 → 真实 commit 索引（WIP 行/加载行返回 -1）
 function toRealIdx(virtualIdx: number): number {
-  if (showWipRow.value || showWipLoading.value) {
+  if (isWipVisible.value) {
     return virtualIdx === 0 ? -1 : virtualIdx - 1
   }
   return virtualIdx
@@ -325,7 +330,7 @@ const selectedCommitIndex = computed(() =>
 // - 选中真实 commit → toVirtualIdx(realIdx)
 // - 没选中 → -1
 const selectedVirtualIndex = computed(() => {
-  if (selectedWip.value && showWipRow.value) return 0
+  if (selectedWip.value && isWipVisible.value) return 0
   if (selectedCommitIndex.value >= 0) return toVirtualIdx(selectedCommitIndex.value)
   return -1
 })
@@ -343,13 +348,13 @@ function selectWipRow() {
 }
 
 function selectRow(virtualIdx: number) {
-  if ((showWipRow.value || showWipLoading.value) && virtualIdx === 0) {
+  if (isWipVisible.value && virtualIdx === 0) {
     if (showWipRow.value) selectWipRow()
     // WIP 加载中：忽略点击
     return
   }
   const realIdx = toRealIdx(virtualIdx)
-  const commit = historyStore.commits[realIdx]
+  const commit = filteredCommits.value[realIdx]
   if (!commit) return
   // 切换到普通 commit：清除 WIP 选中
   selectedWip.value = false
@@ -363,9 +368,9 @@ function selectRow(virtualIdx: number) {
 }
 
 function isSelected(virtualIdx: number): boolean {
-  if ((showWipRow.value || showWipLoading.value) && virtualIdx === 0) return selectedWip.value
+  if (isWipVisible.value && virtualIdx === 0) return selectedWip.value
   const realIdx = toRealIdx(virtualIdx)
-  return historyStore.commits[realIdx]?.oid === selectedOid.value
+  return filteredCommits.value[realIdx]?.oid === selectedOid.value
 }
 
 function onSelectFile(idx: number) {
@@ -1240,7 +1245,7 @@ onUnmounted(() => {
             <template v-for="vRow in virtualizer.getVirtualItems()" :key="vRow.index">
               <!-- Virtual WIP row (index 0: 工作区有变更时显示，或加载中显示占位) -->
               <div
-                v-if="(showWipRow || showWipLoading) && vRow.index === 0"
+                v-if="isWipVisible && vRow.index === 0"
                 class="commit-row wip-row"
                 :class="{ selected: selectedWip, 'wip-ongoing': mergeRebaseStore.isOngoing && !showWipLoading }"
                 :style="{
