@@ -308,7 +308,7 @@ function tagChipTitle(tag: TagInfo): string {
 const graphColWidth = computed(() => {
   if (!historyStore.graphRows.length) return LANE_W * 2
   const maxCols = historyStore.graphRows.reduce((m, r) => Math.max(m, r.totalColumns), 1)
-  return Math.min(maxCols * LANE_W, 180)
+  return maxCols * LANE_W
 })
 
 // 提交列表内容的最小宽度：图形 + 描述 + 右三列
@@ -1745,7 +1745,7 @@ onUnmounted(() => {
   flex-shrink: 0;
   cursor: grab;
   color: var(--text-muted);
-  opacity: 0;
+  opacity: 0.5;
   transition: opacity 0.15s;
 }
 .dock-handle:hover {
@@ -1754,12 +1754,6 @@ onUnmounted(() => {
 }
 .dock-handle:active {
   cursor: grabbing;
-}
-/* 鼠标进入面板时显示手柄 */
-.commit-panel:hover .col-header > .dock-handle,
-.info-pane:hover > .pane-header > .dock-handle,
-.diff-area:hover > .dock-handle-float {
-  opacity: 0.5;
 }
 
 /* Diff 面板的浮动手柄 */
@@ -1931,19 +1925,14 @@ onUnmounted(() => {
   letter-spacing: 0.04em;
 }
 
-/* dock-handle 在 col-header 里绝对定位，避免占 flex 流导致列头整体右移（与数据行 .commit-row 错位）。
-   仅在面板 hover 时 opacity + pointer-events 激活。 */
+/* dock-handle 在 col-header 里绝对定位，避免占 flex 流导致列头整体右移（与数据行 .commit-row 错位）。 */
 .col-header > .dock-handle {
   position: absolute;
   top: 0;
   left: 0;
   bottom: 0;
   height: auto;
-  pointer-events: none;
   z-index: 3;
-}
-.commit-panel:hover .col-header > .dock-handle {
-  pointer-events: auto;
 }
 
 .commit-list-body {
