@@ -18,6 +18,7 @@ import type {
   RebaseTodoItem,
   ConflictFile,
   BuildInfo,
+  RemoteInfo,
 } from '@/types/git'
 import { useErrorsStore } from '@/stores/errors'
 import { useDebugStore } from '@/stores/debug'
@@ -308,10 +309,13 @@ export function useGitCommands() {
   ) => call<void>('pull_branch', { repoId, remoteName, branchName, mode })
 
   const listRemotes = (repoId: string) =>
-    call<string[]>('list_remotes', { repoId })
+    call<RemoteInfo[]>('list_remotes', { repoId })
 
   const addRemote = (repoId: string, name: string, url: string) =>
     call<void>('add_remote', { repoId, name, url })
+
+  const editRemote = (repoId: string, oldName: string, newName: string, newUrl: string) =>
+    call<void>('edit_remote', { repoId, oldName, newName, newUrl })
 
   const removeRemote = (repoId: string, name: string) =>
     call<void>('remove_remote', { repoId, name })
@@ -488,6 +492,7 @@ export function useGitCommands() {
     pullBranch,
     listRemotes,
     addRemote,
+    editRemote,
     removeRemote,
     listSubmodules,
     initSubmodule,

@@ -170,6 +170,15 @@ function onSearchKeydown(e: KeyboardEvent) {
 watch(() => uiStore.diffSearchQuery, () => {
   lastSelection = null
 })
+
+function clearSearch() {
+  uiStore.diffSearchQuery = ''
+  searchExpanded.value = false
+  lastSelection = null
+  searchInputEl.value?.blur()
+  const el = searchInputEl.value?.closest('.diff-view') as HTMLElement | null
+  if (el) el.focus()
+}
 </script>
 
 <template>
@@ -222,6 +231,18 @@ watch(() => uiStore.diffSearchQuery, () => {
           @blur="onSearchBlur"
           @keydown="onSearchKeydown"
         />
+        <button
+          v-show="uiStore.diffSearchQuery"
+          class="search-clear-btn"
+          tabindex="-1"
+          @mousedown.prevent
+          @click="clearSearch"
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"/>
+            <line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
         <div v-show="searchExpanded || uiStore.diffSearchQuery" class="search-nav">
           <button class="search-nav-btn" title="Previous (Shift+Enter)" @click="findNext(true)">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -454,11 +475,33 @@ watch(() => uiStore.diffSearchQuery, () => {
   color: var(--text-muted);
 }
 
+.search-clear-btn {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-muted);
+  border-radius: 4px;
+  padding: 0;
+  transition: color 0.15s, background 0.15s;
+  margin-right: 2px;
+}
+
+.search-clear-btn:hover {
+  color: var(--text-primary);
+  background: var(--bg-overlay);
+}
+
 .search-nav {
   display: flex;
   align-items: center;
   flex-shrink: 0;
-  margin-left: 4px;
+  margin-left: 2px;
 }
 
 .search-nav-btn {

@@ -1,6 +1,8 @@
 import { ref } from 'vue'
 import { useGitCommands } from '@/composables/useGitCommands'
 
+import type { RemoteInfo } from '@/types/git'
+
 // 本 composable 只需要 ContextMenu 的 items 子集；内联类型避免跨 .vue
 // 文件的 named type 导入在 vue-tsc 下不稳定。
 type MenuItem = { label: string; action: string }
@@ -33,18 +35,20 @@ export function usePickRemote() {
     repoId: string,
     anchorRect?: DOMRect,
   ): Promise<string | null> {
-    let remotes: string[]
+    let remotes: RemoteInfo[]
     try {
       remotes = await git.listRemotes(repoId)
     } catch {
       return null
     }
     if (remotes.length === 0) return null
-    if (remotes.length === 1) return remotes[0]
+    if (remotes.length === 1) return remotes[0].name
 
     // 多 remote：弹菜单
     return new Promise<string | null>((resolve) => {
-      menuItems.value = remotes.map((name) => ({ label: name, action: name }))
+      const items = remotes.map((r) => ({ label: r.name, action: r.name }))
+      items.unshift({ label: 'Fetch All', action: '--all' })
+      menuItems.value = items
       if (anchorRect) {
         menuX.value = anchorRect.left
         menuY.value = anchorRect.bottom + 4

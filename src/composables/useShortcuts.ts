@@ -78,10 +78,7 @@ export function useShortcuts() {
       const id = repoStore.activeRepoId
       if (id) {
         try {
-          const remotes = await git.listRemotes(id)
-          for (const remote of remotes) {
-            await git.fetchRemote(id, remote)
-          }
+          await git.fetchRemote(id, '--all')
           historyStore.loadLog()
           historyStore.loadBranches()
         } catch {

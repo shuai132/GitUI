@@ -20,6 +20,7 @@ import Modal from '@/components/common/Modal.vue'
 import ContextMenu, { type ContextMenuItem } from '@/components/common/ContextMenu.vue'
 import SettingsModal from '@/components/settings/SettingsModal.vue'
 import AboutInfo from '@/components/common/AboutInfo.vue'
+import type { RemoteInfo } from '@/types/git'
 
 const repoStore = useRepoStore()
 const historyStore = useHistoryStore()
@@ -271,18 +272,20 @@ const remoteMenu = reactive({
 async function pickRemote(anchorRect?: DOMRect): Promise<string | null> {
   const id = repoStore.activeRepoId
   if (!id) return null
-  let remotes: string[]
+  let remotes: RemoteInfo[]
   try {
     remotes = await git.listRemotes(id)
   } catch {
     return null
   }
   if (remotes.length === 0) return null
-  if (remotes.length === 1) return remotes[0]
+  if (remotes.length === 1) return remotes[0].name
 
   // 多 remote：弹菜单让用户显式选择
   return new Promise<string | null>((resolve) => {
-    remoteMenu.items = remotes.map((name) => ({ label: name, action: name }))
+    const items = remotes.map((r) => ({ label: r.name, action: r.name }))
+    items.unshift({ label: 'Fetch All', action: '--all' })
+    remoteMenu.items = items
     if (anchorRect) {
       remoteMenu.x = anchorRect.left
       remoteMenu.y = anchorRect.bottom + 4

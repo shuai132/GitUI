@@ -6,6 +6,11 @@ export interface RepoMeta {
 
 export type FileStatusKind = 'added' | 'modified' | 'deleted' | 'renamed' | 'untracked' | 'conflicted'
 
+export interface RemoteInfo {
+  name: string
+  url: string | null
+}
+
 export interface FileEntry {
   path: string
   old_path?: string

@@ -18,6 +18,7 @@ import CheckoutRemoteDialog from '@/components/branch/CheckoutRemoteDialog.vue'
 import EditSubmoduleDialog from '@/components/submodule/EditSubmoduleDialog.vue'
 import AddSubmoduleDialog from '@/components/submodule/AddSubmoduleDialog.vue'
 import AddRemoteDialog from '@/components/remote/AddRemoteDialog.vue'
+import EditRemoteDialog from '@/components/remote/EditRemoteDialog.vue'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import { useGitCommands } from '@/composables/useGitCommands'
 import { useRepoCreation } from '@/composables/useRepoCreation'
@@ -65,7 +66,7 @@ const currentUpstream = computed(() => {
 
 // Remote branch tree（按 / 分层，第一层是 origin / upstream 等 remote 名）
 const remoteTree = computed(() =>
-  buildBranchTree(historyStore.branches.filter((b) => b.is_remote), historyStore.remotes)
+  buildBranchTree(historyStore.branches.filter((b) => b.is_remote), historyStore.remotes.map((r) => r.name))
 )
 
 // 侧栏空间紧张，+ 按钮直接弹「添加仓库」菜单（打开 / 克隆 / 新建），
@@ -704,6 +705,94 @@ function onDeleteRemote(remoteName: string) {
   )
 }
 
+const editRemoteDlg = reactive({
+  visible: false,
+  target: null as { name: string; url: string | null } | null,
+})
+
+const remoteMenu = reactive({
+  visible: false,
+  x: 0,
+  y: 0,
+  targetName: null as string | null,
+  isSection: false,
+})
+
+const remoteMenuItems = computed<ContextMenuItem[]>(() => {
+  if (remoteMenu.isSection) {
+    return [{ label: t('toolbar.opLabels.fetch', 'Fetch') + ' All', action: 'fetch-all' }]
+  }
+  return [
+    { label: t('toolbar.opLabels.fetch', 'Fetch'), action: 'fetch' },
+    { label: t('common.edit', 'Edit'), action: 'edit' },
+    { separator: true },
+    { label: t('sidebar.branch.menu.delete', 'Delete...'), action: 'delete', danger: true },
+  ]
+})
+
+function openRemoteSectionMenu(e: MouseEvent) {
+  e.preventDefault()
+  remoteMenu.targetName = null
+  remoteMenu.isSection = true
+  remoteMenu.x = e.clientX
+  remoteMenu.y = e.clientY
+  remoteMenu.visible = true
+}
+
+function openRemoteItemMenu(e: MouseEvent, name: string) {
+  e.preventDefault()
+  remoteMenu.targetName = name
+  remoteMenu.isSection = false
+  remoteMenu.x = e.clientX
+  remoteMenu.y = e.clientY
+  remoteMenu.visible = true
+}
+
+function closeRemoteMenu() {
+  remoteMenu.visible = false
+}
+
+async function onRemoteMenuAction(action: string) {
+  const target = remoteMenu.targetName
+  const repoId = repoStore.activeRepoId
+  if (!repoId) return
+
+  try {
+    if (action === 'fetch-all') {
+      const { useRepoOpsStore } = await import('@/stores/repoOps')
+      useRepoOpsStore().setBusy(repoId, 'fetch', true)
+      try {
+        await git.fetchRemote(repoId, '--all')
+        await Promise.all([historyStore.loadLog(), historyStore.loadBranches()])
+        historyStore.loadRemoteTags().catch(() => {})
+      } finally {
+        useRepoOpsStore().setBusy(repoId, 'fetch', false)
+      }
+    } else if (action === 'fetch' && target) {
+      const { useRepoOpsStore } = await import('@/stores/repoOps')
+      useRepoOpsStore().setBusy(repoId, 'fetch', true)
+      try {
+        await git.fetchRemote(repoId, target)
+        await Promise.all([historyStore.loadLog(), historyStore.loadBranches()])
+        historyStore.loadRemoteTags().catch(() => {})
+      } finally {
+        useRepoOpsStore().setBusy(repoId, 'fetch', false)
+      }
+    } else if (action === 'edit' && target) {
+      const remote = historyStore.remotes.find(r => r.name === target)
+      if (remote) {
+        editRemoteDlg.target = remote
+        editRemoteDlg.visible = true
+      }
+    } else if (action === 'delete' && target) {
+      onDeleteRemote(target)
+    }
+  } catch (e: unknown) {
+    const { useErrorsStore } = await import('@/stores/errors')
+    useErrorsStore().push(`remote menu ${action}`, e)
+  }
+}
+
 // ── Add Submodule ─────────────────────────────────────────────────────
 const addSubmoduleDlg = reactive({ visible: false })
 
@@ -928,7 +1017,7 @@ async function onAddSubmoduleSuccess() {
 
       <!-- REMOTE tree section -->
       <div class="section" v-if="repoStore.activeRepoId">
-        <div class="section-title collapsible" @click="sectionState.toggle('remote')">
+        <div class="section-title collapsible" @click="sectionState.toggle('remote')" @contextmenu="openRemoteSectionMenu">
           <svg class="chevron" :class="{ open: !sectionState.isCollapsed('remote') }"
                width="10" height="10" viewBox="0 0 24 24"
                fill="none" stroke="currentColor" stroke-width="2.5">
@@ -1084,6 +1173,22 @@ async function onAddSubmoduleSuccess() {
     />
 
     <!-- Generic confirm dialog (for remote / submodule delete) -->
+    <ContextMenu
+      v-model:visible="remoteMenu.visible"
+      :x="remoteMenu.x"
+      :y="remoteMenu.y"
+      :items="remoteMenuItems"
+      @action="onRemoteMenuAction"
+      @close="closeRemoteMenu"
+    />
+
+    <EditRemoteDialog
+      :visible="editRemoteDlg.visible"
+      :target="editRemoteDlg.target"
+      @close="editRemoteDlg.visible = false"
+      @success="onAddRemoteSuccess"
+    />
+
     <ConfirmDialog
       :visible="confirmDlg.visible"
       :title="confirmDlg.title"

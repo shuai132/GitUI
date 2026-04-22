@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import type { CommitInfo, BranchInfo, CommitDetail, TagInfo } from '@/types/git'
+import type { CommitInfo, BranchInfo, CommitDetail, TagInfo, RemoteInfo } from '@/types/git'
 import { useGitCommands } from '@/composables/useGitCommands'
 import { useRepoStore } from './repos'
 import { useUiStore } from './ui'
@@ -11,7 +11,7 @@ const PAGE_SIZE = 200
 export const useHistoryStore = defineStore('history', () => {
   const commits = ref<CommitInfo[]>([])
   const branches = ref<BranchInfo[]>([])
-  const remotes = ref<string[]>([])
+  const remotes = ref<RemoteInfo[]>([])
   const tags = ref<TagInfo[]>([])
   // 远端已存在的 tag 短名集合（任一 remote 命中即算已同步）。
   // 通过 list_remote_tags 懒加载，失败时 remoteTagsChecked 保持 false，UI 显示"未知"。
@@ -124,7 +124,7 @@ export const useHistoryStore = defineStore('history', () => {
     try {
       const [next, nextRemotes] = await Promise.all([
         git.listBranches(repoStore.activeRepoId),
-        git.listRemotes(repoStore.activeRepoId).catch(() => [] as string[])
+        git.listRemotes(repoStore.activeRepoId).catch(() => [] as RemoteInfo[])
       ])
       // 分支列表结构未变（数量、名称、指向的 oid、ahead/behind 都一样）时跳过
       const prev = branches.value
@@ -142,7 +142,7 @@ export const useHistoryStore = defineStore('history', () => {
       const prevRemotes = remotes.value
       const remotesUnchanged =
         nextRemotes.length === prevRemotes.length &&
-        nextRemotes.every((r, i) => r === prevRemotes[i])
+        nextRemotes.every((r, i) => r.name === prevRemotes[i].name && r.url === prevRemotes[i].url)
       if (!remotesUnchanged) remotes.value = nextRemotes
     } catch (e: unknown) {
       error.value = String(e)
@@ -305,7 +305,7 @@ export const useHistoryStore = defineStore('history', () => {
     remoteTagsLoading.value = true
     try {
       const repoId = repoStore.activeRepoId
-      const remotes = await git.listRemotes(repoId).catch(() => [] as string[])
+      const remotes = await git.listRemotes(repoId).catch(() => [] as RemoteInfo[])
       if (remotes.length === 0) {
         // 无 remote：认为已检查，所有 tag 都是"仅本地"
         remoteTagsChecked.value = true
@@ -314,7 +314,7 @@ export const useHistoryStore = defineStore('history', () => {
       }
       const results = await Promise.all(
         remotes.map(r =>
-          git.listRemoteTags(repoId, r).then(
+          git.listRemoteTags(repoId, r.name).then(
             names => ({ ok: true as const, names }),
             () => ({ ok: false as const, names: [] as string[] }),
           ),
