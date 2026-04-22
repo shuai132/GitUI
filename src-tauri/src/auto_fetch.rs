@@ -88,16 +88,16 @@ impl AutoFetchService {
                 match GitEngine::list_remotes(&meta.path) {
                     Ok(remotes) => {
                         for remote in &remotes {
-                            if let Err(e) = GitEngine::fetch(&meta.path, remote) {
+                            if let Err(e) = GitEngine::fetch(&meta.path, &remote.name) {
                                 log::warn!(
                                     "[auto_fetch] fetch failed for {} remote={}: {e}",
-                                    meta.id, remote
+                                    meta.id, remote.name
                                 );
                                 let _ = app.emit(
                                     "repo://error",
                                     serde_json::json!({
                                         "repoId": meta.id,
-                                        "msg": format!("Auto-fetch failed ({}): {e}", remote)
+                                        "msg": format!("Auto-fetch failed ({}): {e}", remote.name)
                                     }),
                                 );
                             }
