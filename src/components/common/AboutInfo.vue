@@ -2,11 +2,15 @@
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useGitCommands } from '@/composables/useGitCommands'
+import { check } from '@tauri-apps/plugin-updater'
+import { relaunch } from '@tauri-apps/plugin-process'
+import { ask, message } from '@tauri-apps/plugin-dialog'
 
 const { t } = useI18n()
 const git = useGitCommands()
 const appVersion = ref('')
 const gitHash = ref<string | null>(null)
+const isCheckingUpdate = ref(false)
 
 const versionLabel = computed(() => {
   if (!appVersion.value) return ''
@@ -27,6 +31,34 @@ onMounted(async () => {
 async function openUrl(url: string) {
   const { openUrl: open } = await import('@tauri-apps/plugin-opener')
   open(url)
+}
+
+async function checkForUpdates() {
+  if (isCheckingUpdate.value) return
+  isCheckingUpdate.value = true
+  try {
+    const update = await check()
+    if (update) {
+      const confirmed = await ask(
+        `发现新版本 GitUI v${update.version}，发行说明：\n${update.body || '无'}\n\n是否立即下载并更新？`,
+        { title: '更新可用', kind: 'info', okLabel: '更新', cancelLabel: '取消' }
+      )
+      if (confirmed) {
+        await update.downloadAndInstall((event) => {
+          // 可选：在这里记录下载进度
+          console.log(event)
+        })
+        await relaunch()
+      }
+    } else {
+      await message('当前已经是最新版本。', { title: '检查更新', kind: 'info' })
+    }
+  } catch (err: any) {
+    console.error('检查更新失败', err)
+    await message(`检查更新失败：${err.message || err}`, { title: '错误', kind: 'error' })
+  } finally {
+    isCheckingUpdate.value = false
+  }
 }
 </script>
 
@@ -67,6 +99,15 @@ async function openUrl(url: string) {
           rel="noopener"
           @click.prevent="openUrl('https://github.com/shuai132/GitUI')"
         >https://github.com/shuai132/GitUI</a>
+      </div>
+      <div class="about-row about-row-action">
+        <button 
+          class="check-update-btn" 
+          :disabled="isCheckingUpdate"
+          @click="checkForUpdates"
+        >
+          {{ isCheckingUpdate ? '正在检查...' : '检查更新' }}
+        </button>
       </div>
     </div>
   </div>
@@ -133,5 +174,30 @@ async function openUrl(url: string) {
 .about-link:hover {
   color: var(--text-primary);
   border-bottom-color: var(--text-primary);
+}
+
+.about-row-action {
+  margin-top: 12px;
+}
+
+.check-update-btn {
+  padding: 6px 16px;
+  border-radius: 4px;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  font-size: var(--font-sm);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.check-update-btn:hover:not(:disabled) {
+  background-color: var(--bg-surface-hover);
+  border-color: var(--text-muted);
+}
+
+.check-update-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 </style>
