@@ -523,6 +523,9 @@ impl GitEngine {
         let parent_oids = commit.parent_ids().map(|p| p.to_string()).collect();
         let info = build_commit_info(&commit, parent_oids, false, false, false);
 
+        let mut opts = git2::DiffOptions::new();
+        opts.context_lines(0).interhunk_lines(0);
+
         let diff = if commit.parent_count() > 0 {
             let parent = commit.parent(0)?;
             let parent_tree = parent.tree()?;
@@ -530,11 +533,11 @@ impl GitEngine {
             repo.diff_tree_to_tree(
                 Some(&parent_tree),
                 Some(&commit_tree),
-                Some(&mut DiffOptions::new()),
+                Some(&mut opts),
             )?
         } else {
             let commit_tree = commit.tree()?;
-            repo.diff_tree_to_tree(None, Some(&commit_tree), Some(&mut DiffOptions::new()))?
+            repo.diff_tree_to_tree(None, Some(&commit_tree), Some(&mut opts))?
         };
 
         let mut diffs = Self::parse_diff_summary(&repo, &diff, include_stats)?;
@@ -551,7 +554,7 @@ impl GitEngine {
                         if let Ok(untracked_diff) = repo.diff_tree_to_tree(
                             None,
                             Some(&untracked_tree),
-                            Some(&mut DiffOptions::new()),
+                            Some(&mut opts),
                         ) {
                             if let Ok(mut untracked_diffs) =
                                 Self::parse_diff_summary(&repo, &untracked_diff, include_stats)
@@ -576,6 +579,9 @@ impl GitEngine {
         let parent_oids = commit.parent_ids().map(|p| p.to_string()).collect();
         let info = build_commit_info(&commit, parent_oids, false, false, false);
 
+        let mut opts = git2::DiffOptions::new();
+        opts.context_lines(0).interhunk_lines(0);
+
         let diff = if commit.parent_count() > 0 {
             let parent = commit.parent(0)?;
             let parent_tree = parent.tree()?;
@@ -583,11 +589,11 @@ impl GitEngine {
             repo.diff_tree_to_tree(
                 Some(&parent_tree),
                 Some(&commit_tree),
-                Some(&mut DiffOptions::new()),
+                Some(&mut opts),
             )?
         } else {
             let commit_tree = commit.tree()?;
-            repo.diff_tree_to_tree(None, Some(&commit_tree), Some(&mut DiffOptions::new()))?
+            repo.diff_tree_to_tree(None, Some(&commit_tree), Some(&mut opts))?
         };
 
         let mut diffs = Self::parse_diff(&repo, &diff)?;
@@ -606,7 +612,7 @@ impl GitEngine {
                         if let Ok(untracked_diff) = repo.diff_tree_to_tree(
                             None,
                             Some(&untracked_tree),
-                            Some(&mut DiffOptions::new()),
+                            Some(&mut opts),
                         ) {
                             if let Ok(mut untracked_diffs) =
                                 Self::parse_diff(&repo, &untracked_diff)
