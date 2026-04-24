@@ -537,7 +537,34 @@ impl GitEngine {
             repo.diff_tree_to_tree(None, Some(&commit_tree), Some(&mut DiffOptions::new()))?
         };
 
-        let diffs = Self::parse_diff(&repo, &diff)?;
+        let mut diffs = Self::parse_diff(&repo, &diff)?;
+
+        // stash 提交有 3 个父节点时，parent[2] 是未跟踪文件快照（untracked commit）。
+        // 主 diff（HEAD vs WIP）不包含这些文件，需单独对比空树来补全。
+        if commit.parent_count() == 3 {
+            if let Ok(untracked_commit) = commit.parent(2) {
+                if untracked_commit.parent_count() == 0
+                    && untracked_commit
+                        .message()
+                        .unwrap_or("")
+                        .starts_with("untracked")
+                {
+                    if let Ok(untracked_tree) = untracked_commit.tree() {
+                        if let Ok(untracked_diff) = repo.diff_tree_to_tree(
+                            None,
+                            Some(&untracked_tree),
+                            Some(&mut DiffOptions::new()),
+                        ) {
+                            if let Ok(mut untracked_diffs) =
+                                Self::parse_diff(&repo, &untracked_diff)
+                            {
+                                diffs.append(&mut untracked_diffs);
+                            }
+                        }
+                    }
+                }
+            }
+        }
 
         Ok(CommitDetail { info, diffs })
     }
@@ -2958,7 +2985,36 @@ impl GitEngine {
             repo.diff_tree_to_tree(None, Some(&commit_tree), Some(&mut diff_opts))?
         };
 
-        let diffs = Self::parse_diff(&repo, &diff)?;
+        let mut diffs = Self::parse_diff(&repo, &diff)?;
+
+        // stash 未跟踪文件快照补全（同 get_commit_detail 逻辑，但加了 pathspec 过滤）
+        if commit.parent_count() == 3 {
+            if let Ok(untracked_commit) = commit.parent(2) {
+                if untracked_commit.parent_count() == 0
+                    && untracked_commit
+                        .message()
+                        .unwrap_or("")
+                        .starts_with("untracked")
+                {
+                    if let Ok(untracked_tree) = untracked_commit.tree() {
+                        let mut untracked_opts = DiffOptions::new();
+                        untracked_opts.pathspec(file_path);
+                        if let Ok(untracked_diff) = repo.diff_tree_to_tree(
+                            None,
+                            Some(&untracked_tree),
+                            Some(&mut untracked_opts),
+                        ) {
+                            if let Ok(mut untracked_diffs) =
+                                Self::parse_diff(&repo, &untracked_diff)
+                            {
+                                diffs.append(&mut untracked_diffs);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         Ok(diffs.into_iter().next().unwrap_or(FileDiff {
             old_path: None,
             new_path: Some(file_path.to_string()),
@@ -3134,4 +3190,72 @@ fn read_rebase_state(
     let total = read_trimmed_file(&dir.join("end")).and_then(|s| s.parse::<u32>().ok());
 
     (onto, orig_head, head_name, step, total, current_oid)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use git2::{Repository, Signature, StashFlags};
+    use std::fs;
+
+    fn setup_test_repo() -> (tempfile::TempDir, Repository) {
+        let dir = tempfile::tempdir().unwrap();
+        let repo = Repository::init(dir.path()).unwrap();
+        let sig = Signature::now("test", "test@test.com").unwrap();
+
+        // Initial commit
+        fs::write(dir.path().join("existing.txt"), "hello\n").unwrap();
+        let mut index = repo.index().unwrap();
+        index.add_path(std::path::Path::new("existing.txt")).unwrap();
+        index.write().unwrap();
+        let tree_oid = index.write_tree().unwrap();
+        let tree = repo.find_tree(tree_oid).unwrap();
+        repo.commit(Some("HEAD"), &sig, &sig, "init", &tree, &[]).unwrap();
+        drop(tree);
+        (dir, repo)
+    }
+
+    #[test]
+    fn test_stash_diff_includes_untracked_and_staged_new_files() {
+        let (dir, mut repo) = setup_test_repo();
+        let path = dir.path().to_str().unwrap();
+
+        // Create staged new file
+        fs::write(dir.path().join("staged_new.txt"), "staged content\n").unwrap();
+        let mut index = repo.index().unwrap();
+        index.add_path(std::path::Path::new("staged_new.txt")).unwrap();
+        index.write().unwrap();
+
+        // Create untracked file (NOT staged)
+        fs::write(dir.path().join("untracked_new.txt"), "untracked content\n").unwrap();
+
+        // Stash using libgit2 with INCLUDE_UNTRACKED
+        let sig = repo.signature().unwrap();
+        repo.stash_save2(&sig, Some("test stash"), Some(StashFlags::INCLUDE_UNTRACKED)).unwrap();
+
+        // Get the stash commit OID
+        let stash_oid = {
+            let reflog = repo.reflog("refs/stash").unwrap();
+            reflog.get(0).unwrap().id_new()
+        };
+
+        // Test get_commit_detail
+        let detail = GitEngine::get_commit_detail(path, &stash_oid.to_string()).unwrap();
+
+        let file_names: Vec<&str> = detail.diffs.iter()
+            .filter_map(|d| d.new_path.as_deref())
+            .collect();
+
+        // Both files should appear
+        assert!(file_names.contains(&"staged_new.txt"), "staged_new.txt should be in stash diff");
+        assert!(file_names.contains(&"untracked_new.txt"), "untracked_new.txt should be in stash diff");
+
+        // Verify hunks are not empty
+        for diff in &detail.diffs {
+            if diff.new_path.as_deref() == Some("existing.txt") { continue; }
+            assert!(!diff.hunks.is_empty(),
+                "File {:?} should have non-empty hunks (additions={})",
+                diff.new_path, diff.additions);
+        }
+    }
 }
