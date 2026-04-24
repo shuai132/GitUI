@@ -189,6 +189,7 @@ export function tokensToHtml(tokens: DiffToken[]): string {
 }
 
 function escHtml(s: string): string {
+  if (typeof s !== 'string') return ''
   return s
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')

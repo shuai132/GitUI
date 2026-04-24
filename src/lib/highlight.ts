@@ -101,6 +101,7 @@ export const EXT_TO_LANG: Record<string, string> = {
 }
 
 function escapeHtml(s: string): string {
+  if (typeof s !== 'string') return ''
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 }
 

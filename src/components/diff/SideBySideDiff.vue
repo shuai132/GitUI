@@ -42,7 +42,7 @@ const alignedRows = computed((): AlignedRow[] => {
     const hunk = props.diff.hunks[hi]
     // Hunk header row
     rows.push({
-      left: { content: hunk.header.trimEnd(), kind: 'header', hunkIndex: hi },
+      left: { content: (hunk.header ?? '').trimEnd(), kind: 'header', hunkIndex: hi },
       right: { content: '', kind: 'header' },
     })
 
@@ -55,8 +55,8 @@ const alignedRows = computed((): AlignedRow[] => {
       for (let i = 0; i < maxLen; i++) {
         const dl = delBuf[i]
         const al = addBuf[i]
-        const dlContent = dl ? dl.content.replace(/\n$/, '') : ''
-        const alContent = al ? al.content.replace(/\n$/, '') : ''
+        const dlContent = (dl && dl.content) ? dl.content.replace(/\n$/, '') : ''
+        const alContent = (al && al.content) ? al.content.replace(/\n$/, '') : ''
 
         // Word-diff：仅当左右都有内容时配对计算（语法高亮关闭时生效，避免与 v-html 冲突）
         let leftWordHtml: string | undefined
@@ -88,7 +88,7 @@ const alignedRows = computed((): AlignedRow[] => {
       } else {
         // Context line — flush pending del/add first
         flushBuffers()
-        const content = line.content.replace(/\n$/, '')
+        const content = (line.content ?? '').replace(/\n$/, '')
         rows.push({
           left: { lineNo: line.old_lineno, content, kind: 'ctx' },
           right: { lineNo: line.new_lineno, content, kind: 'ctx' },

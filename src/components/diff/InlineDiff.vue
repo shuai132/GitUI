@@ -39,13 +39,12 @@ const rows = computed<InlineRow[]>(() => {
   props.diff.hunks.forEach((hunk, hi) => {
     result.push({
       kind: 'header',
-      content: hunk.header.trimEnd(),
+      content: (hunk.header ?? '').trimEnd(),
       hunkIndex: hi,
-    })
-    // 收集本 hunk 所有行，之后做一次 word-diff 配对
+    })    // 收集本 hunk 所有行，之后做一次 word-diff 配对
     const hunkRows: InlineRow[] = []
     for (const line of hunk.lines) {
-      const content = line.content.replace(/\n$/, '')
+      const content = (line.content ?? '').replace(/\n$/, '')
       if (line.origin === '-') {
         hunkRows.push({ kind: 'del', oldLineNo: line.old_lineno, content, hunkIndex: hi })
       } else if (line.origin === '+') {
