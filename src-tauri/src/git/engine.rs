@@ -514,6 +514,59 @@ impl GitEngine {
         })
     }
 
+    pub fn get_commit_summary(path: &str, oid_str: &str, include_stats: bool) -> GitResult<CommitDetail> {
+        let repo = Self::open(path)?;
+        let oid = git2::Oid::from_str(oid_str)
+            .map_err(|e| GitError::OperationFailed(e.message().to_string()))?;
+        let commit = repo.find_commit(oid)?;
+
+        let parent_oids = commit.parent_ids().map(|p| p.to_string()).collect();
+        let info = build_commit_info(&commit, parent_oids, false, false, false);
+
+        let diff = if commit.parent_count() > 0 {
+            let parent = commit.parent(0)?;
+            let parent_tree = parent.tree()?;
+            let commit_tree = commit.tree()?;
+            repo.diff_tree_to_tree(
+                Some(&parent_tree),
+                Some(&commit_tree),
+                Some(&mut DiffOptions::new()),
+            )?
+        } else {
+            let commit_tree = commit.tree()?;
+            repo.diff_tree_to_tree(None, Some(&commit_tree), Some(&mut DiffOptions::new()))?
+        };
+
+        let mut diffs = Self::parse_diff_summary(&repo, &diff, include_stats)?;
+
+        if commit.parent_count() == 3 {
+            if let Ok(untracked_commit) = commit.parent(2) {
+                if untracked_commit.parent_count() == 0
+                    && untracked_commit
+                        .message()
+                        .unwrap_or("")
+                        .starts_with("untracked")
+                {
+                    if let Ok(untracked_tree) = untracked_commit.tree() {
+                        if let Ok(untracked_diff) = repo.diff_tree_to_tree(
+                            None,
+                            Some(&untracked_tree),
+                            Some(&mut DiffOptions::new()),
+                        ) {
+                            if let Ok(mut untracked_diffs) =
+                                Self::parse_diff_summary(&repo, &untracked_diff, include_stats)
+                            {
+                                diffs.append(&mut untracked_diffs);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(CommitDetail { info, diffs })
+    }
+
     pub fn get_commit_detail(path: &str, oid_str: &str) -> GitResult<CommitDetail> {
         let repo = Self::open(path)?;
         let oid = git2::Oid::from_str(oid_str)
@@ -1001,6 +1054,63 @@ impl GitEngine {
         }
 
         Ok(out)
+    }
+
+    /// 仅解析 diff 概览（文件列表及增删行数），不加载具体 hunk/line 内容。
+    fn parse_diff_summary(_repo: &Repository, diff: &git2::Diff, include_stats: bool) -> GitResult<Vec<FileDiff>> {
+        let files = std::cell::RefCell::new(Vec::with_capacity(diff.deltas().len()));
+
+        let mut file_cb = |delta: git2::DiffDelta<'_>, _: f32| {
+            let old_id = delta.old_file().id();
+            let new_id = delta.new_file().id();
+            files.borrow_mut().push(FileDiff {
+                old_path: delta
+                    .old_file()
+                    .path()
+                    .map(|p| p.to_string_lossy().to_string()),
+                new_path: delta
+                    .new_file()
+                    .path()
+                    .map(|p| p.to_string_lossy().to_string()),
+                is_binary: delta.old_file().is_binary() || delta.new_file().is_binary(),
+                hunks: Vec::new(),
+                additions: 0,
+                deletions: 0,
+                old_blob_oid: if old_id.is_zero() {
+                    None
+                } else {
+                    Some(old_id.to_string())
+                },
+                new_blob_oid: if new_id.is_zero() {
+                    None
+                } else {
+                    Some(new_id.to_string())
+                },
+                encoding: "UTF-8".to_string(),
+            });
+            true
+        };
+
+        if include_stats {
+            let mut line_cb = |_: git2::DiffDelta<'_>, _: Option<git2::DiffHunk<'_>>, line: git2::DiffLine<'_>| {
+                if let Some(f) = files.borrow_mut().last_mut() {
+                    match line.origin() {
+                        '+' => f.additions += 1,
+                        '-' => f.deletions += 1,
+                        _ => {}
+                    }
+                }
+                true
+            };
+
+            diff.foreach(&mut file_cb, None, None, Some(&mut line_cb))
+                .map_err(|e| GitError::OperationFailed(e.message().to_string()))?;
+        } else {
+            diff.foreach(&mut file_cb, None, None, None)
+                .map_err(|e| GitError::OperationFailed(e.message().to_string()))?;
+        }
+
+        Ok(files.into_inner())
     }
 
     /// 按 blob oid 读取原始字节并 base64 编码（用于二进制文件预览）。

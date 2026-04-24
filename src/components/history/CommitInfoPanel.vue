@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, reactive, ref, watch, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useVirtualizer } from '@tanstack/vue-virtual'
 import type { CommitDetail, FileDiff, FileStatusKind } from '@/types/git'
 import { formatAbsoluteTime, fileStatusColor } from '@/utils/format'
 import { GRAPH_COLORS } from '@/utils/graph'
@@ -8,10 +9,13 @@ import { useUiStore } from '@/stores/ui'
 import { useRepoStore } from '@/stores/repos'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useGitCommands } from '@/composables/useGitCommands'
+import { useHistoryStore } from '@/stores/history'
 import ContextMenu, { type ContextMenuItem } from '@/components/common/ContextMenu.vue'
 import { buildFileTree, flattenTree } from '@/utils/fileTree'
 
 const { t } = useI18n()
+const historyStore = useHistoryStore()
+const uiStore = useUiStore()
 
 const props = defineProps<{
   commit: CommitDetail | null
@@ -23,7 +27,6 @@ const emit = defineEmits<{
   showFileHistory: [payload: { filePath: string; mode: 'history' | 'blame' }]
 }>()
 
-const uiStore = useUiStore()
 const repoStore = useRepoStore()
 const workspaceStore = useWorkspaceStore()
 const git = useGitCommands()
@@ -48,7 +51,6 @@ function diffStatus(d: FileDiff): FileStatusKind {
 }
 
 // ── 头部区（summary + meta-grid）和变动文件列表之间的可拖拽分隔条 ──
-// commitInfoTopH === 0 时头部自适应内容高度；拖动后变成像素值，持久化到 uiStore
 const panelRoot = ref<HTMLElement | null>(null)
 const topSection = ref<HTMLElement | null>(null)
 
@@ -66,9 +68,7 @@ function startTopResize(e: PointerEvent) {
   const startY = e.clientY
   const startH = topEl.getBoundingClientRect().height
   const rootH = rootEl.getBoundingClientRect().height
-  // 上限：留至少 80px 给另一区
   const maxH = Math.max(80, rootH - 80)
-  // filesFirst 时 top-section 在 handle 下方，拖动方向反转
   const dir = filesFirst.value ? -1 : 1
   const onMove = (ev: PointerEvent) => {
     const next = startH + dir * (ev.clientY - startY)
@@ -148,7 +148,6 @@ watch(() => viewMode.value, (mode) => {
 })
 
 watch(() => props.commit?.info.oid, () => {
-  // Clear expanded dirs on commit change? Or maybe auto-expand roots.
   if (viewMode.value === 'tree') {
     expandedDirs.value.clear()
     const tree = buildFileTree(props.commit?.diffs ?? [], d => d.new_path ?? d.old_path ?? '')
@@ -179,6 +178,19 @@ const displayItems = computed<DisplayItem[]>(() => {
   }
   return diffs.map((d, i) => ({ type: 'file', path: d.new_path ?? d.old_path ?? '', file: d, depth: 0, index: i }))
 })
+
+// ── 虚拟滚动 ──────────────────────────────────────────────────
+const scrollContainer = ref<HTMLElement | null>(null)
+const rowHeight = 24 // 对应 var(--file-list-row-height)
+
+const virtualizer = useVirtualizer(
+  computed(() => ({
+    count: displayItems.value.length,
+    getScrollElement: () => scrollContainer.value,
+    estimateSize: () => rowHeight,
+    overscan: 10,
+  }))
+)
 
 function onRowClick(item: DisplayItem) {
   if (item.type === 'dir') {
@@ -281,13 +293,12 @@ async function onFileMenuAction(action: string) {
 
 <template>
   <div class="commit-info-panel" v-if="commit" ref="panelRoot">
-    <!-- 上半区：头部 + 元数据（高度由 sizes.commitInfoTopH 控制，可拖拽） -->
+    <!-- 上半区：头部 + 元数据 -->
     <div
       class="top-section"
       ref="topSection"
       :style="[topSectionStyle, filesFirst ? { order: 2 } : {}]"
     >
-      <!-- Header: avatar + commit title -->
       <div class="panel-header">
         <div class="avatar" :style="{ background: avatarColor }">{{ initials }}</div>
         <div class="title-block">
@@ -296,7 +307,6 @@ async function onFileMenuAction(action: string) {
         </div>
       </div>
 
-      <!-- Metadata grid -->
       <div class="meta-grid">
         <span class="mk">{{ t('history.detailsPanel.commit') }}</span>
         <span class="mv oid">{{ commit.info.oid.slice(0, 16) }}</span>
@@ -323,9 +333,8 @@ async function onFileMenuAction(action: string) {
       </div>
     </div>
 
-    <!-- Resize handle between top-section and file-tabs -->
     <div
-      v-if="commit.diffs.length"
+      v-if="commit.diffs.length || historyStore.loadingDetail"
       class="top-resize"
       :style="filesFirst ? { order: 1 } : {}"
       @pointerdown="startTopResize"
@@ -335,7 +344,7 @@ async function onFileMenuAction(action: string) {
     <div
       class="file-tabs-container"
       :style="filesFirst ? { order: 0 } : {}"
-      v-if="commit.diffs.length"
+      v-if="commit.diffs.length || historyStore.loadingDetail"
     >
       <div class="file-tabs-header">
         <span class="file-tabs-title">{{ t('history.detailsPanel.changedFiles', { count: commit.diffs.length }) }}</span>
@@ -376,60 +385,83 @@ async function onFileMenuAction(action: string) {
           </button>
         </div>
       </div>
-      <div class="file-tabs">
+
+      <!-- 虚拟滚动列表 -->
+      <div class="file-tabs" ref="scrollContainer">
+        <div v-if="historyStore.loadingDetail && !commit.diffs.length" class="file-list-loading">
+          <span class="loading-spinner" />
+          {{ t('history.loading') }}
+        </div>
+        
         <div
-          v-for="(item, idx) in displayItems"
-          :key="idx"
-          class="file-tab"
-          :class="{ active: item.type === 'file' && item.index === selectedFileIdx, 'is-dir': item.type === 'dir' }"
-          @click="onRowClick(item)"
-          @contextmenu="onRowContext($event, item)"
-          :title="item.path"
+          v-else
+          :style="{ height: virtualizer.getTotalSize() + 'px', width: '100%', position: 'relative' }"
         >
-          <!-- Indent for tree view -->
-          <div v-if="viewMode === 'tree' && item.depth > 0" :style="{ width: (item.depth * 14) + 'px' }" class="tree-indent" />
+          <div
+            v-for="vRow in virtualizer.getVirtualItems()"
+            :key="vRow.index"
+            class="file-tab"
+            :class="{ 
+              active: displayItems[vRow.index].type === 'file' && displayItems[vRow.index].index === selectedFileIdx, 
+              'is-dir': displayItems[vRow.index].type === 'dir' 
+            }"
+            :style="{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: '100%',
+              height: rowHeight + 'px',
+              transform: `translateY(${vRow.start}px)`
+            }"
+            @click="onRowClick(displayItems[vRow.index])"
+            @contextmenu="onRowContext($event, displayItems[vRow.index])"
+            :title="displayItems[vRow.index].path"
+          >
+            <!-- Indent for tree view -->
+            <div v-if="viewMode === 'tree' && displayItems[vRow.index].depth > 0" :style="{ width: (displayItems[vRow.index].depth * 14) + 'px' }" class="tree-indent" />
 
-          <!-- Directory Item -->
-          <template v-if="item.type === 'dir'">
-            <svg
-              class="folder-icon"
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              :style="{ transform: getDir(item).expanded ? 'rotate(90deg)' : 'rotate(0deg)' }"
-            >
-              <polyline points="9 18 15 12 9 6" />
-            </svg>
-            <span class="file-name"><span class="path-text"><bdi>{{ getDir(item).name }}</bdi></span></span>
-          </template>
+            <!-- Directory Item -->
+            <template v-if="displayItems[vRow.index].type === 'dir'">
+              <svg
+                class="folder-icon"
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                :style="{ transform: getDir(displayItems[vRow.index]).expanded ? 'rotate(90deg)' : 'rotate(0deg)' }"
+              >
+                <polyline points="9 18 15 12 9 6" />
+              </svg>
+              <span class="file-name"><span class="path-text"><bdi>{{ getDir(displayItems[vRow.index]).name }}</bdi></span></span>
+            </template>
 
-          <!-- File Item -->
-          <template v-else>
-            <svg
-              class="status-icon"
-              :style="{ color: fileStatusColor(diffStatus(getFile(item))) }"
-              width="13"
-              height="13"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            >
-              <path :d="statusIconMap[diffStatus(getFile(item))]?.d ?? statusIconMap.modified.d" />
-            </svg>
-            <span class="file-name"><span class="path-text"><bdi>{{ viewMode === 'tree' ? (item.path.split('/').pop() || item.path) : item.path }}</bdi></span></span>
-            <span class="file-stats">
-              <span class="add" v-if="getFile(item).additions > 0">+{{ getFile(item).additions }}</span>
-              <span class="del" v-if="getFile(item).deletions > 0">-{{ getFile(item).deletions }}</span>
-            </span>
-          </template>
+            <!-- File Item -->
+            <template v-else>
+              <svg
+                class="status-icon"
+                :style="{ color: fileStatusColor(diffStatus(getFile(displayItems[vRow.index]))) }"
+                width="13"
+                height="13"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path :d="statusIconMap[diffStatus(getFile(displayItems[vRow.index]))]?.d ?? statusIconMap.modified.d" />
+              </svg>
+              <span class="file-name"><span class="path-text"><bdi>{{ viewMode === 'tree' ? (displayItems[vRow.index].path.split('/').pop() || displayItems[vRow.index].path) : displayItems[vRow.index].path }}</bdi></span></span>
+              <span class="file-stats">
+                <span class="add" v-if="getFile(displayItems[vRow.index]).additions > 0">+{{ getFile(displayItems[vRow.index]).additions }}</span>
+                <span class="del" v-if="getFile(displayItems[vRow.index]).deletions > 0">-{{ getFile(displayItems[vRow.index]).deletions }}</span>
+              </span>
+            </template>
+          </div>
         </div>
       </div>
     </div>
@@ -654,6 +686,16 @@ async function onFileMenuAction(action: string) {
   display: flex;
   flex-direction: column;
   padding: 4px 0;
+}
+
+.file-list-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 20px;
+  color: var(--text-muted);
+  font-size: var(--font-sm);
 }
 
 .file-tab {

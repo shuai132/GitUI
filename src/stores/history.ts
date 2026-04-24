@@ -167,20 +167,85 @@ export const useHistoryStore = defineStore('history', () => {
     }
   }
 
+  const loadingDetail = ref(false)
+
   async function selectCommit(oid: string) {
     const repoStore = useRepoStore()
     if (!repoStore.activeRepoId) return
 
+    // ── 第一步：瞬间响应 ──
+    // 立即更新 selectedCommit 和 showDetail，让 UI 瞬间弹出并选中行。
+    const existing = commits.value.find(c => c.oid === oid)
+    if (existing) {
+      selectedCommit.value = { info: existing, diffs: [] }
+      showDetail.value = true
+    }
+    
     selectedFileDiffIndex.value = 0
+    loadingDetail.value = true
+
+    // ── 第二步：将重负载推迟到下一帧 ──
+    // 这样浏览器能先完成第一步的渲染（面板弹出、列表高亮），避免 IPC 序列化和后续逻辑阻塞主线程。
+    const currentRepoId = repoStore.activeRepoId
+    setTimeout(async () => {
+      // 校验用户是否已经切到了别的提交
+      if (!selectedCommit.value || selectedCommit.value.info.oid !== oid) return
+
+      try {
+        // 快速加载文件列表 (includeStats=false)
+        const summary = await git.getCommitSummary(currentRepoId, oid, false)
+        
+        if (selectedCommit.value?.info.oid === oid) {
+          selectedCommit.value = summary
+          loadingDetail.value = false
+          
+          // 默认加载第一个文件的详情
+          if (summary.diffs.length > 0) {
+            loadFileDiff(0)
+          }
+
+          // 后台补全统计数字
+          git.getCommitSummary(currentRepoId, oid, true).then((fullSummary) => {
+            if (selectedCommit.value?.info.oid === oid) {
+              fullSummary.diffs.forEach((fd, i) => {
+                const target = selectedCommit.value?.diffs[i]
+                if (target && (target.new_path === fd.new_path || target.old_path === fd.old_path)) {
+                  target.additions = fd.additions
+                  target.deletions = fd.deletions
+                }
+              })
+            }
+          }).catch(e => console.error('Failed to load stats:', e))
+        }
+      } catch (e: unknown) {
+        error.value = String(e)
+        loadingDetail.value = false
+      }
+    }, 0)
+  }
+
+  async function loadFileDiff(idx: number) {
+    const repoStore = useRepoStore()
+    const commit = selectedCommit.value
+    if (!repoStore.activeRepoId || !commit) return
+
+    const diff = commit.diffs[idx]
+    // 已经加载过，或者是二进制文件（无 hunk），则跳过
+    if (!diff || diff.hunks.length > 0 || diff.is_binary) return
+
     try {
-      selectedCommit.value = await git.getCommitDetail(repoStore.activeRepoId, oid)
+      const path = diff.new_path || diff.old_path
+      if (!path) return
+      const fullDiff = await git.getFileDiffAtCommit(repoStore.activeRepoId, path, commit.info.oid)
+      commit.diffs[idx] = fullDiff
     } catch (e: unknown) {
-      error.value = String(e)
+      console.error('Failed to load file diff:', e)
     }
   }
 
   function selectFileDiff(idx: number) {
     selectedFileDiffIndex.value = idx
+    loadFileDiff(idx)
   }
 
   async function createBranch(name: string, fromOid?: string) {
@@ -377,6 +442,7 @@ export const useHistoryStore = defineStore('history', () => {
     showDetail,
     graphRows,
     selectedFileDiffIndex,
+    loadingDetail,
     hasMore,
     loading,
     loadingMore,

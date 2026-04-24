@@ -229,6 +229,9 @@ export function useGitCommands() {
       includeStashes,
     })
 
+  const getCommitSummary = (repoId: string, oid: string, includeStats = true) =>
+    call<CommitDetail>('get_commit_summary', { repoId, oid, includeStats })
+
   const getCommitDetail = (repoId: string, oid: string) =>
     call<CommitDetail>('get_commit_detail', { repoId, oid })
 
@@ -471,6 +474,7 @@ export function useGitCommands() {
     resetToCommit,
     createTag,
     getLog,
+    getCommitSummary,
     getCommitDetail,
     getFileLog,
     getFileDiff,

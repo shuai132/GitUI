@@ -92,6 +92,7 @@ pub fn run() {
             create_tag,
             // Log
             get_log,
+            get_commit_summary,
             get_commit_detail,
             get_file_log,
             // Diff

@@ -23,6 +23,19 @@ pub async fn get_log(
 }
 
 #[tauri::command]
+pub async fn get_commit_summary(
+    repo_id: String,
+    oid: String,
+    include_stats: bool,
+    repo_manager: State<'_, RepoManager>,
+) -> Result<CommitDetail, GitError> {
+    let meta = repo_manager
+        .get_meta(&repo_id)
+        .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
+    GitEngine::get_commit_summary(&meta.path, &oid, include_stats)
+}
+
+#[tauri::command]
 pub async fn get_commit_detail(
     repo_id: String,
     oid: String,
