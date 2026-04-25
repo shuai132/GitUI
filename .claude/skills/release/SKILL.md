@@ -41,7 +41,7 @@ git rev-parse vX.Y.Z 2>/dev/null
 读三个文件的当前版本号，跟目标 `X.Y.Z` 比。
 
 - 三处都等于 `X.Y.Z`：跳到步骤 3。
-- 否则：用 Edit 把不一致的改成 `X.Y.Z`（只改版本号字段），`Cargo.lock` 里 `name = "gitui"` 附近若有旧版本号一并改掉（没有则跳过）。**修改后必须执行 `npm install` 以更新 `package-lock.json`**，然后只 add 这些文件（包括 `package-lock.json`）提交：
+- 否则：用 Edit 把不一致的改成 `X.Y.Z`（只改版本号字段），`Cargo.lock` 里 `name = "gitui"` 附近若有旧版本号一并改掉（没有则跳过）。**修改后必须执行 `npm install` 以更新 `package-lock.json`**，然后只 add 这些文件（包括 `package-lock.json` 和 `src-tauri/Cargo.lock`）提交：
 
   ```bash
   git commit -m "chore: release vX.Y.Z"
@@ -66,7 +66,7 @@ git tag vX.Y.Z
 
 ## 注意事项
 
-- **版本号同步提交单独成条**：只含三个版本号文件及对应的 lock 文件（`package-lock.json` 和必要时的 `Cargo.lock`），不夹带其他改动。
+- **版本号同步提交单独成条**：只含三个版本号文件及对应的 lock 文件（`package-lock.json` 和 `src-tauri/Cargo.lock`），不夹带其他改动。
 - **不用 `git push --tags`**：只推本次这一个 tag。
 - **失败不回滚**：push 失败保留本地 tag / commit，告诉用户让用户决定，不要擅自 `git reset` 或 `git tag -d`。
 - **推送不用再确认**：skill 的语义就是推到 GitHub；只有前置/一致性检查异常才停下来确认。
