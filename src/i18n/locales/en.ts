@@ -178,6 +178,9 @@ const messages = {
         delete: 'Delete...',
       },
       confirmDelete: 'Delete branch "{name}"? This cannot be undone.',
+      confirmDeleteWithRemote: 'Branch "{name}" also exists on remote. Delete from remote as well?',
+      deleteLocalOnly: 'Delete local only',
+      deleteLocalAndRemote: 'Delete both local and remote',
       confirmSwitchForce: 'Force switching will discard all uncommitted changes in the working directory. Switch to branch "{name}"?',
     },
     tag: {

@@ -269,6 +269,13 @@ export const useHistoryStore = defineStore('history', () => {
     await loadBranches()
   }
 
+  async function deleteRemoteBranch(remoteName: string, branchName: string) {
+    const repoStore = useRepoStore()
+    if (!repoStore.activeRepoId) return
+    await git.deleteRemoteBranch(repoStore.activeRepoId, remoteName, branchName)
+    await loadBranches()
+  }
+
   async function checkoutRemoteBranch(
     remoteBranch: string,
     localName: string,
@@ -467,6 +474,7 @@ export const useHistoryStore = defineStore('history', () => {
     createBranch,
     switchBranch,
     deleteBranch,
+    deleteRemoteBranch,
     checkoutRemoteBranch,
     checkoutCommit,
     cherryPickCommit,

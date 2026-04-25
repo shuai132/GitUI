@@ -267,6 +267,9 @@ export function useGitCommands() {
   const deleteBranch = (repoId: string, name: string) =>
     call<void>('delete_branch', { repoId, name })
 
+  const deleteRemoteBranch = (repoId: string, remoteName: string, branchName: string) =>
+    call<void>('delete_remote_branch', { repoId, remoteName, branchName })
+
   const checkoutRemoteBranch = (
     repoId: string,
     remoteBranch: string,
@@ -489,6 +492,7 @@ export function useGitCommands() {
     createBranch,
     switchBranch,
     deleteBranch,
+    deleteRemoteBranch,
     checkoutRemoteBranch,
     listTags,
     deleteTag,

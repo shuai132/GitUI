@@ -106,6 +106,7 @@ pub fn run() {
             create_branch,
             switch_branch,
             delete_branch,
+            delete_remote_branch,
             checkout_remote_branch,
             // Tag
             list_tags,

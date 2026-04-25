@@ -290,8 +290,8 @@ const contextMenuItems = computed<ContextMenuItem[]>(() => {
 
   items.push({ label: t('sidebar.branch.menu.copyName'), action: 'copy-name' })
 
-  // 只有非当前分支可以删除（当前分支 / 远程分支暂不开放删除）
-  if (!b.is_remote && !b.is_head) {
+  // 允许删除：非当前本地分支，或者任何远程分支
+  if ((!b.is_remote && !b.is_head) || b.is_remote) {
     items.push({ separator: true })
     items.push({ label: t('sidebar.branch.menu.delete'), action: 'delete', danger: true })
   }
@@ -332,11 +332,46 @@ async function onContextAction(action: string) {
       case 'copy-name':
         await navigator.clipboard.writeText(b.name)
         break
-      case 'delete':
-        if (confirm(t('sidebar.branch.confirmDelete', { name: b.name }))) {
-          await historyStore.deleteBranch(b.name)
-        }
+      case 'delete': {
+        const isRemote = b.is_remote
+        const hasUpstream = !isRemote && !!b.upstream
+        
+        openConfirm(
+          t('sidebar.branch.menu.delete'),
+          hasUpstream
+            ? t('sidebar.branch.confirmDeleteWithRemote', { name: b.name })
+            : t('sidebar.branch.confirmDelete', { name: b.name }),
+          async () => {
+            if (isRemote) {
+              // 删除远程分支，name 形如 "origin/main"
+              const slashIdx = b.name.indexOf('/')
+              if (slashIdx > 0) {
+                const remote = b.name.substring(0, slashIdx)
+                const branch = b.name.substring(slashIdx + 1)
+                await historyStore.deleteRemoteBranch(remote, branch)
+              }
+            } else {
+              // 1. 删除本地
+              await historyStore.deleteBranch(b.name)
+              
+              // 2. (可选) 删除远程
+              if (confirmDlg.checkboxValue && b.upstream) {
+                const slashIdx = b.upstream.indexOf('/')
+                if (slashIdx > 0) {
+                  const remote = b.upstream.substring(0, slashIdx)
+                  const branch = b.upstream.substring(slashIdx + 1)
+                  await historyStore.deleteRemoteBranch(remote, branch)
+                }
+              }
+            }
+          },
+          {
+            checkboxLabel: hasUpstream ? t('sidebar.branch.deleteLocalAndRemote') : undefined,
+            checkboxValue: false,
+          },
+        )
         break
+      }
     }
   } catch (err) {
     console.error(err)

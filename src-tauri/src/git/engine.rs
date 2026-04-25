@@ -1788,6 +1788,13 @@ impl GitEngine {
         Ok(())
     }
 
+    /// 删除远程分支。使用系统 git。
+    pub fn delete_remote_branch(path: &str, remote_name: &str, branch_name: &str) -> GitResult<()> {
+        log::debug!("[engine::delete_remote_branch] remote={remote_name} branch={branch_name}");
+        run_git(path, &["push", remote_name, "--delete", branch_name])?;
+        Ok(())
+    }
+
     pub fn pull(path: &str, remote_name: &str, branch_name: &str, mode: &str) -> GitResult<()> {
         log::debug!("[engine::pull] mode={mode} remote={remote_name} branch={branch_name}");
 
