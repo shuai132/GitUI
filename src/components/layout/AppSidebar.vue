@@ -427,10 +427,11 @@ function openSubmoduleMenu(e: MouseEvent, s: SubmoduleInfo) {
   e.preventDefault()
   e.stopPropagation()
   submoduleMenu.target = s
-  // 把菜单定位到按钮右下方而非鼠标位置，视觉更稳定
-  const btn = e.currentTarget as HTMLElement | null
-  if (btn) {
-    const rect = btn.getBoundingClientRect()
+  // 如果是右键菜单，使用鼠标位置；如果是点击按钮，定位到按钮右下方
+  const isRightClick = e.type === 'contextmenu'
+  const el = e.currentTarget as HTMLElement | null
+  if (el && !isRightClick) {
+    const rect = el.getBoundingClientRect()
     submoduleMenu.x = rect.right
     submoduleMenu.y = rect.bottom
   } else {
@@ -982,6 +983,7 @@ async function onAddSubmoduleSuccess() {
           }"
           :title="`${s.path}${s.url ? '\n' + s.url : ''}`"
           @click="onSubmoduleClick(s)"
+          @contextmenu="openSubmoduleMenu($event, s)"
         >
           <!-- 警告三角：未 init / 未 clone / 找不到 -->
           <svg
