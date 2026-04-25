@@ -1,10 +1,20 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { marked } from 'marked'
 import Modal from './Modal.vue'
 import type { Update } from '@tauri-apps/plugin-updater'
 import { relaunch } from '@tauri-apps/plugin-process'
 import { useSettingsStore } from '@/stores/settings'
+
+// Configure marked: open links in new tab (no XSS risk for known GitHub content)
+marked.use({
+  renderer: {
+    link({ href, title, text }) {
+      return `<a href="${href}" title="${title || ''}" target="_blank" rel="noopener noreferrer">${text}</a>`
+    }
+  }
+})
 
 const props = defineProps<{
   visible: boolean
@@ -21,6 +31,36 @@ const isDownloading = ref(false)
 const downloadProgress = ref(0)
 const isDownloaded = ref(false)
 const error = ref<string | null>(null)
+
+// Release notes from GitHub API
+const releaseNotesHtml = ref<string | null>(null)
+const notesLoading = ref(false)
+
+async function fetchReleaseNotes(version: string) {
+  notesLoading.value = true
+  releaseNotesHtml.value = null
+  try {
+    const res = await fetch(
+      `https://api.github.com/repos/shuai132/GitUI/releases/tags/v${version}`,
+      { headers: { Accept: 'application/vnd.github+json' } }
+    )
+    if (res.ok) {
+      const data = await res.json()
+      const body: string = data.body || ''
+      releaseNotesHtml.value = body ? (await marked.parse(body)) : null
+    }
+  } catch {
+    // network failed — will fallback to update.body below
+  } finally {
+    notesLoading.value = false
+  }
+}
+
+watch(
+  () => props.update,
+  (u) => { if (u) fetchReleaseNotes(u.version) },
+  { immediate: true }
+)
 
 async function handleDownload() {
   if (!props.update || isDownloading.value) return
@@ -79,7 +119,19 @@ function handleClose() {
         <div class="version-badge">v{{ update.version }}</div>
         <div class="release-notes-container">
           <div class="release-notes-title">{{ t('settings.about.releaseNotes') }}</div>
-          <div class="release-notes-body">{{ update.body || t('settings.about.noReleaseNotes') }}</div>
+          <div v-if="notesLoading" class="release-notes-loading">
+            <svg class="spinner" viewBox="0 0 24 24"><circle class="path" cx="12" cy="12" r="10" fill="none" stroke-width="3"></circle></svg>
+          </div>
+          <!-- Rendered markdown from GitHub API -->
+          <div
+            v-else-if="releaseNotesHtml"
+            class="release-notes-body release-notes-md"
+            v-html="releaseNotesHtml"
+          />
+          <!-- Fallback: plain text from latest.json -->
+          <div v-else class="release-notes-body">
+            {{ update.body || t('settings.about.noReleaseNotes') }}
+          </div>
         </div>
       </div>
 
@@ -171,9 +223,80 @@ function handleClose() {
   font-size: var(--font-sm);
   color: var(--text-muted);
   white-space: pre-wrap;
-  max-height: 200px;
+  max-height: 240px;
   overflow-y: auto;
-  line-height: 1.5;
+  line-height: 1.6;
+}
+
+.release-notes-loading {
+  display: flex;
+  justify-content: center;
+  padding: 12px 0;
+}
+
+.release-notes-loading .spinner {
+  animation: rotate 2s linear infinite;
+  width: 18px;
+  height: 18px;
+}
+
+.release-notes-loading .path {
+  stroke: var(--accent-blue);
+  stroke-linecap: round;
+  animation: dash 1.5s ease-in-out infinite;
+}
+
+/* Markdown rendered styles */
+.release-notes-md {
+  white-space: normal;
+}
+
+.release-notes-md :deep(h1),
+.release-notes-md :deep(h2),
+.release-notes-md :deep(h3) {
+  font-size: var(--font-sm);
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 8px 0 4px;
+}
+
+.release-notes-md :deep(p) {
+  margin: 4px 0;
+}
+
+.release-notes-md :deep(ul),
+.release-notes-md :deep(ol) {
+  padding-left: 18px;
+  margin: 4px 0;
+}
+
+.release-notes-md :deep(li) {
+  margin: 2px 0;
+}
+
+.release-notes-md :deep(a) {
+  color: var(--accent-blue);
+  text-decoration: none;
+}
+
+.release-notes-md :deep(a:hover) {
+  text-decoration: underline;
+}
+
+.release-notes-md :deep(code) {
+  background: var(--bg-primary);
+  border-radius: 3px;
+  padding: 1px 4px;
+  font-family: var(--code-font-family);
+  font-size: 11px;
+}
+
+.release-notes-md :deep(pre) {
+  background: var(--bg-primary);
+  border-radius: 4px;
+  padding: 8px;
+  overflow-x: auto;
+  margin: 6px 0;
 }
 
 .update-status {
