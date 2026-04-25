@@ -36,6 +36,8 @@ const submenuSide = ref<'right' | 'left'>('right')
 const submenuVPos = ref<'top' | 'bottom'>('top')
 let submenuCloseTimer: number | null = null
 
+const submenuStyles = ref<Record<string, string>>({})
+
 function clearSubmenuCloseTimer() {
   if (submenuCloseTimer !== null) {
     window.clearTimeout(submenuCloseTimer)
@@ -53,10 +55,15 @@ function onParentMouseEnter(idx: number, e: MouseEvent) {
   // 检测子菜单弹出方向 (水平)
   const SUBMENU_W = 200
   const parentRect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+  
+  const styles: Record<string, string> = {}
+  
   if (parentRect.right + SUBMENU_W > windowWidth.value - 10) {
     submenuSide.value = 'left'
+    styles.right = `${windowWidth.value - parentRect.left + 2}px`
   } else {
     submenuSide.value = 'right'
+    styles.left = `${parentRect.right - 2}px`
   }
 
   // 检测子菜单弹出方向 (垂直)
@@ -66,9 +73,13 @@ function onParentMouseEnter(idx: number, e: MouseEvent) {
   )
   if (parentRect.top + estSubmenuHeight > windowHeight.value - 10) {
     submenuVPos.value = 'bottom'
+    styles.bottom = `${windowHeight.value - parentRect.bottom + 5}px`
   } else {
     submenuVPos.value = 'top'
+    styles.top = `${parentRect.top - 5}px`
   }
+  
+  submenuStyles.value = styles
 }
 
 function onParentMouseLeave() {
@@ -128,6 +139,7 @@ function onDocumentPointerDown(e: PointerEvent) {
   const target = e.target as HTMLElement | null
   if (!target) return
   if (target.closest('.context-menu')) return
+  if (target.closest('.submenu')) return
   if (target.closest('[data-menu-anchor]')) return
   emit('close')
 }
@@ -178,32 +190,6 @@ onBeforeUnmount(() => {
         >
           <span class="menu-item-label">{{ item.label }}</span>
           <span class="submenu-arrow">›</span>
-
-          <div
-            v-if="openSubmenuIndex === idx"
-            class="submenu"
-            :class="{
-              'submenu--left': submenuSide === 'left',
-              'submenu--bottom': submenuVPos === 'bottom',
-            }"
-            @mouseenter="onSubmenuMouseEnter"
-            @mouseleave="onSubmenuMouseLeave"
-          >
-            <template v-for="(child, cidx) in item.children" :key="cidx">
-              <div v-if="child.separator" class="menu-separator" />
-              <div
-                v-else
-                class="menu-item"
-                :class="{
-                  'menu-item--disabled': child.disabled,
-                  'menu-item--danger': child.danger,
-                }"
-                @click="onItemClick(child)"
-              >
-                {{ child.label }}
-              </div>
-            </template>
-          </div>
         </div>
         <div
           v-else
@@ -217,6 +203,29 @@ onBeforeUnmount(() => {
           @click="onItemClick(item)"
         >
           {{ item.label }}
+        </div>
+      </template>
+    </div>
+
+    <div
+      v-if="visible && openSubmenuIndex !== null && items[openSubmenuIndex]?.children?.length"
+      class="submenu"
+      :style="submenuStyles"
+      @mouseenter="onSubmenuMouseEnter"
+      @mouseleave="onSubmenuMouseLeave"
+    >
+      <template v-for="(child, cidx) in items[openSubmenuIndex].children" :key="cidx">
+        <div v-if="child.separator" class="menu-separator" />
+        <div
+          v-else
+          class="menu-item"
+          :class="{
+            'menu-item--disabled': child.disabled,
+            'menu-item--danger': child.danger,
+          }"
+          @click="onItemClick(child)"
+        >
+          {{ child.label }}
         </div>
       </template>
     </div>
@@ -267,10 +276,7 @@ onBeforeUnmount(() => {
 }
 
 .submenu {
-  position: absolute;
-  left: 100%;
-  top: -5px;
-  margin-left: -2px;
+  position: fixed;
   min-width: 200px;
   background: var(--bg-surface);
   border: 1px solid var(--border);
@@ -278,18 +284,6 @@ onBeforeUnmount(() => {
   padding: 4px 0;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
   z-index: 1001;
-}
-
-.submenu--left {
-  left: auto;
-  right: 100%;
-  margin-left: 0;
-  margin-right: -2px;
-}
-
-.submenu--bottom {
-  top: auto;
-  bottom: -5px;
 }
 
 .menu-item:hover {
