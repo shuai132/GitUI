@@ -8,7 +8,7 @@ import { useSettingsStore } from '@/stores/settings'
 
 const props = defineProps<{
   visible: boolean
-  update: Update | null
+  update: any // 绕过 Update 类型的 #private 检查
 }>()
 
 const emit = defineEmits<{
@@ -30,24 +30,18 @@ async function handleDownload() {
   downloadProgress.value = 0
   
   try {
-    await props.update.downloadAndInstall((event) => {
-      switch (event.event) {
-        case 'Started':
-          downloadProgress.value = 0
-          break
-        case 'Progress':
-          break
-        case 'Finished':
-          downloadProgress.value = 100
-          break
+    const update = props.update as Update
+    await update.downloadAndInstall((event) => {
+      if (event.event === 'Started') {
+        downloadProgress.value = 0
+      } else if (event.event === 'Finished') {
+        downloadProgress.value = 100
       }
       
-      // Some versions of the plugin use event.data for progress
-      if (typeof event.data === 'object' && 'progress' in event.data) {
-        // @ts-ignore
-        downloadProgress.value = Math.round(event.data.progress * 100)
-      } else if (event.event === 'Progress' && typeof event.data === 'number') {
-        // Fallback or guess
+      // 安全地处理进度信息，兼容不同版本的事件结构
+      const anyEvent = event as any
+      if (anyEvent.data && typeof anyEvent.data === 'object' && 'progress' in anyEvent.data) {
+        downloadProgress.value = Math.round(anyEvent.data.progress * 100)
       }
     })
     isDownloaded.value = true
