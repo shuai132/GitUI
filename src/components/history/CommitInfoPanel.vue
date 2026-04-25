@@ -213,6 +213,10 @@ function getFile(item: DisplayItem): FileDiff {
   return (item as any).file
 }
 
+function isActiveFile(item: DisplayItem): boolean {
+  return item.type === 'file' && item.index === props.selectedFileIdx
+}
+
 function getDir(item: DisplayItem): { name: string; expanded: boolean } {
   return item as any
 }
@@ -401,11 +405,10 @@ async function onFileMenuAction(action: string) {
             v-for="vRow in virtualizer.getVirtualItems()"
             :key="vRow.index"
             class="file-tab"
-            :class="{ 
-              active: displayItems[vRow.index].type === 'file' && displayItems[vRow.index].index === selectedFileIdx, 
-              'is-dir': displayItems[vRow.index].type === 'dir' 
-            }"
-            :style="{
+            :class="{
+              active: isActiveFile(displayItems[vRow.index]),
+              'is-dir': displayItems[vRow.index].type === 'dir'
+            }"            :style="{
               position: 'absolute',
               top: 0,
               left: 0,
