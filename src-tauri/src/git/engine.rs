@@ -1409,29 +1409,51 @@ impl GitEngine {
         Ok(())
     }
 
-    /// 列出远端所有 tag 的短名（通过 `ls-remote`，不做 fetch）。
-    /// Git 的 tag 是共享命名空间，本地没有 `refs/remotes/<remote>/tags/*` 镜像，
-    /// 所以只能在线查询远端 refs 才能判断某个本地 tag 是否已推送。
-    pub fn list_remote_tag_names(path: &str, remote_name: &str) -> GitResult<Vec<String>> {
-        log::debug!("[engine::list_remote_tag_names] remote={remote_name}");
+    pub fn list_remote_tags(path: &str, remote_name: &str) -> GitResult<Vec<TagInfo>> {
+        log::debug!("[engine::list_remote_tags] remote={remote_name}");
 
         let url = get_remote_url(path, remote_name)?;
         if is_ssh_url(&url) {
-            // `git ls-remote --tags <remote>` 输出格式：`<oid>\trefs/tags/<name>[^{}]`
             let stdout = run_git(path, &["ls-remote", "--tags", remote_name])?;
-            let mut names = Vec::new();
+            let mut map: std::collections::HashMap<String, TagInfo> = std::collections::HashMap::new();
             for line in stdout.lines() {
-                if let Some((_oid, refname)) = line.split_once('\t') {
-                    if refname.starts_with("refs/tags/") && !refname.ends_with("^{}") {
-                        names.push(refname["refs/tags/".len()..].to_string());
+                if let Some((oid, refname)) = line.split_once('\t') {
+                    if !refname.starts_with("refs/tags/") {
+                        continue;
+                    }
+                    if refname.ends_with("^{}") {
+                        let tag_name = refname["refs/tags/".len()..refname.len()-3].to_string();
+                        if let Some(tag) = map.get_mut(&tag_name) {
+                            tag.commit_oid = oid.to_string();
+                            tag.is_annotated = true;
+                        } else {
+                            map.insert(tag_name.clone(), TagInfo {
+                                name: tag_name,
+                                commit_oid: oid.to_string(),
+                                is_annotated: true,
+                                message: None,
+                                tagger_name: None,
+                                time: None,
+                            });
+                        }
+                    } else {
+                        let tag_name = refname["refs/tags/".len()..].to_string();
+                        map.insert(tag_name.clone(), TagInfo {
+                            name: tag_name,
+                            commit_oid: oid.to_string(),
+                            is_annotated: false,
+                            message: None,
+                            tagger_name: None,
+                            time: None,
+                        });
                     }
                 }
             }
             log::debug!(
-                "[engine::list_remote_tag_names] remote={remote_name} count={} (ssh cli)",
-                names.len()
+                "[engine::list_remote_tags] remote={remote_name} count={} (ssh cli)",
+                map.len()
             );
-            return Ok(names);
+            return Ok(map.into_values().collect());
         }
 
         let repo = Self::open(path)?;
@@ -1441,23 +1463,45 @@ impl GitEngine {
         remote.connect_auth(git2::Direction::Fetch, Some(callbacks), None)?;
         let heads = remote.list()?;
 
-        let mut names: Vec<String> = Vec::new();
+        let mut map: std::collections::HashMap<String, TagInfo> = std::collections::HashMap::new();
         for head in heads {
             let name = head.name();
-            // annotated tag 会额外多出一条 `refs/tags/X^{}`（peeled），短名与原 tag
-            // 重复，直接跳过。
-            if !name.starts_with("refs/tags/") || name.ends_with("^{}") {
+            if !name.starts_with("refs/tags/") {
                 continue;
             }
-            names.push(name["refs/tags/".len()..].to_string());
+            if name.ends_with("^{}") {
+                let tag_name = name["refs/tags/".len()..name.len()-3].to_string();
+                if let Some(tag) = map.get_mut(&tag_name) {
+                    tag.commit_oid = head.oid().to_string();
+                    tag.is_annotated = true;
+                } else {
+                    map.insert(tag_name.clone(), TagInfo {
+                        name: tag_name,
+                        commit_oid: head.oid().to_string(),
+                        is_annotated: true,
+                        message: None,
+                        tagger_name: None,
+                        time: None,
+                    });
+                }
+            } else {
+                let tag_name = name["refs/tags/".len()..].to_string();
+                map.insert(tag_name.clone(), TagInfo {
+                    name: tag_name,
+                    commit_oid: head.oid().to_string(),
+                    is_annotated: false,
+                    message: None,
+                    tagger_name: None,
+                    time: None,
+                });
+            }
         }
-        // 断开连接，避免占用（RemoteCallbacks 里的借用到此释放）
         let _ = remote.disconnect();
         log::debug!(
-            "[engine::list_remote_tag_names] remote={remote_name} count={}",
-            names.len()
+            "[engine::list_remote_tags] remote={remote_name} count={}",
+            map.len()
         );
-        Ok(names)
+        Ok(map.into_values().collect())
     }
 
     // ── 提交级操作 ──────────────────────────────────────────────────────
@@ -1713,6 +1757,23 @@ impl GitEngine {
         callbacks.credentials(make_credentials_callback());
         let mut fetch_opts = git2::FetchOptions::new();
         fetch_opts.remote_callbacks(callbacks);
+        remote.fetch(&[] as &[&str], Some(&mut fetch_opts), None)?;
+        Ok(())
+    }
+
+    pub fn fetch_tags(path: &str, remote_name: &str) -> GitResult<()> {
+        let url = get_remote_url(path, remote_name)?;
+        if is_ssh_url(&url) {
+            run_git(path, &["fetch", remote_name, "--tags"])?;
+            return Ok(());
+        }
+        let repo = Self::open(path)?;
+        let mut remote = repo.find_remote(remote_name)?;
+        let mut callbacks = git2::RemoteCallbacks::new();
+        callbacks.credentials(make_credentials_callback());
+        let mut fetch_opts = git2::FetchOptions::new();
+        fetch_opts.remote_callbacks(callbacks);
+        fetch_opts.download_tags(git2::AutotagOption::All);
         remote.fetch(&[] as &[&str], Some(&mut fetch_opts), None)?;
         Ok(())
     }

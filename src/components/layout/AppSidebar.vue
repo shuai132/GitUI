@@ -338,9 +338,11 @@ async function onContextAction(action: string) {
         
         openConfirm(
           t('sidebar.branch.menu.delete'),
-          hasUpstream
-            ? t('sidebar.branch.confirmDeleteWithRemote', { name: b.name })
-            : t('sidebar.branch.confirmDelete', { name: b.name }),
+          isRemote
+            ? t('sidebar.branch.confirmDeleteRemote', { name: b.name })
+            : hasUpstream
+              ? t('sidebar.branch.confirmDeleteWithRemote', { name: b.name })
+              : t('sidebar.branch.confirmDelete', { name: b.name }),
           async () => {
             if (isRemote) {
               // 删除远程分支，name 形如 "origin/main"
@@ -368,6 +370,7 @@ async function onContextAction(action: string) {
           {
             checkboxLabel: hasUpstream ? t('sidebar.branch.deleteLocalAndRemote') : undefined,
             checkboxValue: false,
+            loadingLabel: t('common.deleting', '删除中...'),
           },
         )
         break
@@ -502,6 +505,9 @@ async function onSubmoduleMenuAction(action: string) {
           async () => {
             await submodulesStore.deinit(s.name)
           },
+          {
+            loadingLabel: t('common.deleting', '删除中...'),
+          }
         )
         break
     }
@@ -555,12 +561,18 @@ const tagMenu = reactive({
   x: 0,
   y: 0,
   target: null as TagInfo | null,
+  isSection: false,
 })
 
 const tagMenuItems = computed<ContextMenuItem[]>(() => {
+  if (tagMenu.isSection) {
+    return [
+      { label: t('toolbar.opLabels.fetch', 'Fetch') + ' Tags', action: 'fetch-tags' }
+    ]
+  }
   const tag = tagMenu.target
   if (!tag) return []
-  return [
+  const items: ContextMenuItem[] = [
     { label: t('sidebar.tag.menu.copyName'), action: 'copy-name' },
     { label: t('sidebar.tag.menu.copyOid'), action: 'copy-oid' },
     { separator: true },
@@ -569,11 +581,26 @@ const tagMenuItems = computed<ContextMenuItem[]>(() => {
     { separator: true },
     { label: t('sidebar.tag.menu.delete'), action: 'delete', danger: true },
   ]
+  const isSynced = historyStore.remoteTagNames.has(tag.name)
+  if (isSynced) {
+    items.push({ label: t('sidebar.tag.menu.deleteRemote'), action: 'delete-remote', danger: true })
+  }
+  return items
 })
+
+function openTagSectionMenu(e: MouseEvent) {
+  e.preventDefault()
+  tagMenu.target = null
+  tagMenu.isSection = true
+  tagMenu.x = e.clientX
+  tagMenu.y = e.clientY
+  tagMenu.visible = true
+}
 
 function openTagMenu(e: MouseEvent, tag: TagInfo) {
   e.preventDefault()
   tagMenu.target = tag
+  tagMenu.isSection = false
   tagMenu.x = e.clientX
   tagMenu.y = e.clientY
   tagMenu.visible = true
@@ -584,9 +611,21 @@ function closeTagMenu() {
 }
 
 async function onTagMenuAction(action: string) {
-  const tag = tagMenu.target
-  if (!tag) return
   try {
+    if (action === 'fetch-tags') {
+      const id = repoStore.activeRepoId
+      if (!id) return
+      const remote = await pickRemote(id)
+      if (!remote) return
+      await git.fetchTagsFromRemote(id, remote)
+      await historyStore.loadTags()
+      historyStore.loadRemoteTags(true).catch(() => {})
+      return
+    }
+
+    const tag = tagMenu.target
+    if (!tag) return
+
     switch (action) {
       case 'copy-name':
         await navigator.clipboard.writeText(tag.name)
@@ -636,7 +675,27 @@ async function onTagMenuAction(action: string) {
           {
             checkboxLabel: isSynced ? t('sidebar.tag.deleteLocalAndRemote') : undefined,
             checkboxValue: false,
+            loadingLabel: t('common.deleting', '删除中...'),
           },
+        )
+        break
+      }
+      case 'delete-remote': {
+        openConfirm(
+          t('sidebar.tag.menu.deleteRemote'),
+          t('sidebar.tag.confirmDeleteRemote', { name: tag.name }),
+          async () => {
+            const id = repoStore.activeRepoId
+            if (!id) return
+            const remote = await pickRemote(id)
+            if (remote) {
+              await historyStore.deleteRemoteTag(tag.name, remote)
+            }
+          },
+          {
+            confirmLabel: t('sidebar.tag.menu.deleteRemote'),
+            loadingLabel: t('common.deleting', '删除中...'),
+          }
         )
         break
       }
@@ -714,6 +773,8 @@ const confirmDlg = reactive({
   showCheckbox: false,
   checkboxLabel: '',
   checkboxValue: false,
+  confirmLabel: '',
+  loadingLabel: '',
   _resolve: null as (() => Promise<void>) | null,
 })
 
@@ -721,7 +782,7 @@ function openConfirm(
   title: string,
   message: string,
   action: () => Promise<void>,
-  options?: { checkboxLabel?: string; checkboxValue?: boolean },
+  options?: { checkboxLabel?: string; checkboxValue?: boolean; confirmLabel?: string; loadingLabel?: string },
 ) {
   confirmDlg.title = title
   confirmDlg.message = message
@@ -730,6 +791,8 @@ function openConfirm(
   confirmDlg.showCheckbox = !!options?.checkboxLabel
   confirmDlg.checkboxLabel = options?.checkboxLabel || ''
   confirmDlg.checkboxValue = options?.checkboxValue || false
+  confirmDlg.confirmLabel = options?.confirmLabel || ''
+  confirmDlg.loadingLabel = options?.loadingLabel || ''
   confirmDlg.visible = true
 }
 
@@ -773,6 +836,9 @@ function onDeleteRemote(remoteName: string) {
       await git.removeRemote(repoId, remoteName)
       await historyStore.loadBranches()
     },
+    {
+      loadingLabel: t('common.deleting', '删除中...'),
+    }
   )
 }
 
@@ -913,7 +979,7 @@ async function onAddSubmoduleSuccess() {
 
       <!-- TAGS section -->
       <div class="section" v-if="tags.length > 0 && repoStore.activeRepoId">
-        <div class="section-title collapsible" @click="sectionState.toggle('tags')">
+        <div class="section-title collapsible" @click="sectionState.toggle('tags')" @contextmenu="openTagSectionMenu">
           <svg class="chevron" :class="{ open: !sectionState.isCollapsed('tags') }"
                width="10" height="10" viewBox="0 0 24 24"
                fill="none" stroke="currentColor" stroke-width="2.5">
@@ -1252,7 +1318,8 @@ async function onAddSubmoduleSuccess() {
       :message="confirmDlg.message"
       :loading="confirmDlg.loading"
       :danger="true"
-      :confirm-label="confirmDlg.showCheckbox ? t('common.confirm') : t('common.delete')"
+      :confirm-label="confirmDlg.confirmLabel || (confirmDlg.showCheckbox ? t('common.confirm') : t('common.delete'))"
+      :loading-label="confirmDlg.loadingLabel || undefined"
       :checkbox-label="confirmDlg.showCheckbox ? confirmDlg.checkboxLabel : undefined"
       v-model:checkbox-value="confirmDlg.checkboxValue"
       @confirm="onConfirmDialogConfirm"

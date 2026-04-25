@@ -16,6 +16,7 @@ export const useHistoryStore = defineStore('history', () => {
   // 远端已存在的 tag 短名集合（任一 remote 命中即算已同步）。
   // 通过 list_remote_tags 懒加载，失败时 remoteTagsChecked 保持 false，UI 显示"未知"。
   const remoteTagNames = ref<Set<string>>(new Set())
+  const remoteTags = ref<TagInfo[]>([])
   const remoteTagsChecked = ref(false)
   const remoteTagsLoading = ref(false)
   const selectedCommit = ref<CommitDetail | null>(null)
@@ -378,10 +379,10 @@ export const useHistoryStore = defineStore('history', () => {
   /// 并发查询所有 remote 的 tag 列表，合并成 set；失败的 remote 跳过。
   /// 至少一个 remote 成功即 remoteTagsChecked = true；全部失败（通常是无网络 / 认证错误）
   /// 保持 false，让前端显示"未知"态而不是误判成"仅本地"。
-  async function loadRemoteTags() {
+  async function loadRemoteTags(force = false) {
     const repoStore = useRepoStore()
     if (!repoStore.activeRepoId) return
-    if (remoteTagsLoading.value) return
+    if (remoteTagsLoading.value && !force) return
     remoteTagsLoading.value = true
     try {
       const repoId = repoStore.activeRepoId
@@ -395,21 +396,28 @@ export const useHistoryStore = defineStore('history', () => {
       const results = await Promise.all(
         remotes.map(r =>
           git.listRemoteTags(repoId, r.name).then(
-            names => ({ ok: true as const, names }),
-            () => ({ ok: false as const, names: [] as string[] }),
+            tags => ({ ok: true as const, tags }),
+            () => ({ ok: false as const, tags: [] as TagInfo[] }),
           ),
         ),
       )
-      const merged = new Set<string>()
+      const mergedNames = new Set<string>()
+      const mergedTags: TagInfo[] = []
       let anySuccess = false
       for (const r of results) {
         if (r.ok) {
           anySuccess = true
-          for (const n of r.names) merged.add(n)
+          for (const t of r.tags) {
+            if (!mergedNames.has(t.name)) {
+              mergedNames.add(t.name)
+              mergedTags.push(t)
+            }
+          }
         }
       }
       if (anySuccess) {
-        remoteTagNames.value = merged
+        remoteTagNames.value = mergedNames
+        remoteTags.value = mergedTags
         remoteTagsChecked.value = true
       }
     } finally {
@@ -434,6 +442,7 @@ export const useHistoryStore = defineStore('history', () => {
     remotes.value = []
     tags.value = []
     remoteTagNames.value = new Set()
+    remoteTags.value = []
     remoteTagsChecked.value = false
     remoteTagsLoading.value = false
     selectedCommit.value = null
@@ -450,6 +459,7 @@ export const useHistoryStore = defineStore('history', () => {
     remotes,
     tags,
     remoteTagNames,
+    remoteTags,
     remoteTagsChecked,
     remoteTagsLoading,
     selectedCommit,

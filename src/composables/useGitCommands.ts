@@ -291,11 +291,14 @@ export function useGitCommands() {
     call<void>('delete_tag', { repoId, name })
 
   const listRemoteTags = (repoId: string, remoteName: string) =>
-    call<string[]>('list_remote_tags', { repoId, remoteName })
+    call<TagInfo[]>('list_remote_tags', { repoId, remoteName })
 
   // ---- Remote ----
   const fetchRemote = (repoId: string, remoteName: string) =>
     call<void>('fetch_remote', { repoId, remoteName })
+
+  const fetchTagsFromRemote = (repoId: string, remoteName: string) =>
+    call<void>('fetch_tags_from_remote', { repoId, remoteName })
 
   const pushBranch = (
     repoId: string,
@@ -499,6 +502,7 @@ export function useGitCommands() {
     deleteRemoteTag,
     listRemoteTags,
     fetchRemote,
+    fetchTagsFromRemote,
     pushBranch,
     pushTag,
     pullBranch,

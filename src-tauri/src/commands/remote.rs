@@ -30,6 +30,30 @@ pub async fn fetch_remote(
 }
 
 #[tauri::command]
+pub async fn fetch_tags_from_remote(
+    repo_id: String,
+    remote_name: String,
+    repo_manager: State<'_, RepoManager>,
+) -> Result<(), GitError> {
+    log::debug!("[fetch_tags_from_remote] remote={remote_name}");
+    let meta = repo_manager
+        .get_meta(&repo_id)
+        .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
+    
+    if remote_name == "--all" {
+        let remotes = GitEngine::list_remotes(&meta.path)?;
+        for remote in remotes {
+            let _ = GitEngine::fetch_tags(&meta.path, &remote.name);
+        }
+        Ok(())
+    } else {
+        let result = GitEngine::fetch_tags(&meta.path, &remote_name);
+        log::debug!("[fetch_tags_from_remote] result={result:?}");
+        result
+    }
+}
+
+#[tauri::command]
 pub async fn push_branch(
     repo_id: String,
     remote_name: String,

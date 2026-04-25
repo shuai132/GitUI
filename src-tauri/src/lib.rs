@@ -114,6 +114,7 @@ pub fn run() {
             list_remote_tags,
             // Remote
             fetch_remote,
+            fetch_tags_from_remote,
             push_branch,
             push_tag,
             pull_branch,

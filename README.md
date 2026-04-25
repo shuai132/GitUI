@@ -25,7 +25,7 @@
 - [x] 提交操作：checkout、cherry-pick、revert、reset（soft / mixed / hard）、创建 tag、修改提交信息（HEAD 走 amend，历史提交走 rebase reword）
 - [x] Merge / Rebase：完整 merge（ff / no-ff / squash）、交互式 rebase（reword / squash / fixup / drop / reorder）；右键菜单或拖拽 commit 触发；冲突时用内置三路合并编辑器解决；可选"自动 stash & 恢复"
 - [x] 分支管理：本地 / 远程树形、创建 / 切换 / 删除、检出远程分支并建立追踪
-- [x] Tag 管理：侧边栏 TAGS 列表、创建、删除
+- [x] Tag 管理：侧边栏 TAGS 列表、创建、删除（含仅远程）、推拉同步
 - [x] 远程操作：fetch、push、pull（fast-forward / ff-only / rebase 三模式）、tag 推送
 - [x] SSH 凭据链：ssh-agent → `~/.ssh/id_ed25519` → `~/.ssh/id_rsa`，HTTPS 走系统 credential helper
 - [x] Submodule：init / update / edit URL / deinit，已克隆的可作为新仓库打开

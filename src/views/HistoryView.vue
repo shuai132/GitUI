@@ -274,6 +274,14 @@ const tagsByCommit = computed(() => {
     if (!map.has(t.commit_oid)) map.set(t.commit_oid, [])
     map.get(t.commit_oid)!.push(t)
   }
+  // 加上仅存在于远端的标签
+  const localTagNames = new Set(historyStore.tags.map(t => t.name))
+  for (const t of historyStore.remoteTags) {
+    if (!localTagNames.has(t.name)) {
+      if (!map.has(t.commit_oid)) map.set(t.commit_oid, [])
+      map.get(t.commit_oid)!.push(t)
+    }
+  }
   return map
 })
 

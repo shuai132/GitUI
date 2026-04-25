@@ -9,6 +9,7 @@ const props = defineProps<{
   title: string
   message: string
   confirmLabel?: string
+  loadingLabel?: string
   danger?: boolean
   loading?: boolean
   checkboxLabel?: string
@@ -56,7 +57,7 @@ function onCancel() {
         :disabled="loading"
         @click="onConfirm"
       >
-        {{ loading ? t('common.loading') : (confirmLabel ?? t('common.confirm')) }}
+        {{ loading ? (loadingLabel ?? t('common.loading')) : (confirmLabel ?? t('common.confirm')) }}
       </button>
     </template>
   </Modal>
