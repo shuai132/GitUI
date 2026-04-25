@@ -927,7 +927,7 @@ async function handleDblClick(e: MouseEvent) {
     <Modal
       :visible="showAboutDialog"
       :title="t('common.aboutTitle')"
-      width="320px"
+      width="fit-content"
       @close="showAboutDialog = false"
     >
       <AboutInfo />

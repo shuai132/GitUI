@@ -33,49 +33,50 @@ async function openUrl(url: string) {
 
 <template>
   <div class="about-content">
-    <div class="about-header">
-      <div class="about-icon">
-        <svg xmlns="http://www.w3.org/2000/svg" width="80" height="80" viewBox="0 0 512 512">
-          <rect width="512" height="512" rx="112" fill="#1e2030"/>
-          <line x1="186" y1="110" x2="186" y2="402" stroke="#494d64" stroke-width="6" stroke-linecap="round"/>
-          <path d="M 186 210 C 186 300, 326 260, 326 350" stroke="#494d64" stroke-width="6" fill="none" stroke-linecap="round"/>
-          <path d="M 326 350 C 326 390, 186 375, 186 402" stroke="#494d64" stroke-width="6" fill="none" stroke-linecap="round"/>
-          <circle cx="186" cy="402" r="26" fill="#1e2030" stroke="#f5a97f" stroke-width="5"/>
-          <circle cx="186" cy="402" r="13" fill="#f5a97f"/>
-          <circle cx="186" cy="210" r="20" fill="#1e2030" stroke="#8aadf4" stroke-width="5"/>
-          <circle cx="186" cy="210" r="10" fill="#8aadf4"/>
-          <circle cx="326" cy="350" r="22" fill="#1e2030" stroke="#a6da95" stroke-width="5"/>
-          <circle cx="326" cy="350" r="11" fill="#a6da95"/>
-          <circle cx="186" cy="110" r="30" fill="#1e2030" stroke="#c6a0f6" stroke-width="6"/>
-          <circle cx="186" cy="110" r="15" fill="#c6a0f6"/>
-          <circle cx="186" cy="110" r="40" fill="none" stroke="#c6a0f6" stroke-width="2" opacity="0.25"/>
-        </svg>
-      </div>
+    <div class="about-icon">
+      <svg xmlns="http://www.w3.org/2000/svg" width="76" height="76" viewBox="0 0 512 512">
+        <rect width="512" height="512" rx="112" fill="#1e2030"/>
+        <line x1="186" y1="110" x2="186" y2="402" stroke="#494d64" stroke-width="6" stroke-linecap="round"/>
+        <path d="M 186 210 C 186 300, 326 260, 326 350" stroke="#494d64" stroke-width="6" fill="none" stroke-linecap="round"/>
+        <path d="M 326 350 C 326 390, 186 375, 186 402" stroke="#494d64" stroke-width="6" fill="none" stroke-linecap="round"/>
+        <circle cx="186" cy="402" r="26" fill="#1e2030" stroke="#f5a97f" stroke-width="5"/>
+        <circle cx="186" cy="402" r="13" fill="#f5a97f"/>
+        <circle cx="186" cy="210" r="20" fill="#1e2030" stroke="#8aadf4" stroke-width="5"/>
+        <circle cx="186" cy="210" r="10" fill="#8aadf4"/>
+        <circle cx="326" cy="350" r="22" fill="#1e2030" stroke="#a6da95" stroke-width="5"/>
+        <circle cx="326" cy="350" r="11" fill="#a6da95"/>
+        <circle cx="186" cy="110" r="30" fill="#1e2030" stroke="#c6a0f6" stroke-width="6"/>
+        <circle cx="186" cy="110" r="15" fill="#c6a0f6"/>
+        <circle cx="186" cy="110" r="40" fill="none" stroke="#c6a0f6" stroke-width="2" opacity="0.25"/>
+      </svg>
+    </div>
+
+    <div class="about-right">
       <div class="about-title-info">
         <div class="about-name">GitUI</div>
         <div class="about-version">{{ versionLabel }}</div>
       </div>
-    </div>
 
-    <div class="about-body">
-      <div class="about-info-grid">
-        <div class="info-row">
-          <span class="info-label">{{ t('settings.about.authorLabel') }}</span>
-          <span class="info-value">{{ t('settings.about.authorValue') }}</span>
+      <div class="about-body">
+        <div class="about-info-grid">
+          <div class="info-row">
+            <span class="info-label">{{ t('settings.about.authorLabel') }}</span>
+            <span class="info-value">{{ t('settings.about.authorValue') }}</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">{{ t('settings.about.githubLabel') }}</span>
+            <a
+              class="about-link"
+              href="https://github.com/shuai132/GitUI"
+              target="_blank"
+              rel="noopener"
+              @click.prevent="openUrl('https://github.com/shuai132/GitUI')"
+            >https://github.com/shuai132/GitUI</a>
+          </div>
         </div>
-        <div class="info-row">
-          <span class="info-label">{{ t('settings.about.githubLabel') }}</span>
-          <a
-            class="about-link"
-            href="https://github.com/shuai132/GitUI"
-            target="_blank"
-            rel="noopener"
-            @click.prevent="openUrl('https://github.com/shuai132/GitUI')"
-          >https://github.com/shuai132/GitUI</a>
+        <div class="about-copyright">
+          {{ t('settings.about.copyright') }}
         </div>
-      </div>
-      <div class="about-copyright">
-        {{ t('settings.about.copyright') }}
       </div>
     </div>
   </div>
@@ -91,29 +92,30 @@ async function openUrl(url: string) {
 
 .about-content {
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 10px 20px;
-  text-align: center;
-}
-
-.about-header {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 24px;
+  flex-direction: row;
+  align-items: flex-start;
+  padding: 16px 24px;
+  gap: 32px;
 }
 
 .about-icon {
   flex-shrink: 0;
   filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.2));
+  margin-top: 4px;
+}
+
+.about-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
+  gap: 24px;
+  min-width: 0; /* allows text truncation if needed */
 }
 
 .about-title-info {
   display: flex;
   flex-direction: column;
-  align-items: center;
   gap: 4px;
 }
 
@@ -122,6 +124,7 @@ async function openUrl(url: string) {
   font-weight: 800;
   color: var(--text-primary);
   letter-spacing: -0.5px;
+  line-height: 1.1;
 }
 
 .about-version {
@@ -133,23 +136,21 @@ async function openUrl(url: string) {
 .about-body {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 32px;
+  gap: 12px;
 }
 
 .about-info-grid {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 12px;
+  gap: 8px;
 }
 
 .info-row {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 4px;
+  gap: 6px;
   font-size: var(--font-md);
+  white-space: nowrap;
 }
 
 .info-label {
@@ -166,6 +167,8 @@ async function openUrl(url: string) {
   text-decoration: none;
   cursor: pointer;
   transition: opacity 0.15s;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .about-link:hover {
