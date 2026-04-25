@@ -84,9 +84,8 @@ export const EXTERNAL_TERMINAL_PRESETS: ExternalTerminalPreset[] = [
  * 自动更新策略：
  * - `auto`: 启动时自动检查更新（默认）
  * - `manual`: 仅在“关于”页面点击手动检查
- * - `disabled`: 彻底禁用自动检查逻辑
  */
-export type UpdateStrategy = 'auto' | 'manual' | 'disabled'
+export type UpdateStrategy = 'auto' | 'manual'
 
 export interface SettingsData {
   themeMode: ThemeMode

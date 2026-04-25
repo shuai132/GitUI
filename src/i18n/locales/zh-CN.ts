@@ -672,7 +672,6 @@ const messages = {
       updateStrategyTitle: '检查更新',
       updateStrategyAuto: '启动时自动检查（推荐）',
       updateStrategyManual: '手动检查',
-      updateStrategyDisabled: '从不检查',
       updateStrategyHint: '自动检查仅在有新版本时提示，不会静默安装。',
     },
     gitPrefs: {

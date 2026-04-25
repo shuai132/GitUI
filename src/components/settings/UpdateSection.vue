@@ -24,7 +24,6 @@ const LAST_CHECK_KEY = 'gitui.last_update_check'
 const updateStrategyOptions = [
   { value: 'auto', labelKey: 'settings.advanced.updateStrategyAuto' },
   { value: 'manual', labelKey: 'settings.advanced.updateStrategyManual' },
-  { value: 'disabled', labelKey: 'settings.advanced.updateStrategyDisabled' },
 ]
 
 onMounted(async () => {

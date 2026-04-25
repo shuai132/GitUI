@@ -673,7 +673,6 @@ const messages = {
       updateStrategyTitle: 'Check for Updates',
       updateStrategyAuto: 'Automatically on startup (recommended)',
       updateStrategyManual: 'Manually',
-      updateStrategyDisabled: 'Never',
       updateStrategyHint: 'Automatic checks will only notify you; no silent installation.',
     },
     gitPrefs: {
