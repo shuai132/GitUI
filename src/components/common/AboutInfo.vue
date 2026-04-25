@@ -2,15 +2,12 @@
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useGitCommands } from '@/composables/useGitCommands'
-import { check } from '@tauri-apps/plugin-updater'
-import { relaunch } from '@tauri-apps/plugin-process'
-import { ask, message } from '@tauri-apps/plugin-dialog'
+import { formatTime } from '@/utils/format'
 
 const { t } = useI18n()
 const git = useGitCommands()
 const appVersion = ref('')
 const gitHash = ref<string | null>(null)
-const isCheckingUpdate = ref(false)
 
 const versionLabel = computed(() => {
   if (!appVersion.value) return ''
@@ -32,82 +29,53 @@ async function openUrl(url: string) {
   const { openUrl: open } = await import('@tauri-apps/plugin-opener')
   open(url)
 }
-
-async function checkForUpdates() {
-  if (isCheckingUpdate.value) return
-  isCheckingUpdate.value = true
-  try {
-    const update = await check()
-    if (update) {
-      const confirmed = await ask(
-        `发现新版本 GitUI v${update.version}，发行说明：\n${update.body || '无'}\n\n是否立即下载并更新？`,
-        { title: '更新可用', kind: 'info', okLabel: '更新', cancelLabel: '取消' }
-      )
-      if (confirmed) {
-        await update.downloadAndInstall((event) => {
-          // 可选：在这里记录下载进度
-          console.log(event)
-        })
-        await relaunch()
-      }
-    } else {
-      await message('当前已经是最新版本。', { title: '检查更新', kind: 'info' })
-    }
-  } catch (err: any) {
-    console.error('检查更新失败', err)
-    await message(`检查更新失败：${err.message || err}`, { title: '错误', kind: 'error' })
-  } finally {
-    isCheckingUpdate.value = false
-  }
-}
 </script>
 
 <template>
   <div class="about-content">
-    <div class="about-icon">
-      <svg xmlns="http://www.w3.org/2000/svg" width="72" height="72" viewBox="0 0 512 512">
-        <rect width="512" height="512" rx="112" fill="#1e2030"/>
-        <line x1="186" y1="110" x2="186" y2="402" stroke="#494d64" stroke-width="6" stroke-linecap="round"/>
-        <path d="M 186 210 C 186 300, 326 260, 326 350" stroke="#494d64" stroke-width="6" fill="none" stroke-linecap="round"/>
-        <path d="M 326 350 C 326 390, 186 375, 186 402" stroke="#494d64" stroke-width="6" fill="none" stroke-linecap="round"/>
-        <circle cx="186" cy="402" r="26" fill="#1e2030" stroke="#f5a97f" stroke-width="5"/>
-        <circle cx="186" cy="402" r="13" fill="#f5a97f"/>
-        <circle cx="186" cy="210" r="20" fill="#1e2030" stroke="#8aadf4" stroke-width="5"/>
-        <circle cx="186" cy="210" r="10" fill="#8aadf4"/>
-        <circle cx="326" cy="350" r="22" fill="#1e2030" stroke="#a6da95" stroke-width="5"/>
-        <circle cx="326" cy="350" r="11" fill="#a6da95"/>
-        <circle cx="186" cy="110" r="30" fill="#1e2030" stroke="#c6a0f6" stroke-width="6"/>
-        <circle cx="186" cy="110" r="15" fill="#c6a0f6"/>
-        <circle cx="186" cy="110" r="40" fill="none" stroke="#c6a0f6" stroke-width="2" opacity="0.25"/>
-      </svg>
+    <div class="about-header">
+      <div class="about-icon">
+        <svg xmlns="http://www.w3.org/2000/svg" width="80" height="80" viewBox="0 0 512 512">
+          <rect width="512" height="512" rx="112" fill="#1e2030"/>
+          <line x1="186" y1="110" x2="186" y2="402" stroke="#494d64" stroke-width="6" stroke-linecap="round"/>
+          <path d="M 186 210 C 186 300, 326 260, 326 350" stroke="#494d64" stroke-width="6" fill="none" stroke-linecap="round"/>
+          <path d="M 326 350 C 326 390, 186 375, 186 402" stroke="#494d64" stroke-width="6" fill="none" stroke-linecap="round"/>
+          <circle cx="186" cy="402" r="26" fill="#1e2030" stroke="#f5a97f" stroke-width="5"/>
+          <circle cx="186" cy="402" r="13" fill="#f5a97f"/>
+          <circle cx="186" cy="210" r="20" fill="#1e2030" stroke="#8aadf4" stroke-width="5"/>
+          <circle cx="186" cy="210" r="10" fill="#8aadf4"/>
+          <circle cx="326" cy="350" r="22" fill="#1e2030" stroke="#a6da95" stroke-width="5"/>
+          <circle cx="326" cy="350" r="11" fill="#a6da95"/>
+          <circle cx="186" cy="110" r="30" fill="#1e2030" stroke="#c6a0f6" stroke-width="6"/>
+          <circle cx="186" cy="110" r="15" fill="#c6a0f6"/>
+          <circle cx="186" cy="110" r="40" fill="none" stroke="#c6a0f6" stroke-width="2" opacity="0.25"/>
+        </svg>
+      </div>
+      <div class="about-title-info">
+        <div class="about-name">GitUI</div>
+        <div class="about-version">{{ versionLabel }}</div>
+      </div>
     </div>
-    <div class="about-name">GitUI</div>
-    <div class="about-fields">
-      <div class="about-row">
-        <span class="about-label">{{ t('settings.about.authorLabel') }}</span>
-        <span class="about-value">{{ t('settings.about.authorValue') }}</span>
+
+    <div class="about-body">
+      <div class="about-info-grid">
+        <div class="info-row">
+          <span class="info-label">{{ t('settings.about.authorLabel') }}</span>
+          <span class="info-value">{{ t('settings.about.authorValue') }}</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">{{ t('settings.about.githubLabel') }}</span>
+          <a
+            class="about-link"
+            href="https://github.com/shuai132/GitUI"
+            target="_blank"
+            rel="noopener"
+            @click.prevent="openUrl('https://github.com/shuai132/GitUI')"
+          >https://github.com/shuai132/GitUI</a>
+        </div>
       </div>
-      <div class="about-row">
-        <span class="about-label">{{ t('settings.about.versionLabel') }}</span>
-        <span class="about-value">{{ versionLabel }}</span>
-      </div>
-      <div class="about-row about-row-project">
-        <a
-          class="about-link"
-          href="https://github.com/shuai132/GitUI"
-          target="_blank"
-          rel="noopener"
-          @click.prevent="openUrl('https://github.com/shuai132/GitUI')"
-        >https://github.com/shuai132/GitUI</a>
-      </div>
-      <div class="about-row about-row-action">
-        <button 
-          class="check-update-btn" 
-          :disabled="isCheckingUpdate"
-          @click="checkForUpdates"
-        >
-          {{ isCheckingUpdate ? '正在检查...' : '检查更新' }}
-        </button>
+      <div class="about-copyright">
+        {{ t('settings.about.copyright') }}
       </div>
     </div>
   </div>
@@ -125,79 +93,90 @@ async function checkForUpdates() {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
+  padding: 10px 20px;
+  text-align: center;
 }
 
-.about-icon {
-  margin-bottom: 4px;
-}
-
-.about-name {
-  font-size: var(--font-xl);
-  font-weight: 700;
-  color: var(--text-primary);
-}
-
-.about-fields {
+.about-header {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
+  gap: 12px;
+  margin-bottom: 24px;
 }
 
-.about-row {
+.about-icon {
+  flex-shrink: 0;
+  filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.2));
+}
+
+.about-title-info {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.about-name {
+  font-size: 28px;
+  font-weight: 800;
+  color: var(--text-primary);
+  letter-spacing: -0.5px;
+}
+
+.about-version {
+  font-size: var(--font-md);
+  color: var(--text-muted);
+  font-family: var(--code-font-family);
+}
+
+.about-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 32px;
+}
+
+.about-info-grid {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.info-row {
   display: flex;
   align-items: center;
+  justify-content: center;
+  gap: 4px;
   font-size: var(--font-md);
 }
 
-.about-row-project {
-  margin-top: 2px;
-}
-
-.about-label {
+.info-label {
   color: var(--text-muted);
 }
 
-.about-value {
+.info-value {
   color: var(--text-primary);
+  font-weight: 500;
 }
 
 .about-link {
-  color: var(--text-muted);
+  color: var(--accent-blue);
   text-decoration: none;
   cursor: pointer;
-  border-bottom: 1px dashed var(--text-muted);
-  transition: color 0.15s, border-color 0.15s;
+  transition: opacity 0.15s;
 }
 
 .about-link:hover {
-  color: var(--text-primary);
-  border-bottom-color: var(--text-primary);
+  opacity: 0.8;
+  text-decoration: underline;
 }
 
-.about-row-action {
-  margin-top: 12px;
-}
-
-.check-update-btn {
-  padding: 6px 16px;
-  border-radius: 4px;
-  background-color: var(--bg-surface);
-  border: 1px solid var(--border-color);
-  color: var(--text-primary);
-  font-size: var(--font-sm);
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.check-update-btn:hover:not(:disabled) {
-  background-color: var(--bg-surface-hover);
-  border-color: var(--text-muted);
-}
-
-.check-update-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
+.about-copyright {
+  font-size: 11px;
+  color: var(--text-muted);
+  opacity: 0.8;
 }
 </style>
+

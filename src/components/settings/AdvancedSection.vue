@@ -2,10 +2,12 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useUiStore } from '@/stores/ui'
+import { useSettingsStore } from '@/stores/settings'
 import { useGitPrefsStore, FETCH_INTERVAL_OPTIONS } from '@/stores/gitPrefs'
 import { useGitCommands } from '@/composables/useGitCommands'
 
 const uiStore = useUiStore()
+const settingsStore = useSettingsStore()
 const gitPrefsStore = useGitPrefsStore()
 const git = useGitCommands()
 const { t } = useI18n()

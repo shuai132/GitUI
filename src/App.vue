@@ -25,11 +25,15 @@ import { useGitPrefsStore } from '@/stores/gitPrefs'
 import { useGitEvents } from '@/composables/useGitEvents'
 import { useGitCommands } from '@/composables/useGitCommands'
 import { useShortcuts } from '@/composables/useShortcuts'
+import { useSettingsStore } from '@/stores/settings'
 import { listen } from '@tauri-apps/api/event'
+import { check, type Update } from '@tauri-apps/plugin-updater'
+import UpdateDialog from '@/components/common/UpdateDialog.vue'
 
 const { t } = useI18n()
 const router = useRouter()
 const repoStore = useRepoStore()
+const settingsStore = useSettingsStore()
 const workspaceStore = useWorkspaceStore()
 const historyStore = useHistoryStore()
 const submodulesStore = useSubmodulesStore()
@@ -44,6 +48,28 @@ const git = useGitCommands()
 
 // 全局键盘快捷键
 useShortcuts()
+
+// 更新相关
+const availableUpdate = ref<Update | null>(null)
+const showUpdateDialog = ref(false)
+
+async function runAutoUpdateCheck() {
+  if (settingsStore.updateStrategy !== 'auto') return
+  
+  try {
+    const update = await check()
+    if (update) {
+      // 检查是否是被跳过的版本
+      if (settingsStore.skippedVersion === update.version) {
+        return
+      }
+      availableUpdate.value = update
+      showUpdateDialog.value = true
+    }
+  } catch (e) {
+    console.error('[updater] auto check failed', e)
+  }
+}
 
 // 「添加仓库」下拉菜单 + clone/init 对话框：菜单和对话框都挂在 App 顶层，
 // AppToolbar/AppSidebar 通过 useRepoCreation() 触发显示。
@@ -99,6 +125,10 @@ async function onRepoCreationSelect(action: string) {
 // 注入的启动仓库路径（在新窗口中打开某仓库的场景），存在则 openRepo 激活它。
 onMounted(async () => {
   await repoStore.loadPersisted()
+  
+  // 启动时自动检查更新
+  void runAutoUpdateCheck()
+
   try {
     const path = await git.consumeStartupRepo()
     if (path) {
@@ -361,6 +391,11 @@ watch(
       :items="pickRemoteItems"
       @close="onPickRemoteClose"
       @select="onPickRemoteSelect"
+    />
+    <UpdateDialog 
+      :visible="showUpdateDialog" 
+      :update="availableUpdate" 
+      @close="showUpdateDialog = false" 
     />
   </div>
 </template>

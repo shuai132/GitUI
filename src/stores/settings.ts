@@ -80,6 +80,14 @@ export const EXTERNAL_TERMINAL_PRESETS: ExternalTerminalPreset[] = [
   { value: 'custom', labelKey: 'settings.externalTools.preset.custom', appName: '' },
 ]
 
+/**
+ * 自动更新策略：
+ * - `auto`: 启动时自动检查更新（默认）
+ * - `manual`: 仅在“关于”页面点击手动检查
+ * - `disabled`: 彻底禁用自动检查逻辑
+ */
+export type UpdateStrategy = 'auto' | 'manual' | 'disabled'
+
 export interface SettingsData {
   themeMode: ThemeMode
   uiFontFamily: string      // '' = 默认栈
@@ -99,6 +107,10 @@ export interface SettingsData {
   fileListRowHeight: number
   /** UI 语言；默认 'auto' 跟随系统 */
   uiLanguage: UiLanguage
+  /** 更新策略 */
+  updateStrategy: UpdateStrategy
+  /** 已跳过的更新版本号 */
+  skippedVersion: string | null
 }
 
 export const DEFAULT_SETTINGS: SettingsData = {
@@ -116,6 +128,8 @@ export const DEFAULT_SETTINGS: SettingsData = {
   historyRowHeight: 20,
   fileListRowHeight: 18,
   uiLanguage: 'auto',
+  updateStrategy: 'auto',
+  skippedVersion: null,
 }
 
 /**
@@ -297,6 +311,8 @@ export const useSettingsStore = defineStore('settings', () => {
   const historyRowHeight = ref<number>(clampHistoryRowHeight(__initialData.historyRowHeight))
   const fileListRowHeight = ref<number>(clampFileListRowHeight(__initialData.fileListRowHeight))
   const uiLanguage = ref<UiLanguage>(normalizeUiLanguage(__initialData.uiLanguage))
+  const updateStrategy = ref<UpdateStrategy>(__initialData.updateStrategy ?? 'auto')
+  const skippedVersion = ref<string | null>(__initialData.skippedVersion ?? null)
 
   function snapshot(): SettingsData {
     return {
@@ -314,6 +330,8 @@ export const useSettingsStore = defineStore('settings', () => {
       historyRowHeight: historyRowHeight.value,
       fileListRowHeight: fileListRowHeight.value,
       uiLanguage: uiLanguage.value,
+      updateStrategy: updateStrategy.value,
+      skippedVersion: skippedVersion.value,
     }
   }
 
@@ -344,6 +362,8 @@ export const useSettingsStore = defineStore('settings', () => {
       historyRowHeight,
       fileListRowHeight,
       uiLanguage,
+      updateStrategy,
+      skippedVersion,
     ],
     () => {
       applySettingsToDom(snapshot())
@@ -436,6 +456,8 @@ export const useSettingsStore = defineStore('settings', () => {
     historyRowHeight,
     fileListRowHeight,
     uiLanguage,
+    updateStrategy,
+    skippedVersion,
     uiFontIsDefault,
     codeFontIsDefault,
     setAccentOverride,
