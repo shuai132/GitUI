@@ -360,6 +360,14 @@ export const useHistoryStore = defineStore('history', () => {
     await loadTags()
   }
 
+  async function deleteRemoteTag(tagName: string, remoteName: string) {
+    const repoStore = useRepoStore()
+    if (!repoStore.activeRepoId) return
+    await git.deleteRemoteTag(repoStore.activeRepoId, remoteName, tagName)
+    // 重新加载远程标签列表以更新 UI 状态（是否已同步）
+    await loadRemoteTags()
+  }
+
   /// 并发查询所有 remote 的 tag 列表，合并成 set；失败的 remote 跳过。
   /// 至少一个 remote 成功即 remoteTagsChecked = true；全部失败（通常是无网络 / 认证错误）
   /// 保持 false，让前端显示"未知"态而不是误判成"仅本地"。
@@ -469,6 +477,7 @@ export const useHistoryStore = defineStore('history', () => {
     amendCommitMessage,
     createTag,
     deleteTag,
+    deleteRemoteTag,
     reset,
   }
 })

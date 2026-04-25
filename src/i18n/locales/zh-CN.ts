@@ -189,6 +189,9 @@ const messages = {
         delete: '删除标签...',
       },
       confirmDelete: '确认删除标签 "{name}"？此操作不可撤销。',
+      confirmDeleteWithRemote: '标签 "{name}" 已同步到远程。删除本地标签的同时，是否也从远程删除？',
+      deleteLocalOnly: '仅删除本地',
+      deleteLocalAndRemote: '本地与远程一并删除',
       confirmPushForce: '确认强制推送标签 "{name}"？如果远程已存在同名标签且指向不同 commit，将会被覆盖。',
     },
     stash: {

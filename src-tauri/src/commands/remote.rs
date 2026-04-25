@@ -64,6 +64,22 @@ pub async fn push_tag(
 }
 
 #[tauri::command]
+pub async fn delete_remote_tag(
+    repo_id: String,
+    remote_name: String,
+    tag_name: String,
+    repo_manager: State<'_, RepoManager>,
+) -> Result<(), GitError> {
+    log::debug!("[delete_remote_tag] remote={remote_name} tag={tag_name}");
+    let meta = repo_manager
+        .get_meta(&repo_id)
+        .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
+    let result = GitEngine::delete_remote_tag(&meta.path, &remote_name, &tag_name);
+    log::debug!("[delete_remote_tag] result={result:?}");
+    result
+}
+
+#[tauri::command]
 pub async fn pull_branch(
     repo_id: String,
     remote_name: String,

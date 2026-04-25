@@ -575,11 +575,35 @@ async function onTagMenuAction(action: string) {
         historyStore.markTagPushed(tag.name)
         break
       }
-      case 'delete':
-        if (confirm(t('sidebar.tag.confirmDelete', { name: tag.name }))) {
-          await historyStore.deleteTag(tag.name)
-        }
+      case 'delete': {
+        const isSynced = historyStore.remoteTagNames.has(tag.name)
+        openConfirm(
+          t('sidebar.tag.menu.delete'),
+          isSynced
+            ? t('sidebar.tag.confirmDeleteWithRemote', { name: tag.name })
+            : t('sidebar.tag.confirmDelete', { name: tag.name }),
+          async () => {
+            const deleteRemote = confirmDlg.checkboxValue
+            // 1. 删除本地
+            await historyStore.deleteTag(tag.name)
+
+            // 2. (可选) 删除远程
+            if (deleteRemote) {
+              const id = repoStore.activeRepoId
+              if (!id) return
+              const remote = await pickRemote(id)
+              if (remote) {
+                await historyStore.deleteRemoteTag(tag.name, remote)
+              }
+            }
+          },
+          {
+            checkboxLabel: isSynced ? t('sidebar.tag.deleteLocalAndRemote') : undefined,
+            checkboxValue: false,
+          },
+        )
         break
+      }
     }
   } catch (err) {
     console.error(err)
@@ -651,14 +675,25 @@ const confirmDlg = reactive({
   title: '',
   message: '',
   loading: false,
+  showCheckbox: false,
+  checkboxLabel: '',
+  checkboxValue: false,
   _resolve: null as (() => Promise<void>) | null,
 })
 
-function openConfirm(title: string, message: string, action: () => Promise<void>) {
+function openConfirm(
+  title: string,
+  message: string,
+  action: () => Promise<void>,
+  options?: { checkboxLabel?: string; checkboxValue?: boolean },
+) {
   confirmDlg.title = title
   confirmDlg.message = message
   confirmDlg._resolve = action
   confirmDlg.loading = false
+  confirmDlg.showCheckbox = !!options?.checkboxLabel
+  confirmDlg.checkboxLabel = options?.checkboxLabel || ''
+  confirmDlg.checkboxValue = options?.checkboxValue || false
   confirmDlg.visible = true
 }
 
@@ -1180,7 +1215,9 @@ async function onAddSubmoduleSuccess() {
       :message="confirmDlg.message"
       :loading="confirmDlg.loading"
       :danger="true"
-      :confirm-label="t('common.delete')"
+      :confirm-label="confirmDlg.showCheckbox ? t('common.confirm') : t('common.delete')"
+      :checkbox-label="confirmDlg.showCheckbox ? confirmDlg.checkboxLabel : undefined"
+      v-model:checkbox-value="confirmDlg.checkboxValue"
       @confirm="onConfirmDialogConfirm"
       @cancel="onConfirmDialogCancel"
     />

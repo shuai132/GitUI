@@ -120,6 +120,7 @@ pub fn run() {
             add_remote,
             edit_remote,
             remove_remote,
+            delete_remote_tag,
             // Submodule
             list_submodules,
             init_submodule,

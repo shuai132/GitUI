@@ -1781,6 +1781,13 @@ impl GitEngine {
         Ok(())
     }
 
+    /// 删除远程 tag。使用系统 git 以简化 auth 和 ssh 处理。
+    pub fn delete_remote_tag(path: &str, remote_name: &str, tag_name: &str) -> GitResult<()> {
+        log::debug!("[engine::delete_remote_tag] remote={remote_name} tag={tag_name}");
+        run_git(path, &["push", remote_name, "--delete", tag_name])?;
+        Ok(())
+    }
+
     pub fn pull(path: &str, remote_name: &str, branch_name: &str, mode: &str) -> GitResult<()> {
         log::debug!("[engine::pull] mode={mode} remote={remote_name} branch={branch_name}");
 

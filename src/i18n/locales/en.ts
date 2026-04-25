@@ -189,6 +189,9 @@ const messages = {
         delete: 'Delete tag...',
       },
       confirmDelete: 'Delete tag "{name}"? This cannot be undone.',
+      confirmDeleteWithRemote: 'Tag "{name}" is synced to remote. Do you want to delete it from remote as well?',
+      deleteLocalOnly: 'Delete local only',
+      deleteLocalAndRemote: 'Delete both local and remote',
       confirmPushForce: 'Force push tag "{name}"? This will overwrite the tag on the remote if it already exists.',
     },
     stash: {

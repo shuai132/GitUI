@@ -11,11 +11,14 @@ const props = defineProps<{
   confirmLabel?: string
   danger?: boolean
   loading?: boolean
+  checkboxLabel?: string
+  checkboxValue?: boolean
 }>()
 
 const emit = defineEmits<{
   confirm: []
   cancel: []
+  'update:checkboxValue': [val: boolean]
 }>()
 
 function onConfirm() {
@@ -31,6 +34,17 @@ function onCancel() {
 <template>
   <Modal :visible="visible" :title="title" width="420px" @close="onCancel">
     <p class="confirm-message">{{ message }}</p>
+
+    <div v-if="checkboxLabel" class="confirm-checkbox">
+      <label class="checkbox-container">
+        <input
+          type="checkbox"
+          :checked="checkboxValue"
+          @change="emit('update:checkboxValue', ($event.target as HTMLInputElement).checked)"
+        >
+        <span class="checkbox-label">{{ checkboxLabel }}</span>
+      </label>
+    </div>
 
     <template #footer>
       <button class="btn btn-secondary" :disabled="loading" @click="onCancel">
@@ -55,5 +69,24 @@ function onCancel() {
   line-height: 1.6;
   margin: 0;
   white-space: pre-wrap;
+}
+
+.confirm-checkbox {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.checkbox-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.checkbox-label {
+  font-size: var(--font-sm);
+  color: var(--text-primary);
 }
 </style>
