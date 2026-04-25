@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { useWindowSize } from '@vueuse/core'
 
 export interface ContextMenuItem {
   /** 分隔线：其他字段忽略 */
@@ -27,8 +28,12 @@ const emit = defineEmits<{
   select: [action: string]
 }>()
 
+const { width: windowWidth, height: windowHeight } = useWindowSize()
+
 // ── 子菜单状态 ─────────────────────────────────────────────────────
 const openSubmenuIndex = ref<number | null>(null)
+const submenuSide = ref<'right' | 'left'>('right')
+const submenuVPos = ref<'top' | 'bottom'>('top')
 let submenuCloseTimer: number | null = null
 
 function clearSubmenuCloseTimer() {
@@ -38,9 +43,32 @@ function clearSubmenuCloseTimer() {
   }
 }
 
-function onParentMouseEnter(idx: number) {
+function onParentMouseEnter(idx: number, e: MouseEvent) {
   clearSubmenuCloseTimer()
   openSubmenuIndex.value = idx
+
+  const item = props.items[idx]
+  if (!item.children) return
+
+  // 检测子菜单弹出方向 (水平)
+  const SUBMENU_W = 200
+  const parentRect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+  if (parentRect.right + SUBMENU_W > windowWidth.value - 10) {
+    submenuSide.value = 'left'
+  } else {
+    submenuSide.value = 'right'
+  }
+
+  // 检测子菜单弹出方向 (垂直)
+  const estSubmenuHeight = item.children.reduce(
+    (h, it) => h + (it.separator ? 9 : 30),
+    10, // padding
+  )
+  if (parentRect.top + estSubmenuHeight > windowHeight.value - 10) {
+    submenuVPos.value = 'bottom'
+  } else {
+    submenuVPos.value = 'top'
+  }
 }
 
 function onParentMouseLeave() {
@@ -70,14 +98,14 @@ function onNonParentMouseEnter() {
 const style = computed(() => {
   // 用 inline top/left；若溢出浏览器视口右/下边，反向偏移
   const MENU_MIN_W = 180
-  const MENU_ITEM_H = 28
+  const MENU_ITEM_H = 30 // 稍微调大一点，确保安全
   const hPad = 12
   const estHeight = props.items.reduce(
-    (h, it) => h + (it.separator ? 7 : MENU_ITEM_H),
+    (h, it) => h + (it.separator ? 9 : MENU_ITEM_H),
     hPad,
   )
-  const maxX = window.innerWidth - MENU_MIN_W - 8
-  const maxY = window.innerHeight - estHeight - 8
+  const maxX = windowWidth.value - MENU_MIN_W - 8
+  const maxY = windowHeight.value - estHeight - 8
   return {
     left: Math.max(4, Math.min(props.x, maxX)) + 'px',
     top: Math.max(4, Math.min(props.y, maxY)) + 'px',
@@ -145,7 +173,7 @@ onBeforeUnmount(() => {
             'menu-item--disabled': item.disabled,
             'menu-item--danger': item.danger,
           }"
-          @mouseenter="onParentMouseEnter(idx)"
+          @mouseenter="onParentMouseEnter(idx, $event)"
           @mouseleave="onParentMouseLeave"
         >
           <span class="menu-item-label">{{ item.label }}</span>
@@ -154,6 +182,10 @@ onBeforeUnmount(() => {
           <div
             v-if="openSubmenuIndex === idx"
             class="submenu"
+            :class="{
+              'submenu--left': submenuSide === 'left',
+              'submenu--bottom': submenuVPos === 'bottom',
+            }"
             @mouseenter="onSubmenuMouseEnter"
             @mouseleave="onSubmenuMouseLeave"
           >
@@ -195,6 +227,8 @@ onBeforeUnmount(() => {
 .context-menu {
   position: fixed;
   min-width: 180px;
+  max-height: calc(100vh - 16px);
+  overflow-y: auto;
   background: var(--bg-surface);
   border: 1px solid var(--border);
   border-radius: 6px;
@@ -244,6 +278,18 @@ onBeforeUnmount(() => {
   padding: 4px 0;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
   z-index: 1001;
+}
+
+.submenu--left {
+  left: auto;
+  right: 100%;
+  margin-left: 0;
+  margin-right: -2px;
+}
+
+.submenu--bottom {
+  top: auto;
+  bottom: -5px;
 }
 
 .menu-item:hover {

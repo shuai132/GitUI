@@ -868,9 +868,6 @@ function onCommitContextMenu(e: MouseEvent, commit: CommitInfo | undefined) {
   commitMenu.x = e.clientX
   commitMenu.y = e.clientY
   commitMenu.visible = true
-  // 右键同时选中此提交（符合直觉）
-  selectedWip.value = false
-  historyStore.selectCommit(commit.oid)
 }
 
 function closeCommitMenu() {
