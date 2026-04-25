@@ -34,6 +34,7 @@ export function usePickRemote() {
   async function pickRemote(
     repoId: string,
     anchorRect?: DOMRect,
+    showFetchAll: boolean = false,
   ): Promise<string | null> {
     let remotes: RemoteInfo[]
     try {
@@ -47,7 +48,9 @@ export function usePickRemote() {
     // 多 remote：弹菜单
     return new Promise<string | null>((resolve) => {
       const items = remotes.map((r) => ({ label: r.name, action: r.name }))
-      items.unshift({ label: 'Fetch All', action: '--all' })
+      if (showFetchAll) {
+        items.unshift({ label: 'Fetch All', action: '--all' })
+      }
       menuItems.value = items
       if (anchorRect) {
         menuX.value = anchorRect.left

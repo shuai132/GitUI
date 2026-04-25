@@ -269,7 +269,7 @@ const remoteMenu = reactive({
   resolve: null as ((remote: string | null) => void) | null,
 })
 
-async function pickRemote(anchorRect?: DOMRect): Promise<string | null> {
+async function pickRemote(anchorRect?: DOMRect, showFetchAll: boolean = false): Promise<string | null> {
   const id = repoStore.activeRepoId
   if (!id) return null
   let remotes: RemoteInfo[]
@@ -284,7 +284,9 @@ async function pickRemote(anchorRect?: DOMRect): Promise<string | null> {
   // 多 remote：弹菜单让用户显式选择
   return new Promise<string | null>((resolve) => {
     const items = remotes.map((r) => ({ label: r.name, action: r.name }))
-    items.unshift({ label: 'Fetch All', action: '--all' })
+    if (showFetchAll) {
+      items.unshift({ label: 'Fetch All', action: '--all' })
+    }
     remoteMenu.items = items
     if (anchorRect) {
       remoteMenu.x = anchorRect.left
@@ -332,7 +334,7 @@ async function doPull(mode: PullMode, anchorRect?: DOMRect) {
   const id = repoStore.activeRepoId
   const branch = currentBranch.value
   if (!id || !branch) return
-  const remote = await pickRemote(anchorRect)
+  const remote = await pickRemote(anchorRect, false)
   if (!remote) {
     const remotes = await git.listRemotes(id).catch(() => [])
     if (remotes.length === 0) showError(t('toolbar.noRemoteConfigured'))
@@ -359,7 +361,7 @@ async function doPush(mode: PushMode, anchorRect?: DOMRect) {
   const id = repoStore.activeRepoId
   const branch = currentBranch.value
   if (!id || !branch) return
-  const remote = await pickRemote(anchorRect)
+  const remote = await pickRemote(anchorRect, false)
   if (!remote) {
     const remotes = await git.listRemotes(id).catch(() => [])
     if (remotes.length === 0) showError(t('toolbar.noRemoteConfigured'))
@@ -426,7 +428,7 @@ async function onFetch(e?: MouseEvent) {
     const rect = e 
       ? (e.currentTarget as HTMLElement).getBoundingClientRect()
       : fetchBtnRef.value?.getBoundingClientRect()
-    remote = await pickRemote(rect)
+    remote = await pickRemote(rect, true)
   }
   
   if (!remote) {
