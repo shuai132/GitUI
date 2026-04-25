@@ -127,3 +127,9 @@ npm run tauri build             # 打包发布
 ### 样式
 
 Tailwind CSS v4（`@tailwindcss/vite` 插件），全局 CSS 变量在 `src/assets/main.css`，组件用 `<style scoped>`，配色 Catppuccin Macchiato。
+
+## AI 技能 (Skills)
+
+本项目提供了一些针对特定任务的 AI 技能（Skill）配置，位于 `.claude/skills/` 目录下。对于不支持自动加载 skill 的 AI 客户端，请手动查阅对应的技能文档以了解相关规范与流程：
+
+- **Release (版本发布)**: 位于 [`.claude/skills/release/SKILL.md`](./.claude/skills/release/SKILL.md)，包含发版相关的操作指南和自动化步骤。
