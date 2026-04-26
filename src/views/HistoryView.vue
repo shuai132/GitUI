@@ -31,6 +31,12 @@ import { usePanelDock } from '@/composables/usePanelDock'
 import type { PanelId } from '@/stores/ui'
 import type { BranchInfo, CommitInfo, TagInfo } from '@/types/git'
 
+import { useHistoryPanes } from '@/composables/history/useHistoryPanes'
+import { useCommitContextMenu } from '@/composables/history/useCommitContextMenu'
+import { useCommitDragDrop } from '@/composables/history/useCommitDragDrop'
+import { useCommitTags } from '@/composables/history/useCommitTags'
+import CommitListHeader from '@/components/history/CommitListHeader.vue'
+
 const { t } = useI18n()
 const historyStore = useHistoryStore()
 const repoStore = useRepoStore()
@@ -52,6 +58,18 @@ const activePane = ref<ActivePane>('commits')
 
 // ── 详情区（info + diff）显示状态（默认隐藏，点击提交后显示）────────
 const { selectedWip, showDetail } = storeToRefs(historyStore)
+
+const contentAreaRef = ref<HTMLElement | null>(null)
+const {
+  sizes,
+  contentGridStyle,
+  mainResizeStyle,
+  secondaryResizeStyle,
+  panelBorders,
+  startMainResize,
+  startSecondaryResize,
+  startColResize,
+} = useHistoryPanes(contentAreaRef, showDetail)
 
 // ── Search / filter ─────────────────────────────────────────────────
 const filteredCommits = computed(() => {
@@ -265,68 +283,13 @@ function onListBodyWheel(e: WheelEvent) {
   e.preventDefault()
 }
 
-// ── Branch tag map (oid → branches pointing to this commit) ─────────
-const branchTagMap = computed(() => {
-  const map = new Map<string, BranchInfo[]>()
-  for (const b of historyStore.branches) {
-    if (b.commit_oid) {
-      if (!map.has(b.commit_oid)) map.set(b.commit_oid, [])
-      map.get(b.commit_oid)!.push(b)
-    }
-  }
-  return map
-})
-
-function branchTagColor(b: BranchInfo): string {
-  if (b.is_head) return 'var(--accent-blue)'
-  if (b.is_remote) return 'var(--accent-orange)'
-  return 'var(--accent-green)'
-}
-
-// ── Tag chip map (oid → tags pointing to this commit) ──────────────
-const tagsByCommit = computed(() => {
-  const map = new Map<string, TagInfo[]>()
-  for (const t of historyStore.tags) {
-    if (!map.has(t.commit_oid)) map.set(t.commit_oid, [])
-    map.get(t.commit_oid)!.push(t)
-  }
-  // 加上仅存在于远端的标签
-  const localTagNames = new Set(historyStore.tags.map(t => t.name))
-  for (const t of historyStore.remoteTags) {
-    if (!localTagNames.has(t.name)) {
-      if (!map.has(t.commit_oid)) map.set(t.commit_oid, [])
-      map.get(t.commit_oid)!.push(t)
-    }
-  }
-  return map
-})
-
-type TagRemoteStatus = 'synced' | 'local_only' | 'unknown'
-
-function tagRemoteStatus(tag: TagInfo): TagRemoteStatus {
-  if (!historyStore.remoteTagsChecked) return 'unknown'
-  return historyStore.remoteTagNames.has(tag.name) ? 'synced' : 'local_only'
-}
-
-function tagStatusLabel(status: TagRemoteStatus): string {
-  switch (status) {
-    case 'synced':
-      return t('history.tag.status.synced')
-    case 'local_only':
-      return t('history.tag.status.localOnly')
-    default:
-      return t('history.tag.status.unknown')
-  }
-}
-
-function tagChipTitle(tag: TagInfo): string {
-  const head = tag.is_annotated
-    ? `🏷 ${tag.name} (${t('history.tag.annotated')})`
-    : `🏷 ${tag.name}`
-  const status = `[${tagStatusLabel(tagRemoteStatus(tag))}]`
-  const body = `${head} ${status}`
-  return tag.message ? `${body}\n\n${tag.message}` : body
-}
+const {
+  branchTagMap,
+  branchTagColor,
+  tagsByCommit,
+  tagRemoteStatus,
+  tagChipTitle,
+} = useCommitTags()
 
 // ── Graph column width ───────────────────────────────────────────────
 const graphColWidth = computed(() => {
@@ -420,13 +383,6 @@ watch(showWipRow, (has) => {
   }
 })
 
-// ── Pane sizes：响应式绑定到 uiStore.historyPaneSizes ────────────────
-// 拖动时直接改 store 对象，pointerup 调 persistHistoryPaneSizes() 写 localStorage
-const sizes = uiStore.historyPaneSizes
-
-// ── Content area grid style ──────────────────────────────────────────
-const contentAreaRef = ref<HTMLElement | null>(null)
-
 // ── Panel dock（拖拽停靠）────────────────────────────────────────────
 const {
   isDragging,
@@ -439,158 +395,6 @@ const {
   currentLayout: computed(() => uiStore.dockLayout),
   onLayoutChange: (layout) => uiStore.setDockLayout(layout),
 })
-const contentGridStyle = computed(() => {
-  if (!showDetail.value) {
-    return {
-      gridTemplateColumns: '1fr',
-      gridTemplateRows: '1fr',
-      gridTemplateAreas: '"commits"',
-    }
-  }
-  const { spanning, edge, first, second } = uiStore.dockLayout
-  const isH = edge === 'left' || edge === 'right'
-  const mainPct = isH ? sizes.commitPanePct : sizes.commitRowPct
-  const secPct = isH ? sizes.diffRowPct : sizes.infoPanePct
-
-  let areas: string, rows: string, cols: string
-  switch (edge) {
-    case 'top':
-      areas = `"${spanning} ${spanning}" "${first} ${second}"`
-      rows = `${mainPct}% ${100 - mainPct}%`
-      cols = `${secPct}% 1fr`
-      break
-    case 'bottom':
-      areas = `"${first} ${second}" "${spanning} ${spanning}"`
-      rows = `${100 - mainPct}% ${mainPct}%`
-      cols = `${secPct}% 1fr`
-      break
-    case 'left':
-      areas = `"${spanning} ${first}" "${spanning} ${second}"`
-      cols = `${mainPct}% 1fr`
-      rows = `${secPct}% ${100 - secPct}%`
-      break
-    case 'right':
-      areas = `"${first} ${spanning}" "${second} ${spanning}"`
-      cols = `${100 - mainPct}% ${mainPct}%`
-      rows = `${secPct}% ${100 - secPct}%`
-      break
-  }
-  return { gridTemplateAreas: areas, gridTemplateRows: rows, gridTemplateColumns: cols }
-})
-
-// ── Main resize：spanning 面板与 pair 区之间的分割 ──────────────────
-// edge=top/bottom → 水平分割线（上下拖）→ 改 commitRowPct
-// edge=left/right → 垂直分割线（左右拖）→ 改 commitPanePct
-function startMainResize(e: PointerEvent) {
-  e.preventDefault()
-  const container = contentAreaRef.value
-  if (!container) return
-  const rect = container.getBoundingClientRect()
-  const edge = uiStore.dockLayout.edge
-  const isH = edge === 'left' || edge === 'right'
-  const cursor = isH ? 'col-resize' : 'row-resize'
-
-  const onMove = (ev: PointerEvent) => {
-    let pct: number
-    if (isH) {
-      pct = ((ev.clientX - rect.left) / rect.width) * 100
-      if (edge === 'right') pct = 100 - pct
-      sizes.commitPanePct = Math.max(20, Math.min(80, pct))
-    } else {
-      pct = ((ev.clientY - rect.top) / rect.height) * 100
-      if (edge === 'bottom') pct = 100 - pct
-      sizes.commitRowPct = Math.max(20, Math.min(85, pct))
-    }
-  }
-  const onUp = () => {
-    window.removeEventListener('pointermove', onMove)
-    window.removeEventListener('pointerup', onUp)
-    document.body.style.cursor = ''
-    document.body.style.userSelect = ''
-    uiStore.persistHistoryPaneSizes()
-  }
-  window.addEventListener('pointermove', onMove)
-  window.addEventListener('pointerup', onUp)
-  document.body.style.cursor = cursor
-  document.body.style.userSelect = 'none'
-}
-
-// ── Secondary resize：pair 区内两个面板之间的分割 ──────────────────────
-// edge=top/bottom → pair 横向排列 → 垂直分割线（左右拖）→ 改 infoPanePct
-// edge=left/right → pair 纵向排列 → 水平分割线（上下拖）→ 改 diffRowPct
-function startSecondaryResize(e: PointerEvent) {
-  e.preventDefault()
-  const container = contentAreaRef.value
-  if (!container) return
-  const rect = container.getBoundingClientRect()
-  const edge = uiStore.dockLayout.edge
-  const isH = edge === 'left' || edge === 'right'
-  const cursor = isH ? 'row-resize' : 'col-resize'
-
-  const onMove = (ev: PointerEvent) => {
-    if (isH) {
-      // pair 纵向排列，拖动改行高比例
-      const pct = ((ev.clientY - rect.top) / rect.height) * 100
-      sizes.diffRowPct = Math.max(20, Math.min(85, pct))
-    } else {
-      // pair 横向排列，拖动改列宽比例
-      const pct = ((ev.clientX - rect.left) / rect.width) * 100
-      sizes.infoPanePct = Math.max(20, Math.min(80, pct))
-    }
-  }
-  const onUp = () => {
-    window.removeEventListener('pointermove', onMove)
-    window.removeEventListener('pointerup', onUp)
-    document.body.style.cursor = ''
-    document.body.style.userSelect = ''
-    uiStore.persistHistoryPaneSizes()
-  }
-  window.addEventListener('pointermove', onMove)
-  window.addEventListener('pointerup', onUp)
-  document.body.style.cursor = cursor
-  document.body.style.userSelect = 'none'
-}
-
-// ── Column resize (hash / author / date) ─────────────────────────────
-// handle 在每列的左边缘：拖 handle 向右 → 本列缩小（分隔线右移，右列被挤）
-type ColKey = 'desc' | 'hash' | 'author' | 'date'
-const COL_LIMITS: Record<ColKey, [number, number]> = {
-  desc: [200, 1200],
-  hash: [48, 240],
-  author: [60, 420],
-  date: [60, 300],
-}
-const COL_KEY_MAP: Record<ColKey, 'descColW' | 'hashColW' | 'authorColW' | 'dateColW'> = {
-  desc: 'descColW',
-  hash: 'hashColW',
-  author: 'authorColW',
-  date: 'dateColW',
-}
-function startColResize(e: PointerEvent, col: ColKey) {
-  e.preventDefault()
-  e.stopPropagation()
-  const startX = e.clientX
-  const sizeKey = COL_KEY_MAP[col]
-  const startW = sizes[sizeKey]
-  const [min, max] = COL_LIMITS[col]
-  const onMove = (ev: PointerEvent) => {
-    // 每个 handle 位于"右邻列"的左边缘，拖动调整左邻列（col 指定）的宽度。
-    // 向右拖 → 左邻列变宽 → delta = +（ev.clientX - startX）
-    const delta = ev.clientX - startX
-    sizes[sizeKey] = Math.max(min, Math.min(max, startW + delta))
-  }
-  const onUp = () => {
-    window.removeEventListener('pointermove', onMove)
-    window.removeEventListener('pointerup', onUp)
-    document.body.style.cursor = ''
-    document.body.style.userSelect = ''
-    uiStore.persistHistoryPaneSizes()
-  }
-  window.addEventListener('pointermove', onMove)
-  window.addEventListener('pointerup', onUp)
-  document.body.style.cursor = 'col-resize'
-  document.body.style.userSelect = 'none'
-}
 
 // ── 键盘 ↑↓ 在当前激活的 pane 中切换条目 ─────────────────────────────
 // 把 WIP 行/加载占位视为虚拟索引 0。real commits 占虚拟索引 (showWipRow||showWipLoading ? 1 : 0)...count-1。
@@ -632,37 +436,6 @@ function onKeyDown(e: KeyboardEvent) {
   e.preventDefault()
 }
 
-// ── 提交右键菜单 ─────────────────────────────────────────────────────
-const commitMenu = reactive({
-  visible: false,
-  x: 0,
-  y: 0,
-  commit: null as CommitInfo | null,
-})
-
-const showCreateBranchDialog = ref(false)
-const showCreateTagDialog = ref(false)
-const showEditMessageDialog = ref(false)
-const editMessageCommit = ref<CommitInfo | null>(null)
-const editMessageText = ref('')
-const editMessageAuthorTime = ref('')
-const editMessageCommitterTime = ref('')
-const editMessageAuthorName = ref('')
-const editMessageAuthorEmail = ref('')
-const editMessageAutoStash = ref(false)
-const editMessageSubmitting = ref(false)
-const createTagAnnotated = ref(false)
-const dialogCommit = ref<CommitInfo | null>(null)
-
-// 从 reflog 中移除 unreachable 提交的对话框状态。走项目内 Modal 组件，
-// 不用原生 window.confirm/alert —— macOS 下 Tauri WebView 对这些 API 的
-// 支持不稳定（可能静默吞掉），不如走统一对话框体验。
-const dropUnreachableDialog = reactive({
-  visible: false,
-  commit: null as CommitInfo | null,
-  count: 0,
-  submitting: false,
-})
 
 // ── Merge / Rebase 对话框状态 ─────────────────────────────────────
 const showMergeDialog = ref(false)
@@ -670,12 +443,7 @@ const mergeSourceCandidates = ref<string[]>([])
 const showRebaseDialog = ref(false)
 const rebaseUpstream = ref('')
 const rebaseOnto = ref<string | null>(null)
-const showDragDialog = ref(false)
-const dragSourceOid = ref<string | null>(null)
-const dragTargetOid = ref<string | null>(null)
-// 拖拽过程中的临时状态：源行变淡、目标行高亮，drop/dragend 时清零
-const draggingOid = ref<string | null>(null)
-const dragOverOid = ref<string | null>(null)
+
 
 function openMergeDialog(candidates: string[]) {
   mergeSourceCandidates.value = candidates
@@ -688,67 +456,19 @@ function openRebaseDialog(upstream: string, onto: string | null) {
   showRebaseDialog.value = true
 }
 
-// ── 拖拽 commit 到 commit：触发合并/变基选择对话框 ───────────────
-function onCommitDragStart(e: DragEvent, commit: CommitInfo | undefined) {
-  if (!commit || commit.is_stash) return
-  e.dataTransfer?.setData('text/plain', `gitui:commit:${commit.oid}`)
-  if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move'
-  draggingOid.value = commit.oid
-}
-
-function onCommitDragOver(e: DragEvent, commit: CommitInfo | undefined) {
-  const payload = e.dataTransfer?.types.includes('text/plain')
-  if (!payload || !commit) return
-  e.preventDefault()
-  if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'
-  // dragover 高频触发，相等检查避免无效 reactivity；源自己不作为目标
-  if (commit.oid !== draggingOid.value && dragOverOid.value !== commit.oid) {
-    dragOverOid.value = commit.oid
-  }
-}
-
-function onCommitDrop(e: DragEvent, commit: CommitInfo | undefined) {
-  if (!commit) return
-  const raw = e.dataTransfer?.getData('text/plain') ?? ''
-  if (!raw.startsWith('gitui:commit:')) return
-  const sourceOid = raw.slice('gitui:commit:'.length)
-  if (sourceOid === commit.oid) return
-  e.preventDefault()
-  dragSourceOid.value = sourceOid
-  dragTargetOid.value = commit.oid
-  showDragDialog.value = true
-  draggingOid.value = null
-  dragOverOid.value = null
-}
-
-// 用户按 Esc 取消或拖到窗口外松手时 drop 不触发，靠 dragend 兜底清理
-function onCommitDragEnd() {
-  draggingOid.value = null
-  dragOverOid.value = null
-}
-
-function onDragDialogMerge() {
-  const sourceOid = dragSourceOid.value
-  if (!sourceOid) {
-    showDragDialog.value = false
-    return
-  }
-  const candidates = historyStore.branches
-    .filter(b => !b.is_remote && b.commit_oid === sourceOid && !b.is_head)
-    .map(b => b.name)
-  showDragDialog.value = false
-  openMergeDialog(candidates)
-}
-
-function onDragDialogRebase() {
-  const targetOid = dragTargetOid.value
-  if (!targetOid) {
-    showDragDialog.value = false
-    return
-  }
-  showDragDialog.value = false
-  openRebaseDialog(targetOid, null)
-}
+const {
+  showDragDialog,
+  dragSourceOid,
+  dragTargetOid,
+  draggingOid,
+  dragOverOid,
+  onCommitDragStart,
+  onCommitDragOver,
+  onCommitDrop,
+  onCommitDragEnd,
+  onDragDialogMerge,
+  onDragDialogRebase,
+} = useCommitDragDrop(openMergeDialog, openRebaseDialog)
 
 const currentBranchName = computed(
   () =>
@@ -796,294 +516,39 @@ const currentConflictFilePath = computed<string | null>(() => {
   return file?.status === 'conflicted' ? path : null
 })
 
-// 根据 commit_oid 在 stashStore 中查到对应 stash；找不到返回 null
-function stashEntryForCommit(oid: string) {
-  return stashStore.entries.find((s) => s.commit_oid === oid) ?? null
-}
+const {
+  commitMenu,
+  commitMenuItems,
+  onCommitContextMenu,
+  closeCommitMenu,
+  onCommitMenuAction,
 
-const commitMenuItems = computed<ContextMenuItem[]>(() => {
-  const c = commitMenu.commit
-  if (!c) return []
+  showCreateBranchDialog,
+  showCreateTagDialog,
+  createTagAnnotated,
+  dialogCommit,
 
-  // Stash 提交：只提供 stash 相关操作（apply / pop / delete）
-  if (c.is_stash) {
-    const entry = stashEntryForCommit(c.oid)
-    // entry 理论上一定存在（stash commit 必然来自 stashStore），兜底 disable
-    const hasEntry = entry !== null
-    return [
-      { label: t('history.contextMenu.stashApply'), action: 'stash-apply', disabled: !hasEntry },
-      { label: t('history.contextMenu.stashPop'), action: 'stash-pop', disabled: !hasEntry },
-      { label: t('history.contextMenu.stashDelete'), action: 'stash-delete', disabled: !hasEntry },
-    ]
-  }
+  showEditMessageDialog,
+  editMessageText,
+  editMessageAuthorTime,
+  editMessageCommitterTime,
+  editMessageAuthorName,
+  editMessageAuthorEmail,
+  editMessageAutoStash,
+  editMessageSubmitting,
+  isEditingHeadCommit,
+  onEditMessageConfirm,
 
-  const ongoing = mergeRebaseStore.isOngoing
-  // 该 commit 指向的本地分支（可能多个）
-  const pointedBranches = historyStore.branches
-    .filter(b => !b.is_remote && b.commit_oid === c.oid)
-    .map(b => b.name)
-  const canMerge = !ongoing && pointedBranches.length > 0 && c.oid !== headCommitOid.value
-  const canRebase = !ongoing && c.oid !== headCommitOid.value
-  // 编辑提交信息：HEAD 走 amend；非 HEAD 走 reword rebase。
-  // 禁用条件：不可达 / ongoing op / 根提交（无法 rebase --root）/ 合并提交（rebase 会线性化丢合并语义）/ 非 HEAD 祖先
-  const isHead = c.oid === headCommitOid.value
-  const canEditMessage =
-    !c.is_unreachable &&
-    !ongoing &&
-    (isHead || (c.parent_oids.length === 1 && isAncestorOfHead(c.oid)))
-
-  const items: ContextMenuItem[] = [
-    { label: t('history.contextMenu.checkout'), action: 'checkout' },
-    { separator: true },
-    {
-      label: t('history.contextMenu.editMessage'),
-      action: 'edit-message',
-      disabled: !canEditMessage,
-    },
-    { separator: true },
-    { label: t('history.contextMenu.createBranch'), action: 'create-branch' },
-    { label: t('history.contextMenu.cherryPick'), action: 'cherry-pick' },
-    {
-      label: t('history.contextMenu.resetTo', { branch: currentBranchName.value }),
-      children: [
-        { label: t('history.contextMenu.resetSoft'), action: 'reset-soft' },
-        { label: t('history.contextMenu.resetMixed'), action: 'reset-mixed' },
-        { label: t('history.contextMenu.resetHard'), action: 'reset-hard' },
-      ],
-    },
-    { label: t('history.contextMenu.revert'), action: 'revert' },
-    { separator: true },
-    {
-      label: t('history.contextMenu.mergeInto', { branch: currentBranchName.value }),
-      action: 'merge-into',
-      disabled: !canMerge,
-    },
-    {
-      label: t('history.contextMenu.rebaseOnto', { branch: currentBranchName.value }),
-      action: 'rebase-onto',
-      disabled: !canRebase,
-    },
-    { separator: true },
-    { label: t('history.contextMenu.copySha'), action: 'copy-sha' },
-    { separator: true },
-    { label: t('history.contextMenu.createTag'), action: 'create-tag' },
-    { label: t('history.contextMenu.createAnnotatedTag'), action: 'create-annotated-tag' },
-  ]
-
-  // 丢失引用专属：从 HEAD reflog 中移除让该 commit 从 unreachable 视图消失所需的所有 entry（剥链）。
-  // tip 点了只删自己；中间 / 尾端点了会连带删掉所有"以它为祖先"的 reflog 入口。
-  // 二次确认前通过 preview 命令取具体数量，详见 docs/10-stash-reflog.md。
-  if (c.is_unreachable) {
-    items.push(
-      { separator: true },
-      { label: t('history.contextMenu.dropUnreachable'), action: 'drop-unreachable' },
-    )
-  }
-
-  return items
-})
-
-function onCommitContextMenu(e: MouseEvent, commit: CommitInfo | undefined) {
-  if (!commit) return
-  e.preventDefault()
-  // 右键菜单出现时隐藏悬停 tooltip，避免两者重叠
-  hideCommitTooltip()
-  commitMenu.commit = commit
-  commitMenu.x = e.clientX
-  commitMenu.y = e.clientY
-  commitMenu.visible = true
-}
-
-function closeCommitMenu() {
-  commitMenu.visible = false
-}
-
-async function onCommitMenuAction(action: string) {
-  const c = commitMenu.commit
-  if (!c) return
-  try {
-    switch (action) {
-      case 'stash-apply': {
-        const entry = stashEntryForCommit(c.oid)
-        if (entry) await stashStore.apply(entry.index)
-        break
-      }
-      case 'stash-pop': {
-        const entry = stashEntryForCommit(c.oid)
-        if (entry) await stashStore.pop(entry.index)
-        break
-      }
-      case 'stash-delete': {
-        const entry = stashEntryForCommit(c.oid)
-        if (!entry) break
-        if (confirm(t('history.dialog.confirmStashDelete.body', { index: entry.index, message: entry.message }))) {
-          await stashStore.drop(entry.index)
-        }
-        break
-      }
-      case 'checkout':
-        if (
-          confirm(
-            t('history.dialog.confirmCheckout.body', { shortOid: c.short_oid }),
-          )
-        ) {
-          await historyStore.checkoutCommit(c.oid)
-        }
-        break
-      case 'edit-message':
-        editMessageCommit.value = c
-        editMessageText.value = c.message.trim()
-        editMessageAuthorTime.value = toDatetimeLocal(c.author_time)
-        editMessageCommitterTime.value = toDatetimeLocal(Math.floor(Date.now() / 1000))
-        editMessageAuthorName.value = c.author_name
-        editMessageAuthorEmail.value = c.author_email
-        editMessageAutoStash.value = false
-        editMessageSubmitting.value = false
-        showEditMessageDialog.value = true
-        break
-      case 'create-branch':
-        dialogCommit.value = c
-        showCreateBranchDialog.value = true
-        break
-      case 'cherry-pick':
-        if (confirm(t('history.dialog.confirmCherryPick.body', { summary: c.summary }))) {
-          await historyStore.cherryPickCommit(c.oid)
-        }
-        break
-      case 'revert':
-        if (
-          confirm(
-            t('history.dialog.confirmRevert.body', { summary: c.summary }),
-          )
-        ) {
-          await historyStore.revertCommit(c.oid)
-        }
-        break
-      case 'reset-soft':
-      case 'reset-mixed':
-      case 'reset-hard': {
-        const mode = action.slice(6) as 'soft' | 'mixed' | 'hard'
-        const modeLabel = t(`history.dialog.confirmReset.mode.${mode}`)
-        const warn =
-          mode === 'hard'
-            ? t('history.dialog.confirmReset.hardBody', {
-                branch: currentBranchName.value,
-                shortOid: c.short_oid,
-              })
-            : t('history.dialog.confirmReset.body', {
-                branch: currentBranchName.value,
-                mode: modeLabel,
-                shortOid: c.short_oid,
-              })
-        if (confirm(warn)) await historyStore.resetToCommit(c.oid, mode)
-        break
-      }
-      case 'merge-into': {
-        // 找到指向 c 的本地分支作为候选 source
-        const candidates = historyStore.branches
-          .filter(b => !b.is_remote && b.commit_oid === c.oid && !b.is_head)
-          .map(b => b.name)
-        openMergeDialog(candidates)
-        break
-      }
-      case 'rebase-onto':
-        openRebaseDialog(c.oid, null)
-        break
-      case 'copy-sha':
-        await navigator.clipboard.writeText(c.oid)
-        break
-      case 'drop-unreachable': {
-        // 先 preview 拿到受影响条数，再弹自定义 Modal（替代原生 confirm/alert，
-        // 后者在 Tauri macOS WebView 下可能静默失效）。count === 0 时也展示，
-        // 让用户看到"无需操作"的明确反馈。
-        const count = await historyStore.previewDropUnreachableCommit(c.oid)
-        dropUnreachableDialog.commit = c
-        dropUnreachableDialog.count = count
-        dropUnreachableDialog.submitting = false
-        dropUnreachableDialog.visible = true
-        break
-      }
-      case 'create-tag':
-        dialogCommit.value = c
-        createTagAnnotated.value = false
-        showCreateTagDialog.value = true
-        break
-      case 'create-annotated-tag':
-        dialogCommit.value = c
-        createTagAnnotated.value = true
-        showCreateTagDialog.value = true
-        break
-    }
-  } catch (err) {
-    alert(String(err))
-  }
-}
-
-async function onEditMessageConfirm() {
-  const text = editMessageText.value.trim()
-  const commit = editMessageCommit.value
-  if (!text || !commit || editMessageSubmitting.value) return
-  editMessageSubmitting.value = true
-  const authorTime = editMessageAuthorTime.value ? fromDatetimeLocal(editMessageAuthorTime.value) : undefined
-  const committerTime = editMessageCommitterTime.value ? fromDatetimeLocal(editMessageCommitterTime.value) : undefined
-  const authorName = editMessageAuthorName.value.trim() || undefined
-  const authorEmail = editMessageAuthorEmail.value.trim() || undefined
-  try {
-    if (commit.oid === headCommitOid.value) {
-      await historyStore.amendCommitMessage(text, authorTime, committerTime, authorName, authorEmail)
-    } else {
-      // 非 HEAD：通过 rebase 以 reword 方式重写该提交。
-      // upstream = parent（已在菜单判定时校验为单父 & 祖先），rebase_plan 返回
-      // `parent..HEAD` 的完整 todo，前端找到目标项改为 reword 并预填新消息后启动。
-      const parentOid = commit.parent_oids[0]
-      if (!parentOid) return
-      const todo = await mergeRebaseStore.planRebase(parentOid, null)
-      const idx = todo.findIndex((x) => x.oid === commit.oid)
-      if (idx < 0) {
-        alert(t('errors.rebase.planMismatch', { shortOid: commit.short_oid }))
-        return
-      }
-      todo[idx] = {
-        ...todo[idx],
-        action: 'reword',
-        new_message: text,
-        new_author_time: authorTime,
-        new_committer_time: committerTime,
-        new_author_name: authorName,
-        new_author_email: authorEmail,
-      }
-      await mergeRebaseStore.startRebase(parentOid, null, todo, editMessageAutoStash.value)
-    }
-    showEditMessageDialog.value = false
-  } catch (err) {
-    alert(String(err))
-  } finally {
-    editMessageSubmitting.value = false
-  }
-}
-
-const isEditingHeadCommit = computed(
-  () => !!editMessageCommit.value && editMessageCommit.value.oid === headCommitOid.value,
+  dropUnreachableDialog,
+  onDropUnreachableConfirm,
+  onDropUnreachableCancel,
+} = useCommitContextMenu(
+  currentBranchName,
+  headCommitOid,
+  isAncestorOfHead,
+  openMergeDialog,
+  openRebaseDialog,
 )
-
-async function onDropUnreachableConfirm() {
-  const c = dropUnreachableDialog.commit
-  if (!c) return
-  dropUnreachableDialog.submitting = true
-  try {
-    await historyStore.dropUnreachableCommit(c.oid)
-    dropUnreachableDialog.visible = false
-  } catch (err) {
-    alert(String(err))
-  } finally {
-    dropUnreachableDialog.submitting = false
-  }
-}
-
-function onDropUnreachableCancel() {
-  dropUnreachableDialog.visible = false
-  dropUnreachableDialog.commit = null
-}
 
 // ── WIP 行文件 diff：离开 WIP 模式时清掉 diff store 里的工作区 diff ───
 watch(selectedWip, (v) => {
@@ -1128,54 +593,7 @@ watch(
 
 // ── Resize handle 位置 computed ──────────────────────────────────────
 // mainResizeStyle: spanning 与 pair 之间的分割条
-const mainResizeStyle = computed(() => {
-  const { edge } = uiStore.dockLayout
-  const isH = edge === 'left' || edge === 'right'
-  if (isH) {
-    // 垂直分割线
-    const pos = edge === 'left' ? `${sizes.commitPanePct}%` : `${100 - sizes.commitPanePct}%`
-    return { left: pos, top: '0', bottom: '0', width: '6px', height: 'auto', transform: 'translateX(-3px)', cursor: 'col-resize' }
-  }
-  // 水平分割线
-  const pos = edge === 'top' ? `${sizes.commitRowPct}%` : `${100 - sizes.commitRowPct}%`
-  return { top: pos, left: '0', right: '0', height: '6px', width: 'auto', transform: 'translateY(-3px)', cursor: 'row-resize' }
-})
 
-// secondaryResizeStyle: pair 区内两个面板之间的分割条
-const secondaryResizeStyle = computed(() => {
-  const { edge } = uiStore.dockLayout
-  const isH = edge === 'left' || edge === 'right'
-  if (isH) {
-    // pair 纵向排列 → 水平分割线
-    const spanPct = sizes.commitPanePct
-    return {
-      top: `${sizes.diffRowPct}%`,
-      left: edge === 'left' ? `${spanPct}%` : '0',
-      right: edge === 'right' ? `${spanPct}%` : '0',
-      height: '6px', width: 'auto', transform: 'translateY(-3px)', cursor: 'row-resize',
-    }
-  }
-  // pair 横向排列 → 垂直分割线
-  const spanPct = sizes.commitRowPct
-  return {
-    left: `${sizes.infoPanePct}%`,
-    top: edge === 'top' ? `${spanPct}%` : '0',
-    bottom: edge === 'bottom' ? `${spanPct}%` : '0',
-    width: '6px', height: 'auto', transform: 'translateX(-3px)', cursor: 'col-resize',
-  }
-})
-
-// ── 面板边框 computed ────────────────────────────────────────────────
-const panelBorders = computed(() => {
-  const { edge, spanning, first } = uiStore.dockLayout
-  const borderSide: Record<string, string> = { top: 'bottom', bottom: 'top', left: 'right', right: 'left' }
-  const pairBorderSide = (edge === 'top' || edge === 'bottom') ? 'right' : 'bottom'
-  const border = '1px solid var(--border)'
-  return {
-    [spanning]: { [`border-${borderSide[edge]}`]: border } as Record<string, string>,
-    [first]: { [`border-${pairBorderSide}`]: border } as Record<string, string>,
-  }
-})
 
 // ── 文件历史 / Blame 模态框 ──────────────────────────────────────────
 const fileHistoryModal = reactive({
@@ -1215,35 +633,15 @@ onUnmounted(() => {
       <div class="commit-panel" :style="panelBorders['commits']" data-panel-id="commits">
         <!-- Column headers (clip + transform 跟随 body 的水平滚动，让头部不参与外层水平滚动，
              从而 body 的垂直滚动条始终贴在面板右缘可见) -->
-        <div class="col-header-clip">
-          <div
-            class="col-header"
-            :style="{ minWidth: commitListMinWidth + 'px', transform: `translateX(${-headerScrollLeft}px)` }"
-            @wheel="onListBodyWheel"
-          >
-            <div class="dock-handle" @pointerdown="onDragHandlePointerDown('commits', $event)" :title="t('history.dock.dragToMove')">
-              <svg width="8" height="14" viewBox="0 0 8 14"><circle cx="2" cy="2" r="1" fill="currentColor"/><circle cx="6" cy="2" r="1" fill="currentColor"/><circle cx="2" cy="7" r="1" fill="currentColor"/><circle cx="6" cy="7" r="1" fill="currentColor"/><circle cx="2" cy="12" r="1" fill="currentColor"/><circle cx="6" cy="12" r="1" fill="currentColor"/></svg>
-            </div>
-            <div class="col-graph" :style="{ width: graphColWidth + 'px' }"></div>
-            <div class="col-message" :style="{ width: sizes.descColW + 'px' }">{{ t('history.columns.description') }}</div>
-            <div class="col-hash header-col" :style="{ width: sizes.hashColW + 'px' }">
-              {{ t('history.columns.commit') }}
-              <div class="col-resize" @pointerdown="startColResize($event, 'desc')" :title="t('history.columns.resizeGroup')" />
-            </div>
-            <div class="col-author header-col" :style="{ width: sizes.authorColW + 'px' }">
-              {{ t('history.columns.author') }}
-              <div class="col-resize" @pointerdown="startColResize($event, 'hash')" :title="t('history.columns.resizeAuthor')" />
-            </div>
-            <div class="col-date header-col" :style="{ width: sizes.dateColW + 'px' }">
-              {{ t('history.columns.date') }}
-              <div class="col-resize" @pointerdown="startColResize($event, 'author')" :title="t('history.columns.resizeDate')" />
-            </div>
-            <div class="col-date header-col" :style="{ width: sizes.dateCol2W + 'px' }">
-              <span style="visibility: hidden">&nbsp;</span>
-              <div class="col-resize" @pointerdown="startColResize($event, 'date')" :title="t('history.columns.resizeDateWidth')" />
-            </div>
-          </div>
-        </div>
+        <CommitListHeader
+          :commit-list-min-width="commitListMinWidth"
+          :header-scroll-left="headerScrollLeft"
+          :graph-col-width="graphColWidth"
+          :sizes="sizes"
+          @list-body-wheel="onListBodyWheel"
+          @drag-handle-pointer-down="onDragHandlePointerDown"
+          @col-resize-start="startColResize"
+        />
 
         <!-- Virtual list body：水平 + 垂直滚动都收在这里，垂直滚动条永远在 body 右缘 -->
         <!-- @wheel：JS 主动接管滚动，规避 Windows WebView2 中 draggable 行阻断 wheel 冒泡的问题 -->

@@ -10,6 +10,7 @@ const messages = {
     deleting: '删除中...',
     add: '添加',
     adding: '添加中...',
+    edit: '编辑',
   },
   app: {
     sidebar: {
@@ -412,6 +413,9 @@ const messages = {
     },
   },
   remote: {
+    edit: {
+      title: '编辑 Remote',
+    },
     add: {
       title: '添加 Remote',
       nameLabel: '名称：',

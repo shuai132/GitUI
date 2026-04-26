@@ -10,6 +10,7 @@ const messages = {
     deleting: 'Deleting...',
     add: 'Add',
     adding: 'Adding...',
+    edit: 'Edit',
   },
   app: {
     sidebar: {
@@ -413,6 +414,9 @@ const messages = {
     },
   },
   remote: {
+    edit: {
+      title: 'Edit Remote',
+    },
     add: {
       title: 'Add remote',
       nameLabel: 'Name:',
