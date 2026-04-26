@@ -7,3 +7,6 @@ pub mod merge;
 pub mod rebase;
 pub mod shellout;
 pub mod types;
+
+#[cfg(test)]
+pub mod test_utils;

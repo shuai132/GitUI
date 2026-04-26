@@ -3386,39 +3386,24 @@ fn read_rebase_state(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use git2::{Repository, Signature, StashFlags};
+    use crate::git::test_utils::TestRepo;
+    use git2::StashFlags;
     use std::fs;
-
-    fn setup_test_repo() -> (tempfile::TempDir, Repository) {
-        let dir = tempfile::tempdir().unwrap();
-        let repo = Repository::init(dir.path()).unwrap();
-        let sig = Signature::now("test", "test@test.com").unwrap();
-
-        // Initial commit
-        fs::write(dir.path().join("existing.txt"), "hello\n").unwrap();
-        let mut index = repo.index().unwrap();
-        index.add_path(std::path::Path::new("existing.txt")).unwrap();
-        index.write().unwrap();
-        let tree_oid = index.write_tree().unwrap();
-        let tree = repo.find_tree(tree_oid).unwrap();
-        repo.commit(Some("HEAD"), &sig, &sig, "init", &tree, &[]).unwrap();
-        drop(tree);
-        (dir, repo)
-    }
 
     #[test]
     fn test_stash_diff_includes_untracked_and_staged_new_files() {
-        let (dir, mut repo) = setup_test_repo();
-        let path = dir.path().to_str().unwrap();
+        let mut test_repo = TestRepo::new();
+        let path = test_repo.path_str().to_string(); // clone to avoid lifetime issues if we mutably borrow repo
+        let repo = &mut test_repo.repo;
 
         // Create staged new file
-        fs::write(dir.path().join("staged_new.txt"), "staged content\n").unwrap();
+        fs::write(test_repo.dir.path().join("staged_new.txt"), "staged content\n").unwrap();
         let mut index = repo.index().unwrap();
         index.add_path(std::path::Path::new("staged_new.txt")).unwrap();
         index.write().unwrap();
 
         // Create untracked file (NOT staged)
-        fs::write(dir.path().join("untracked_new.txt"), "untracked content\n").unwrap();
+        fs::write(test_repo.dir.path().join("untracked_new.txt"), "untracked content\n").unwrap();
 
         // Stash using libgit2 with INCLUDE_UNTRACKED
         let sig = repo.signature().unwrap();
@@ -3431,7 +3416,7 @@ mod tests {
         };
 
         // Test get_commit_detail
-        let detail = GitEngine::get_commit_detail(path, &stash_oid.to_string()).unwrap();
+        let detail = GitEngine::get_commit_detail(&path, &stash_oid.to_string()).unwrap();
 
         let file_names: Vec<&str> = detail.diffs.iter()
             .filter_map(|d| d.new_path.as_deref())
@@ -3448,5 +3433,42 @@ mod tests {
                 "File {:?} should have non-empty hunks (additions={})",
                 diff.new_path, diff.additions);
         }
+    }
+
+    #[test]
+    fn test_get_status() {
+        let test_repo = TestRepo::new();
+        let path = test_repo.path_str();
+
+        // Add untracked file
+        fs::write(test_repo.dir.path().join("new_file.txt"), "hello gitui").unwrap();
+
+        // Add modified file
+        fs::write(test_repo.dir.path().join("existing.txt"), "hello modified").unwrap();
+
+        let status = GitEngine::get_status(path).expect("Failed to get status");
+        assert_eq!(status.untracked.len(), 1);
+        assert_eq!(status.untracked[0].path, "new_file.txt");
+        
+        assert_eq!(status.unstaged.len(), 1);
+        assert_eq!(status.unstaged[0].path, "existing.txt");
+    }
+
+    #[test]
+    fn test_get_log() {
+        let test_repo = TestRepo::new();
+        let path = test_repo.path_str();
+
+        let log = GitEngine::get_log(path, 0, 10, false, false).expect("Failed to get log");
+        
+        // At least the initial commit should exist
+        assert_eq!(log.commits.len(), 1);
+        assert_eq!(log.commits[0].summary, "init");
+        
+        GitEngine::create_commit(path, "second commit").unwrap();
+        let log_after = GitEngine::get_log(path, 0, 10, false, false).unwrap();
+        
+        assert_eq!(log_after.commits.len(), 2);
+        assert_eq!(log_after.commits[0].summary, "second commit");
     }
 }
