@@ -2756,7 +2756,7 @@ impl GitEngine {
         for (i, entry) in reflog.iter().enumerate() {
             let msg = entry
                 .message_bytes()
-                .map(|b| String::from_utf8_lossy(b).into_owned())
+                .map(|b| decode_commit_text(b, None))
                 .unwrap_or_default();
             out.push((i, msg, entry.id_new()));
         }
