@@ -234,19 +234,35 @@ function hideCommitTooltip() {
   commitTooltip.visible = false
 }
 
-// 把 wheel 的 deltaX 转发到 .commit-list-body（横向滚动）。
-// body 同时承担水平 + 垂直滚动；列头通过 onScroll 里的 headerScrollLeft 同步。
-function onBodyWheel(e: WheelEvent) {
-  // 纵向意图优先：deltaY 不小于 deltaX 时，完全交给浏览器原生纵向滚动，
-  // 不做任何处理也不 preventDefault。Windows 下鼠标滚轮常带轻微 deltaX 抖动，
-  // 若拦截会连同 deltaY 一起被 preventDefault 吞掉，导致列表滚不动。
-  if (Math.abs(e.deltaY) >= Math.abs(e.deltaX)) return
-  const body = scrollContainer.value
-  if (!body) return
-  const before = body.scrollLeft
-  body.scrollLeft += e.deltaX
-  // 只有实际消费了横向滚动才 preventDefault，避免影响浏览器前进/后退
-  if (body.scrollLeft !== before) e.preventDefault()
+// Windows Chromium/WebView2 中，带 draggable 属性的行元素会阻断 wheel 事件向上
+// 冒泡到可滚动父容器，导致垂直滚动失效（macOS WebKit 无此问题）。
+// 解决方案：在 scroll container 和列头上统一用 JS 主动接管滚动。
+function onListBodyWheel(e: WheelEvent) {
+  const el = scrollContainer.value
+  if (!el) return
+
+  // 换算 deltaMode → 像素
+  // deltaMode 0: pixel（触控板）；1: line（物理鼠标，Windows 默认 deltaY=3）；2: page
+  let dy = e.deltaY
+  let dx = e.deltaX
+  if (e.deltaMode === 1) {
+    dy *= rowH.value
+    dx *= rowH.value
+  } else if (e.deltaMode === 2) {
+    dy *= el.clientHeight
+    dx *= el.clientWidth
+  }
+
+  if (Math.abs(dy) >= Math.abs(dx)) {
+    // 纵向滚动：JS 主动写 scrollTop，保证 Windows 下 draggable 行不阻断滚动
+    el.scrollTop += dy
+  } else {
+    // 横向滚动：用于列头区域触发 body 水平滚动
+    const before = el.scrollLeft
+    el.scrollLeft += dx
+    if (el.scrollLeft === before) return // 没消费横向，不 preventDefault
+  }
+  e.preventDefault()
 }
 
 // ── Branch tag map (oid → branches pointing to this commit) ─────────
@@ -1203,7 +1219,7 @@ onUnmounted(() => {
           <div
             class="col-header"
             :style="{ minWidth: commitListMinWidth + 'px', transform: `translateX(${-headerScrollLeft}px)` }"
-            @wheel="onBodyWheel"
+            @wheel="onListBodyWheel"
           >
             <div class="dock-handle" @pointerdown="onDragHandlePointerDown('commits', $event)" :title="t('history.dock.dragToMove')">
               <svg width="8" height="14" viewBox="0 0 8 14"><circle cx="2" cy="2" r="1" fill="currentColor"/><circle cx="6" cy="2" r="1" fill="currentColor"/><circle cx="2" cy="7" r="1" fill="currentColor"/><circle cx="6" cy="7" r="1" fill="currentColor"/><circle cx="2" cy="12" r="1" fill="currentColor"/><circle cx="6" cy="12" r="1" fill="currentColor"/></svg>
@@ -1230,11 +1246,12 @@ onUnmounted(() => {
         </div>
 
         <!-- Virtual list body：水平 + 垂直滚动都收在这里，垂直滚动条永远在 body 右缘 -->
+        <!-- @wheel：JS 主动接管滚动，规避 Windows WebView2 中 draggable 行阻断 wheel 冒泡的问题 -->
         <div
           class="commit-list-body"
           ref="scrollContainer"
           @scroll="onScroll"
-          @wheel="onBodyWheel"
+          @wheel="onListBodyWheel"
         >
           <div
             v-if="historyStore.loading && historyStore.commits.length === 0"
