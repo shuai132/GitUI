@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, watch, toRaw } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { marked } from 'marked'
 import Modal from './Modal.vue'
@@ -70,7 +70,7 @@ async function handleDownload() {
   downloadProgress.value = 0
   
   try {
-    const update = props.update as Update
+    const update = toRaw(props.update) as Update
     await update.downloadAndInstall((event) => {
       if (event.event === 'Started') {
         downloadProgress.value = 0
