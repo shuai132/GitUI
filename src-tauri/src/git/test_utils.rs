@@ -11,6 +11,11 @@ impl TestRepo {
     pub fn new() -> Self {
         let dir = tempfile::tempdir().unwrap();
         let repo = Repository::init(dir.path()).unwrap();
+        
+        let mut config = repo.config().unwrap();
+        config.set_str("user.name", "test").unwrap();
+        config.set_str("user.email", "test@test.com").unwrap();
+
         let sig = Signature::now("test", "test@test.com").unwrap();
 
         // Initial commit to make HEAD exist
