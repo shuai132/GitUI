@@ -84,7 +84,7 @@ function mountTerminal(tabId: string) {
   const el = hostEls.get(tabId)
   const tab = currentTabs.value.find(t => t.id === tabId)
   if (!el || !tab) return
-  if ((tab.term as any)._core?.element === el) return
+  if (tab.term.element === el) return
 
   // Prevent xterm.js from falling into an infinite ResizeObserver/Refresh loop 
   // by never opening it inside a hidden (display: none) container.

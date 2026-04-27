@@ -80,8 +80,8 @@ async function loadSide(side: 'old' | 'new') {
       width: 0,
       height: 0,
     }
-  } catch (e: any) {
-    setError(side, e?.message ?? String(e))
+  } catch (e: unknown) {
+    setError(side, e instanceof Error ? e.message : String(e))
   }
 }
 

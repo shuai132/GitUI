@@ -3,7 +3,7 @@ import { ref, watch, toRaw } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { marked } from 'marked'
 import Modal from './Modal.vue'
-import type { Update } from '@tauri-apps/plugin-updater'
+import type { DownloadEvent, Update } from '@tauri-apps/plugin-updater'
 import { relaunch } from '@tauri-apps/plugin-process'
 import { useSettingsStore } from '@/stores/settings'
 
@@ -18,7 +18,7 @@ marked.use({
 
 const props = defineProps<{
   visible: boolean
-  update: any // 绕过 Update 类型的 #private 检查
+  update: Pick<Update, 'version' | 'body' | 'downloadAndInstall'> | null
 }>()
 
 const emit = defineEmits<{
@@ -35,6 +35,10 @@ const error = ref<string | null>(null)
 // Release notes from GitHub API
 const releaseNotesHtml = ref<string | null>(null)
 const notesLoading = ref(false)
+
+function errorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err)
+}
 
 async function fetchReleaseNotes(version: string) {
   notesLoading.value = true
@@ -68,28 +72,31 @@ async function handleDownload() {
   isDownloading.value = true
   error.value = null
   downloadProgress.value = 0
+  let downloadedBytes = 0
+  let contentLength: number | undefined
   
   try {
-    const update = toRaw(props.update) as Update
-    await update.downloadAndInstall((event) => {
+    const update = toRaw(props.update)
+    await update.downloadAndInstall((event: DownloadEvent) => {
       if (event.event === 'Started') {
+        contentLength = event.data.contentLength
+        downloadedBytes = 0
         downloadProgress.value = 0
+      } else if (event.event === 'Progress') {
+        downloadedBytes += event.data.chunkLength
+        if (contentLength && contentLength > 0) {
+          downloadProgress.value = Math.min(99, Math.round((downloadedBytes / contentLength) * 100))
+        }
       } else if (event.event === 'Finished') {
         downloadProgress.value = 100
-      }
-      
-      // 安全地处理进度信息，兼容不同版本的事件结构
-      const anyEvent = event as any
-      if (anyEvent.data && typeof anyEvent.data === 'object' && 'progress' in anyEvent.data) {
-        downloadProgress.value = Math.round(anyEvent.data.progress * 100)
       }
     })
     isDownloaded.value = true
     // If successfully downloaded, clear skipped version
     settings.skippedVersion = null
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('Download failed', err)
-    error.value = err.message || String(err)
+    error.value = errorMessage(err)
   } finally {
     isDownloading.value = false
   }

@@ -1,6 +1,4 @@
-import type { FileEntry } from '@/types/git'
-
-export interface TreeNode<T = any> {
+export interface TreeNode<T = unknown> {
   isDir: boolean
   path: string
   name: string

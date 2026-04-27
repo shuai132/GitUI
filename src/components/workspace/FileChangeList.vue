@@ -65,6 +65,7 @@ function collapseAll() {
 export type DisplayItem = 
   | { type: 'file'; path: string; file: FileEntry; depth: number }
   | { type: 'dir'; path: string; name: string; depth: number; expanded: boolean }
+type DirDisplayItem = Extract<DisplayItem, { type: 'dir' }>
 
 const displayItems = computed<DisplayItem[]>(() => {
   if (props.viewMode === 'tree') {
@@ -167,11 +168,13 @@ function onRowContext(e: MouseEvent, item: DisplayItem) {
 }
 
 function getFile(item: DisplayItem): FileEntry {
-  return (item as any).file
+  if (item.type !== 'file') throw new Error('Expected file item')
+  return item.file
 }
 
-function getDir(item: DisplayItem): { name: string; expanded: boolean } {
-  return item as any
+function getDir(item: DisplayItem): DirDisplayItem {
+  if (item.type !== 'dir') throw new Error('Expected directory item')
+  return item
 }
 
 const statusIconMap: Record<FileStatusKind, { d: string; stroke?: boolean }> = {

@@ -2,6 +2,7 @@
 import { ref, onMounted, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useSettingsStore } from '@/stores/settings'
+import type { UpdateStrategy } from '@/stores/settings'
 import { useGitCommands } from '@/composables/useGitCommands'
 import { check, type Update } from '@tauri-apps/plugin-updater'
 import { message } from '@tauri-apps/plugin-dialog'
@@ -24,7 +25,7 @@ const LAST_CHECK_KEY = 'gitui.last_update_check'
 const updateStrategyOptions = [
   { value: 'auto', labelKey: 'settings.advanced.updateStrategyAuto' },
   { value: 'manual', labelKey: 'settings.advanced.updateStrategyManual' },
-]
+] satisfies { value: UpdateStrategy; labelKey: string }[]
 
 onMounted(async () => {
   try {
@@ -58,8 +59,9 @@ async function checkForUpdates() {
     } else {
       await message(t('settings.about.noUpdateFound'), { title: t('settings.about.checkUpdate'), kind: 'info' })
     }
-  } catch (err: any) {
-    await message(`${t('settings.about.updateError')}：${err.message || err}`, { title: '错误', kind: 'error' })
+  } catch (err: unknown) {
+    const detail = err instanceof Error ? err.message : String(err)
+    await message(`${t('settings.about.updateError')}：${detail}`, { title: '错误', kind: 'error' })
   } finally {
     isChecking.value = false
   }
@@ -99,7 +101,7 @@ async function checkForUpdates() {
         :key="opt.value"
         class="strategy-item"
         :class="{ 'is-active': settingsStore.updateStrategy === opt.value }"
-        @click="settingsStore.updateStrategy = opt.value as any"
+        @click="settingsStore.updateStrategy = opt.value"
       >
         <div class="strategy-radio">
           <div class="radio-inner"></div>
