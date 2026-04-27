@@ -132,6 +132,7 @@ function onDragHandlePointerDown(panel: PanelId, event: PointerEvent) {
 
 <style scoped>
 .diff-area {
+  grid-area: diff;
   position: relative;
   display: flex;
   flex-direction: column;
@@ -141,6 +142,7 @@ function onDragHandlePointerDown(panel: PanelId, event: PointerEvent) {
 }
 
 .info-pane {
+  grid-area: info;
   display: flex;
   flex-direction: column;
   overflow: hidden;

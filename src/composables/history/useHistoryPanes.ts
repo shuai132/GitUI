@@ -1,9 +1,21 @@
 import { computed, type Ref } from 'vue'
-import { useUiStore } from '@/stores/ui'
+import { useUiStore, type PanelId } from '@/stores/ui'
 
 export function useHistoryPanes(contentAreaRef: Ref<HTMLElement | null>, showDetail: Ref<boolean>) {
   const uiStore = useUiStore()
   const sizes = uiStore.historyPaneSizes
+
+  function pairRows(first: PanelId, second: PanelId) {
+    if (first === 'diff') return `${sizes.diffRowPct}% 1fr`
+    if (second === 'diff') return `${100 - sizes.diffRowPct}% ${sizes.diffRowPct}%`
+    return `${sizes.diffRowPct}% ${100 - sizes.diffRowPct}%`
+  }
+
+  function pairCols(first: PanelId, second: PanelId) {
+    if (first === 'info') return `${sizes.infoPanePct}% 1fr`
+    if (second === 'info') return `${100 - sizes.infoPanePct}% ${sizes.infoPanePct}%`
+    return `${sizes.infoPanePct}% ${100 - sizes.infoPanePct}%`
+  }
 
   // ── Content area grid style ──────────────────────────────────────────
   const contentGridStyle = computed(() => {
@@ -17,29 +29,28 @@ export function useHistoryPanes(contentAreaRef: Ref<HTMLElement | null>, showDet
     const { spanning, edge, first, second } = uiStore.dockLayout
     const isH = edge === 'left' || edge === 'right'
     const mainPct = isH ? sizes.commitPanePct : sizes.commitRowPct
-    const secPct = isH ? sizes.diffRowPct : sizes.infoPanePct
 
     let areas: string, rows: string, cols: string
     switch (edge) {
       case 'top':
         areas = `"${spanning} ${spanning}" "${first} ${second}"`
         rows = `${mainPct}% ${100 - mainPct}%`
-        cols = `${secPct}% 1fr`
+        cols = pairCols(first, second)
         break
       case 'bottom':
         areas = `"${first} ${second}" "${spanning} ${spanning}"`
         rows = `${100 - mainPct}% ${mainPct}%`
-        cols = `${secPct}% 1fr`
+        cols = pairCols(first, second)
         break
       case 'left':
         areas = `"${spanning} ${first}" "${spanning} ${second}"`
         cols = `${mainPct}% 1fr`
-        rows = `${secPct}% ${100 - secPct}%`
+        rows = pairRows(first, second)
         break
       case 'right':
         areas = `"${first} ${spanning}" "${second} ${spanning}"`
         cols = `${100 - mainPct}% ${mainPct}%`
-        rows = `${secPct}% ${100 - secPct}%`
+        rows = pairRows(first, second)
         break
     }
     return { gridTemplateAreas: areas, gridTemplateRows: rows, gridTemplateColumns: cols }
@@ -91,12 +102,15 @@ export function useHistoryPanes(contentAreaRef: Ref<HTMLElement | null>, showDet
     const cursor = isH ? 'row-resize' : 'col-resize'
 
     const onMove = (ev: PointerEvent) => {
+      const { first, second } = uiStore.dockLayout
       if (isH) {
         const pct = ((ev.clientY - rect.top) / rect.height) * 100
-        sizes.diffRowPct = Math.max(20, Math.min(85, pct))
+        const diffPct = first === 'diff' ? pct : second === 'diff' ? 100 - pct : pct
+        sizes.diffRowPct = Math.max(20, Math.min(85, diffPct))
       } else {
         const pct = ((ev.clientX - rect.left) / rect.width) * 100
-        sizes.infoPanePct = Math.max(20, Math.min(80, pct))
+        const infoPct = first === 'info' ? pct : second === 'info' ? 100 - pct : pct
+        sizes.infoPanePct = Math.max(20, Math.min(80, infoPct))
       }
     }
     const onUp = () => {
@@ -164,20 +178,30 @@ export function useHistoryPanes(contentAreaRef: Ref<HTMLElement | null>, showDet
   })
 
   const secondaryResizeStyle = computed(() => {
-    const { edge } = uiStore.dockLayout
+    const { edge, first, second } = uiStore.dockLayout
     const isH = edge === 'left' || edge === 'right'
     if (isH) {
       const spanPct = sizes.commitPanePct
+      const topPct = first === 'diff'
+        ? sizes.diffRowPct
+        : second === 'diff'
+          ? 100 - sizes.diffRowPct
+          : sizes.diffRowPct
       return {
-        top: `${sizes.diffRowPct}%`,
+        top: `${topPct}%`,
         left: edge === 'left' ? `${spanPct}%` : '0',
         right: edge === 'right' ? `${spanPct}%` : '0',
         height: '6px', width: 'auto', transform: 'translateY(-3px)', cursor: 'row-resize',
       }
     }
     const spanPct = sizes.commitRowPct
+    const leftPct = first === 'info'
+      ? sizes.infoPanePct
+      : second === 'info'
+        ? 100 - sizes.infoPanePct
+        : sizes.infoPanePct
     return {
-      left: `${sizes.infoPanePct}%`,
+      left: `${leftPct}%`,
       top: edge === 'top' ? `${spanPct}%` : '0',
       bottom: edge === 'bottom' ? `${spanPct}%` : '0',
       width: '6px', height: 'auto', transform: 'translateX(-3px)', cursor: 'col-resize',
