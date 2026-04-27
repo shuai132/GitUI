@@ -17,34 +17,35 @@
 
 | 阶段 | 内容 | 状态 |
 | --- | --- | --- |
-| 1 | 提取文件操作与批量操作 composable | 待办 |
-| 2 | 提取右键菜单和批量菜单 composable | 待办 |
-| 3 | 拆分提交表单与文件区子组件 | 待办 |
-| 4 | 重组 `WipPanel.vue` 并保持交互一致 | 待办 |
-| 5 | 类型检查、测试和手动工作区验证 | 待办 |
+| 1 | 提取文件操作与批量操作 composable | 完成 |
+| 2 | 提取右键菜单和批量菜单 composable | 完成 |
+| 3 | 拆分提交表单与文件区子组件 | 部分完成 |
+| 4 | 重组 `WipPanel.vue` 并保持交互一致 | 完成 |
+| 5 | 类型检查、测试和手动工作区验证 | 自动验证完成，待手动验证 |
 
 ## 子任务清单
 
-- [ ] 创建 `src/composables/workspace/useWipFileActions.ts`
-  - [ ] 管理单文件 stage / unstage / discard。
-  - [ ] 管理 batch stage / unstage / discard。
-  - [ ] 保留刷新 workspace / history / diff 的现有顺序。
-- [ ] 创建 `src/composables/workspace/useWipMenus.ts`
-  - [ ] 管理文件右键菜单状态和菜单项。
-  - [ ] 管理批量选择菜单状态和菜单项。
-  - [ ] 保留复制路径、系统打开、编辑器打开、忽略文件等现有动作。
-- [ ] 创建 `src/components/workspace/WipCommitBox.vue`
-  - [ ] 承载提交信息输入、Amend、错误提示、提交按钮。
-  - [ ] 保留自动调整高度和提交快捷键。
+- [x] 创建 `src/composables/workspace/useWipFileActions.ts`
+  - [x] 管理单文件 stage / unstage / discard。
+  - [x] 管理 batch stage / unstage / discard。
+  - [x] 保留刷新 workspace / history / diff 的现有顺序。
+- [x] 创建 `src/composables/workspace/useWipMenus.ts`
+  - [x] 管理文件右键菜单状态和菜单项。
+  - [x] 管理批量选择菜单状态和菜单项。
+  - [x] 保留复制路径、系统打开、编辑器打开、忽略文件等现有动作。
+- [x] 创建 `src/components/workspace/WipCommitBox.vue`
+  - [x] 承载提交信息输入、Amend、错误提示、提交按钮。
+  - [x] 保留自动调整高度和提交快捷键。
 - [ ] 创建 `src/components/workspace/WipFileSections.vue`
   - [ ] 承载 unstaged / staged 两段文件列表和 list / tree 切换。
   - [ ] 保留多选、键盘导航、展开/收起和列表 ref 接线。
-- [ ] 重组 `WipPanel.vue`
-  - [ ] 保留顶层标题、统计、分栏布局和危险操作确认弹窗。
-  - [ ] 保持当前 class 名或等价样式，避免视觉回归。
+- [x] 重组 `WipPanel.vue`
+  - [x] 保留顶层标题、统计、分栏布局和危险操作确认弹窗。
+  - [x] 保持当前 class 名或等价样式，避免视觉回归。
 - [ ] 验证
-  - [ ] `npx vue-tsc --noEmit`
-  - [ ] `npm run test`
+  - [x] `npx vue-tsc --noEmit`
+  - [x] `npm run test`
+  - [x] `cd src-tauri && cargo check`
   - [ ] 手动验证 stage / unstage / discard / batch / amend / commit / 键盘导航。
 
 ## 关键决策
@@ -53,6 +54,7 @@
 2. **先拆逻辑，再拆模板**：文件操作和菜单状态是最容易从组件中移出的部分，先拆这两块可降低后续组件拆分成本。
 3. **提交表单单独组件化**：提交表单与文件列表状态耦合较低，独立后有利于维护 Amend、草稿和快捷键逻辑。
 4. **保守处理列表热路径**：`FileChangeList` 已承担复杂列表交互，本次不改其内部实现，也不改变 row height / tree 视图行为。
+5. **暂缓拆分 `WipFileSections.vue`**：文件列表区同时承载 `FileChangeList` 实例 ref、分栏拖拽、键盘导航滚动定位、展开/收起和多选回调。拆成子组件需要暴露多组 imperative 方法或传递过多 props/emits，短期会增加热路径接线复杂度；本轮保留在 `WipPanel.vue`，只完成逻辑拆分和提交表单组件化。
 
 ## 验证方式
 

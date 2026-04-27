@@ -1,19 +1,20 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import { useWorkspaceStore } from '@/stores/workspace'
-import { useHistoryStore } from '@/stores/history'
 import { useDiffStore } from '@/stores/diff'
 import { useUiStore } from '@/stores/ui'
 import { useRepoStore } from '@/stores/repos'
-import { resolveExternalTerminalApp, useSettingsStore } from '@/stores/settings'
-import { useShortcutsStore, bindingToLabel, matchesBinding } from '@/stores/shortcuts'
+import { useSettingsStore } from '@/stores/settings'
 import { useGitCommands } from '@/composables/useGitCommands'
+import { useWipFileActions } from '@/composables/workspace/useWipFileActions'
+import { useWipMenus } from '@/composables/workspace/useWipMenus'
 import type { FileEntry } from '@/types/git'
 import FileChangeList from '@/components/workspace/FileChangeList.vue'
+import WipCommitBox from '@/components/workspace/WipCommitBox.vue'
 import Modal from '@/components/common/Modal.vue'
-import ContextMenu, { type ContextMenuItem } from '@/components/common/ContextMenu.vue'
+import ContextMenu from '@/components/common/ContextMenu.vue'
 import { useMergeRebaseStore } from '@/stores/mergeRebase'
 import type { ContextMenuPayload } from '@/components/workspace/FileChangeList.vue'
 
@@ -28,12 +29,10 @@ function toggleViewMode() {
   localStorage.setItem(WIP_VIEW_MODE_KEY, viewMode.value)
 }
 const workspaceStore = useWorkspaceStore()
-const historyStore = useHistoryStore()
 const diffStore = useDiffStore()
 const uiStore = useUiStore()
 const repoStore = useRepoStore()
 const settingsStore = useSettingsStore()
-const shortcutsStore = useShortcutsStore()
 const git = useGitCommands()
 const mergeRebaseStore = useMergeRebaseStore()
 
@@ -100,28 +99,11 @@ function onSelectFile(file: FileEntry) {
 }
 
 async function onToggleFile(fileOrPath: FileEntry | string, isDir: boolean) {
-  if (isDir) {
-    const dirPath = fileOrPath as string
-    const prefix = dirPath + '/'
-    const toStage = unstagedAll.value.filter(f => f.path.startsWith(prefix))
-    if (toStage.length > 0) {
-      for (const f of toStage) await workspaceStore.stageFile(f.path)
-    } else {
-      const toUnstage = stagedAll.value.filter(f => f.path.startsWith(prefix))
-      for (const f of toUnstage) await workspaceStore.unstageFile(f.path)
-    }
-  } else {
-    const file = fileOrPath as FileEntry
-    if (file.staged) {
-      await workspaceStore.unstageFile(file.path)
-    } else {
-      await workspaceStore.stageFile(file.path)
-    }
-  }
+  await toggleFile(fileOrPath, isDir)
 }
 
 async function onStageAll() {
-  await workspaceStore.stageAll()
+  await stageAll()
 }
 
 // ── 多选状态 ──────────────────────────────────────────────────────
@@ -136,224 +118,77 @@ function onStagedMultiSelect(paths: string[]) {
   stagedMultiPaths.value = paths
 }
 
+const {
+  toggleFile,
+  stageAll,
+  unstageAll,
+  batchStage: stageSelected,
+  batchUnstage: unstageSelected,
+  batchDiscard: discardSelected,
+} = useWipFileActions({
+  workspaceStore,
+  selectedPath,
+  unstagedAll,
+  stagedAll,
+  unstagedMultiPaths,
+  stagedMultiPaths,
+  unstagedListRef,
+  stagedListRef,
+  confirmDiscardSelected: (count) => confirm(t('workspace.confirmDiscard.selected', { count })),
+})
+
 async function batchStage() {
-  const paths = [...unstagedMultiPaths.value]
-  for (const path of paths) {
-    await workspaceStore.stageFile(path)
-  }
-  unstagedListRef.value?.clearMultiSelect()
-  unstagedMultiPaths.value = []
+  await stageSelected()
 }
 
 async function batchUnstage() {
-  const paths = [...stagedMultiPaths.value]
-  for (const path of paths) {
-    await workspaceStore.unstageFile(path)
-  }
-  stagedListRef.value?.clearMultiSelect()
-  stagedMultiPaths.value = []
+  await unstageSelected()
 }
 
 async function batchDiscard() {
-  const paths = [...unstagedMultiPaths.value]
-  if (!confirm(t('workspace.confirmDiscard.selected', { count: paths.length }))) return
-  for (const path of paths) {
-    await workspaceStore.discardFile(path)
-  }
-  if (paths.includes(selectedPath.value ?? '')) {
-    selectedPath.value = null
-  }
-  unstagedListRef.value?.clearMultiSelect()
-  unstagedMultiPaths.value = []
+  await discardSelected()
 }
 
 async function onUnstageAll() {
-  await workspaceStore.unstageAll()
+  await unstageAll()
 }
 
-// ── 多选右键菜单 ──────────────────────────────────────────────────
-const batchMenu = reactive({
-  visible: false,
-  x: 0,
-  y: 0,
-  // 'unstaged' | 'staged'
-  source: '' as 'unstaged' | 'staged',
-})
-
-const batchMenuItems = computed<ContextMenuItem[]>(() => {
-  if (batchMenu.source === 'unstaged') {
-    const n = unstagedMultiPaths.value.length
-    return [
-      { label: t('workspace.wip.menu.stageSelected', { count: n }), action: 'batch-stage' },
-      { separator: true },
-      { label: t('workspace.wip.menu.discardSelected', { count: n }), action: 'batch-discard', danger: true },
-    ]
-  }
-  const n = stagedMultiPaths.value.length
-  return [
-    { label: t('workspace.wip.menu.unstageSelected', { count: n }), action: 'batch-unstage' },
-  ]
-})
-
-async function onBatchMenuAction(action: string) {
-  batchMenu.visible = false
-  if (action === 'batch-stage') await batchStage()
-  else if (action === 'batch-unstage') await batchUnstage()
-  else if (action === 'batch-discard') await batchDiscard()
-}
-
-// ── 文件右键菜单 ─────────────────────────────────────────────────
-const fileMenu = reactive({
-  visible: false,
-  x: 0,
-  y: 0,
-  file: null as FileEntry | null,
-  path: '',
-  isDir: false,
-})
-
-const fileMenuItems = computed<ContextMenuItem[]>(() => {
-  if (fileMenu.isDir) {
-     return [
-       { label: t('workspace.fileList.rowAction.stage'), action: 'toggle' },
-       { separator: true },
-       { label: t('workspace.wip.menu.copyRelativePath'), action: 'copy-relative' },
-       { label: t('workspace.wip.menu.copyAbsolutePath'), action: 'copy-absolute' },
-       { separator: true },
-       { label: t('workspace.wip.menu.revealInFinder'), action: 'reveal' },
-       { label: t('workspace.wip.menu.openTerminalHere'), action: 'open-terminal' },
-       { separator: true },
-       { label: t('fileHistory.menu.history'), action: 'file-history' }
-     ]
-  }
-
-  const f = fileMenu.file
-  if (!f) return []
-  if (f.status === 'conflicted') {
-    return [
-      { label: t('workspace.wip.menu.useOurs'), action: 'use-ours' },
-      { label: t('workspace.wip.menu.useTheirs'), action: 'use-theirs' },
-      { separator: true },
-      { label: t('workspace.wip.menu.markResolved'), action: 'mark-resolved' },
-      { separator: true },
-      { label: t('workspace.wip.menu.copyRelativePath'), action: 'copy-relative' },
-      { label: t('workspace.wip.menu.openInEditor'), action: 'open-editor' },
-    ]
-  }
-  return [
-    {
-      label: f.staged ? t('workspace.wip.menu.unstage') : t('workspace.wip.menu.stage'),
-      action: 'toggle',
-    },
-    { separator: true },
-    { label: t('workspace.wip.menu.copyName'), action: 'copy-name' },
-    { label: t('workspace.wip.menu.copyRelativePath'), action: 'copy-relative' },
-    { label: t('workspace.wip.menu.copyAbsolutePath'), action: 'copy-absolute' },
-    { separator: true },
-    { label: t('workspace.wip.menu.revealInFinder'), action: 'reveal' },
-    { label: t('workspace.wip.menu.openInEditor'), action: 'open-editor' },
-    { label: t('workspace.wip.menu.openTerminalHere'), action: 'open-terminal' },
-    { separator: true },
-    {
-      label: t('workspace.wip.menu.addToGitignore'),
-      action: 'add-gitignore',
-      disabled: f.staged || f.status !== 'untracked',
-    },
-    { separator: true },
-    {
-      label: t('workspace.wip.menu.discardFile'),
-      action: 'discard',
-      danger: true,
-      disabled: f.staged,
-    },
-    { separator: true },
-    { label: t('fileHistory.menu.history'), action: 'file-history', disabled: f.status === 'untracked' },
-    { label: t('fileHistory.menu.blame'), action: 'file-blame', disabled: f.status === 'untracked' || f.status === 'deleted' },
-  ]
+const {
+  batchMenu,
+  batchMenuItems,
+  fileMenu,
+  fileMenuItems,
+  openFileContextMenu,
+  handleBatchMenuAction,
+  handleFileMenuAction,
+} = useWipMenus({
+  t,
+  git,
+  mergeRebaseStore,
+  repoStore,
+  settingsStore,
+  workspaceStore,
+  selectedPath,
+  unstagedMultiPaths,
+  stagedMultiPaths,
+  toggleFile,
+  batchStage,
+  batchUnstage,
+  batchDiscard,
+  confirmDiscardFile: (filePath) => confirm(t('workspace.confirmDiscard.file', { file: filePath })),
+  showFileHistory: (payload) => emit('showFileHistory', payload),
 })
 
 function onFileContext(e: MouseEvent, payload: ContextMenuPayload) {
-  // 右键落在多选区时，显示批量菜单
-  const inUnstagedMulti = !payload.isDir && unstagedMultiPaths.value.length > 1 &&
-    unstagedMultiPaths.value.includes(payload.path)
-  const inStagedMulti = !payload.isDir && stagedMultiPaths.value.length > 1 &&
-    stagedMultiPaths.value.includes(payload.path)
-  if (inUnstagedMulti || inStagedMulti) {
-    batchMenu.source = inUnstagedMulti ? 'unstaged' : 'staged'
-    batchMenu.x = e.clientX
-    batchMenu.y = e.clientY
-    batchMenu.visible = true
-    return
-  }
-  fileMenu.file = payload.file ?? null
-  fileMenu.path = payload.path
-  fileMenu.isDir = payload.isDir
-  fileMenu.x = e.clientX
-  fileMenu.y = e.clientY
-  fileMenu.visible = true
+  openFileContextMenu(e, payload)
+}
+
+async function onBatchMenuAction(action: string) {
+  await handleBatchMenuAction(action)
 }
 
 async function onFileMenuAction(action: string) {
-  const isDir = fileMenu.isDir
-  const f = fileMenu.file
-  const targetPath = fileMenu.path
-  if (!f && !isDir) return
-  fileMenu.visible = false
-
-  const repoPath = repoStore.activeRepo()?.path ?? ''
-  const absPath = repoPath ? `${repoPath}/${targetPath}` : targetPath
-  const dirPath = isDir ? absPath : (absPath.substring(0, absPath.lastIndexOf('/')) || repoPath)
-
-  try {
-    if (action === 'use-ours') {
-      await mergeRebaseStore.useConflictSide(targetPath, 'ours')
-    } else if (action === 'use-theirs') {
-      await mergeRebaseStore.useConflictSide(targetPath, 'theirs')
-    } else if (action === 'mark-resolved') {
-      // 工作区当前内容直接作为解决方案
-      const content = await git.readWorktreeFile(repoStore.activeRepoId!, targetPath, true)
-        .then(b => {
-          const binary = atob(b.bytes_base64)
-          const bytes = new Uint8Array(binary.length)
-          for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
-          return new TextDecoder().decode(bytes)
-        })
-        .catch(() => '')
-      await mergeRebaseStore.resolveConflict(targetPath, content)
-    } else if (action === 'toggle') {
-      await onToggleFile(isDir ? targetPath : f!, isDir)
-    } else if (action === 'copy-name') {
-      await navigator.clipboard.writeText(targetPath.split('/').pop() ?? targetPath)
-    } else if (action === 'copy-relative') {
-      await navigator.clipboard.writeText(targetPath)
-    } else if (action === 'copy-absolute') {
-      await navigator.clipboard.writeText(absPath)
-    } else if (action === 'reveal') {
-      await git.revealFile(absPath)
-    } else if (action === 'open-editor') {
-      await git.openFileInEditor(absPath)
-    } else if (action === 'open-terminal') {
-      await git.openTerminalHere(dirPath, resolveExternalTerminalApp(settingsStore))
-    } else if (action === 'add-gitignore') {
-      const repoId = repoStore.activeRepoId
-      if (repoId) {
-        await git.addToGitignore(repoId, targetPath)
-        await workspaceStore.refresh(repoId)
-      }
-    } else if (action === 'discard') {
-      if (!confirm(t('workspace.confirmDiscard.file', { file: targetPath }))) return
-      await workspaceStore.discardFile(targetPath)
-      if (selectedPath.value === targetPath) {
-        selectedPath.value = null
-      }
-    } else if (action === 'file-history') {
-      emit('showFileHistory', { filePath: targetPath, mode: 'history' })
-    } else if (action === 'file-blame') {
-      emit('showFileHistory', { filePath: targetPath, mode: 'blame' })
-    }
-  } catch (e) {
-    alert(String(e))
-  }
+  await handleFileMenuAction(action)
 }
 
 // ── 丢弃全部变更（trash 按钮） ─────────────────────────────────────
@@ -399,86 +234,6 @@ onMounted(() => {
   }
 })
 watch(() => uiStore.shouldOpenDiscardAll, checkDiscardAllRequest)
-
-// ── 提交表单 ──────────────────────────────────────────────────────
-const amendChecked = ref(false)
-const message = computed({
-  get: () => workspaceStore.commitDraft,
-  set: (v: string) => {
-    workspaceStore.commitDraft = v
-  },
-})
-const committing = ref(false)
-const commitError = ref<string | null>(null)
-
-const canCommit = computed(() => {
-  if (committing.value) return false
-  if (message.value.trim().length === 0) return false
-  // 普通提交：必须有暂存文件；amend：HEAD 必须存在 + 允许无新增暂存
-  if (amendChecked.value) return !isUnborn.value
-  return stagedAll.value.length > 0
-})
-
-const commitButtonLabel = computed(() => {
-  if (committing.value) return t('workspace.commit.button.committing')
-  if (amendChecked.value) return t('workspace.commit.button.amend')
-  if (stagedAll.value.length === 0) return t('workspace.commit.button.stageFirst')
-  return t('workspace.commit.button.commitCount', { count: stagedAll.value.length })
-})
-
-// amend 勾选时自动填充上次提交信息
-watch(amendChecked, (checked) => {
-  const headMsg = workspaceStore.status?.head_commit_message ?? ''
-  if (checked) {
-    if (message.value.trim() === '') {
-      message.value = headMsg
-    }
-  } else {
-    if (message.value === headMsg) {
-      message.value = ''
-    }
-  }
-  nextTick(autoResizeInput)
-})
-
-async function onCommit() {
-  if (!canCommit.value) return
-  committing.value = true
-  commitError.value = null
-  try {
-    const msg = message.value.trim()
-    const oid = amendChecked.value
-      ? await workspaceStore.amend(msg)
-      : await workspaceStore.commit(msg)
-    message.value = ''
-    amendChecked.value = false
-    await historyStore.loadLog()
-    await historyStore.loadBranches()
-    if (oid) {
-      historyStore.selectCommit(oid)
-    }
-  } catch (e) {
-    commitError.value = String(e)
-  } finally {
-    committing.value = false
-  }
-}
-
-function onMessageKeydown(e: KeyboardEvent) {
-  if (matchesBinding(e, shortcutsStore.bindings.commit)) {
-    e.preventDefault()
-    onCommit()
-  }
-}
-
-const messageInputRef = ref<HTMLTextAreaElement | null>(null)
-
-function autoResizeInput() {
-  const el = messageInputRef.value
-  if (!el) return
-  el.style.height = 'auto'
-  el.style.height = el.scrollHeight + 'px'
-}
 
 // ── 未暂存/已暂存分割线拖拽 ────────────────────────────────────────
 const WIP_SPLIT_KEY = 'wip-split-pct'
@@ -687,40 +442,7 @@ watch(
       </div>
     </div>
 
-    <!-- 提交表单 -->
-    <div class="commit-form">
-      <textarea
-        ref="messageInputRef"
-        v-model="message"
-        class="message-input"
-        rows="1"
-        wrap="off"
-        :placeholder="t('workspace.commit.messagePlaceholder')"
-        spellcheck="false"
-        autocomplete="off"
-        @keydown="onMessageKeydown"
-        @input="autoResizeInput"
-      />
-      <div class="commit-actions">
-        <label class="amend-row" :title="t('workspace.commit.amendLabel')">
-          <input
-            type="checkbox"
-            v-model="amendChecked"
-            :disabled="isUnborn"
-          />
-          <span>Amend</span>
-        </label>
-        <button
-          class="btn-commit"
-          :disabled="!canCommit"
-          :title="shortcutsStore.bindings.commit ? bindingToLabel(shortcutsStore.bindings.commit) : undefined"
-          @click="onCommit"
-        >
-          {{ commitButtonLabel }}
-        </button>
-      </div>
-      <div v-if="commitError" class="commit-error">{{ commitError }}</div>
-    </div>
+    <WipCommitBox :is-unborn="isUnborn" :staged-count="stagedAll.length" />
 
     <!-- 丢弃全部变更确认框 -->
     <Modal
@@ -901,99 +623,6 @@ watch(
 .btn-section--danger:hover {
   background: var(--accent-red);
   border-color: var(--accent-red);
-}
-
-.commit-form {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 6px 12px;
-  border-top: 1px solid var(--border);
-  background: var(--bg-secondary);
-  flex-shrink: 0;
-  overflow: hidden;
-}
-
-.commit-actions {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  justify-content: space-between;
-}
-
-.amend-row {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font-size: var(--font-sm);
-  color: var(--text-secondary);
-  cursor: pointer;
-  user-select: none;
-  flex-shrink: 0;
-}
-
-.amend-row input[type='checkbox'] {
-  cursor: pointer;
-  accent-color: var(--accent-blue);
-}
-
-.amend-row input:disabled {
-  cursor: not-allowed;
-}
-
-.message-input {
-  background: var(--bg-surface);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  color: var(--text-primary);
-  font-family: inherit;
-  font-size: var(--font-md);
-  padding: 4px 8px;
-  outline: none;
-  transition: border-color 0.15s;
-  resize: none;
-  overflow-x: auto;
-  scrollbar-width: none;
-  overflow-y: hidden;
-  line-height: 1.4;
-  max-height: 120px;
-}
-
-.message-input:focus {
-  border-color: var(--accent-blue);
-}
-
-.message-input::-webkit-scrollbar {
-  display: none;
-}
-
-.commit-error {
-  font-size: var(--font-sm);
-  color: var(--accent-red);
-}
-
-.btn-commit {
-  background: var(--accent-blue);
-  color: var(--bg-primary);
-  border: none;
-  border-radius: 4px;
-  padding: 4px 14px;
-  font-size: var(--font-md);
-  font-family: inherit;
-  font-weight: 600;
-  cursor: pointer;
-  transition: opacity 0.15s;
-  flex-shrink: 0;
-  white-space: nowrap;
-}
-
-.btn-commit:hover:not(:disabled) {
-  opacity: 0.85;
-}
-
-.btn-commit:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
 }
 
 .discard-body {
