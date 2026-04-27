@@ -10,7 +10,7 @@ import { useDiffStore } from '@/stores/diff'
 import { useStashStore } from '@/stores/stash'
 import { useUiStore } from '@/stores/ui'
 import { useSettingsStore } from '@/stores/settings'
-import { formatAbsoluteTime, formatAuthor, formatHistoryTime } from '@/utils/format'
+import { formatAuthor, formatHistoryTime } from '@/utils/format'
 import { LANE_W } from '@/utils/graph'
 import CommitGraphRow from '@/components/history/CommitGraphRow.vue'
 import WipRow from '@/components/history/WipRow.vue'
@@ -29,6 +29,8 @@ import { useCommitDragDrop } from '@/composables/history/useCommitDragDrop'
 import { useCommitTags } from '@/composables/history/useCommitTags'
 import { useHistorySelection } from '@/composables/history/useHistorySelection'
 import { useHistoryKeyboard } from '@/composables/history/useHistoryKeyboard'
+import { useCommitTooltip } from '@/composables/history/useCommitTooltip'
+import { useHistoryDiffState } from '@/composables/history/useHistoryDiffState'
 import CommitListHeader from '@/components/history/CommitListHeader.vue'
 
 const { t } = useI18n()
@@ -95,51 +97,6 @@ const isWipVisible = computed(() =>
   !uiStore.historySearchQuery.trim() && (showWipRow.value || showWipLoading.value)
 )
 
-// 当前是否选中的是 WIP 行（而不是某条 commit）
-// WIP 文件统计（用于详情面板标题栏）
-const wipStats = computed(() => {
-  const s = workspaceStore.status
-  if (!s) return { modified: 0, deleted: 0, added: 0 }
-
-  let modified = 0
-  let deleted = 0
-  let added = 0
-
-  const allFiles = [...s.staged, ...s.unstaged, ...s.untracked]
-
-  for (const f of allFiles) {
-    if (f.status === 'deleted') {
-      deleted++
-    } else if (f.status === 'added' || f.status === 'untracked') {
-      added++
-    } else {
-      modified++
-    }
-  }
-
-  return { modified, deleted, added }
-})
-
-// Commit 文件统计
-const commitStats = computed(() => {
-  const diffs = historyStore.selectedCommit?.diffs ?? []
-  let modified = 0
-  let deleted = 0
-  let added = 0
-
-  for (const d of diffs) {
-    if (!d.new_path || d.new_path === '/dev/null') {
-      deleted++
-    } else if (!d.old_path || d.old_path === '/dev/null') {
-      added++
-    } else {
-      modified++
-    }
-  }
-
-  return { modified, deleted, added }
-})
-
 // 虚拟行数 = 过滤后 commits + (WIP 行或 WIP 加载占位各占 1 个，搜索时隐藏)
 const virtualRowCount = computed(() =>
   filteredCommits.value.length + (isWipVisible.value ? 1 : 0),
@@ -175,51 +132,12 @@ function onScroll() {
   }
 }
 
-// ── 悬停提交行时的自定义 tooltip（配合 app 配色，替代浏览器原生 title） ──
-const commitTooltip = reactive({
-  visible: false,
-  x: 0,
-  y: 0,
-  text: '',
-})
-let commitTooltipTimer: number | null = null
-
-function commitPreview(c: CommitInfo | undefined): string {
-  if (!c) return ''
-  return [
-    c.message.trim(),
-    '',
-    `${t('history.tooltip.author')}: ${c.author_name} <${c.author_email}>`,
-    `${t('history.tooltip.date')}: ${formatAbsoluteTime(c.time)}`,
-    `${t('history.tooltip.commit')}: ${c.short_oid}`,
-  ].join('\n')
-}
-
-function showCommitTooltip(e: MouseEvent, commit: CommitInfo | undefined) {
-  if (!commit) return
-  const text = commitPreview(commit)
-  if (commitTooltipTimer !== null) window.clearTimeout(commitTooltipTimer)
-  commitTooltipTimer = window.setTimeout(() => {
-    commitTooltip.text = text
-    commitTooltip.x = e.clientX + 14
-    commitTooltip.y = e.clientY + 14
-    commitTooltip.visible = true
-  }, 400)
-}
-
-function moveCommitTooltip(e: MouseEvent) {
-  if (!commitTooltip.visible) return
-  commitTooltip.x = e.clientX + 14
-  commitTooltip.y = e.clientY + 14
-}
-
-function hideCommitTooltip() {
-  if (commitTooltipTimer !== null) {
-    window.clearTimeout(commitTooltipTimer)
-    commitTooltipTimer = null
-  }
-  commitTooltip.visible = false
-}
+const {
+  commitTooltip,
+  showCommitTooltip,
+  moveCommitTooltip,
+  hideCommitTooltip,
+} = useCommitTooltip()
 
 // Windows Chromium/WebView2 中，带 draggable 属性的行元素会阻断 wheel 事件向上
 // 冒泡到可滚动父容器，导致垂直滚动失效（macOS WebKit 无此问题）。
@@ -293,14 +211,16 @@ const {
   activePane,
 })
 
-// ── Current diff ─────────────────────────────────────────────────────
-// 选中 WIP 时显示工作区 diff（diffStore.currentDiff）；
-// 选中普通 commit 时显示 commit 内的文件 diff。
-const currentDiff = computed(() => {
-  if (selectedWip.value) return diffStore.currentDiff
-  const commit = historyStore.selectedCommit
-  if (!commit) return null
-  return commit.diffs[historyStore.selectedFileDiffIndex] ?? null
+const {
+  wipStats,
+  commitStats,
+  currentDiff,
+  currentConflictFilePath,
+} = useHistoryDiffState({
+  selectedWip,
+  historyStore,
+  diffStore,
+  workspaceStore,
 })
 
 // ── Panel dock（拖拽停靠）────────────────────────────────────────────
@@ -371,6 +291,12 @@ const headCommitOid = computed(() => {
   return headBranch?.commit_oid ?? historyStore.commits[0]?.oid ?? ''
 })
 
+const commitByOid = computed(() => {
+  const map = new Map<string, CommitInfo>()
+  for (const commit of historyStore.commits) map.set(commit.oid, commit)
+  return map
+})
+
 // 目标 commit 是否是 HEAD 的祖先（含 HEAD 本身）。
 // 基于已加载的 historyStore.commits 做 BFS：HEAD 起沿 parent_oids 往回走，命中 target 即为祖先。
 // 未在已加载 commits 中（超出分页或在其他分支上）的提交保守判定为 false。
@@ -378,8 +304,6 @@ function isAncestorOfHead(targetOid: string): boolean {
   const head = headCommitOid.value
   if (!head) return false
   if (head === targetOid) return true
-  const oidMap = new Map<string, CommitInfo>()
-  for (const c of historyStore.commits) oidMap.set(c.oid, c)
   const visited = new Set<string>()
   const queue: string[] = [head]
   let i = 0
@@ -388,24 +312,12 @@ function isAncestorOfHead(targetOid: string): boolean {
     if (visited.has(oid)) continue
     visited.add(oid)
     if (oid === targetOid) return true
-    const c = oidMap.get(oid)
+    const c = commitByOid.value.get(oid)
     if (!c) continue
     for (const p of c.parent_oids) queue.push(p)
   }
   return false
 }
-
-// 选中的文件是否冲突文件；是则让 DiffView 渲染 ConflictView 代替普通 diff
-const currentConflictFilePath = computed<string | null>(() => {
-  if (!selectedWip.value) return null
-  const path = diffStore.currentPath
-  if (!path) return null
-  const s = workspaceStore.status
-  if (!s) return null
-  const all = [...s.staged, ...s.unstaged, ...s.untracked]
-  const file = all.find((f) => f.path === path)
-  return file?.status === 'conflicted' ? path : null
-})
 
 const {
   commitMenu,
