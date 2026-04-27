@@ -17,30 +17,31 @@
 
 | 阶段 | 内容 | 状态 |
 | --- | --- | --- |
-| 1 | 提取提交文件显示数据与展开状态 | 待办 |
-| 2 | 提取文件菜单逻辑 | 待办 |
-| 3 | 拆分提交文件列表组件 | 待办 |
-| 4 | 重组 `CommitInfoPanel.vue` | 待办 |
-| 5 | 类型检查、测试和提交详情手动验证 | 待办 |
+| 1 | 提取提交文件显示数据与展开状态 | 完成 |
+| 2 | 提取文件菜单逻辑 | 完成 |
+| 3 | 拆分提交文件列表组件 | 完成 |
+| 4 | 重组 `CommitInfoPanel.vue` | 完成 |
+| 5 | 类型检查、测试和提交详情手动验证 | 自动验证完成，手动待验证 |
 
 ## 子任务清单
 
-- [ ] 创建 `src/composables/history/useCommitFileItems.ts`
-  - [ ] 管理 list / tree 视图模式。
-  - [ ] 管理展开目录、全部展开 / 收起。
-  - [ ] 生成用于虚拟滚动的 display items。
-- [ ] 创建 `src/composables/history/useCommitFileMenu.ts`
-  - [ ] 管理文件行右键菜单和文件 tab 菜单。
-  - [ ] 保留复制路径、打开文件历史、打开 blame 等动作。
-- [ ] 创建 `src/components/history/CommitFileList.vue`
-  - [ ] 承载文件 list / tree 切换、虚拟滚动和行渲染。
-  - [ ] 通过 emit 通知选择文件、打开上下文菜单。
-- [ ] 重组 `CommitInfoPanel.vue`
-  - [ ] 保留提交作者、提交信息、面板尺寸调整和顶层布局。
-  - [ ] 将文件列表和菜单接线交给新模块。
+- [x] 创建 `src/composables/history/useCommitFileItems.ts`
+  - [x] 管理 list / tree 视图模式。
+  - [x] 管理展开目录、全部展开 / 收起。
+  - [x] 生成用于虚拟滚动的 display items。
+- [x] 创建 `src/composables/history/useCommitFileMenu.ts`
+  - [x] 管理文件行右键菜单和文件 tab 菜单。
+  - [x] 保留复制路径、打开文件历史、打开 blame 等动作。
+- [x] 创建 `src/components/history/CommitFileList.vue`
+  - [x] 承载文件 list / tree 切换、虚拟滚动和行渲染。
+  - [x] 通过 emit 通知选择文件、打开上下文菜单。
+- [x] 重组 `CommitInfoPanel.vue`
+  - [x] 保留提交作者、提交信息、面板尺寸调整和顶层布局。
+  - [x] 将文件列表和菜单接线交给新模块。
 - [ ] 验证
-  - [ ] `npx vue-tsc --noEmit`
-  - [ ] `npm run test`
+  - [x] `npx vue-tsc --noEmit`
+  - [x] `npm run test`
+  - [x] `cd src-tauri && cargo check`
   - [ ] 手动验证提交详情、文件切换、文件树、右键菜单和文件历史入口。
 
 ## 关键决策
