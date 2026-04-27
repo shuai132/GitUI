@@ -1,10 +1,12 @@
 <script setup lang="ts">
-import { computed, ref, watch, nextTick } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useVirtualizer } from '@tanstack/vue-virtual'
 import type { ConflictFile } from '@/types/git'
 import { useMergeRebaseStore } from '@/stores/mergeRebase'
 import { highlightLine, detectLangByPath } from '@/lib/highlight'
+import { buildConflictAlignment, buildConflictOutputMap } from '@/lib/conflictMerge'
+import { useConflictSelection } from '@/composables/diff/useConflictSelection'
+import { useSyncedConflictPanes } from '@/composables/diff/useSyncedConflictPanes'
 
 const { t } = useI18n()
 
@@ -20,30 +22,6 @@ const conflict = ref<ConflictFile | null>(null)
 const loading = ref(false)
 const saving = ref(false)
 const errorMsg = ref<string | null>(null)
-const currentHunkIdx = ref(0)
-
-type AlignRow = {
-  left: string | null
-  leftNo: number | null
-  right: string | null
-  rightNo: number | null
-  status: 'equal' | 'left-only' | 'right-only' | 'changed' | 'hunk-header'
-  hunkId: number | null
-  baseCls: string
-}
-
-type Hunk = {
-  id: number
-  /** 组头行在 rows 中的 idx（虚拟占位，仅用于放 master checkbox） */
-  headerIdx: number
-  /** 该 hunk 第一条数据行的 idx（= headerIdx + 1） */
-  startIdx: number
-  endIdx: number
-  /** 该 hunk 内所有 left 非空的 row idx（按顺序） */
-  leftRowIdx: number[]
-  /** 该 hunk 内所有 right 非空的 row idx（按顺序） */
-  rightRowIdx: number[]
-}
 
 async function load() {
   if (!props.filePath) {
@@ -55,7 +33,6 @@ async function load() {
   try {
     const file = await mr.loadConflictFile(props.filePath)
     conflict.value = file
-    currentHunkIdx.value = 0
   } catch (e) {
     errorMsg.value = String(e)
   } finally {
@@ -65,172 +42,33 @@ async function load() {
 
 watch(() => props.filePath, load, { immediate: true })
 
-// 左右对齐：LCS 行级 diff + 相邻 left-only/right-only 合并成 changed
-const alignment = computed<{ rows: AlignRow[]; hunks: Hunk[] }>(() => {
+const alignment = computed(() => {
   if (!conflict.value || conflict.value.is_binary) {
     return { rows: [], hunks: [] }
   }
-  const a = (conflict.value.ours ?? '').split('\n')
-  const b = (conflict.value.theirs ?? '').split('\n')
-  if (a.length > 0 && a[a.length - 1] === '') a.pop()
-  if (b.length > 0 && b[b.length - 1] === '') b.pop()
-
-  const m = a.length
-  const n = b.length
-  const dp: Uint32Array[] = []
-  for (let i = 0; i <= m; i++) dp.push(new Uint32Array(n + 1))
-  for (let i = 1; i <= m; i++) {
-    for (let j = 1; j <= n; j++) {
-      if (a[i - 1] === b[j - 1]) dp[i][j] = dp[i - 1][j - 1] + 1
-      else dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1])
-    }
-  }
-  const raw: AlignRow[] = []
-  const mk = (left: string | null, leftNo: number | null, right: string | null, rightNo: number | null, status: AlignRow['status']): AlignRow => ({
-    left, leftNo, right, rightNo, status, hunkId: null, baseCls: '',
-  })
-  let i = m
-  let j = n
-  while (i > 0 && j > 0) {
-    if (a[i - 1] === b[j - 1]) {
-      raw.push(mk(a[i - 1], i, b[j - 1], j, 'equal'))
-      i--
-      j--
-    } else if (dp[i - 1][j] >= dp[i][j - 1]) {
-      raw.push(mk(a[i - 1], i, null, null, 'left-only'))
-      i--
-    } else {
-      raw.push(mk(null, null, b[j - 1], j, 'right-only'))
-      j--
-    }
-  }
-  while (i > 0) {
-    raw.push(mk(a[i - 1], i, null, null, 'left-only'))
-    i--
-  }
-  while (j > 0) {
-    raw.push(mk(null, null, b[j - 1], j, 'right-only'))
-    j--
-  }
-  raw.reverse()
-
-  // 阶段 2：把相邻的非 equal 行按 max-len 配对成 changed / left-only / right-only
-  // （LCS backtrack 产出的 left-only / right-only 顺序不固定，直接 zip 避免依赖顺序）
-  const rows: AlignRow[] = []
-  let k = 0
-  while (k < raw.length) {
-    if (raw[k].status === 'equal') {
-      rows.push(raw[k])
-      k++
-      continue
-    }
-    let end = k
-    while (end < raw.length && raw[end].status !== 'equal') end++
-    const leftItems: Array<{ content: string; lineNo: number }> = []
-    const rightItems: Array<{ content: string; lineNo: number }> = []
-    for (let p = k; p < end; p++) {
-      const rp = raw[p]
-      if (rp.left !== null && rp.leftNo !== null) leftItems.push({ content: rp.left, lineNo: rp.leftNo })
-      if (rp.right !== null && rp.rightNo !== null) rightItems.push({ content: rp.right, lineNo: rp.rightNo })
-    }
-    const maxLen = Math.max(leftItems.length, rightItems.length)
-    for (let i = 0; i < maxLen; i++) {
-      const li = leftItems[i]
-      const ri = rightItems[i]
-      if (li && ri) rows.push(mk(li.content, li.lineNo, ri.content, ri.lineNo, 'changed'))
-      else if (li) rows.push(mk(li.content, li.lineNo, null, null, 'left-only'))
-      else if (ri) rows.push(mk(null, null, ri.content, ri.lineNo, 'right-only'))
-    }
-    k = end
-  }
-
-  // 阶段 3：扫出 hunks；多行 hunk 开头插一条组头行，单行 hunk 不插
-  const finalRows: AlignRow[] = []
-  const hunks: Hunk[] = []
-  let curHunk: Hunk | null = null
-  for (let origIdx = 0; origIdx < rows.length; origIdx++) {
-    const r = rows[origIdx]
-    if (r.status === 'equal') {
-      curHunk = null
-      r.baseCls = 'row'
-      finalRows.push(r)
-      continue
-    }
-    if (!curHunk) {
-      // 预判该 hunk 有多少行，决定是否需要组头
-      let end = origIdx
-      while (end + 1 < rows.length && rows[end + 1].status !== 'equal') end++
-      const isMulti = end > origIdx
-      let headerIdx: number
-      let startIdx: number
-      if (isMulti) {
-        headerIdx = finalRows.length
-        finalRows.push({
-          left: null, leftNo: null, right: null, rightNo: null,
-          status: 'hunk-header', hunkId: hunks.length, baseCls: 'row row-hunk-header',
-        })
-        startIdx = finalRows.length
-      } else {
-        startIdx = finalRows.length
-        headerIdx = startIdx
-      }
-      curHunk = { id: hunks.length, headerIdx, startIdx, endIdx: startIdx, leftRowIdx: [], rightRowIdx: [] }
-      hunks.push(curHunk)
-    }
-    r.hunkId = curHunk.id
-    const newIdx = finalRows.length
-    curHunk.endIdx = newIdx
-    if (r.left !== null) curHunk.leftRowIdx.push(newIdx)
-    if (r.right !== null) curHunk.rightRowIdx.push(newIdx)
-    r.baseCls = 'row row-diff row-' + r.status
-    finalRows.push(r)
-  }
-  return { rows: finalRows, hunks }
+  return buildConflictAlignment(conflict.value.ours ?? '', conflict.value.theirs ?? '')
 })
 
 const rows = computed(() => alignment.value.rows)
 const hunks = computed(() => alignment.value.hunks)
 const conflictCount = computed(() => hunks.value.length)
 
-// 按行勾选：Set key 为 'a:idx' / 'b:idx'
-const selectedRows = ref<Set<string>>(new Set())
-const aKey = (idx: number) => 'a:' + idx
-const bKey = (idx: number) => 'b:' + idx
-
-// 冲突数据重新加载时清空勾选（默认全不勾，用户从零挑选）
-watch(hunks, () => {
-  selectedRows.value = new Set()
-  currentHunkIdx.value = 0
-})
-
-function toggleRow(idx: number, side: 'a' | 'b') {
-  const r = rows.value[idx]
-  if (!r || r.hunkId === null) return
-  if (side === 'a' && r.left === null) return
-  if (side === 'b' && r.right === null) return
-  const next = new Set(selectedRows.value)
-  const key = side === 'a' ? aKey(idx) : bKey(idx)
-  if (next.has(key)) next.delete(key)
-  else next.add(key)
-  selectedRows.value = next
-  currentHunkIdx.value = r.hunkId
-}
-
-function useAllOurs() {
-  const next = new Set<string>()
-  for (const h of hunks.value) for (const idx of h.leftRowIdx) next.add(aKey(idx))
-  selectedRows.value = next
-}
-
-function useAllTheirs() {
-  const next = new Set<string>()
-  for (const h of hunks.value) for (const idx of h.rightRowIdx) next.add(bKey(idx))
-  selectedRows.value = next
-}
-
-function clearAll() {
-  selectedRows.value = new Set()
-}
+const {
+  selectedRows,
+  currentHunkIdx,
+  selectedCount,
+  totalSelectable,
+  toggleRow,
+  useAllOurs,
+  useAllTheirs,
+  clearAll,
+  isRowSelectable,
+  isRowChecked,
+  hunkSideIdxs,
+  hunkAllChecked,
+  hunkSomeChecked,
+  toggleHunk,
+} = useConflictSelection(rows, hunks)
 
 const syntaxLang = computed(() => detectLangByPath(props.filePath))
 
@@ -238,87 +76,7 @@ function lineHtml(content: string): string {
   return content === '' ? '' : highlightLine(content, syntaxLang.value)
 }
 
-function isRowSelectable(idx: number, side: 'a' | 'b'): boolean {
-  const r = rows.value[idx]
-  if (!r || r.hunkId === null) return false
-  return side === 'a' ? r.left !== null : r.right !== null
-}
-
-function isRowChecked(idx: number, side: 'a' | 'b'): boolean {
-  if (!isRowSelectable(idx, side)) return false
-  return selectedRows.value.has(side === 'a' ? aKey(idx) : bKey(idx))
-}
-
-function hunkSideIdxs(hunkId: number, side: 'a' | 'b'): number[] {
-  const h = hunks.value[hunkId]
-  if (!h) return []
-  return side === 'a' ? h.leftRowIdx : h.rightRowIdx
-}
-
-function hunkAllChecked(hunkId: number, side: 'a' | 'b'): boolean {
-  const idxs = hunkSideIdxs(hunkId, side)
-  if (idxs.length === 0) return false
-  const keyFn = side === 'a' ? aKey : bKey
-  for (const idx of idxs) if (!selectedRows.value.has(keyFn(idx))) return false
-  return true
-}
-
-function hunkSomeChecked(hunkId: number, side: 'a' | 'b'): boolean {
-  const idxs = hunkSideIdxs(hunkId, side)
-  if (idxs.length === 0) return false
-  const keyFn = side === 'a' ? aKey : bKey
-  let n = 0
-  for (const idx of idxs) if (selectedRows.value.has(keyFn(idx))) n++
-  return n > 0 && n < idxs.length
-}
-
-function toggleHunk(hunkId: number, side: 'a' | 'b') {
-  const idxs = hunkSideIdxs(hunkId, side)
-  if (idxs.length === 0) return
-  const keyFn = side === 'a' ? aKey : bKey
-  const all = hunkAllChecked(hunkId, side)
-  const next = new Set(selectedRows.value)
-  for (const idx of idxs) {
-    const k = keyFn(idx)
-    if (all) next.delete(k)
-    else next.add(k)
-  }
-  selectedRows.value = next
-  currentHunkIdx.value = hunkId
-}
-
-// 合成 output 时同时产出 row↔line 双向映射（单次扫描）
-const outputMap = computed(() => {
-  const lines: string[] = []
-  const rowToLine: number[] = []
-  const lineToRow: number[] = [0] // 1-based：line N 对应 lineToRow[N]
-  const rs = rows.value
-  const sel = selectedRows.value
-  let line = 1
-  for (let idx = 0; idx < rs.length; idx++) {
-    rowToLine.push(line)
-    const r = rs[idx]
-    if (r.status === 'equal') {
-      lines.push(r.left ?? '')
-      lineToRow.push(idx)
-      line += 1
-    } else if (r.status === 'hunk-header') {
-      // 组头行不贡献 output；rowToLine 指向紧随其后的数据行起点
-    } else if (r.hunkId !== null) {
-      if (r.left !== null && sel.has(aKey(idx))) {
-        lines.push(r.left)
-        lineToRow.push(idx)
-        line += 1
-      }
-      if (r.right !== null && sel.has(bKey(idx))) {
-        lines.push(r.right)
-        lineToRow.push(idx)
-        line += 1
-      }
-    }
-  }
-  return { lines, rowToLine, lineToRow }
-})
+const outputMap = computed(() => buildConflictOutputMap(rows.value, selectedRows.value))
 
 const outputLines = computed(() => outputMap.value.lines)
 const rowIdxToOutputLine = computed(() => outputMap.value.rowToLine)
@@ -326,13 +84,6 @@ const outputLineToRowIdx = computed(() => outputMap.value.lineToRow)
 
 const savedText = computed(() => outputLines.value.join('\n'))
 const hasMarkers = computed(() => /^<<<<<<< /m.test(savedText.value))
-
-const selectedCount = computed(() => selectedRows.value.size)
-const totalSelectable = computed(() => {
-  let n = 0
-  for (const h of hunks.value) n += h.leftRowIdx.length + h.rightRowIdx.length
-  return n
-})
 
 // 按实际最大行号计算 lineno 宽度，避免 2 位数行号在 40px 右对齐列中飘远
 const linenoWidth = computed(() => {
@@ -345,125 +96,29 @@ const linenoWidth = computed(() => {
   return digits * 8 + 2
 })
 
-const paneARowsRef = ref<HTMLElement | null>(null)
-const paneBRowsRef = ref<HTMLElement | null>(null)
-const paneOutputRowsRef = ref<HTMLElement | null>(null)
-const ROW_H = 20
-
-// 预估最宽行所需字符数，用来给 rows-inner 设置 width 以启用横向滚动条
-const maxChars = computed(() => {
-  let max = 0
-  for (const r of rows.value) {
-    const la = r.left?.length ?? 0
-    const lb = r.right?.length ?? 0
-    if (la > max) max = la
-    if (lb > max) max = lb
-  }
-  return Math.min(max, 300)
+const {
+  paneARowsRef,
+  paneBRowsRef,
+  paneOutputRowsRef,
+  virtualizerA,
+  virtualizerB,
+  virtualizerO,
+  maxChars,
+  maxOutputChars,
+  onPaneAScroll,
+  onPaneBScroll,
+  onOutputScroll,
+  goPrevHunk,
+  goNextHunk,
+} = useSyncedConflictPanes({
+  rows,
+  outputLines,
+  hunks,
+  conflictCount,
+  rowIdxToOutputLine,
+  outputLineToRowIdx,
+  currentHunkIdx,
 })
-
-const maxOutputChars = computed(() => {
-  let max = 0
-  for (const l of outputLines.value) if (l.length > max) max = l.length
-  return Math.min(max, 300)
-})
-
-const virtualizerA = useVirtualizer(
-  computed(() => ({
-    count: rows.value.length,
-    getScrollElement: () => paneARowsRef.value,
-    estimateSize: () => ROW_H,
-    overscan: 10,
-  })),
-)
-
-const virtualizerB = useVirtualizer(
-  computed(() => ({
-    count: rows.value.length,
-    getScrollElement: () => paneBRowsRef.value,
-    estimateSize: () => ROW_H,
-    overscan: 10,
-  })),
-)
-
-const virtualizerO = useVirtualizer(
-  computed(() => ({
-    count: outputLines.value.length,
-    getScrollElement: () => paneOutputRowsRef.value,
-    estimateSize: () => ROW_H,
-    overscan: 10,
-  })),
-)
-
-// 防抖锁：任一侧滚动触发时标记，防止互相回调产生震荡
-let scrollLock: 'a' | 'b' | 'o' | null = null
-
-function onPaneAScroll() {
-  if (scrollLock && scrollLock !== 'a') return
-  scrollLock = 'a'
-  syncFromRow(paneARowsRef.value?.scrollTop ?? 0)
-  requestAnimationFrame(() => (scrollLock = null))
-}
-
-function onPaneBScroll() {
-  if (scrollLock && scrollLock !== 'b') return
-  scrollLock = 'b'
-  syncFromRow(paneBRowsRef.value?.scrollTop ?? 0)
-  requestAnimationFrame(() => (scrollLock = null))
-}
-
-function onOutputScroll() {
-  if (scrollLock && scrollLock !== 'o') return
-  scrollLock = 'o'
-  const el = paneOutputRowsRef.value
-  if (!el) {
-    requestAnimationFrame(() => (scrollLock = null))
-    return
-  }
-  const topLine = Math.floor(el.scrollTop / ROW_H) + 1
-  const rowIdx = outputLineToRowIdx.value[topLine] ?? 0
-  const rowTop = rowIdx * ROW_H
-  if (paneARowsRef.value) paneARowsRef.value.scrollTop = rowTop
-  if (paneBRowsRef.value) paneBRowsRef.value.scrollTop = rowTop
-  requestAnimationFrame(() => (scrollLock = null))
-}
-
-function syncFromRow(rowScrollTop: number) {
-  if (paneARowsRef.value && paneARowsRef.value.scrollTop !== rowScrollTop) {
-    paneARowsRef.value.scrollTop = rowScrollTop
-  }
-  if (paneBRowsRef.value && paneBRowsRef.value.scrollTop !== rowScrollTop) {
-    paneBRowsRef.value.scrollTop = rowScrollTop
-  }
-  const topRow = Math.floor(rowScrollTop / ROW_H)
-  const outLine = rowIdxToOutputLine.value[topRow] ?? 1
-  const el = paneOutputRowsRef.value
-  if (el) {
-    const target = (outLine - 1) * ROW_H
-    if (Math.abs(el.scrollTop - target) > 1) el.scrollTop = target
-  }
-}
-
-function scrollToHunk(idx: number) {
-  if (idx < 0 || idx >= hunks.value.length) return
-  currentHunkIdx.value = idx
-  const hunk = hunks.value[idx]
-  nextTick(() => {
-    virtualizerA.value.scrollToIndex(hunk.headerIdx, { align: 'center' })
-    const startLine = rowIdxToOutputLine.value[hunk.startIdx] ?? 1
-    virtualizerO.value.scrollToIndex(Math.max(0, startLine - 1), { align: 'center' })
-  })
-}
-
-function goPrevHunk() {
-  if (conflictCount.value === 0) return
-  scrollToHunk((currentHunkIdx.value - 1 + conflictCount.value) % conflictCount.value)
-}
-
-function goNextHunk() {
-  if (conflictCount.value === 0) return
-  scrollToHunk((currentHunkIdx.value + 1) % conflictCount.value)
-}
 
 async function onSave() {
   if (!props.filePath) return

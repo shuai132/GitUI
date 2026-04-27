@@ -17,38 +17,40 @@
 
 | 阶段 | 内容 | 状态 |
 | --- | --- | --- |
-| 1 | 提取冲突对齐与输出合成纯函数 | 待办 |
-| 2 | 为纯函数补单元测试 | 待办 |
-| 3 | 提取选择状态、hunk 导航和滚动同步 composable | 待办 |
-| 4 | 拆分轻量 UI 子组件并组装 `ConflictView.vue` | 待办 |
-| 5 | 类型检查、单元测试和手动冲突解决验证 | 待办 |
+| 1 | 提取冲突对齐与输出合成纯函数 | 完成 |
+| 2 | 为纯函数补单元测试 | 完成 |
+| 3 | 提取选择状态、hunk 导航和滚动同步 composable | 完成 |
+| 4 | 拆分轻量 UI 子组件并组装 `ConflictView.vue` | 暂缓 |
+| 5 | 类型检查、单元测试和手动冲突解决验证 | 部分完成 |
 
 ## 子任务清单
 
-- [ ] 创建 `src/lib/conflictMerge.ts`
-  - [ ] 定义 `AlignRow`、`ConflictHunk`、输出映射等前端内部类型。
-  - [ ] 提取当前 LCS 行级对齐逻辑，保持相邻 left-only / right-only 合并为 changed 的行为。
-  - [ ] 提取根据选中行生成输出文本和行号映射的逻辑。
-- [ ] 创建 `src/lib/conflictMerge.spec.ts`
-  - [ ] 覆盖完全相同内容、单侧新增、双侧修改、多个 hunk、尾部空行处理。
-  - [ ] 覆盖按行选择 ours/theirs 后的输出顺序。
-- [ ] 创建 `src/composables/diff/useConflictSelection.ts`
-  - [ ] 管理选中行集合、单行切换、按 hunk 切换、全选 ours/theirs、清空选择。
-  - [ ] 保留 hunk master checkbox 的 all / some 状态。
-- [ ] 创建 `src/composables/diff/useSyncedConflictPanes.ts`
-  - [ ] 管理三栏 virtualizer 引用、滚动同步和 hunk 定位。
-  - [ ] 保留当前避免递归滚动触发的同步策略。
+- [x] 创建 `src/lib/conflictMerge.ts`
+  - [x] 定义 `AlignRow`、`ConflictHunk`、输出映射等前端内部类型。
+  - [x] 提取当前 LCS 行级对齐逻辑，保持相邻 left-only / right-only 合并为 changed 的行为。
+  - [x] 提取根据选中行生成输出文本和行号映射的逻辑。
+- [x] 创建 `src/lib/conflictMerge.spec.ts`
+  - [x] 覆盖完全相同内容、单侧新增、双侧修改、多个 hunk、尾部空行处理。
+  - [x] 覆盖按行选择 ours/theirs 后的输出顺序。
+- [x] 创建 `src/composables/diff/useConflictSelection.ts`
+  - [x] 管理选中行集合、单行切换、按 hunk 切换、全选 ours/theirs、清空选择。
+  - [x] 保留 hunk master checkbox 的 all / some 状态。
+- [x] 创建 `src/composables/diff/useSyncedConflictPanes.ts`
+  - [x] 管理三栏 virtualizer 引用、滚动同步和 hunk 定位。
+  - [x] 保留当前避免递归滚动触发的同步策略。
 - [ ] 视情况拆分 UI 子组件
   - [ ] `ConflictToolbar.vue`：文件标题、hunk 导航、全选按钮、保存按钮。
   - [ ] `ConflictPane.vue`：ours / theirs 单栏渲染。
   - [ ] `ConflictOutputPane.vue`：输出预览栏渲染。
-- [ ] 重组 `ConflictView.vue`
-  - [ ] 只保留文件加载、错误/加载/保存状态、顶层布局和子模块接线。
-  - [ ] 保持当前 class 名或等价样式，避免视觉回归。
+- [x] 重组 `ConflictView.vue`
+  - [x] 移除对齐、输出合成、选择状态、滚动同步等内联逻辑，保留文件加载、错误/加载/保存状态和模板接线。
+  - [x] 保持当前 class 名或等价样式，避免视觉回归。
 - [ ] 验证
-  - [ ] `npx vue-tsc --noEmit`
-  - [ ] `npm run test`
+  - [x] `npx vue-tsc --noEmit`
+  - [x] `npm run test`
   - [ ] 手动制造 merge/rebase 冲突，验证打开冲突文件、按行选择、hunk 全选、三栏滚动、保存并标记已解决。
+
+阶段 4 说明：本轮评估后暂不拆 `ConflictPane` / `ConflictOutputPane` / `ConflictToolbar`。当前模板与虚拟滚动、hunk master checkbox、输出行映射仍有较多交叉状态，继续拆会显著增加 props / emits 面积；先完成逻辑提取，保留模板主体以控制回归风险。
 
 ## 关键决策
 
