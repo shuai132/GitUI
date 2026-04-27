@@ -17,29 +17,29 @@
 
 | 阶段 | 内容 | 状态 |
 | --- | --- | --- |
-| 1 | 提取 diff 搜索 composable | 待办 |
-| 2 | 提取 hunk revert 逻辑 | 待办 |
-| 3 | 拆分 `DiffToolbar.vue` | 待办 |
-| 4 | 重组 `DiffView.vue` | 待办 |
-| 5 | 类型检查、测试和 diff 手动验证 | 待办 |
+| 1 | 提取 diff 搜索 composable | 完成 |
+| 2 | 提取 hunk revert 逻辑 | 完成 |
+| 3 | 拆分 `DiffToolbar.vue` | 完成 |
+| 4 | 重组 `DiffView.vue` | 完成 |
+| 5 | 类型检查、测试和 diff 手动验证 | 自动验证完成，手动待验证 |
 
 ## 子任务清单
 
-- [ ] 创建 `src/composables/diff/useDiffSearch.ts`
-  - [ ] 管理搜索展开、输入聚焦、查询变更、next / previous。
-  - [ ] 保留 `uiStore.openDiffSearchSignal` 行为。
-- [ ] 创建 `src/composables/diff/useRevertHunk.ts`
-  - [ ] 管理提交 diff 的 hunk revert 操作。
-  - [ ] 保留 patch apply 后刷新历史 / diff 的现有语义。
-- [ ] 创建 `src/components/diff/DiffToolbar.vue`
-  - [ ] 承载模式切换、语法高亮、搜索、hunk 跳转、revert 操作入口。
-  - [ ] 通过 props / emits 与 `DiffView` 交互。
-- [ ] 重组 `DiffView.vue`
-  - [ ] 保留图片 / SVG / 文本 diff 分流。
-  - [ ] 保留对 `InlineDiff`、`SideBySideDiff`、`ImageDiff` 的接线。
+- [x] 创建 `src/composables/diff/useDiffSearch.ts`
+  - [x] 管理搜索展开、输入聚焦、查询变更、next / previous。
+  - [x] 保留 `uiStore.openDiffSearchSignal` 行为。
+- [x] 创建 `src/composables/diff/useRevertHunk.ts`
+  - [x] 管理提交 diff 的 hunk revert 操作。
+  - [x] 保留 patch apply 后刷新历史 / diff 的现有语义。
+- [x] 创建 `src/components/diff/DiffToolbar.vue`
+  - [x] 承载模式切换、语法高亮、搜索、hunk 跳转、revert 操作入口。
+  - [x] 通过 props / emits 与 `DiffView` 交互。
+- [x] 重组 `DiffView.vue`
+  - [x] 保留图片 / SVG / 文本 diff 分流。
+  - [x] 保留对 `InlineDiff`、`SideBySideDiff`、`ImageDiff` 的接线。
 - [ ] 验证
-  - [ ] `npx vue-tsc --noEmit`
-  - [ ] `npm run test`
+  - [x] `npx vue-tsc --noEmit`
+  - [x] `npm run test`
   - [ ] 手动验证三种文本模式、图片预览、SVG 文本模式、搜索和 hunk 跳转。
 
 ## 关键决策

@@ -12,10 +12,14 @@ Diff 查看器服务于 **WIP 工作区 diff** 和 **提交内 diff**。两种�
 
 - **后端 (`commands/diff.rs`)**：负责调用 Git 引擎获取差异。针对工作区 diff，会包含未追踪（Untracked）文件的内容。
 - **前端组件 (`components/diff/`)**：
-  - `DiffView`：主入口，管理模式切换、工具栏状态和公共交互逻辑。
+  - `DiffView`：主入口，负责图片 / SVG / 文本 diff 分流，并接线具体渲染组件。
+  - `DiffToolbar`：承载模式切换、语法高亮、搜索入口、变更块跳转和 SVG 图片 / 文本切换。
   - `InlineDiff`：渲染行内流式布局，同时处理按块分组模式。
   - `SideBySideDiff`：渲染左右对比布局，处理行对齐。
   - `ImageDiff`：处理位图和 SVG 的特殊对比展示。
+- **前端逻辑 (`composables/diff/`)**：
+  - `useDiffSearch`：管理 diff 搜索框状态，并响应全局搜索信号。
+  - `useRevertHunk`：管理提交 diff 的 hunk 反向应用操作。
 - **逻辑工具 (`lib/highlight.ts`, `lib/wordDiff.ts`)**：提供语法高亮映射和词级差异计算。
 
 ## 数据契约
