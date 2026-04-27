@@ -878,6 +878,21 @@ impl GitEngine {
                     } else {
                         Some(new_id.to_string())
                     };
+
+                    if let Some(last) = files.last_mut() {
+                        if last.new_path == new_path && last.old_path == old_path && last.new_path.is_some() {
+                            let mut merged = files.pop().unwrap();
+                            if new_id.is_zero() {
+                                merged.old_blob_oid = Some(old_id.to_string());
+                            } else if old_id.is_zero() {
+                                merged.new_blob_oid = Some(new_id.to_string());
+                            }
+                            merged.is_binary = merged.is_binary || is_binary;
+                            current = Some(merged);
+                            return true;
+                        }
+                    }
+
                     current = Some(PendingFile {
                         old_path,
                         new_path,
@@ -1064,20 +1079,36 @@ impl GitEngine {
 
     /// 仅解析 diff 概览（文件列表及增删行数），不加载具体 hunk/line 内容。
     fn parse_diff_summary(_repo: &Repository, diff: &git2::Diff, include_stats: bool) -> GitResult<Vec<FileDiff>> {
-        let files = std::cell::RefCell::new(Vec::with_capacity(diff.deltas().len()));
+        let files = std::cell::RefCell::new(Vec::<FileDiff>::with_capacity(diff.deltas().len()));
 
         let mut file_cb = |delta: git2::DiffDelta<'_>, _: f32| {
             let old_id = delta.old_file().id();
             let new_id = delta.new_file().id();
-            files.borrow_mut().push(FileDiff {
-                old_path: delta
-                    .old_file()
-                    .path()
-                    .map(|p| p.to_string_lossy().to_string()),
-                new_path: delta
-                    .new_file()
-                    .path()
-                    .map(|p| p.to_string_lossy().to_string()),
+            let old_path = delta
+                .old_file()
+                .path()
+                .map(|p| p.to_string_lossy().to_string());
+            let new_path = delta
+                .new_file()
+                .path()
+                .map(|p| p.to_string_lossy().to_string());
+
+            let mut files_ref = files.borrow_mut();
+            if let Some(last) = files_ref.last_mut() {
+                if last.new_path == new_path && last.old_path == old_path && last.new_path.is_some() {
+                    if new_id.is_zero() {
+                        last.old_blob_oid = Some(old_id.to_string());
+                    } else if old_id.is_zero() {
+                        last.new_blob_oid = Some(new_id.to_string());
+                    }
+                    last.is_binary = last.is_binary || delta.old_file().is_binary() || delta.new_file().is_binary();
+                    return true;
+                }
+            }
+
+            files_ref.push(FileDiff {
+                old_path,
+                new_path,
                 is_binary: delta.old_file().is_binary() || delta.new_file().is_binary(),
                 hunks: Vec::new(),
                 additions: 0,
