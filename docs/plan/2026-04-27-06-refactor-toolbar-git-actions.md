@@ -16,25 +16,25 @@
 
 | 阶段 | 内容 | 状态 |
 | --- | --- | --- |
-| 1 | 提取远程选择和 Pull / Push 菜单逻辑 | 待办 |
-| 2 | 提取 Git 操作执行逻辑 | 待办 |
-| 3 | 重组 `ToolbarGitActions.vue` | 待办 |
-| 4 | 类型检查、测试和 toolbar 手动验证 | 待办 |
+| 1 | 提取远程选择和 Pull / Push 菜单逻辑 | 完成 |
+| 2 | 提取 Git 操作执行逻辑 | 完成 |
+| 3 | 重组 `ToolbarGitActions.vue` | 完成 |
+| 4 | 类型检查、测试和 toolbar 手动验证 | 自动验证完成，待手动验证 |
 
 ## 子任务清单
 
-- [ ] 创建 `src/composables/toolbar/useRemoteActionMenu.ts`
-  - [ ] 管理远程选择菜单、Pull 模式菜单、Push 模式菜单。
-  - [ ] 保留 fetch all、remote 选择和 anchor rect 行为。
-- [ ] 创建 `src/composables/toolbar/useToolbarGitActions.ts`
-  - [ ] 管理 pull、push、stash、pop、fetch、系统终端打开。
-  - [ ] 保留 busy 状态、toast 成功提示和错误提示。
-- [ ] 重组 `ToolbarGitActions.vue`
-  - [ ] 保留按钮布局、图标、快捷键 label 和 ContextMenu 挂载。
-  - [ ] 保持当前 class 名或等价样式。
+- [x] 创建 `src/composables/toolbar/useRemoteActionMenu.ts`
+  - [x] 管理远程选择菜单、Pull 模式菜单、Push 模式菜单。
+  - [x] 保留 fetch all、remote 选择和 anchor rect 行为。
+- [x] 创建 `src/composables/toolbar/useToolbarGitActions.ts`
+  - [x] 管理 pull、push、stash、pop、fetch、系统终端打开。
+  - [x] 保留 busy 状态、toast 成功提示和错误提示。
+- [x] 重组 `ToolbarGitActions.vue`
+  - [x] 保留按钮布局、图标、快捷键 label 和 ContextMenu 挂载。
+  - [x] 保持当前 class 名或等价样式。
 - [ ] 验证
-  - [ ] `npx vue-tsc --noEmit`
-  - [ ] `npm run test`
+  - [x] `npx vue-tsc --noEmit`
+  - [x] `npm run test`
   - [ ] 手动验证 Pull / Push 多模式、Fetch、Stash、Pop、打开终端和打开仓库菜单。
 
 ## 关键决策

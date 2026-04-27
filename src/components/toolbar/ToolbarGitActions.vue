@@ -1,312 +1,62 @@
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from 'vue'
+import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useRepoStore } from '@/stores/repos'
-import { useHistoryStore } from '@/stores/history'
-import { useStashStore } from '@/stores/stash'
-import { useWorkspaceStore } from '@/stores/workspace'
-import { useRepoOpsStore } from '@/stores/repoOps'
-import { useUiStore } from '@/stores/ui'
-import { resolveExternalTerminalApp, useSettingsStore } from '@/stores/settings'
-import { useShortcutsStore, bindingToLabel, type ShortcutActionId } from '@/stores/shortcuts'
-import { useGitCommands } from '@/composables/useGitCommands'
-import { useRepoCreation } from '@/composables/useRepoCreation'
-import { useGlobalToast } from '@/composables/useGlobalToast'
-import ContextMenu, { type ContextMenuItem } from '@/components/common/ContextMenu.vue'
-import type { RemoteInfo } from '@/types/git'
+import ContextMenu from '@/components/common/ContextMenu.vue'
+import { useRemoteActionMenu, type PullMode, type PushMode } from '@/composables/toolbar/useRemoteActionMenu'
+import { useToolbarGitActions } from '@/composables/toolbar/useToolbarGitActions'
 
-const repoStore = useRepoStore()
-const historyStore = useHistoryStore()
-const stashStore = useStashStore()
-const workspaceStore = useWorkspaceStore()
-const repoOpsStore = useRepoOpsStore()
-const uiStore = useUiStore()
-const settingsStore = useSettingsStore()
-const shortcutsStore = useShortcutsStore()
-const git = useGitCommands()
-const repoCreation = useRepoCreation()
 const { t } = useI18n()
-const { showToast, showError } = useGlobalToast()
 
-function withShortcut(label: string, actionId: ShortcutActionId): string {
-  const b = shortcutsStore.bindings[actionId]
-  return b ? `${label} (${bindingToLabel(b)})` : label
-}
-
-const busy = computed(() => repoOpsStore.getBusy(repoStore.activeRepoId))
-const hasRepo = computed(() => !!repoStore.activeRepoId)
-
-const currentBranch = computed(
-  () =>
-    historyStore.branches.find((b) => b.is_head && !b.is_remote)?.name ?? null,
-)
-
-const canRemoteOp = computed(() => hasRepo.value && currentBranch.value !== null)
-const canStash = computed(() => {
-  if (!hasRepo.value) return false
-  const s = workspaceStore.status
-  if (!s) return false
-  return s.staged.length + s.unstaged.length + s.untracked.length > 0
-})
-const canStashPop = computed(() => hasRepo.value && stashStore.entries.length > 0)
-
-// ── Helpers ────────────────────────────────────────────────────────
-const remoteMenu = reactive({
-  visible: false,
-  x: 0,
-  y: 0,
-  items: [] as ContextMenuItem[],
-  resolve: null as ((remote: string | null) => void) | null,
+const fetchBtnRef = ref<HTMLButtonElement | null>(null)
+const remoteActions = useRemoteActionMenu()
+const toolbarActions = useToolbarGitActions({
+  fetchBtnRef,
+  pickRemote: remoteActions.pickRemote,
 })
 
-async function pickRemote(anchorRect?: DOMRect, showFetchAll: boolean = false): Promise<string | null> {
-  const id = repoStore.activeRepoId
-  if (!id) return null
-  let remotes: RemoteInfo[]
-  try {
-    remotes = await git.listRemotes(id)
-  } catch {
-    return null
-  }
-  if (remotes.length === 0) return null
-  if (remotes.length === 1) return remotes[0].name
+const {
+  remoteMenu,
+  onRemoteMenuSelect,
+  onRemoteMenuClose,
+  pullModeMenu,
+  pullModeMenuItems,
+  pullChevronRect,
+  onPullChevronClick,
+  closePullModeMenu,
+  pushModeMenu,
+  pushModeMenuItems,
+  pushChevronRect,
+  onPushChevronClick,
+  closePushModeMenu,
+} = remoteActions
 
-  return new Promise<string | null>((resolve) => {
-    const items = remotes.map((r) => ({ label: r.name, action: r.name }))
-    if (showFetchAll) {
-      items.unshift({ label: 'Fetch All', action: '--all' })
-    }
-    remoteMenu.items = items
-    if (anchorRect) {
-      remoteMenu.x = anchorRect.left
-      remoteMenu.y = anchorRect.bottom + 4
-    } else {
-      // 兜底参考
-      remoteMenu.x = 80
-      remoteMenu.y = 80
-    }
-    remoteMenu.resolve = resolve
-    remoteMenu.visible = true
-  })
-}
-
-function onRemoteMenuSelect(action: string) {
-  remoteMenu.visible = false
-  const fn = remoteMenu.resolve
-  remoteMenu.resolve = null
-  fn?.(action)
-}
-
-function onRemoteMenuClose() {
-  remoteMenu.visible = false
-  const fn = remoteMenu.resolve
-  remoteMenu.resolve = null
-  fn?.(null)
-}
-
-// ── 添加仓库 ────────────────────────────────────────────────────────
-function showAddRepoMenu(e: MouseEvent) {
-  repoCreation.showMenuAt(e.currentTarget as HTMLElement)
-}
-
-// ── Pull ────────────────────────────────────────────────────────────
-type PullMode = 'ff' | 'ff_only' | 'rebase'
-
-const pullModeMenu = reactive({
-  visible: false,
-  x: 0,
-  y: 0,
-})
-
-const pullModeMenuItems = computed<ContextMenuItem[]>(() => [
-  { label: t('toolbar.pullMode.ff'), action: 'ff' },
-  { label: t('toolbar.pullMode.ffOnly'), action: 'ff_only' },
-  { label: t('toolbar.pullMode.rebase'), action: 'rebase' },
-])
-
-let pullChevronRect: DOMRect | null = null
-
-function onPullChevronClick(e: MouseEvent) {
-  e.stopPropagation()
-  if (pullModeMenu.visible) {
-    pullModeMenu.visible = false
-    return
-  }
-  const el = e.currentTarget as HTMLElement
-  const rect = el.getBoundingClientRect()
-  pullChevronRect = rect
-  pullModeMenu.x = rect.left
-  pullModeMenu.y = rect.bottom + 4
-  pullModeMenu.visible = true
-}
+const {
+  stashStore,
+  busy,
+  hasRepo,
+  canRemoteOp,
+  canStash,
+  canStashPop,
+  withShortcut,
+  showAddRepoMenu,
+  onPull,
+  doPull,
+  onPush,
+  doPush,
+  onStash,
+  onPop,
+  onFetch,
+  onOpenSystemTerminal,
+} = toolbarActions
 
 function onPullModeSelect(action: string) {
-  pullModeMenu.visible = false
-  doPull(action as PullMode, pullChevronRect ?? undefined)
-}
-
-async function onPull(e: MouseEvent) {
-  await doPull('ff', (e.currentTarget as HTMLElement | null)?.getBoundingClientRect())
-}
-
-async function doPull(mode: PullMode, anchorRect?: DOMRect) {
-  const id = repoStore.activeRepoId
-  const branch = currentBranch.value
-  if (!id || !branch) return
-  const remote = await pickRemote(anchorRect, false)
-  if (!remote) {
-    const remotes = await git.listRemotes(id).catch(() => [])
-    if (remotes.length === 0) showError(t('toolbar.noRemoteConfigured'))
-    return
-  }
-  repoOpsStore.setBusy(id, 'pull', true)
-  try {
-    await git.pullBranch(id, remote, branch, mode)
-    await Promise.all([historyStore.loadLog(), historyStore.loadBranches()])
-    showToast('success', t('toolbar.opSuccess', { label: t('toolbar.opLabels.pull') }))
-  } catch {
-    // 错误在 ToolbarToast 中拦截处理
-  } finally {
-    repoOpsStore.setBusy(id, 'pull', false)
-  }
-}
-
-// ── Push ────────────────────────────────────────────────────────────
-type PushMode = 'normal' | 'force_with_lease' | 'force'
-
-const pushModeMenu = reactive({
-  visible: false,
-  x: 0,
-  y: 0,
-})
-let pushChevronRect: DOMRect | null = null
-
-const pushModeMenuItems = computed<ContextMenuItem[]>(() => [
-  { label: t('toolbar.pushMode.forceWithLease'), action: 'force_with_lease' },
-  { label: t('toolbar.pushMode.force'), action: 'force' },
-])
-
-function onPushChevronClick(e: MouseEvent) {
-  e.stopPropagation()
-  if (pushModeMenu.visible) {
-    pushModeMenu.visible = false
-    return
-  }
-  const el = e.currentTarget as HTMLElement
-  const rect = el.getBoundingClientRect()
-  pushChevronRect = rect
-  pushModeMenu.x = rect.left
-  pushModeMenu.y = rect.bottom + 4
-  pushModeMenu.visible = true
+  closePullModeMenu()
+  doPull(action as PullMode, pullChevronRect.value ?? undefined)
 }
 
 function onPushModeSelect(action: string) {
-  pushModeMenu.visible = false
-  doPush(action as PushMode, pushChevronRect ?? undefined)
-}
-
-async function onPush(e: MouseEvent) {
-  await doPush('normal', (e.currentTarget as HTMLElement | null)?.getBoundingClientRect())
-}
-
-async function doPush(mode: PushMode, anchorRect?: DOMRect) {
-  const id = repoStore.activeRepoId
-  const branch = currentBranch.value
-  if (!id || !branch) return
-  const remote = await pickRemote(anchorRect, false)
-  if (!remote) {
-    const remotes = await git.listRemotes(id).catch(() => [])
-    if (remotes.length === 0) showError(t('toolbar.noRemoteConfigured'))
-    return
-  }
-  repoOpsStore.setBusy(id, 'push', true)
-  try {
-    await git.pushBranch(id, remote, branch, mode)
-    await historyStore.loadBranches()
-    showToast('success', t('toolbar.opSuccess', { label: t('toolbar.opLabels.push') }))
-  } catch {
-    // 错误在 ToolbarToast 中拦截处理
-  } finally {
-    repoOpsStore.setBusy(id, 'push', false)
-  }
-}
-
-// ── Stash / Pop ─────────────────────────────────────────────────────
-async function onStash() {
-  if (!canStash.value) return
-  const id = repoStore.activeRepoId
-  if (!id) return
-  repoOpsStore.setBusy(id, 'stash', true)
-  try {
-    const draft = workspaceStore.commitDraft.trim()
-    await stashStore.push(draft || undefined)
-    if (draft) workspaceStore.commitDraft = ''
-  } catch {
-    // 错误在 ToolbarToast 中拦截处理
-  } finally {
-    repoOpsStore.setBusy(id, 'stash', false)
-  }
-}
-
-async function onPop() {
-  if (!canStashPop.value) return
-  const id = repoStore.activeRepoId
-  if (!id) return
-  repoOpsStore.setBusy(id, 'pop', true)
-  try {
-    await stashStore.pop()
-  } catch {
-    // 错误在 ToolbarToast 中拦截处理
-  } finally {
-    repoOpsStore.setBusy(id, 'pop', false)
-  }
-}
-
-// ── Fetch ───────────────────────────────────────────────────────────
-const fetchBtnRef = ref<HTMLButtonElement | null>(null)
-
-watch(() => uiStore.fetchSignal, () => {
-  onFetch()
-})
-
-async function onFetch(e?: MouseEvent) {
-  const id = repoStore.activeRepoId
-  if (!id) return
-  
-  let remote = uiStore.fetchTarget
-  if (!remote) {
-    const rect = e 
-      ? (e.currentTarget as HTMLElement).getBoundingClientRect()
-      : fetchBtnRef.value?.getBoundingClientRect()
-    remote = await pickRemote(rect, true)
-  }
-  
-  if (!remote) {
-    const remotes = await git.listRemotes(id).catch(() => [])
-    if (remotes.length === 0) showError(t('toolbar.noRemoteConfigured'))
-    return
-  }
-  repoOpsStore.setBusy(id, 'fetch', true)
-  try {
-    await git.fetchRemote(id, remote)
-    await Promise.all([historyStore.loadLog(), historyStore.loadBranches()])
-    historyStore.loadRemoteTags(true).catch(() => {})
-  } catch {
-    // 错误在 ToolbarToast 中拦截处理
-  } finally {
-    repoOpsStore.setBusy(id, 'fetch', false)
-  }
-}
-
-// ── Terminal ────────────────────────────────────────────────────────
-async function onOpenSystemTerminal() {
-  const id = repoStore.activeRepoId
-  if (!id) return
-  try {
-    await git.openTerminal(id, resolveExternalTerminalApp(settingsStore))
-  } catch {
-    // 错误在 ToolbarToast 中拦截处理
-  }
+  closePushModeMenu()
+  doPush(action as PushMode, pushChevronRect.value ?? undefined)
 }
 </script>
 
