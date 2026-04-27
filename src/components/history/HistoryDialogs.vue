@@ -1,0 +1,315 @@
+<script setup lang="ts">
+import type { CommitInfo } from '@/types/git'
+import FileHistoryModal from '@/components/file-history/FileHistoryModal.vue'
+import CreateBranchDialog from '@/components/commit/CreateBranchDialog.vue'
+import CreateTagDialog from '@/components/commit/CreateTagDialog.vue'
+import Modal from '@/components/common/Modal.vue'
+import MergeDialog from '@/components/merge/MergeDialog.vue'
+import RebasePlanDialog from '@/components/rebase/RebasePlanDialog.vue'
+import DragActionDialog from '@/components/history/DragActionDialog.vue'
+
+interface FileHistoryState {
+  visible: boolean
+  filePath: string
+  mode: 'history' | 'blame'
+}
+
+interface DropUnreachableDialogState {
+  visible: boolean
+  commit: CommitInfo | null
+  count: number
+  submitting: boolean
+}
+
+defineProps<{
+  showCreateBranchDialog: boolean
+  showCreateTagDialog: boolean
+  createTagAnnotated: boolean
+  dialogCommit: CommitInfo | null
+  showMergeDialog: boolean
+  mergeSourceCandidates: string[]
+  showRebaseDialog: boolean
+  rebaseUpstream: string
+  rebaseOnto: string | null
+  showDragDialog: boolean
+  dragSourceOid: string | null
+  dragTargetOid: string | null
+  showEditMessageDialog: boolean
+  editMessageText: string
+  editMessageAuthorTime: string
+  editMessageCommitterTime: string
+  editMessageAuthorName: string
+  editMessageAuthorEmail: string
+  editMessageAutoStash: boolean
+  editMessageSubmitting: boolean
+  isEditingHeadCommit: boolean
+  dropUnreachableDialog: DropUnreachableDialogState
+  fileHistoryModal: FileHistoryState
+}>()
+
+const emit = defineEmits<{
+  'update:showCreateBranchDialog': [value: boolean]
+  'update:showCreateTagDialog': [value: boolean]
+  'update:showMergeDialog': [value: boolean]
+  'update:showRebaseDialog': [value: boolean]
+  'update:showDragDialog': [value: boolean]
+  'update:showEditMessageDialog': [value: boolean]
+  'update:editMessageText': [value: string]
+  'update:editMessageAuthorTime': [value: string]
+  'update:editMessageCommitterTime': [value: string]
+  'update:editMessageAuthorName': [value: string]
+  'update:editMessageAuthorEmail': [value: string]
+  'update:editMessageAutoStash': [value: boolean]
+  closeFileHistory: []
+  dragDialogMerge: []
+  dragDialogRebase: []
+  editMessageConfirm: []
+  dropUnreachableConfirm: []
+  dropUnreachableCancel: []
+}>()
+</script>
+
+<template>
+  <CreateBranchDialog
+    :visible="showCreateBranchDialog"
+    :commit="dialogCommit"
+    @close="emit('update:showCreateBranchDialog', false)"
+  />
+
+  <CreateTagDialog
+    :visible="showCreateTagDialog"
+    :commit="dialogCommit"
+    :annotated="createTagAnnotated"
+    @close="emit('update:showCreateTagDialog', false)"
+  />
+
+  <MergeDialog
+    :visible="showMergeDialog"
+    :source-commit-oid="null"
+    :candidate-sources="mergeSourceCandidates"
+    @close="emit('update:showMergeDialog', false)"
+  />
+
+  <RebasePlanDialog
+    :visible="showRebaseDialog"
+    :upstream="rebaseUpstream"
+    :onto="rebaseOnto"
+    @close="emit('update:showRebaseDialog', false)"
+  />
+
+  <DragActionDialog
+    :visible="showDragDialog"
+    :source-oid="dragSourceOid"
+    :target-oid="dragTargetOid"
+    @close="emit('update:showDragDialog', false)"
+    @merge="emit('dragDialogMerge')"
+    @rebase="emit('dragDialogRebase')"
+  />
+
+  <Modal
+    v-if="showEditMessageDialog"
+    :visible="showEditMessageDialog"
+    :title="$t('history.dialog.editMessage.title')"
+    width="480px"
+    @close="emit('update:showEditMessageDialog', false)"
+  >
+    <div v-if="!isEditingHeadCommit" class="edit-message-hint">
+      {{ $t('history.dialog.editMessage.rewordHint') }}
+    </div>
+    <textarea
+      :value="editMessageText"
+      class="edit-message-input"
+      rows="6"
+      spellcheck="false"
+      autocomplete="off"
+      @input="emit('update:editMessageText', ($event.target as HTMLTextAreaElement).value)"
+    />
+    <div class="edit-message-times">
+      <label class="edit-message-time-row">
+        <span class="edit-message-time-label">{{ $t('history.dialog.editMessage.committerDate') }}</span>
+        <input
+          :value="editMessageCommitterTime"
+          type="datetime-local"
+          step="1"
+          class="edit-message-time-input"
+          @input="emit('update:editMessageCommitterTime', ($event.target as HTMLInputElement).value)"
+        />
+      </label>
+      <label class="edit-message-time-row">
+        <span class="edit-message-time-label">{{ $t('history.dialog.editMessage.authorDate') }}</span>
+        <input
+          :value="editMessageAuthorTime"
+          type="datetime-local"
+          step="1"
+          class="edit-message-time-input"
+          @input="emit('update:editMessageAuthorTime', ($event.target as HTMLInputElement).value)"
+        />
+      </label>
+      <label class="edit-message-time-row">
+        <span class="edit-message-time-label">{{ $t('history.dialog.editMessage.authorName') }}</span>
+        <input
+          :value="editMessageAuthorName"
+          type="text"
+          class="edit-message-time-input"
+          autocomplete="off"
+          spellcheck="false"
+          @input="emit('update:editMessageAuthorName', ($event.target as HTMLInputElement).value)"
+        />
+      </label>
+      <label class="edit-message-time-row">
+        <span class="edit-message-time-label">{{ $t('history.dialog.editMessage.authorEmail') }}</span>
+        <input
+          :value="editMessageAuthorEmail"
+          type="email"
+          class="edit-message-time-input"
+          autocomplete="off"
+          spellcheck="false"
+          @input="emit('update:editMessageAuthorEmail', ($event.target as HTMLInputElement).value)"
+        />
+      </label>
+    </div>
+    <label v-if="!isEditingHeadCommit" class="edit-message-autostash">
+      <input
+        :checked="editMessageAutoStash"
+        type="checkbox"
+        @change="emit('update:editMessageAutoStash', ($event.target as HTMLInputElement).checked)"
+      />
+      <span>{{ $t('history.dialog.editMessage.autoStash') }}</span>
+    </label>
+    <template #footer>
+      <button class="btn btn-secondary" @click="emit('update:showEditMessageDialog', false)">{{ $t('common.cancel') }}</button>
+      <button
+        class="btn btn-primary"
+        :disabled="!editMessageText.trim() || editMessageSubmitting"
+        @click="emit('editMessageConfirm')"
+      >{{ $t('history.dialog.editMessage.confirm') }}</button>
+    </template>
+  </Modal>
+
+  <Modal
+    v-if="dropUnreachableDialog.visible"
+    :visible="dropUnreachableDialog.visible"
+    :title="$t('history.dialog.dropUnreachable.title')"
+    width="480px"
+    @close="emit('dropUnreachableCancel')"
+  >
+    <p class="drop-unreachable-body">
+      <template v-if="dropUnreachableDialog.count === 0">
+        {{ $t('history.dialog.dropUnreachable.emptyBody', { shortOid: dropUnreachableDialog.commit?.short_oid ?? '' }) }}
+      </template>
+      <template v-else>
+        {{ $t('history.dialog.dropUnreachable.body', {
+          shortOid: dropUnreachableDialog.commit?.short_oid ?? '',
+          count: dropUnreachableDialog.count,
+        }) }}
+      </template>
+    </p>
+    <template #footer>
+      <button class="btn btn-secondary" @click="emit('dropUnreachableCancel')">
+        {{ dropUnreachableDialog.count === 0 ? $t('history.dialog.dropUnreachable.close') : $t('common.cancel') }}
+      </button>
+      <button
+        v-if="dropUnreachableDialog.count > 0"
+        class="btn btn-primary"
+        :disabled="dropUnreachableDialog.submitting"
+        @click="emit('dropUnreachableConfirm')"
+      >{{ $t('history.dialog.dropUnreachable.confirm') }}</button>
+    </template>
+  </Modal>
+
+  <FileHistoryModal
+    v-if="fileHistoryModal.visible"
+    :file-path="fileHistoryModal.filePath"
+    :initial-mode="fileHistoryModal.mode"
+    @close="emit('closeFileHistory')"
+  />
+</template>
+
+<style scoped>
+.edit-message-input {
+  width: 100%;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: var(--font-md);
+  padding: 8px;
+  resize: vertical;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.edit-message-input:focus {
+  border-color: var(--accent-blue);
+}
+
+.edit-message-hint {
+  font-size: var(--font-sm);
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+  padding: 6px 10px;
+  background: var(--bg-overlay);
+  border-radius: 4px;
+}
+
+.edit-message-autostash {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  font-size: var(--font-md);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.edit-message-autostash input[type='checkbox'] {
+  cursor: pointer;
+  accent-color: var(--accent-blue);
+}
+
+.edit-message-times {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.edit-message-time-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: default;
+}
+
+.edit-message-time-label {
+  font-size: var(--font-sm);
+  color: var(--text-secondary);
+  min-width: 120px;
+  flex-shrink: 0;
+}
+
+.edit-message-time-input {
+  flex: 1;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: var(--font-sm);
+  padding: 4px 6px;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.edit-message-time-input:focus {
+  border-color: var(--accent-blue);
+}
+
+.drop-unreachable-body {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: var(--font-md);
+  line-height: 1.55;
+}
+</style>

@@ -14,27 +14,21 @@ import { formatAbsoluteTime, formatAuthor, formatHistoryTime } from '@/utils/for
 import { LANE_W } from '@/utils/graph'
 import CommitGraphRow from '@/components/history/CommitGraphRow.vue'
 import WipRow from '@/components/history/WipRow.vue'
-import DiffView from '@/components/diff/DiffView.vue'
-import CommitInfoPanel from '@/components/history/CommitInfoPanel.vue'
-import WipPanel from '@/components/workspace/WipPanel.vue'
-import ContextMenu, { type ContextMenuItem } from '@/components/common/ContextMenu.vue'
-import FileHistoryModal from '@/components/file-history/FileHistoryModal.vue'
-import CreateBranchDialog from '@/components/commit/CreateBranchDialog.vue'
-import CreateTagDialog from '@/components/commit/CreateTagDialog.vue'
-import Modal from '@/components/common/Modal.vue'
+import HistoryDetailPane from '@/components/history/HistoryDetailPane.vue'
+import HistoryDialogs from '@/components/history/HistoryDialogs.vue'
+import ContextMenu from '@/components/common/ContextMenu.vue'
 import OngoingOpBanner from '@/components/common/OngoingOpBanner.vue'
-import MergeDialog from '@/components/merge/MergeDialog.vue'
-import RebasePlanDialog from '@/components/rebase/RebasePlanDialog.vue'
-import DragActionDialog from '@/components/history/DragActionDialog.vue'
 import { useMergeRebaseStore } from '@/stores/mergeRebase'
 import { usePanelDock } from '@/composables/usePanelDock'
 import type { PanelId } from '@/stores/ui'
-import type { BranchInfo, CommitInfo, TagInfo } from '@/types/git'
+import type { CommitInfo } from '@/types/git'
 
 import { useHistoryPanes } from '@/composables/history/useHistoryPanes'
 import { useCommitContextMenu } from '@/composables/history/useCommitContextMenu'
 import { useCommitDragDrop } from '@/composables/history/useCommitDragDrop'
 import { useCommitTags } from '@/composables/history/useCommitTags'
+import { useHistorySelection } from '@/composables/history/useHistorySelection'
+import { useHistoryKeyboard } from '@/composables/history/useHistoryKeyboard'
 import CommitListHeader from '@/components/history/CommitListHeader.vue'
 
 const { t } = useI18n()
@@ -150,31 +144,6 @@ const commitStats = computed(() => {
 const virtualRowCount = computed(() =>
   filteredCommits.value.length + (isWipVisible.value ? 1 : 0),
 )
-
-// 真实 commit 索引 → 虚拟行索引
-function toVirtualIdx(realIdx: number): number {
-  return isWipVisible.value ? realIdx + 1 : realIdx
-}
-
-// 虚拟行索引 → 真实 commit 索引（WIP 行/加载行返回 -1）
-function toRealIdx(virtualIdx: number): number {
-  if (isWipVisible.value) {
-    return virtualIdx === 0 ? -1 : virtualIdx - 1
-  }
-  return virtualIdx
-}
-
-// Unix 秒 → datetime-local 输入框所需的本地时间字符串（YYYY-MM-DDTHH:mm:ss）
-function toDatetimeLocal(unixSecs: number): string {
-  const d = new Date(unixSecs * 1000)
-  const p = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`
-}
-
-// datetime-local 字符串 → Unix 秒
-function fromDatetimeLocal(s: string): number {
-  return Math.floor(new Date(s).getTime() / 1000)
-}
 
 const scrollContainer = ref<HTMLElement | null>(null)
 // 列头水平滚动偏移：与 commit-list-body 的 scrollLeft 同步，用 transform 平移列头。
@@ -306,64 +275,23 @@ const commitListMinWidth = computed(() => {
 })
 
 // ── Row selection ────────────────────────────────────────────────────
-const selectedOid = computed(() => historyStore.selectedCommit?.info.oid ?? null)
-
-const selectedCommitIndex = computed(() =>
-  filteredCommits.value.findIndex((c) => c.oid === selectedOid.value)
-)
-
-// 虚拟行层面的"选中行"索引：
-// - 选中 WIP 行 → 0（且 showWipRow）
-// - 选中真实 commit → toVirtualIdx(realIdx)
-// - 没选中 → -1
-const selectedVirtualIndex = computed(() => {
-  if (selectedWip.value && isWipVisible.value) return 0
-  if (selectedCommitIndex.value >= 0) return toVirtualIdx(selectedCommitIndex.value)
-  return -1
+const {
+  selectedVirtualIndex,
+  toVirtualIdx,
+  toRealIdx,
+  selectWipRow,
+  selectRow,
+  isSelected,
+  onSelectFile,
+} = useHistorySelection({
+  historyStore,
+  filteredCommits,
+  isWipVisible,
+  showWipRow,
+  selectedWip,
+  showDetail,
+  activePane,
 })
-
-function selectWipRow() {
-  if (selectedWip.value) {
-    // 再次点击 WIP 行 → 折叠详情
-    showDetail.value = !showDetail.value
-    return
-  }
-  selectedWip.value = true
-  historyStore.selectedCommit = null
-  showDetail.value = true
-  activePane.value = 'commits'
-}
-
-function selectRow(virtualIdx: number) {
-  if (isWipVisible.value && virtualIdx === 0) {
-    if (showWipRow.value) selectWipRow()
-    // WIP 加载中：忽略点击
-    return
-  }
-  const realIdx = toRealIdx(virtualIdx)
-  const commit = filteredCommits.value[realIdx]
-  if (!commit) return
-  // 切换到普通 commit：清除 WIP 选中
-  selectedWip.value = false
-  if (commit.oid === selectedOid.value) {
-    showDetail.value = !showDetail.value
-  } else {
-    historyStore.selectCommit(commit.oid)
-    showDetail.value = true
-  }
-  activePane.value = 'commits'
-}
-
-function isSelected(virtualIdx: number): boolean {
-  if (isWipVisible.value && virtualIdx === 0) return selectedWip.value
-  const realIdx = toRealIdx(virtualIdx)
-  return filteredCommits.value[realIdx]?.oid === selectedOid.value
-}
-
-function onSelectFile(idx: number) {
-  historyStore.selectFileDiff(idx)
-  activePane.value = 'files'
-}
 
 // ── Current diff ─────────────────────────────────────────────────────
 // 选中 WIP 时显示工作区 diff（diffStore.currentDiff）；
@@ -373,14 +301,6 @@ const currentDiff = computed(() => {
   const commit = historyStore.selectedCommit
   if (!commit) return null
   return commit.diffs[historyStore.selectedFileDiffIndex] ?? null
-})
-
-// 工作副本从"有变更"变回"无变更"时自动取消 WIP 选中 + 隐藏面板
-watch(showWipRow, (has) => {
-  if (!has && selectedWip.value) {
-    selectedWip.value = false
-    showDetail.value = false
-  }
 })
 
 // ── Panel dock（拖拽停靠）────────────────────────────────────────────
@@ -396,45 +316,16 @@ const {
   onLayoutChange: (layout) => uiStore.setDockLayout(layout),
 })
 
-// ── 键盘 ↑↓ 在当前激活的 pane 中切换条目 ─────────────────────────────
-// 把 WIP 行/加载占位视为虚拟索引 0。real commits 占虚拟索引 (showWipRow||showWipLoading ? 1 : 0)...count-1。
-function moveCommitSelection(delta: number) {
-  const total = virtualRowCount.value
-  if (total === 0) return
-  const cur = selectedVirtualIndex.value
-  const next = cur < 0 ? 0 : Math.max(0, Math.min(total - 1, cur + delta))
-  if (next === cur) return
-  selectRow(next)
-  virtualizer.value.scrollToIndex(next, { align: 'auto' })
-}
-
-function moveFileSelection(delta: number) {
-  const diffs = historyStore.selectedCommit?.diffs
-  if (!diffs || diffs.length === 0) return
-  const cur = historyStore.selectedFileDiffIndex
-  const next = Math.max(0, Math.min(diffs.length - 1, cur + delta))
-  if (next !== cur) onSelectFile(next)
-}
-
-function onKeyDown(e: KeyboardEvent) {
-  if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return
-  // 编辑元素（搜索框等）中按 ↑↓ 不拦截
-  const t = e.target as HTMLElement | null
-  if (t) {
-    const tag = t.tagName
-    if (tag === 'INPUT' || tag === 'TEXTAREA' || t.isContentEditable) return
-  }
-  // 只在 history 路由可见时响应
-  if (!repoStore.activeRepoId) return
-
-  const delta = e.key === 'ArrowDown' ? 1 : -1
-  if (activePane.value === 'commits') {
-    moveCommitSelection(delta)
-  } else {
-    moveFileSelection(delta)
-  }
-  e.preventDefault()
-}
+const { onKeyDown } = useHistoryKeyboard({
+  activeRepoId: computed(() => repoStore.activeRepoId),
+  historyStore,
+  activePane,
+  virtualRowCount,
+  selectedVirtualIndex,
+  virtualizer,
+  selectRow,
+  onSelectFile,
+})
 
 
 // ── Merge / Rebase 对话框状态 ─────────────────────────────────────
@@ -820,89 +711,23 @@ onUnmounted(() => {
         </div>
       </div>
 
-      <!-- Diff (三种模式由 DiffView 内部切换) -->
-      <div class="diff-area" v-if="showDetail" :style="panelBorders['diff']" data-panel-id="diff">
-        <div class="dock-handle dock-handle-float" @pointerdown="onDragHandlePointerDown('diff', $event)" :title="t('history.dock.dragToMove')">
-          <svg width="8" height="14" viewBox="0 0 8 14"><circle cx="2" cy="2" r="1" fill="currentColor"/><circle cx="6" cy="2" r="1" fill="currentColor"/><circle cx="2" cy="7" r="1" fill="currentColor"/><circle cx="6" cy="7" r="1" fill="currentColor"/><circle cx="2" cy="12" r="1" fill="currentColor"/><circle cx="6" cy="12" r="1" fill="currentColor"/></svg>
-        </div>
-        <DiffView
-          :diff="currentDiff"
-          :repo-id="repoStore.activeRepoId ?? undefined"
-          :wip="selectedWip ? { staged: diffStore.currentStaged } : null"
-          :conflict-file-path="currentConflictFilePath"
-          @close="showDetail = false"
-        />
-      </div>
-
-      <!-- Info panel: WipPanel when WIP row selected, else CommitInfoPanel -->
-      <div class="info-pane" v-if="showDetail" :style="panelBorders['info']" data-panel-id="info">
-        <div class="pane-header">
-          <div class="dock-handle" @pointerdown="onDragHandlePointerDown('info', $event)" :title="t('history.dock.dragToMove')">
-            <svg width="8" height="14" viewBox="0 0 8 14"><circle cx="2" cy="2" r="1" fill="currentColor"/><circle cx="6" cy="2" r="1" fill="currentColor"/><circle cx="2" cy="7" r="1" fill="currentColor"/><circle cx="6" cy="7" r="1" fill="currentColor"/><circle cx="2" cy="12" r="1" fill="currentColor"/><circle cx="6" cy="12" r="1" fill="currentColor"/></svg>
-          </div>
-          <span class="pane-header-title" />
-          <!-- 文件变更统计 -->
-          <span v-if="selectedWip" class="pane-header-stats">
-            <span class="ph-stat" title="Modified">
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M12 20h9"/>
-                <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
-              </svg>
-              <span class="ph-stat-label">modified</span>
-              <span class="ph-stat-value">{{ wipStats.modified }}</span>
-            </span>
-            <span class="ph-stat deleted" title="Deleted">
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <line x1="5" y1="12" x2="19" y2="12"/>
-              </svg>
-              <span class="ph-stat-label">deleted</span>
-              <span class="ph-stat-value">{{ wipStats.deleted }}</span>
-            </span>
-            <span class="ph-stat added" title="Added">
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <line x1="12" y1="5" x2="12" y2="19"/>
-                <line x1="5" y1="12" x2="19" y2="12"/>
-              </svg>
-              <span class="ph-stat-label">added</span>
-              <span class="ph-stat-value">{{ wipStats.added }}</span>
-            </span>
-          </span>
-          <!-- Commit 统计信息 -->
-          <span v-else-if="historyStore.selectedCommit" class="pane-header-stats">
-            <span class="ph-stat" title="Modified">
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M12 20h9"/>
-                <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
-              </svg>
-              <span class="ph-stat-label">modified</span>
-              <span class="ph-stat-value">{{ commitStats.modified }}</span>
-            </span>
-            <span class="ph-stat deleted" title="Deleted">
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <line x1="5" y1="12" x2="19" y2="12"/>
-              </svg>
-              <span class="ph-stat-label">deleted</span>
-              <span class="ph-stat-value">{{ commitStats.deleted }}</span>
-            </span>
-            <span class="ph-stat added" title="Added">
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <line x1="12" y1="5" x2="12" y2="19"/>
-                <line x1="5" y1="12" x2="19" y2="12"/>
-              </svg>
-              <span class="ph-stat-label">added</span>
-              <span class="ph-stat-value">{{ commitStats.added }}</span>
-            </span>
-          </span>
-        </div>
-        <WipPanel v-if="selectedWip" @show-file-history="openFileHistory" />
-        <CommitInfoPanel
-          v-else
-          :commit="historyStore.selectedCommit"
-          :selected-file-idx="historyStore.selectedFileDiffIndex"
-          @select-file="onSelectFile"
-          @show-file-history="openFileHistory"
-        />
-      </div>
+      <HistoryDetailPane
+        v-if="showDetail"
+        :panel-borders="panelBorders"
+        :repo-id="repoStore.activeRepoId ?? undefined"
+        :selected-wip="selectedWip"
+        :selected-commit="historyStore.selectedCommit"
+        :selected-file-idx="historyStore.selectedFileDiffIndex"
+        :current-diff="currentDiff"
+        :current-staged="diffStore.currentStaged"
+        :current-conflict-file-path="currentConflictFilePath"
+        :wip-stats="wipStats"
+        :commit-stats="commitStats"
+        @close="showDetail = false"
+        @select-file="onSelectFile"
+        @show-file-history="openFileHistory"
+        @drag-handle-pointer-down="onDragHandlePointerDown"
+      />
 
       <!-- Main resize handle: spanning 面板与 pair 区之间 -->
       <div
@@ -952,150 +777,37 @@ onUnmounted(() => {
     @select="onCommitMenuAction"
   />
 
-  <!-- Create branch at commit dialog -->
-  <CreateBranchDialog
-    :visible="showCreateBranchDialog"
-    :commit="dialogCommit"
-    @close="showCreateBranchDialog = false"
+  <HistoryDialogs
+    v-model:show-create-branch-dialog="showCreateBranchDialog"
+    v-model:show-create-tag-dialog="showCreateTagDialog"
+    v-model:show-merge-dialog="showMergeDialog"
+    v-model:show-rebase-dialog="showRebaseDialog"
+    v-model:show-drag-dialog="showDragDialog"
+    v-model:show-edit-message-dialog="showEditMessageDialog"
+    v-model:edit-message-text="editMessageText"
+    v-model:edit-message-author-time="editMessageAuthorTime"
+    v-model:edit-message-committer-time="editMessageCommitterTime"
+    v-model:edit-message-author-name="editMessageAuthorName"
+    v-model:edit-message-author-email="editMessageAuthorEmail"
+    v-model:edit-message-auto-stash="editMessageAutoStash"
+    :create-tag-annotated="createTagAnnotated"
+    :dialog-commit="dialogCommit"
+    :merge-source-candidates="mergeSourceCandidates"
+    :rebase-upstream="rebaseUpstream"
+    :rebase-onto="rebaseOnto"
+    :drag-source-oid="dragSourceOid"
+    :drag-target-oid="dragTargetOid"
+    :edit-message-submitting="editMessageSubmitting"
+    :is-editing-head-commit="isEditingHeadCommit"
+    :drop-unreachable-dialog="dropUnreachableDialog"
+    :file-history-modal="fileHistoryModal"
+    @drag-dialog-merge="onDragDialogMerge"
+    @drag-dialog-rebase="onDragDialogRebase"
+    @edit-message-confirm="onEditMessageConfirm"
+    @drop-unreachable-confirm="onDropUnreachableConfirm"
+    @drop-unreachable-cancel="onDropUnreachableCancel"
+    @close-file-history="fileHistoryModal.visible = false"
   />
-
-  <!-- Create tag dialog -->
-  <CreateTagDialog
-    :visible="showCreateTagDialog"
-    :commit="dialogCommit"
-    :annotated="createTagAnnotated"
-    @close="showCreateTagDialog = false"
-  />
-
-  <!-- Merge dialog -->
-  <MergeDialog
-    :visible="showMergeDialog"
-    :source-commit-oid="null"
-    :candidate-sources="mergeSourceCandidates"
-    @close="showMergeDialog = false"
-  />
-
-  <!-- Rebase plan dialog -->
-  <RebasePlanDialog
-    :visible="showRebaseDialog"
-    :upstream="rebaseUpstream"
-    :onto="rebaseOnto"
-    @close="showRebaseDialog = false"
-  />
-
-  <!-- Drag commit → pick merge/rebase dialog -->
-  <DragActionDialog
-    :visible="showDragDialog"
-    :source-oid="dragSourceOid"
-    :target-oid="dragTargetOid"
-    @close="showDragDialog = false"
-    @merge="onDragDialogMerge"
-    @rebase="onDragDialogRebase"
-  />
-
-  <!-- Edit commit message dialog -->
-  <Modal
-    v-if="showEditMessageDialog"
-    :visible="showEditMessageDialog"
-    :title="t('history.dialog.editMessage.title')"
-    width="480px"
-    @close="showEditMessageDialog = false"
-  >
-    <div v-if="!isEditingHeadCommit" class="edit-message-hint">
-      {{ t('history.dialog.editMessage.rewordHint') }}
-    </div>
-    <textarea
-      v-model="editMessageText"
-      class="edit-message-input"
-      rows="6"
-      spellcheck="false"
-      autocomplete="off"
-    />
-    <div class="edit-message-times">
-      <label class="edit-message-time-row">
-        <span class="edit-message-time-label">{{ t('history.dialog.editMessage.committerDate') }}</span>
-        <input
-          v-model="editMessageCommitterTime"
-          type="datetime-local"
-          step="1"
-          class="edit-message-time-input"
-        />
-      </label>
-      <label class="edit-message-time-row">
-        <span class="edit-message-time-label">{{ t('history.dialog.editMessage.authorDate') }}</span>
-        <input
-          v-model="editMessageAuthorTime"
-          type="datetime-local"
-          step="1"
-          class="edit-message-time-input"
-        />
-      </label>
-      <label class="edit-message-time-row">
-        <span class="edit-message-time-label">{{ t('history.dialog.editMessage.authorName') }}</span>
-        <input
-          v-model="editMessageAuthorName"
-          type="text"
-          class="edit-message-time-input"
-          autocomplete="off"
-          spellcheck="false"
-        />
-      </label>
-      <label class="edit-message-time-row">
-        <span class="edit-message-time-label">{{ t('history.dialog.editMessage.authorEmail') }}</span>
-        <input
-          v-model="editMessageAuthorEmail"
-          type="email"
-          class="edit-message-time-input"
-          autocomplete="off"
-          spellcheck="false"
-        />
-      </label>
-    </div>
-    <label v-if="!isEditingHeadCommit" class="edit-message-autostash">
-      <input v-model="editMessageAutoStash" type="checkbox" />
-      <span>{{ t('history.dialog.editMessage.autoStash') }}</span>
-    </label>
-    <template #footer>
-      <button class="btn btn-secondary" @click="showEditMessageDialog = false">{{ t('common.cancel') }}</button>
-      <button
-        class="btn btn-primary"
-        :disabled="!editMessageText.trim() || editMessageSubmitting"
-        @click="onEditMessageConfirm"
-      >{{ t('history.dialog.editMessage.confirm') }}</button>
-    </template>
-  </Modal>
-
-  <!-- Drop unreachable reflog entries dialog（替代原生 confirm/alert） -->
-  <Modal
-    v-if="dropUnreachableDialog.visible"
-    :visible="dropUnreachableDialog.visible"
-    :title="t('history.dialog.dropUnreachable.title')"
-    width="480px"
-    @close="onDropUnreachableCancel"
-  >
-    <p class="drop-unreachable-body">
-      <template v-if="dropUnreachableDialog.count === 0">
-        {{ t('history.dialog.dropUnreachable.emptyBody', { shortOid: dropUnreachableDialog.commit?.short_oid ?? '' }) }}
-      </template>
-      <template v-else>
-        {{ t('history.dialog.dropUnreachable.body', {
-          shortOid: dropUnreachableDialog.commit?.short_oid ?? '',
-          count: dropUnreachableDialog.count,
-        }) }}
-      </template>
-    </p>
-    <template #footer>
-      <button class="btn btn-secondary" @click="onDropUnreachableCancel">
-        {{ dropUnreachableDialog.count === 0 ? t('history.dialog.dropUnreachable.close') : t('common.cancel') }}
-      </button>
-      <button
-        v-if="dropUnreachableDialog.count > 0"
-        class="btn btn-primary"
-        :disabled="dropUnreachableDialog.submitting"
-        @click="onDropUnreachableConfirm"
-      >{{ t('history.dialog.dropUnreachable.confirm') }}</button>
-    </template>
-  </Modal>
 
   <!-- Commit hover tooltip（自定义样式，跟随鼠标） -->
   <div
@@ -1104,13 +816,6 @@ onUnmounted(() => {
     :style="{ left: commitTooltip.x + 'px', top: commitTooltip.y + 'px' }"
   >{{ commitTooltip.text }}</div>
 
-  <!-- 文件历史 / Blame 模态框 -->
-  <FileHistoryModal
-    v-if="fileHistoryModal.visible"
-    :file-path="fileHistoryModal.filePath"
-    :initial-mode="fileHistoryModal.mode"
-    @close="fileHistoryModal.visible = false"
-  />
 </template>
 
 <style scoped>
@@ -1138,12 +843,6 @@ onUnmounted(() => {
   position: relative;
 }
 
-/* 去掉 CommitInfoPanel / WipPanel 自带的 border-top，由外层 panelBorders 控制 */
-.info-pane :deep(.commit-info-panel),
-.info-pane :deep(.panel-empty) {
-  border-top: none;
-}
-
 /* Pane resize handle (通用，方向由 inline style 控制) */
 .pane-resize-handle {
   position: absolute;
@@ -1154,97 +853,6 @@ onUnmounted(() => {
 .pane-resize-handle:hover,
 .pane-resize-handle:active {
   background: rgba(138, 173, 244, 0.3);
-}
-
-/* ── Dock handle（拖拽手柄）──────────────────────────────────── */
-.dock-handle {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 10px;
-  flex-shrink: 0;
-  cursor: grab;
-  color: var(--text-muted);
-  opacity: 0.5;
-  transition: opacity 0.15s;
-}
-.dock-handle:hover {
-  opacity: 1;
-  color: var(--text-secondary);
-}
-.dock-handle:active {
-  cursor: grabbing;
-}
-
-/* Diff 面板的浮动手柄 */
-.dock-handle-float {
-  position: absolute;
-  top: 4px;
-  left: 4px;
-  z-index: 10;
-  width: 16px;
-  height: 20px;
-}
-
-/* Info 面板的轻量级标题栏 */
-.pane-header {
-  display: flex;
-  align-items: center;
-  height: 22px;
-  background: var(--bg-secondary);
-  border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
-  font-size: var(--font-sm);
-  font-weight: 600;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-.pane-header-title {
-  padding: 0 1px;
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-
-.pane-header-stats {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-left: 0px;
-  text-transform: none;
-  letter-spacing: normal;
-  font-weight: 500;
-}
-
-.ph-stat {
-  display: flex;
-  align-items: center;
-  gap: 3px;
-  font-size: var(--font-xs);
-  color: var(--text-secondary);
-}
-
-.ph-stat svg {
-  color: var(--accent-orange);
-}
-
-.ph-stat.deleted svg {
-  color: var(--accent-red);
-}
-
-.ph-stat.added svg {
-  color: var(--accent-green);
-}
-
-.ph-stat-label {
-  color: var(--text-muted);
-}
-
-.ph-stat-value {
-  color: var(--text-primary);
-  font-weight: 600;
-  min-width: 14px;
-  text-align: right;
 }
 
 /* ── Dock overlay（drop zone）────────────────────────────────── */
@@ -1320,14 +928,6 @@ onUnmounted(() => {
   position: relative;
   overflow: hidden;
   flex-shrink: 0;
-}
-
-.info-pane {
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  min-width: 0;
-  min-height: 0;
 }
 
 .col-header {
@@ -1674,103 +1274,6 @@ onUnmounted(() => {
 
 .wip-loading-text {
   opacity: 0.8;
-}
-
-/* ── Diff area ───────────────────────────────────────────────────── */
-.diff-area {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  min-width: 0;
-  min-height: 0;
-}
-
-.edit-message-input {
-  width: 100%;
-  background: var(--bg-surface);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  color: var(--text-primary);
-  font-family: inherit;
-  font-size: var(--font-md);
-  padding: 8px;
-  resize: vertical;
-  outline: none;
-  box-sizing: border-box;
-}
-
-.edit-message-input:focus {
-  border-color: var(--accent-blue);
-}
-
-.edit-message-hint {
-  font-size: var(--font-sm);
-  color: var(--text-secondary);
-  margin-bottom: 8px;
-  padding: 6px 10px;
-  background: var(--bg-overlay);
-  border-radius: 4px;
-}
-
-.edit-message-autostash {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 10px;
-  font-size: var(--font-md);
-  color: var(--text-secondary);
-  cursor: pointer;
-}
-
-.edit-message-autostash input[type='checkbox'] {
-  cursor: pointer;
-  accent-color: var(--accent-blue);
-}
-
-.edit-message-times {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-top: 10px;
-}
-
-.edit-message-time-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  cursor: default;
-}
-
-.edit-message-time-label {
-  font-size: var(--font-sm);
-  color: var(--text-secondary);
-  min-width: 120px;
-  flex-shrink: 0;
-}
-
-.edit-message-time-input {
-  flex: 1;
-  background: var(--bg-surface);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  color: var(--text-primary);
-  font-family: inherit;
-  font-size: var(--font-sm);
-  padding: 4px 6px;
-  outline: none;
-  box-sizing: border-box;
-}
-
-.edit-message-time-input:focus {
-  border-color: var(--accent-blue);
-}
-
-.drop-unreachable-body {
-  margin: 0;
-  color: var(--text-primary);
-  font-size: var(--font-md);
-  line-height: 1.55;
 }
 
 </style>

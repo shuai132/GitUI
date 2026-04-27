@@ -17,34 +17,34 @@
 
 | 阶段 | 内容 | 状态 |
 | --- | --- | --- |
-| 1 | 提取选择与 WIP 虚拟索引逻辑 | 待办 |
-| 2 | 提取键盘导航逻辑 | 待办 |
-| 3 | 提取详情区组合组件 | 待办 |
-| 4 | 提取历史视图弹窗挂载组件 | 待办 |
-| 5 | 类型检查、测试和历史视图手动验证 | 待办 |
+| 1 | 提取选择与 WIP 虚拟索引逻辑 | 完成 |
+| 2 | 提取键盘导航逻辑 | 完成 |
+| 3 | 提取详情区组合组件 | 完成 |
+| 4 | 提取历史视图弹窗挂载组件 | 完成 |
+| 5 | 类型检查、测试和历史视图手动验证 | 自动验证完成，人工待验 |
 
 ## 子任务清单
 
-- [ ] 创建 `src/composables/history/useHistorySelection.ts`
-  - [ ] 管理 `toVirtualIdx` / `toRealIdx`。
-  - [ ] 管理 WIP 行选择、提交行选择、当前选中 virtual index。
-  - [ ] 保留 showWipRow 变化时的选择修正。
-- [ ] 创建 `src/composables/history/useHistoryKeyboard.ts`
-  - [ ] 管理 commits / files 活跃面板。
-  - [ ] 管理上下移动、左右切换、文件选择快捷键。
-  - [ ] 保留现有快捷键语义和 preventDefault 条件。
-- [ ] 创建 `src/components/history/HistoryDetailPane.vue`
-  - [ ] 组合 `WipPanel`、`CommitInfoPanel`、`DiffView`、`ConflictView`。
-  - [ ] 接收当前 diff、当前冲突路径、详情显示状态等必要 props。
-- [ ] 创建 `src/components/history/HistoryDialogs.vue`
-  - [ ] 承载 merge / rebase / drag action / file history 等弹窗挂载。
-  - [ ] 通过 emit 把执行结果交回父级刷新。
-- [ ] 重组 `HistoryView.vue`
-  - [ ] 保留虚拟列表渲染、滚动容器、分页触发和 wheel 兼容逻辑。
-  - [ ] 保留提交行模板在主文件，除非拆分不会增加热路径复杂度。
-- [ ] 验证
-  - [ ] `npx vue-tsc --noEmit`
-  - [ ] `npm run test`
+- [x] 创建 `src/composables/history/useHistorySelection.ts`
+  - [x] 管理 `toVirtualIdx` / `toRealIdx`。
+  - [x] 管理 WIP 行选择、提交行选择、当前选中 virtual index。
+  - [x] 保留 showWipRow 变化时的选择修正。
+- [x] 创建 `src/composables/history/useHistoryKeyboard.ts`
+  - [x] 管理 commits / files 活跃面板。
+  - [x] 管理上下移动、左右切换、文件选择快捷键。
+  - [x] 保留现有快捷键语义和 preventDefault 条件。
+- [x] 创建 `src/components/history/HistoryDetailPane.vue`
+  - [x] 组合 `WipPanel`、`CommitInfoPanel`、`DiffView`、`ConflictView`。
+  - [x] 接收当前 diff、当前冲突路径、详情显示状态等必要 props。
+- [x] 创建 `src/components/history/HistoryDialogs.vue`
+  - [x] 承载 merge / rebase / drag action / file history 等弹窗挂载。
+  - [x] 通过 emit 把执行结果交回父级刷新。
+- [x] 重组 `HistoryView.vue`
+  - [x] 保留虚拟列表渲染、滚动容器、分页触发和 wheel 兼容逻辑。
+  - [x] 保留提交行模板在主文件，除非拆分不会增加热路径复杂度。
+- [x] 验证
+  - [x] `npx vue-tsc --noEmit`
+  - [x] `npm run test`
   - [ ] 大仓库下滚动、分页、搜索、选择、详情切换、拖拽 merge / rebase。
 
 ## 关键决策
