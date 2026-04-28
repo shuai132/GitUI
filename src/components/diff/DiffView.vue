@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, nextTick, watch } from 'vue'
 import type { FileDiff } from '@/types/git'
 import SideBySideDiff from './SideBySideDiff.vue'
 import InlineDiff from './InlineDiff.vue'
@@ -12,6 +12,7 @@ import { detectPreviewKind } from '@/lib/preview'
 import { useUiStore } from '@/stores/ui'
 import { useRevertHunk } from '@/composables/diff/useRevertHunk'
 import { useGitCommands } from '@/composables/useGitCommands'
+import type { FullFileContent } from '@/lib/fullFileDiff'
 
 const props = defineProps<{
   diff: FileDiff | null
@@ -40,6 +41,7 @@ const vueLangMaps = ref<{ old: VueSfcLineLangMap | null; new: VueSfcLineLangMap 
   old: null,
   new: null,
 })
+const fullFileContent = ref<FullFileContent | null>(null)
 
 const isVueDiff = computed(() => isVuePath(props.diff?.new_path ?? props.diff?.old_path))
 
@@ -65,17 +67,54 @@ const isImageView = computed(() => {
   return false
 })
 
+interface DiffScrollAnchor {
+  oldLineNo?: number
+  newLineNo?: number
+}
+
 // 子 diff 组件的引用（切换 viewMode 时 v-if 切换实例，ref 自动更新）
 const diffRef = ref<{
   goNextChange: () => void
   goPrevChange: () => void
+  getScrollAnchor: () => DiffScrollAnchor | null
+  scrollToLine: (anchor: DiffScrollAnchor) => void
 } | null>(null)
+const pendingScrollAnchor = ref<DiffScrollAnchor | null>(null)
 
 function onNextChange() {
   diffRef.value?.goNextChange()
 }
 function onPrevChange() {
   diffRef.value?.goPrevChange()
+}
+
+watch(
+  () => [uiStore.diffLayoutMode, uiStore.diffGroupByHunk] as const,
+  () => {
+    const anchor = diffRef.value?.getScrollAnchor()
+    if (!anchor) return
+    pendingScrollAnchor.value = anchor
+    void restorePendingScrollAnchor()
+  },
+)
+
+watch(
+  () => fullFileContent.value,
+  () => {
+    if (!pendingScrollAnchor.value) return
+    void restorePendingScrollAnchor(true)
+  },
+)
+
+async function restorePendingScrollAnchor(forceClear = false) {
+  await nextTick()
+  await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+  const anchor = pendingScrollAnchor.value
+  if (!anchor) return
+  diffRef.value?.scrollToLine(anchor)
+  if (forceClear || uiStore.diffGroupByHunk || fullFileContent.value) {
+    pendingScrollAnchor.value = null
+  }
 }
 
 const { allowRevert, revertHunk } = useRevertHunk({
@@ -87,6 +126,7 @@ const { allowRevert, revertHunk } = useRevertHunk({
 let vueLoadSeq = 0
 watch(
   () => [
+    props.diff,
     props.repoId,
     props.diff?.old_blob_oid,
     props.diff?.new_blob_oid,
@@ -113,33 +153,92 @@ watch(
   { immediate: true },
 )
 
+let fullFileLoadSeq = 0
+watch(
+  () => [
+    props.diff,
+    props.repoId,
+    props.diff?.old_blob_oid,
+    props.diff?.new_blob_oid,
+    props.diff?.old_path,
+    props.diff?.new_path,
+    props.diff?.encoding,
+    props.wip?.staged,
+    uiStore.diffLayoutMode,
+    uiStore.diffGroupByHunk,
+    svgTextMode.value,
+  ] as const,
+  async () => {
+    const seq = ++fullFileLoadSeq
+    fullFileContent.value = null
+    if (
+      !props.diff ||
+      !props.repoId ||
+      props.diff.is_binary ||
+      props.diff.hunks.length === 0 ||
+      isImageView.value ||
+      uiStore.diffGroupByHunk
+    ) {
+      return
+    }
+
+    const content = await loadFullFileContent(props.diff)
+    if (seq !== fullFileLoadSeq) return
+    fullFileContent.value = content
+  },
+  { immediate: true },
+)
+
+async function loadFullFileContent(diff: FileDiff): Promise<FullFileContent | null> {
+  const [oldText, newText] = await Promise.all([
+    loadSideText('old', diff),
+    loadSideText('new', diff),
+  ])
+  if (oldText == null || newText == null) return null
+  return { oldText, newText }
+}
+
 async function loadSideText(side: DiffSide, diff: FileDiff): Promise<string | null> {
   try {
     if (side === 'old') {
-      if (!diff.old_blob_oid) return null
+      if (!diff.old_blob_oid) return ''
       const blob = await getBlobBytes(props.repoId!, diff.old_blob_oid, true)
-      return blob.truncated ? null : decodeBase64Utf8(blob.bytes_base64)
+      return blob.truncated ? null : decodeBase64Text(blob.bytes_base64, diff.encoding)
     }
 
-    if (props.wip && !props.wip.staged && diff.new_path) {
+    if (props.wip && !props.wip.staged && diff.new_path && diffHasNewSide(diff)) {
       const blob = await readWorktreeFile(props.repoId!, diff.new_path, true)
-      return blob.truncated ? null : decodeBase64Utf8(blob.bytes_base64)
+      return blob.truncated ? null : decodeBase64Text(blob.bytes_base64, diff.encoding)
     }
-    if (!diff.new_blob_oid) return null
+    if (!diff.new_blob_oid) return ''
     const blob = await getBlobBytes(props.repoId!, diff.new_blob_oid, true)
-    return blob.truncated ? null : decodeBase64Utf8(blob.bytes_base64)
+    return blob.truncated ? null : decodeBase64Text(blob.bytes_base64, diff.encoding)
   } catch {
     return null
   }
 }
 
-function decodeBase64Utf8(base64: string): string {
+function diffHasNewSide(diff: FileDiff): boolean {
+  if (diff.new_blob_oid) return true
+  return diff.hunks.some((hunk) => hunk.new_lines > 0)
+}
+
+function decodeBase64Text(base64: string, encoding: string): string {
   const binary = atob(base64)
   const bytes = new Uint8Array(binary.length)
   for (let i = 0; i < binary.length; i++) {
     bytes[i] = binary.charCodeAt(i)
   }
-  return new TextDecoder().decode(bytes)
+  try {
+    return new TextDecoder(normalizeTextDecoderLabel(encoding)).decode(bytes)
+  } catch {
+    return new TextDecoder().decode(bytes)
+  }
+}
+
+function normalizeTextDecoderLabel(encoding: string): string {
+  if (encoding.toUpperCase() === 'UTF-8 BOM') return 'utf-8'
+  return encoding
 }
 </script>
 
@@ -172,12 +271,14 @@ function decodeBase64Utf8(base64: string): string {
         :wip="wip ?? null"
       />
       <SideBySideDiff
-        v-else-if="uiStore.diffViewMode === 'side-by-side'"
+        v-else-if="uiStore.diffLayoutMode === 'side-by-side'"
         ref="diffRef"
         :diff="diff"
         :loading="loading"
         :syntax-lang="syntaxLang"
         :syntax-lang-for-line="syntaxLangForLine"
+        :full-file-content="fullFileContent"
+        :group-by-hunk="uiStore.diffGroupByHunk"
         :allow-revert="allowRevert"
         @revert-hunk="revertHunk"
       />
@@ -186,9 +287,10 @@ function decodeBase64Utf8(base64: string): string {
         ref="diffRef"
         :diff="diff"
         :loading="loading"
-        :group-by-hunk="uiStore.diffViewMode === 'by-hunk'"
+        :group-by-hunk="uiStore.diffGroupByHunk"
         :syntax-lang="syntaxLang"
         :syntax-lang-for-line="syntaxLangForLine"
+        :full-file-content="fullFileContent"
         :allow-revert="allowRevert"
         @revert-hunk="revertHunk"
       />

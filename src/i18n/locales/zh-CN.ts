@@ -520,7 +520,7 @@ const messages = {
     },
   },
   diff: {
-    mode: { sideBySide: '左右分栏', inline: '单列连续', byHunk: '按 hunk 分块' },
+    mode: { sideBySide: '左右分栏', inline: '单列', byHunk: '按 hunk 分组' },
     toolbar: {
       prevChange: '上一变更',
       nextChange: '下一变更',
@@ -669,6 +669,12 @@ const messages = {
     },
     advanced: {
       viewTitle: '视图',
+      diffLayout: 'Diff 默认布局',
+      diffLayoutHint: '打开文件变更时默认使用的文本 diff 布局',
+      diffLayoutInline: '单列',
+      diffLayoutSideBySide: '左右分栏',
+      diffGroupByHunk: 'Diff 按 hunk 分组',
+      diffGroupByHunkHint: '默认按变更块展示；关闭后单列和左右分栏都显示完整文件',
       soloCurrentBranch: 'Solo 当前分支',
       soloCurrentBranchHint: '历史图只显示当前 HEAD 的 first-parent 主线',
       showRemoteBranches: '显示远程分支',

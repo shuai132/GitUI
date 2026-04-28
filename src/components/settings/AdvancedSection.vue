@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useUiStore } from '@/stores/ui'
+import { useUiStore, type DiffLayoutMode } from '@/stores/ui'
 import { useSettingsStore } from '@/stores/settings'
 import { useGitPrefsStore, FETCH_INTERVAL_OPTIONS } from '@/stores/gitPrefs'
 import { useGitCommands } from '@/composables/useGitCommands'
@@ -12,6 +12,11 @@ const gitPrefsStore = useGitPrefsStore()
 const git = useGitCommands()
 const { t } = useI18n()
 
+const diffLayoutOptions = computed<Array<{ value: DiffLayoutMode; label: string }>>(() => [
+  { value: 'inline', label: t('settings.advanced.diffLayoutInline') },
+  { value: 'side-by-side', label: t('settings.advanced.diffLayoutSideBySide') },
+])
+
 interface ToggleRow {
   key: string
   label: string
@@ -21,6 +26,13 @@ interface ToggleRow {
 }
 
 const viewToggles = computed<ToggleRow[]>(() => [
+  {
+    key: 'diffGroupByHunk',
+    label: t('settings.advanced.diffGroupByHunk'),
+    hint: t('settings.advanced.diffGroupByHunkHint'),
+    get: () => uiStore.diffGroupByHunk,
+    toggle: () => uiStore.toggleDiffGroupByHunk(),
+  },
   {
     key: 'soloCurrentBranch',
     label: t('settings.advanced.soloCurrentBranch'),
@@ -87,6 +99,24 @@ async function onFetchIntervalChange(e: Event) {
 <template>
   <div class="section">
     <div class="section-title">{{ t('settings.advanced.viewTitle') }}</div>
+    <div class="pref-row pref-row--top">
+      <div class="pref-text">
+        <div class="pref-label">{{ t('settings.advanced.diffLayout') }}</div>
+        <div class="pref-hint">{{ t('settings.advanced.diffLayoutHint') }}</div>
+      </div>
+      <div class="segmented-control" role="radiogroup" :aria-label="t('settings.advanced.diffLayout')">
+        <button
+          v-for="opt in diffLayoutOptions"
+          :key="opt.value"
+          type="button"
+          class="segmented-btn"
+          :class="{ 'is-active': uiStore.diffLayoutMode === opt.value }"
+          @click="uiStore.setDiffLayoutMode(opt.value)"
+        >
+          {{ opt.label }}
+        </button>
+      </div>
+    </div>
     <div class="toggle-list">
       <label
         v-for="row in viewToggles"
@@ -224,6 +254,12 @@ async function onFetchIntervalChange(e: Event) {
   background: var(--bg-primary);
 }
 
+.pref-row--top {
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  margin-bottom: 1px;
+}
+
 .pref-text {
   display: flex;
   flex-direction: column;
@@ -254,6 +290,37 @@ async function onFetchIntervalChange(e: Event) {
 
 .pref-select:focus {
   outline: 1px solid var(--accent-blue);
+}
+
+.segmented-control {
+  display: inline-flex;
+  flex-shrink: 0;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--bg-surface);
+}
+
+.segmented-btn {
+  min-width: 64px;
+  height: 24px;
+  border: none;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: var(--font-sm);
+  cursor: pointer;
+  padding: 0 8px;
+}
+
+.segmented-btn:hover {
+  color: var(--text-primary);
+  background: var(--bg-overlay);
+}
+
+.segmented-btn.is-active {
+  color: var(--accent-blue);
+  background: color-mix(in srgb, var(--accent-blue) 16%, transparent);
 }
 
 </style>

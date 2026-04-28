@@ -146,9 +146,9 @@ function withShortcut(label: string, actionId: ShortcutActionId): string {
 
       <button
         class="btn-icon"
-        :class="{ active: uiStore.diffViewMode === 'by-hunk' }"
+        :class="{ active: uiStore.diffGroupByHunk }"
         :title="t('diff.mode.byHunk')"
-        @click="uiStore.setDiffViewMode('by-hunk')"
+        @click="uiStore.toggleDiffGroupByHunk()"
       >
         <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
           <rect x="2" y="2" width="12" height="5" rx="1" />
@@ -157,9 +157,9 @@ function withShortcut(label: string, actionId: ShortcutActionId): string {
       </button>
       <button
         class="btn-icon"
-        :class="{ active: uiStore.diffViewMode === 'inline' }"
+        :class="{ active: uiStore.diffLayoutMode === 'inline' }"
         :title="t('diff.mode.inline')"
-        @click="uiStore.setDiffViewMode('inline')"
+        @click="uiStore.setDiffLayoutMode('inline')"
       >
         <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
           <line x1="2" y1="4" x2="14" y2="4" />
@@ -169,9 +169,9 @@ function withShortcut(label: string, actionId: ShortcutActionId): string {
       </button>
       <button
         class="btn-icon"
-        :class="{ active: uiStore.diffViewMode === 'side-by-side' }"
+        :class="{ active: uiStore.diffLayoutMode === 'side-by-side' }"
         :title="t('diff.mode.sideBySide')"
-        @click="uiStore.setDiffViewMode('side-by-side')"
+        @click="uiStore.setDiffLayoutMode('side-by-side')"
       >
         <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
           <rect x="2" y="2" width="12" height="12" rx="1" />

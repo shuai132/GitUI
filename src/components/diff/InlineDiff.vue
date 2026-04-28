@@ -5,6 +5,7 @@ import type { FileDiff } from '@/types/git'
 import { highlightLine } from '@/lib/highlight'
 import type { DiffSide, SyntaxLangResolver } from '@/lib/highlight'
 import { diffChars, tokensToHtml } from '@/lib/wordDiff'
+import { buildFullInlineRows, type FullFileContent } from '@/lib/fullFileDiff'
 
 const { t } = useI18n()
 
@@ -17,6 +18,8 @@ const props = defineProps<{
   syntaxLang?: string | null
   /** 按左右侧和文件行号解析语法高亮语言，用于 Vue SFC 这类嵌入语言文件。 */
   syntaxLangForLine?: SyntaxLangResolver | null
+  /** inline 连续模式使用的完整旧 / 新文件内容；为空时回退到 hunk-only。 */
+  fullFileContent?: FullFileContent | null
   /** 是否允许回滚变动行 */
   allowRevert?: boolean
 }>()
@@ -30,60 +33,76 @@ interface InlineRow {
   oldLineNo?: number
   newLineNo?: number
   content: string
-  hunkIndex: number
+  hunkIndex?: number
+  isHunkStart?: boolean
   /** Word-diff HTML（语法高亮关闭时对配对 del/add 生效）*/
   wordHtml?: string
 }
 
-/** 扁平化所有 hunk → InlineRow[]，并为配对 del/add 行计算 word-diff */
+interface DiffScrollAnchor {
+  oldLineNo?: number
+  newLineNo?: number
+}
+
 const rows = computed<InlineRow[]>(() => {
   if (!props.diff) return []
+  const baseRows =
+    !props.groupByHunk && props.fullFileContent
+      ? buildFullInlineRows(props.diff, props.fullFileContent)
+      : buildHunkRows(props.diff)
+
+  return addInlineWordDiff(baseRows)
+})
+
+/** 扁平化所有 hunk → InlineRow[]，用于 by-hunk 和完整内容不可用时的回退。 */
+function buildHunkRows(diff: FileDiff): InlineRow[] {
   const result: InlineRow[] = []
-  props.diff.hunks.forEach((hunk, hi) => {
+  diff.hunks.forEach((hunk, hi) => {
     result.push({
       kind: 'header',
       content: (hunk.header ?? '').trimEnd(),
       hunkIndex: hi,
-    })    // 收集本 hunk 所有行，之后做一次 word-diff 配对
-    const hunkRows: InlineRow[] = []
+    })
     for (const line of hunk.lines) {
       const content = (line.content ?? '').replace(/\n$/, '')
       if (line.origin === '-') {
-        hunkRows.push({ kind: 'del', oldLineNo: line.old_lineno, content, hunkIndex: hi })
+        result.push({ kind: 'del', oldLineNo: line.old_lineno, content, hunkIndex: hi })
       } else if (line.origin === '+') {
-        hunkRows.push({ kind: 'add', newLineNo: line.new_lineno, content, hunkIndex: hi })
+        result.push({ kind: 'add', newLineNo: line.new_lineno, content, hunkIndex: hi })
       } else {
-        hunkRows.push({ kind: 'ctx', oldLineNo: line.old_lineno, newLineNo: line.new_lineno, content, hunkIndex: hi })
+        result.push({ kind: 'ctx', oldLineNo: line.old_lineno, newLineNo: line.new_lineno, content, hunkIndex: hi })
       }
-    }
-
-    // Word-diff 配对：在语法高亮关闭时，把紧邻的 del+add 行两两配对
-    if (!props.syntaxLang && !props.syntaxLangForLine) {
-      for (let i = 0; i < hunkRows.length; i++) {
-        const cur = hunkRows[i]
-        const nxt = hunkRows[i + 1]
-        if (cur.kind === 'del' && nxt?.kind === 'add') {
-          const { leftTokens, rightTokens } = diffChars(cur.content, nxt.content)
-          cur.wordHtml = tokensToHtml(leftTokens)
-          nxt.wordHtml = tokensToHtml(rightTokens)
-          i++ // 跳过已配对的 add 行（正常推入）
-          result.push(cur, nxt)
-          continue
-        }
-        result.push(cur)
-      }
-    } else {
-      result.push(...hunkRows)
     }
   })
   return result
-})
+}
+
+function addInlineWordDiff(sourceRows: InlineRow[]): InlineRow[] {
+  if (props.syntaxLang || props.syntaxLangForLine) return sourceRows
+
+  const result: InlineRow[] = []
+  for (let i = 0; i < sourceRows.length; i++) {
+    const cur = { ...sourceRows[i] }
+    const nxt = sourceRows[i + 1]
+    if (cur.kind === 'del' && nxt?.kind === 'add') {
+      const nextRow = { ...nxt }
+      const { leftTokens, rightTokens } = diffChars(cur.content, nextRow.content)
+      cur.wordHtml = tokensToHtml(leftTokens)
+      nextRow.wordHtml = tokensToHtml(rightTokens)
+      result.push(cur, nextRow)
+      i++
+      continue
+    }
+    result.push(cur)
+  }
+  return result
+}
 
 /** 按 hunk 分组，用于 by-hunk 模式 */
 const hunkGroups = computed(() => {
   const groups: InlineRow[][] = []
   let cur: InlineRow[] = []
-  let curHi = -1
+  let curHi: number | undefined
   for (const row of rows.value) {
     if (row.hunkIndex !== curHi) {
       if (cur.length > 0) groups.push(cur)
@@ -138,9 +157,78 @@ function scrollToRow(rowIndex: number) {
     `[data-row="${rowIndex}"]`,
   ) as HTMLElement | null
   if (!el) return
-  const targetY =
-    el.offsetTop - root.clientHeight / 2 + el.offsetHeight / 2
+  const elTopInRoot = elementTopInScroll(root, el)
+  const targetY = elTopInRoot - root.clientHeight / 2 + el.offsetHeight / 2
   root.scrollTo({ top: Math.max(0, targetY), behavior: 'smooth' })
+}
+
+function scrollToRowStart(rowIndex: number) {
+  const root = scrollEl.value
+  if (!root) return
+  const el = root.querySelector(
+    `[data-row="${rowIndex}"]`,
+  ) as HTMLElement | null
+  if (!el) return
+  root.scrollTo({ top: Math.max(0, elementTopInScroll(root, el)), behavior: 'auto' })
+}
+
+function getScrollAnchor(): DiffScrollAnchor | null {
+  const root = scrollEl.value
+  if (!root) return null
+  const rootTop = root.getBoundingClientRect().top
+  const lineEls = Array.from(root.querySelectorAll<HTMLElement>('[data-row]'))
+  for (const el of lineEls) {
+    if (el.getBoundingClientRect().bottom <= rootTop + 0.5) continue
+    const index = Number(el.dataset.row)
+    const row = rows.value[index]
+    if (!row || row.kind === 'header') continue
+    if (row.oldLineNo == null && row.newLineNo == null) continue
+    return { oldLineNo: row.oldLineNo, newLineNo: row.newLineNo }
+  }
+  return null
+}
+
+function elementTopInScroll(root: HTMLElement, el: HTMLElement): number {
+  const rootRect = root.getBoundingClientRect()
+  const elRect = el.getBoundingClientRect()
+  return elRect.top - rootRect.top + root.scrollTop
+}
+
+function scrollToLine(anchor: DiffScrollAnchor) {
+  const targetIndex = findBestRowIndex(anchor)
+  if (targetIndex == null) return
+  scrollToRowStart(targetIndex)
+}
+
+function findBestRowIndex(anchor: DiffScrollAnchor): number | null {
+  let fallbackIndex: number | null = null
+  let fallbackDistance = Number.POSITIVE_INFINITY
+
+  for (let i = 0; i < rows.value.length; i++) {
+    const row = rows.value[i]
+    if (row.kind === 'header') continue
+    if (row.newLineNo != null && row.newLineNo === anchor.newLineNo) return i
+    if (row.oldLineNo != null && row.oldLineNo === anchor.oldLineNo) return i
+
+    const distance = lineDistance(row, anchor)
+    if (distance < fallbackDistance) {
+      fallbackDistance = distance
+      fallbackIndex = i
+    }
+  }
+
+  return fallbackIndex
+}
+
+function lineDistance(row: InlineRow, anchor: DiffScrollAnchor): number {
+  const distances: number[] = []
+  if (row.newLineNo != null && anchor.newLineNo != null) {
+    distances.push(Math.abs(row.newLineNo - anchor.newLineNo))
+  }
+  if (row.oldLineNo != null && anchor.oldLineNo != null) {
+    distances.push(Math.abs(row.oldLineNo - anchor.oldLineNo))
+  }
+  return distances.length > 0 ? Math.min(...distances) : Number.POSITIVE_INFINITY
 }
 
 function goNextChange() {
@@ -160,7 +248,7 @@ function goPrevChange() {
   scrollToRow(starts[currentChangeIdx.value])
 }
 
-defineExpose({ goNextChange, goPrevChange })
+defineExpose({ goNextChange, goPrevChange, getScrollAnchor, scrollToLine })
 </script>
 
 <template>
@@ -168,7 +256,7 @@ defineExpose({ goNextChange, goPrevChange })
     <div v-if="loading" class="inline-state">{{ t('diff.empty.loading') }}</div>
     <div v-else-if="!diff" class="inline-state">{{ t('diff.empty.selectFile') }}</div>
     <div v-else-if="diff.is_binary" class="inline-state">{{ t('diff.empty.binaryFile') }}</div>
-    <div v-else-if="rows.length === 0" class="inline-state">{{ t('diff.empty.noChanges') }}</div>
+    <div v-else-if="diff.hunks.length === 0 || rows.length === 0" class="inline-state">{{ t('diff.empty.noChanges') }}</div>
 
     <!-- 连续模式（所有 hunk 串联）-->
     <div
@@ -187,7 +275,7 @@ defineExpose({ goNextChange, goPrevChange })
           <template v-if="row.kind === 'header'">
             <span class="line-header-content">{{ row.content }}</span>
             <button
-              v-if="allowRevert"
+              v-if="allowRevert && row.hunkIndex != null"
               class="hunk-revert-btn"
               @click.stop="emit('revert-hunk', row.hunkIndex)"
             >
@@ -203,6 +291,13 @@ defineExpose({ goNextChange, goPrevChange })
             <span v-if="langForRow(row)" class="code" v-html="highlightLine(row.content, langForRow(row))" />
             <span v-else-if="row.wordHtml" class="code" v-html="row.wordHtml" />
             <span v-else class="code">{{ row.content }}</span>
+            <button
+              v-if="allowRevert && row.isHunkStart && row.hunkIndex != null"
+              class="hunk-revert-btn"
+              @click.stop="emit('revert-hunk', row.hunkIndex)"
+            >
+              {{ t('diff.hunk.rollback') }}
+            </button>
           </template>
         </div>
       </div>
@@ -228,7 +323,7 @@ defineExpose({ goNextChange, goPrevChange })
             >
               <span class="hunk-header-title">{{ row.content }}</span>
               <button
-                v-if="allowRevert"
+                v-if="allowRevert && row.hunkIndex != null"
                 class="hunk-revert-btn"
                 @click.stop="emit('revert-hunk', row.hunkIndex)"
               >

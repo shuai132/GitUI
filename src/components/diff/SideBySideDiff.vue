@@ -5,16 +5,21 @@ import type { FileDiff, DiffLine } from '@/types/git'
 import { highlightLine } from '@/lib/highlight'
 import type { DiffSide, SyntaxLangResolver } from '@/lib/highlight'
 import { diffChars, tokensToHtml } from '@/lib/wordDiff'
+import { buildFullSideBySideRows, type FullFileContent } from '@/lib/fullFileDiff'
 
 const { t } = useI18n()
 
 const props = defineProps<{
   diff: FileDiff | null
   loading?: boolean
+  /** true 时保持按 hunk 块展示；false 时优先显示完整文件。 */
+  groupByHunk?: boolean
   /** 语法高亮语言（null 表示关闭高亮） */
   syntaxLang?: string | null
   /** 按左右侧和文件行号解析语法高亮语言，用于 Vue SFC 这类嵌入语言文件。 */
   syntaxLangForLine?: SyntaxLangResolver | null
+  /** 完整旧 / 新文件内容；为空时回退到 hunk-only。 */
+  fullFileContent?: FullFileContent | null
   /** 是否允许回滚变动行 */
   allowRevert?: boolean
 }>()
@@ -30,6 +35,7 @@ interface AlignedLine {
   /** 开启 word-diff 时替代 content 的 HTML（已转义 + <mark> 标注）；null = 用 content */
   wordHtml?: string
   hunkIndex?: number
+  isHunkStart?: boolean
 }
 
 interface AlignedRow {
@@ -37,8 +43,17 @@ interface AlignedRow {
   right: AlignedLine
 }
 
+interface DiffScrollAnchor {
+  oldLineNo?: number
+  newLineNo?: number
+}
+
 const alignedRows = computed((): AlignedRow[] => {
   if (!props.diff) return []
+  if (!props.groupByHunk && props.fullFileContent) {
+    return addSideBySideWordDiff(buildFullSideBySideRows(props.diff, props.fullFileContent))
+  }
+
   const rows: AlignedRow[] = []
 
   for (let hi = 0; hi < props.diff.hunks.length; hi++) {
@@ -103,6 +118,26 @@ const alignedRows = computed((): AlignedRow[] => {
 
   return rows
 })
+
+function addSideBySideWordDiff(sourceRows: AlignedRow[]): AlignedRow[] {
+  if (props.syntaxLang || props.syntaxLangForLine) return sourceRows
+
+  return sourceRows.map((row) => {
+    if (row.left.kind !== 'del' || row.right.kind !== 'add') return row
+
+    const { leftTokens, rightTokens } = diffChars(row.left.content, row.right.content)
+    return {
+      left: {
+        ...row.left,
+        wordHtml: tokensToHtml(leftTokens),
+      },
+      right: {
+        ...row.right,
+        wordHtml: tokensToHtml(rightTokens),
+      },
+    }
+  })
+}
 
 // ── 滚动架构 ────────────────────────────────────────────────────────
 // 垂直滚动：bodyRef 是唯一的 overflow-y:auto 容器，左右天然同步。
@@ -204,6 +239,75 @@ function scrollToRow(rowIndex: number) {
   body.scrollTo({ top: Math.max(0, targetY), behavior: 'smooth' })
 }
 
+function scrollToRowStart(rowIndex: number) {
+  const body = bodyRef.value
+  const scroll = leftScrollRef.value
+  if (!body || !scroll) return
+  const el = scroll.querySelector(
+    `[data-row="${rowIndex}"]`,
+  ) as HTMLElement | null
+  if (!el) return
+  const bodyRect = body.getBoundingClientRect()
+  const elRect = el.getBoundingClientRect()
+  const elTopInBody = elRect.top - bodyRect.top + body.scrollTop
+  body.scrollTo({ top: Math.max(0, elTopInBody), behavior: 'auto' })
+}
+
+function getScrollAnchor(): DiffScrollAnchor | null {
+  const body = bodyRef.value
+  const scroll = leftScrollRef.value
+  if (!body || !scroll) return null
+  const bodyTop = body.getBoundingClientRect().top
+  const lineEls = Array.from(scroll.querySelectorAll<HTMLElement>('[data-row]'))
+  for (const el of lineEls) {
+    if (el.getBoundingClientRect().bottom <= bodyTop + 0.5) continue
+    const index = Number(el.dataset.row)
+    const row = alignedRows.value[index]
+    if (!row) continue
+    const oldLineNo = row.left.lineNo
+    const newLineNo = row.right.lineNo
+    if (oldLineNo == null && newLineNo == null) continue
+    return { oldLineNo, newLineNo }
+  }
+  return null
+}
+
+function scrollToLine(anchor: DiffScrollAnchor) {
+  const targetIndex = findBestRowIndex(anchor)
+  if (targetIndex == null) return
+  scrollToRowStart(targetIndex)
+}
+
+function findBestRowIndex(anchor: DiffScrollAnchor): number | null {
+  let fallbackIndex: number | null = null
+  let fallbackDistance = Number.POSITIVE_INFINITY
+
+  for (let i = 0; i < alignedRows.value.length; i++) {
+    const row = alignedRows.value[i]
+    if (row.right.lineNo != null && row.right.lineNo === anchor.newLineNo) return i
+    if (row.left.lineNo != null && row.left.lineNo === anchor.oldLineNo) return i
+
+    const distance = rowDistance(row, anchor)
+    if (distance < fallbackDistance) {
+      fallbackDistance = distance
+      fallbackIndex = i
+    }
+  }
+
+  return fallbackIndex
+}
+
+function rowDistance(row: AlignedRow, anchor: DiffScrollAnchor): number {
+  const distances: number[] = []
+  if (row.right.lineNo != null && anchor.newLineNo != null) {
+    distances.push(Math.abs(row.right.lineNo - anchor.newLineNo))
+  }
+  if (row.left.lineNo != null && anchor.oldLineNo != null) {
+    distances.push(Math.abs(row.left.lineNo - anchor.oldLineNo))
+  }
+  return distances.length > 0 ? Math.min(...distances) : Number.POSITIVE_INFINITY
+}
+
 function goNextChange() {
   const starts = changeStarts.value
   if (starts.length === 0) return
@@ -221,7 +325,7 @@ function goPrevChange() {
   scrollToRow(starts[currentChangeIdx.value])
 }
 
-defineExpose({ goNextChange, goPrevChange })
+defineExpose({ goNextChange, goPrevChange, getScrollAnchor, scrollToLine })
 </script>
 
 <template>
@@ -270,9 +374,9 @@ defineExpose({ goNextChange, goPrevChange })
                    <span v-else class="code">{{ row.left.content }}</span>
                    
                      <button
-                       v-if="allowRevert && row.left.kind === 'header'"
+                       v-if="allowRevert && row.left.hunkIndex != null && (row.left.kind === 'header' || row.left.isHunkStart)"
                        class="hunk-revert-btn"
-                       @click.stop="emit('revert-hunk', row.left.hunkIndex!)"
+                       @click.stop="emit('revert-hunk', row.left.hunkIndex)"
                      >
                        {{ t('diff.hunk.rollback') }}
                      </button>
@@ -312,6 +416,13 @@ defineExpose({ goNextChange, goPrevChange })
                    <span v-if="langForLine('new', row.right)" class="code" v-html="highlightLine(row.right.content, langForLine('new', row.right))" />
                    <span v-else-if="row.right.wordHtml" class="code" v-html="row.right.wordHtml" />
                    <span v-else class="code">{{ row.right.content }}</span>
+                   <button
+                     v-if="allowRevert && row.right.hunkIndex != null && row.right.isHunkStart && row.left.kind !== 'del'"
+                     class="hunk-revert-btn"
+                     @click.stop="emit('revert-hunk', row.right.hunkIndex)"
+                   >
+                     {{ t('diff.hunk.rollback') }}
+                   </button>
                  </div>
               </div>
             </div>

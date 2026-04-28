@@ -521,7 +521,7 @@ const messages = {
     },
   },
   diff: {
-    mode: { sideBySide: 'Side-by-side', inline: 'Unified', byHunk: 'Grouped by hunk' },
+    mode: { sideBySide: 'Side-by-side', inline: 'Unified', byHunk: 'Group by hunk' },
     toolbar: {
       prevChange: 'Previous change',
       nextChange: 'Next change',
@@ -670,6 +670,12 @@ const messages = {
     },
     advanced: {
       viewTitle: 'View',
+      diffLayout: 'Default diff layout',
+      diffLayoutHint: 'Text diff layout used when opening file changes',
+      diffLayoutInline: 'Unified',
+      diffLayoutSideBySide: 'Side-by-side',
+      diffGroupByHunk: 'Group diff by hunk',
+      diffGroupByHunkHint: 'Show change blocks by default; when off, unified and side-by-side both show the full file',
       soloCurrentBranch: 'Solo current branch',
       soloCurrentBranchHint: 'Show only the first-parent line from the current HEAD',
       showRemoteBranches: 'Show remote branches',

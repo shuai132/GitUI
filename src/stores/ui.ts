@@ -12,6 +12,8 @@ const KEYS = {
   showRemoteBranches: 'gitui.history.showRemoteBranches',
   historySizes: 'gitui.history.sizes',
   diffViewMode: 'gitui.diff.viewMode',
+  diffLayoutMode: 'gitui.diff.layoutMode',
+  diffGroupByHunk: 'gitui.diff.groupByHunk',
   diffHighlight: 'gitui.diff.syntax-highlight',
   dockLayout: 'gitui.history.dockLayout',
   customDockLayout: 'gitui.history.customDockLayout',
@@ -59,7 +61,8 @@ function loadJson<T>(key: string, fallback: T): T {
 export type HistoryLayoutMode = 'horizontal' | 'vertical'
 export type HistoryBranchScope = 'all' | 'current_first_parent'
 export type LayoutPreset = 'custom' | 'vertical' | 'horizontal'
-export type DiffViewMode = 'side-by-side' | 'inline' | 'by-hunk'
+export type LegacyDiffViewMode = 'side-by-side' | 'inline' | 'by-hunk'
+export type DiffLayoutMode = 'side-by-side' | 'inline'
 export type PanelId = 'commits' | 'info' | 'diff'
 export type DockEdge = 'top' | 'bottom' | 'left' | 'right'
 
@@ -70,7 +73,8 @@ export interface DockLayout {
   second: PanelId
 }
 
-const DIFF_MODE_VALUES = ['side-by-side', 'inline', 'by-hunk'] as const
+const LEGACY_DIFF_MODE_VALUES = ['side-by-side', 'inline', 'by-hunk'] as const
+const DIFF_LAYOUT_VALUES = ['side-by-side', 'inline'] as const
 const HISTORY_BRANCH_SCOPE_VALUES = ['all', 'current_first_parent'] as const
 
 export type TerminalDock = 'bottom' | 'right'
@@ -175,8 +179,19 @@ export const useUiStore = defineStore('ui', () => {
     localStorage.setItem(KEYS.historySizes, JSON.stringify(historyPaneSizes.value))
   }
 
-  const diffViewMode = ref<DiffViewMode>(
-    loadString<DiffViewMode>(KEYS.diffViewMode, 'side-by-side', DIFF_MODE_VALUES),
+  const hasLegacyDiffViewMode = localStorage.getItem(KEYS.diffViewMode) !== null
+  const legacyDiffViewMode = loadString<LegacyDiffViewMode>(
+    KEYS.diffViewMode,
+    'inline',
+    LEGACY_DIFF_MODE_VALUES,
+  )
+  const legacyDiffLayoutMode: DiffLayoutMode =
+    legacyDiffViewMode === 'side-by-side' ? 'side-by-side' : 'inline'
+  const diffLayoutMode = ref<DiffLayoutMode>(
+    loadString<DiffLayoutMode>(KEYS.diffLayoutMode, legacyDiffLayoutMode, DIFF_LAYOUT_VALUES),
+  )
+  const diffGroupByHunk = ref<boolean>(
+    loadBool(KEYS.diffGroupByHunk, hasLegacyDiffViewMode ? legacyDiffViewMode === 'by-hunk' : true),
   )
   const diffHighlightEnabled = ref<boolean>(loadBool(KEYS.diffHighlight, true))
   const debugPanelVisible = ref<boolean>(loadBool(KEYS.debugPanel, false))
@@ -260,9 +275,18 @@ export const useUiStore = defineStore('ui', () => {
     localStorage.setItem(KEYS.showRemoteBranches, String(showRemoteBranches.value))
   }
 
-  function setDiffViewMode(mode: DiffViewMode) {
-    diffViewMode.value = mode
-    localStorage.setItem(KEYS.diffViewMode, mode)
+  function setDiffLayoutMode(mode: DiffLayoutMode) {
+    diffLayoutMode.value = mode
+    localStorage.setItem(KEYS.diffLayoutMode, mode)
+  }
+
+  function setDiffGroupByHunk(value: boolean) {
+    diffGroupByHunk.value = value
+    localStorage.setItem(KEYS.diffGroupByHunk, String(value))
+  }
+
+  function toggleDiffGroupByHunk() {
+    setDiffGroupByHunk(!diffGroupByHunk.value)
   }
 
   function toggleDiffHighlight() {
@@ -355,7 +379,8 @@ export const useUiStore = defineStore('ui', () => {
     historyBranchScope,
     showRemoteBranches,
     historyPaneSizes,
-    diffViewMode,
+    diffLayoutMode,
+    diffGroupByHunk,
     diffHighlightEnabled,
     debugPanelVisible,
     terminalDock,
@@ -377,7 +402,9 @@ export const useUiStore = defineStore('ui', () => {
     setHistoryBranchScope,
     toggleHistoryBranchScope,
     toggleShowRemoteBranches,
-    setDiffViewMode,
+    setDiffLayoutMode,
+    setDiffGroupByHunk,
+    toggleDiffGroupByHunk,
     toggleDiffHighlight,
     toggleDebugPanel,
     setTerminalDock,

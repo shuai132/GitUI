@@ -29,14 +29,14 @@
 - [x] 远程操作：fetch、push、pull（fast-forward / ff-only / rebase 三模式）、tag 推送
 - [x] SSH 凭据链：ssh-agent → `~/.ssh/id_ed25519` → `~/.ssh/id_rsa`，HTTPS 走系统 credential helper
 - [x] Submodule：init / update / edit URL / deinit，已克隆的可作为新仓库打开
-- [x] Diff 查看器：inline / side-by-side / by-hunk 三种模式、多语言语法高亮、图片 / SVG 预览
+- [x] Diff 查看器：inline / side-by-side 两种布局，均支持完整文件视图与按 hunk 分组、多语言语法高亮、图片 / SVG 预览
 - [x] 字符编码自适应：commit message 按 git `encoding` header 解码、文件内容按 `.gitattributes` 的 `working-tree-encoding` 或 chardetng 自动检测，混合 UTF-8 / GBK 仓库正常显示
 - [x] Stash：push / pop / apply / delete（含 untracked 文件），用提交信息作 stash message
 - [x] Reflog 查看、git gc 触发入口；右键丢失引用提交可从 HEAD reflog 中剥链移除
 - [x] 工作目录文件监控，状态自动刷新
 - [x] 内置终端：应用内（xterm.js + PTY）/ 调用外部终端
 - [x] 调试日志面板：命令历史 + Rust 后端日志
-- [x] 设置面板：界面语言（跟随系统 / 中文 / English）、主题（跟随系统 / 浅色 / 深色）、UI / 代码字体字号、强调色覆盖、行分隔线强度/样式、提交图分叉样式、历史图过滤、外部终端、视图开关
+- [x] 设置面板：界面语言（跟随系统 / 中文 / English）、主题（跟随系统 / 浅色 / 深色）、UI / 代码字体字号、强调色覆盖、行分隔线强度/样式、提交图分叉样式、历史图过滤、Diff 默认布局与 hunk 分组、外部终端、视图开关
 - [x] 灵活布局：历史面板可拖拽停靠到任意方向、侧边栏可拖到最左隐藏、提交表单高度可拖
 - [x] 文件历史 / Blame：右键提交详情或工作区文件 → 查看该文件的提交历史及每行 blame 注解
 
