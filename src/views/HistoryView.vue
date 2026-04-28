@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, reactive, computed, nextTick, onMounted, onUnmounted, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import { useVirtualizer } from '@tanstack/vue-virtual'
@@ -288,7 +288,7 @@ const currentBranchName = computed(
 
 const headCommitOid = computed(() => {
   const headBranch = historyStore.branches.find((b) => b.is_head && !b.is_remote)
-  return headBranch?.commit_oid ?? historyStore.commits[0]?.oid ?? ''
+  return headBranch?.commit_oid ?? workspaceStore.status?.head_commit ?? ''
 })
 
 const commitByOid = computed(() => {
@@ -381,20 +381,64 @@ watch(
   },
 )
 
-// ── 侧边栏点击分支/stash 跳转到对应 commit ──────────────────────────
+let revealSeq = 0
+
+function revealKey(): string {
+  return [
+    repoStore.activeRepoId ?? '',
+    uiStore.historySearchQuery.trim(),
+    uiStore.showUnreachableCommits ? '1' : '0',
+    uiStore.showStashCommits ? '1' : '0',
+    uiStore.historyBranchScope,
+    uiStore.showRemoteBranches ? '1' : '0',
+  ].join('|')
+}
+
+async function revealCommit(oid: string, select: boolean) {
+  const requestSeq = ++revealSeq
+  const key = revealKey()
+  const shouldContinue = () => requestSeq === revealSeq && revealKey() === key
+
+  if (!oid || !repoStore.activeRepoId || uiStore.historySearchQuery.trim()) return
+
+  try {
+    const found = await historyStore.ensureCommitLoaded(oid, shouldContinue)
+    if (!found || !shouldContinue()) return
+
+    const idx = filteredCommits.value.findIndex((c) => c.oid === oid)
+    if (idx < 0) return
+
+    if (select) {
+      selectedWip.value = false
+      historyStore.selectCommit(oid)
+      showDetail.value = true
+      activePane.value = 'commits'
+    }
+
+    await nextTick()
+    virtualizer.value.scrollToIndex(toVirtualIdx(idx), { align: 'center' })
+  } catch (e) {
+    console.error('[history] failed to reveal commit:', e)
+  }
+}
+
+// ── 自动或手动跳转到对应 commit ────────────────────────────────────
 watch(
   () => historyStore.pendingJumpOid,
   (oid) => {
     if (!oid) return
     historyStore.pendingJumpOid = null
-    const idx = filteredCommits.value.findIndex((c) => c.oid === oid)
-    if (idx < 0) return
-    selectedWip.value = false
-    historyStore.selectCommit(oid)
-    showDetail.value = true
-    activePane.value = 'commits'
-    const vIdx = toVirtualIdx(idx)
-    virtualizer.value.scrollToIndex(vIdx, { align: 'center' })
+    revealCommit(oid, true)
+  },
+  { immediate: true },
+)
+
+watch(
+  () => historyStore.pendingRevealOid,
+  (oid) => {
+    if (!oid) return
+    historyStore.pendingRevealOid = null
+    revealCommit(oid, false)
   },
   { immediate: true },
 )
@@ -519,6 +563,7 @@ onUnmounted(() => {
                 class="commit-row"
                 :class="{
                   selected: isSelected(vRow.index),
+                  'commit-head': filteredCommits[toRealIdx(vRow.index)]?.oid === headCommitOid,
                   'commit-dim': filteredCommits[toRealIdx(vRow.index)]?.is_unreachable,
                   'commit-stash': filteredCommits[toRealIdx(vRow.index)]?.is_stash,
                   'drag-target': dragOverOid === filteredCommits[toRealIdx(vRow.index)]?.oid,
@@ -895,6 +940,16 @@ onUnmounted(() => {
 
 .commit-row.selected {
   background: var(--row-selected-bg);
+}
+
+/* 当前 HEAD 行：只是定位提示，不等同于选中行 */
+.commit-row.commit-head:not(.selected):not(.drag-target) {
+  background: rgba(138, 173, 244, 0.16);
+  box-shadow: inset 2px 0 0 rgba(138, 173, 244, 0.9);
+}
+
+.commit-row.commit-head:not(.selected):not(.drag-target):hover {
+  background: rgba(138, 173, 244, 0.22);
 }
 
 /* 拖拽视觉反馈：目标行浅绿高亮 + 绿色 outline，源行变淡 */

@@ -23,26 +23,28 @@ vi.mock('@/composables/useGitCommands', () => ({
   }),
 }))
 
-function page(hasMore = false): LogPage {
+function commit(oid: string) {
   return {
-    commits: [
-      {
-        oid: 'aaa',
-        short_oid: 'aaa',
-        message: 'commit',
-        summary: 'commit',
-        author_name: 'test',
-        author_email: 'test@example.com',
-        author_time: 1,
-        time: 1,
-        parent_oids: [],
-        is_unreachable: false,
-        is_stash: false,
-        is_reflog_tip: false,
-      },
-    ],
+    oid,
+    short_oid: oid.slice(0, 7),
+    message: 'commit',
+    summary: 'commit',
+    author_name: 'test',
+    author_email: 'test@example.com',
+    author_time: 1,
+    time: 1,
+    parent_oids: [],
+    is_unreachable: false,
+    is_stash: false,
+    is_reflog_tip: false,
+  }
+}
+
+function page(hasMore = false, oids = ['aaa']): LogPage {
+  return {
+    commits: oids.map(commit),
     has_more: hasMore,
-    total_loaded: 1,
+    total_loaded: oids.length,
   }
 }
 
@@ -125,5 +127,67 @@ describe('history store log filters', () => {
       'all',
       false,
     )
+  })
+
+  it('does not load more when ensureCommitLoaded finds the target in loaded commits', async () => {
+    getLogMock.mockResolvedValueOnce(page(true, ['head']))
+    const repoStore = useRepoStore()
+    const historyStore = useHistoryStore()
+
+    repoStore.activeRepoId = 'repo-1'
+    await historyStore.loadLog()
+
+    await expect(historyStore.ensureCommitLoaded('head')).resolves.toBe(true)
+
+    expect(getLogMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('loads more until ensureCommitLoaded finds the target commit', async () => {
+    getLogMock
+      .mockResolvedValueOnce(page(true, ['newer']))
+      .mockResolvedValueOnce(page(true, ['middle']))
+      .mockResolvedValueOnce(page(false, ['head']))
+    const repoStore = useRepoStore()
+    const historyStore = useHistoryStore()
+
+    repoStore.activeRepoId = 'repo-1'
+    await historyStore.loadLog()
+
+    await expect(historyStore.ensureCommitLoaded('head')).resolves.toBe(true)
+
+    expect(getLogMock).toHaveBeenCalledTimes(3)
+    expect(historyStore.commits.map((c) => c.oid)).toEqual(['newer', 'middle', 'head'])
+  })
+
+  it('stops loading when ensureCommitLoaded reaches the end without the target', async () => {
+    getLogMock
+      .mockResolvedValueOnce(page(true, ['newer']))
+      .mockResolvedValueOnce(page(false, ['middle']))
+    const repoStore = useRepoStore()
+    const historyStore = useHistoryStore()
+
+    repoStore.activeRepoId = 'repo-1'
+    await historyStore.loadLog()
+
+    await expect(historyStore.ensureCommitLoaded('missing')).resolves.toBe(false)
+
+    expect(getLogMock).toHaveBeenCalledTimes(2)
+    expect(historyStore.commits.map((c) => c.oid)).toEqual(['newer', 'middle'])
+  })
+
+  it('stops loading when ensureCommitLoaded is cancelled', async () => {
+    getLogMock
+      .mockResolvedValueOnce(page(true, ['newer']))
+      .mockResolvedValueOnce(page(true, ['middle']))
+    const repoStore = useRepoStore()
+    const historyStore = useHistoryStore()
+
+    repoStore.activeRepoId = 'repo-1'
+    await historyStore.loadLog()
+
+    await expect(historyStore.ensureCommitLoaded('head', () => false)).resolves.toBe(false)
+
+    expect(getLogMock).toHaveBeenCalledTimes(1)
+    expect(historyStore.commits.map((c) => c.oid)).toEqual(['newer'])
   })
 })

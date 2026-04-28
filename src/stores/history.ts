@@ -32,6 +32,8 @@ export const useHistoryStore = defineStore('history', () => {
   const error = ref<string | null>(null)
   // 由侧边栏设置，HistoryView 消费后清空；用于从 sidebar 跳转到历史中某个 commit
   const pendingJumpOid = ref<string | null>(null)
+  // 由 App 设置，HistoryView 消费后清空；只把目标 commit 滚入视野，不选中也不打开详情
+  const pendingRevealOid = ref<string | null>(null)
 
   const git = useGitCommands()
 
@@ -95,7 +97,7 @@ export const useHistoryStore = defineStore('history', () => {
   async function loadMore() {
     const repoStore = useRepoStore()
     const uiStore = useUiStore()
-    if (!repoStore.activeRepoId || !hasMore.value) return
+    if (!repoStore.activeRepoId || !hasMore.value || loadingMore.value) return
 
     loadingMore.value = true
     try {
@@ -120,6 +122,22 @@ export const useHistoryStore = defineStore('history', () => {
     } finally {
       loadingMore.value = false
     }
+  }
+
+  async function ensureCommitLoaded(
+    oid: string,
+    shouldContinue: () => boolean = () => true,
+  ): Promise<boolean> {
+    if (commits.value.some((c) => c.oid === oid)) return true
+
+    while (hasMore.value && shouldContinue()) {
+      const before = commits.value.length
+      await loadMore()
+      if (commits.value.some((c) => c.oid === oid)) return true
+      if (commits.value.length === before) break
+    }
+
+    return commits.value.some((c) => c.oid === oid)
   }
 
   async function loadBranches() {
@@ -453,8 +471,11 @@ export const useHistoryStore = defineStore('history', () => {
     selectedWip.value = false
     showDetail.value = false
     graphRows.value = []
+    graphLaneState.value = null
     selectedFileDiffIndex.value = 0
     hasMore.value = false
+    pendingJumpOid.value = null
+    pendingRevealOid.value = null
   }
 
   return {
@@ -477,8 +498,10 @@ export const useHistoryStore = defineStore('history', () => {
     loadingMore,
     error,
     pendingJumpOid,
+    pendingRevealOid,
     loadLog,
     loadMore,
+    ensureCommitLoaded,
     loadBranches,
     loadTags,
     loadRemoteTags,

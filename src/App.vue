@@ -53,6 +53,14 @@ useShortcuts()
 const availableUpdate = ref<Update | null>(null)
 const showUpdateDialog = ref(false)
 
+function currentHeadOid(): string | null {
+  return (
+    historyStore.branches.find((b) => b.is_head && !b.is_remote)?.commit_oid ??
+    workspaceStore.status?.head_commit ??
+    null
+  )
+}
+
 async function runAutoUpdateCheck() {
   if (settingsStore.updateStrategy !== 'auto') return
   
@@ -328,7 +336,11 @@ watch(
         } else if (saved.selectedCommitOid) {
           // 复用 pendingJumpOid：HistoryView 负责 selectCommit + 滚动 + showDetail=true
           historyStore.pendingJumpOid = saved.selectedCommitOid
+        } else {
+          historyStore.pendingRevealOid = currentHeadOid()
         }
+      } else {
+        historyStore.pendingRevealOid = currentHeadOid()
       }
     } else {
       submodulesStore.reset()
