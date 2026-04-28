@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import {
+  DEFAULT_ADVANCED_VIEW_PREFS,
   DEFAULT_HISTORY_COLUMN_ORDER,
   moveHistoryColumn,
   normalizeHistoryColumnOrder,
@@ -92,5 +93,33 @@ describe('ui store history column preferences', () => {
     expect(localStorage.getItem('gitui.history.columnOrder')).toBe(
       JSON.stringify(uiStore.historyColumnOrder),
     )
+  })
+
+  it('resets advanced view preferences to defaults', () => {
+    const uiStore = useUiStore()
+
+    uiStore.setDiffLayoutMode('side-by-side')
+    uiStore.setDiffGroupByHunk(false)
+    uiStore.toggleHistoryBranchScope()
+    uiStore.toggleShowRemoteBranches()
+    uiStore.toggleShowChangeStatsColumn()
+    uiStore.toggleShowUnreachable()
+    uiStore.toggleShowStashes()
+    uiStore.toggleDebugPanel()
+    uiStore.toggleDetailFilesFirst()
+
+    uiStore.resetAdvancedViewPrefs()
+
+    expect(uiStore.diffLayoutMode).toBe(DEFAULT_ADVANCED_VIEW_PREFS.diffLayoutMode)
+    expect(uiStore.diffGroupByHunk).toBe(DEFAULT_ADVANCED_VIEW_PREFS.diffGroupByHunk)
+    expect(uiStore.historyBranchScope).toBe(DEFAULT_ADVANCED_VIEW_PREFS.historyBranchScope)
+    expect(uiStore.showRemoteBranches).toBe(DEFAULT_ADVANCED_VIEW_PREFS.showRemoteBranches)
+    expect(uiStore.showChangeStatsColumn).toBe(DEFAULT_ADVANCED_VIEW_PREFS.showChangeStatsColumn)
+    expect(uiStore.showUnreachableCommits).toBe(DEFAULT_ADVANCED_VIEW_PREFS.showUnreachableCommits)
+    expect(uiStore.showStashCommits).toBe(DEFAULT_ADVANCED_VIEW_PREFS.showStashCommits)
+    expect(uiStore.debugPanelVisible).toBe(DEFAULT_ADVANCED_VIEW_PREFS.debugPanelVisible)
+    expect(uiStore.detailFilesFirst).toBe(DEFAULT_ADVANCED_VIEW_PREFS.detailFilesFirst)
+    expect(localStorage.getItem('gitui.diff.layoutMode')).toBe(DEFAULT_ADVANCED_VIEW_PREFS.diffLayoutMode)
+    expect(localStorage.getItem('gitui.history.branchScope')).toBe(DEFAULT_ADVANCED_VIEW_PREFS.historyBranchScope)
   })
 })

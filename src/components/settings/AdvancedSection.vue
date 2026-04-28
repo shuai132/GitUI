@@ -1,13 +1,15 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useUiStore, type DiffLayoutMode } from '@/stores/ui'
-import { useSettingsStore } from '@/stores/settings'
+import {
+  DEFAULT_ADVANCED_VIEW_PREFS,
+  useUiStore,
+  type DiffLayoutMode,
+} from '@/stores/ui'
 import { useGitPrefsStore, FETCH_INTERVAL_OPTIONS } from '@/stores/gitPrefs'
 import { useGitCommands } from '@/composables/useGitCommands'
 
 const uiStore = useUiStore()
-const settingsStore = useSettingsStore()
 const gitPrefsStore = useGitPrefsStore()
 const git = useGitCommands()
 const { t } = useI18n()
@@ -84,6 +86,18 @@ const viewToggles = computed<ToggleRow[]>(() => [
   },
 ])
 
+const viewPrefsAreDefault = computed(() =>
+  uiStore.diffLayoutMode === DEFAULT_ADVANCED_VIEW_PREFS.diffLayoutMode
+  && uiStore.diffGroupByHunk === DEFAULT_ADVANCED_VIEW_PREFS.diffGroupByHunk
+  && uiStore.historyBranchScope === DEFAULT_ADVANCED_VIEW_PREFS.historyBranchScope
+  && uiStore.showRemoteBranches === DEFAULT_ADVANCED_VIEW_PREFS.showRemoteBranches
+  && uiStore.showChangeStatsColumn === DEFAULT_ADVANCED_VIEW_PREFS.showChangeStatsColumn
+  && uiStore.showUnreachableCommits === DEFAULT_ADVANCED_VIEW_PREFS.showUnreachableCommits
+  && uiStore.showStashCommits === DEFAULT_ADVANCED_VIEW_PREFS.showStashCommits
+  && uiStore.debugPanelVisible === DEFAULT_ADVANCED_VIEW_PREFS.debugPanelVisible
+  && uiStore.detailFilesFirst === DEFAULT_ADVANCED_VIEW_PREFS.detailFilesFirst,
+)
+
 const fetchIntervalLabel = computed(() => {
   const opt = FETCH_INTERVAL_OPTIONS.find(
     (o) => o.value === gitPrefsStore.autoFetchInterval,
@@ -105,7 +119,17 @@ async function onFetchIntervalChange(e: Event) {
 
 <template>
   <div class="section">
-    <div class="section-title">{{ t('settings.advanced.viewTitle') }}</div>
+    <div class="section-title">
+      <span>{{ t('settings.advanced.viewTitle') }}</span>
+      <button
+        type="button"
+        class="reset-btn"
+        :disabled="viewPrefsAreDefault"
+        @click="uiStore.resetAdvancedViewPrefs()"
+      >
+        {{ t('settings.resetDefault') }}
+      </button>
+    </div>
     <div class="pref-row pref-row--top">
       <div class="pref-text">
         <div class="pref-label">{{ t('settings.advanced.diffLayout') }}</div>
@@ -184,10 +208,38 @@ async function onFetchIntervalChange(e: Event) {
   color: var(--text-secondary);
   margin-bottom: 4px;
   letter-spacing: 0.2px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
 
 .section-title--spaced {
   margin-top: 14px;
+}
+
+.reset-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: var(--font-sm);
+  font-weight: 400;
+  padding: 2px 8px;
+  cursor: pointer;
+  transition: color 0.1s, border-color 0.1s, background 0.1s;
+}
+
+.reset-btn:hover:not(:disabled) {
+  color: var(--accent-blue);
+  border-color: var(--accent-blue);
+  background: color-mix(in srgb, var(--accent-blue) 8%, transparent);
+}
+
+.reset-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
 }
 
 .toggle-list {

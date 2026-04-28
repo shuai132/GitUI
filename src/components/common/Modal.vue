@@ -5,6 +5,8 @@ const props = defineProps<{
   visible: boolean
   title?: string
   width?: string
+  height?: string
+  bodyClass?: string
 }>()
 
 const emit = defineEmits<{
@@ -36,13 +38,13 @@ function onOverlayClick() {
   <Teleport to="body">
     <Transition name="modal-fade">
       <div v-if="visible" class="modal-overlay" @mousedown.self="onOverlayClick">
-        <div class="modal-box" :style="{ width: width ?? '460px' }">
+        <div class="modal-box" :style="{ width: width ?? '460px', height }">
           <div v-if="title || $slots.header" class="modal-header">
             <slot name="header">
               <div class="modal-title">{{ title }}</div>
             </slot>
           </div>
-          <div class="modal-body">
+          <div class="modal-body" :class="bodyClass">
             <slot />
           </div>
           <div v-if="$slots.footer" class="modal-footer">
@@ -93,6 +95,13 @@ function onOverlayClick() {
   overflow-y: auto;
   flex: 1;
   min-height: 0;
+}
+
+.modal-body--contained-scroll {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .modal-footer {

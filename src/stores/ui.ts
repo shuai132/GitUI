@@ -101,6 +101,18 @@ const HISTORY_COLUMN_VALUES = DEFAULT_HISTORY_COLUMN_ORDER
 export type TerminalDock = 'bottom' | 'right'
 const TERMINAL_DOCK_VALUES = ['bottom', 'right'] as const
 
+export const DEFAULT_ADVANCED_VIEW_PREFS = {
+  diffLayoutMode: 'inline' as DiffLayoutMode,
+  diffGroupByHunk: true,
+  historyBranchScope: 'all' as HistoryBranchScope,
+  showRemoteBranches: true,
+  showChangeStatsColumn: true,
+  showUnreachableCommits: true,
+  showStashCommits: true,
+  debugPanelVisible: false,
+  detailFilesFirst: true,
+} as const
+
 const PRESET_LAYOUTS: Record<string, DockLayout> = {
   vertical:   { spanning: 'commits', edge: 'top',  first: 'info', second: 'diff' },
   horizontal: { spanning: 'commits', edge: 'left', first: 'info', second: 'diff' },
@@ -227,12 +239,22 @@ export const useUiStore = defineStore('ui', () => {
     return (e === 'left' || e === 'right') ? 'horizontal' : 'vertical'
   })
 
-  const showUnreachableCommits = ref<boolean>(loadBool(KEYS.showUnreachable, true))
-  const showStashCommits = ref<boolean>(loadBool(KEYS.showStashes, true))
-  const historyBranchScope = ref<HistoryBranchScope>(
-    loadString<HistoryBranchScope>(KEYS.historyBranchScope, 'all', HISTORY_BRANCH_SCOPE_VALUES),
+  const showUnreachableCommits = ref<boolean>(
+    loadBool(KEYS.showUnreachable, DEFAULT_ADVANCED_VIEW_PREFS.showUnreachableCommits),
   )
-  const showRemoteBranches = ref<boolean>(loadBool(KEYS.showRemoteBranches, true))
+  const showStashCommits = ref<boolean>(
+    loadBool(KEYS.showStashes, DEFAULT_ADVANCED_VIEW_PREFS.showStashCommits),
+  )
+  const historyBranchScope = ref<HistoryBranchScope>(
+    loadString<HistoryBranchScope>(
+      KEYS.historyBranchScope,
+      DEFAULT_ADVANCED_VIEW_PREFS.historyBranchScope,
+      HISTORY_BRANCH_SCOPE_VALUES,
+    ),
+  )
+  const showRemoteBranches = ref<boolean>(
+    loadBool(KEYS.showRemoteBranches, DEFAULT_ADVANCED_VIEW_PREFS.showRemoteBranches),
+  )
   const historyColumnOrder = ref<HistoryColumnId[]>(
     loadJsonArray<HistoryColumnId>(
       KEYS.historyColumnOrder,
@@ -240,7 +262,9 @@ export const useUiStore = defineStore('ui', () => {
       HISTORY_COLUMN_VALUES,
     ),
   )
-  const showChangeStatsColumn = ref<boolean>(loadBool(KEYS.showChangeStatsColumn, true))
+  const showChangeStatsColumn = ref<boolean>(
+    loadBool(KEYS.showChangeStatsColumn, DEFAULT_ADVANCED_VIEW_PREFS.showChangeStatsColumn),
+  )
 
   const historyPaneSizes = ref<HistoryPaneSizes>(
     loadJson<HistoryPaneSizes>(KEYS.historySizes, DEFAULT_HISTORY_SIZES),
@@ -258,15 +282,24 @@ export const useUiStore = defineStore('ui', () => {
     LEGACY_DIFF_MODE_VALUES,
   )
   const legacyDiffLayoutMode: DiffLayoutMode =
-    legacyDiffViewMode === 'side-by-side' ? 'side-by-side' : 'inline'
+    legacyDiffViewMode === 'side-by-side'
+      ? 'side-by-side'
+      : DEFAULT_ADVANCED_VIEW_PREFS.diffLayoutMode
   const diffLayoutMode = ref<DiffLayoutMode>(
     loadString<DiffLayoutMode>(KEYS.diffLayoutMode, legacyDiffLayoutMode, DIFF_LAYOUT_VALUES),
   )
   const diffGroupByHunk = ref<boolean>(
-    loadBool(KEYS.diffGroupByHunk, hasLegacyDiffViewMode ? legacyDiffViewMode === 'by-hunk' : true),
+    loadBool(
+      KEYS.diffGroupByHunk,
+      hasLegacyDiffViewMode
+        ? legacyDiffViewMode === 'by-hunk'
+        : DEFAULT_ADVANCED_VIEW_PREFS.diffGroupByHunk,
+    ),
   )
   const diffHighlightEnabled = ref<boolean>(loadBool(KEYS.diffHighlight, true))
-  const debugPanelVisible = ref<boolean>(loadBool(KEYS.debugPanel, false))
+  const debugPanelVisible = ref<boolean>(
+    loadBool(KEYS.debugPanel, DEFAULT_ADVANCED_VIEW_PREFS.debugPanelVisible),
+  )
 
   // ── Terminal 偏好 ─────────────────────────────────────────────────
   const terminalDock = ref<TerminalDock>(
@@ -275,7 +308,9 @@ export const useUiStore = defineStore('ui', () => {
   const terminalHeight = ref<number>(loadNumber(KEYS.terminalHeight, 260))
   const terminalWidth = ref<number>(loadNumber(KEYS.terminalWidth, 420))
   const terminalVisible = ref<boolean>(loadBool(KEYS.terminalVisible, false))
-  const detailFilesFirst = ref<boolean>(loadBool(KEYS.detailFilesFirst, true))
+  const detailFilesFirst = ref<boolean>(
+    loadBool(KEYS.detailFilesFirst, DEFAULT_ADVANCED_VIEW_PREFS.detailFilesFirst),
+  )
 
   // ── 持久化动作 ────────────────────────────────────────────────────
   // 拖动类：组件在 pointermove 里直接改 .value，pointerup 再调 persistXxx()
@@ -421,6 +456,28 @@ export const useUiStore = defineStore('ui', () => {
     localStorage.setItem(KEYS.detailFilesFirst, String(detailFilesFirst.value))
   }
 
+  function resetAdvancedViewPrefs() {
+    diffLayoutMode.value = DEFAULT_ADVANCED_VIEW_PREFS.diffLayoutMode
+    diffGroupByHunk.value = DEFAULT_ADVANCED_VIEW_PREFS.diffGroupByHunk
+    historyBranchScope.value = DEFAULT_ADVANCED_VIEW_PREFS.historyBranchScope
+    showRemoteBranches.value = DEFAULT_ADVANCED_VIEW_PREFS.showRemoteBranches
+    showChangeStatsColumn.value = DEFAULT_ADVANCED_VIEW_PREFS.showChangeStatsColumn
+    showUnreachableCommits.value = DEFAULT_ADVANCED_VIEW_PREFS.showUnreachableCommits
+    showStashCommits.value = DEFAULT_ADVANCED_VIEW_PREFS.showStashCommits
+    debugPanelVisible.value = DEFAULT_ADVANCED_VIEW_PREFS.debugPanelVisible
+    detailFilesFirst.value = DEFAULT_ADVANCED_VIEW_PREFS.detailFilesFirst
+
+    localStorage.setItem(KEYS.diffLayoutMode, diffLayoutMode.value)
+    localStorage.setItem(KEYS.diffGroupByHunk, String(diffGroupByHunk.value))
+    localStorage.setItem(KEYS.historyBranchScope, historyBranchScope.value)
+    localStorage.setItem(KEYS.showRemoteBranches, String(showRemoteBranches.value))
+    localStorage.setItem(KEYS.showChangeStatsColumn, String(showChangeStatsColumn.value))
+    localStorage.setItem(KEYS.showUnreachable, String(showUnreachableCommits.value))
+    localStorage.setItem(KEYS.showStashes, String(showStashCommits.value))
+    localStorage.setItem(KEYS.debugPanel, String(debugPanelVisible.value))
+    localStorage.setItem(KEYS.detailFilesFirst, String(detailFilesFirst.value))
+  }
+
   // ── WipPanel 粘性请求 ─────────────────────────────────────────────
   function requestDiscardAll() {
     shouldOpenDiscardAll.value = true
@@ -507,6 +564,7 @@ export const useUiStore = defineStore('ui', () => {
     setTerminalVisible,
     toggleTerminalVisible,
     toggleDetailFilesFirst,
+    resetAdvancedViewPrefs,
     // transient
     requestDiscardAll,
     consumeDiscardAllRequest,

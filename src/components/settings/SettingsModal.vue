@@ -51,7 +51,14 @@ const resetDisabled = computed(() =>
 </script>
 
 <template>
-  <Modal :visible="visible" :title="t('settings.title')" width="720px" @close="emit('close')">
+  <Modal
+    :visible="visible"
+    :title="t('settings.title')"
+    width="720px"
+    height="90vh"
+    body-class="modal-body--contained-scroll"
+    @close="emit('close')"
+  >
     <div class="settings-layout">
       <nav class="settings-tabs">
         <button
@@ -95,7 +102,9 @@ const resetDisabled = computed(() =>
   display: grid;
   grid-template-columns: 140px 1fr;
   gap: 16px;
-  min-height: 380px;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
 }
 
 .settings-tabs {
@@ -132,6 +141,8 @@ const resetDisabled = computed(() =>
 
 .settings-content {
   min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
   padding-right: 2px;
 }
 
