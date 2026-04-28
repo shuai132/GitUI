@@ -65,6 +65,7 @@ pub fn run() {
             unstage_all,
             get_repo_state,
             apply_patch,
+            apply_patch_to_index,
             // Merge / Rebase / Conflict
             merge_branch,
             merge_continue,

@@ -8,6 +8,7 @@ Diff 查看器服务于 **WIP 工作区 diff** 和 **提交内 diff**。两种�
 - **多模式展示**：支持左右分栏（Side-by-Side）和行内（Inline）两种布局，并提供独立的按 Hunk 分组选项。关闭分组时用完整文件上下文阅读，开启分组时用变更块聚焦阅读。
 - **交互功能**：支持语法高亮、变更块快速跳转、图片/SVG 预览。
 - **提交回滚**：提交 diff 可按 Hunk 反向应用到工作区；该入口只在开启按 Hunk 分组时展示，完整文件上下文模式不显示 Hunk 回滚操作。
+- **WIP 区块索引操作**：工作区 diff 可在按 Hunk 分组时对单个 Hunk 执行暂存或取消暂存，操作目标是 Index。
 
 ## 模块划分
 
@@ -21,7 +22,9 @@ Diff 查看器服务于 **WIP 工作区 diff** 和 **提交内 diff**。两种�
 - **前端逻辑 (`composables/diff/`)**：
   - `useDiffSearch`：管理 diff 搜索框状态，并响应全局搜索信号。
   - `useRevertHunk`：管理提交 diff 的 hunk 反向应用操作。
+  - `useWipHunkAction`：管理工作区 diff 的 hunk 暂存 / 取消暂存操作。
 - **逻辑工具 (`lib/highlight.ts`, `lib/wordDiff.ts`, `lib/fullFileDiff.ts`)**：提供语法高亮映射、词级差异计算和完整文件 diff 行构造。
+  - `lib/hunkPatch.ts`：根据 `FileDiff` 与 Hunk 方向构造可应用的单 Hunk patch。
 
 ## 数据契约
 

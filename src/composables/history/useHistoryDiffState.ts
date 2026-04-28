@@ -2,6 +2,7 @@ import { computed, type Ref } from 'vue'
 import type { useDiffStore } from '@/stores/diff'
 import type { useHistoryStore } from '@/stores/history'
 import type { useWorkspaceStore } from '@/stores/workspace'
+import { findWipFileBySelection } from '@/utils/wipSelection'
 
 type FileStats = {
   modified: number
@@ -68,6 +69,14 @@ export function useHistoryDiffState({
     return commit.diffs[historyStore.selectedFileDiffIndex] ?? null
   })
 
+  const currentWipFile = computed(() => {
+    if (!selectedWip.value || !diffStore.currentPath) return null
+    const status = workspaceStore.status
+    if (!status) return null
+    const allFiles = [...status.staged, ...status.unstaged, ...status.untracked]
+    return findWipFileBySelection(allFiles, diffStore.currentPath, diffStore.currentStaged) ?? null
+  })
+
   const currentConflictFilePath = computed<string | null>(() => {
     if (!selectedWip.value) return null
     const path = diffStore.currentPath
@@ -83,6 +92,7 @@ export function useHistoryDiffState({
     wipStats,
     commitStats,
     currentDiff,
+    currentWipFile,
     currentConflictFilePath,
   }
 }

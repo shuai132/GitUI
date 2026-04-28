@@ -20,15 +20,15 @@ const props = defineProps<{
   syntaxLangForLine?: SyntaxLangResolver | null
   /** 完整旧 / 新文件内容；为空时回退到 hunk-only。 */
   fullFileContent?: FullFileContent | null
-  /** 是否允许回滚变动行 */
-  allowRevert?: boolean
+  /** 按 hunk 分组时展示的 hunk 操作文案；为空则不展示操作入口。 */
+  hunkActionLabel?: string | null
 }>()
 
 const emit = defineEmits<{
-  'revert-hunk': [hunkIndex: number]
+  'hunk-action': [hunkIndex: number]
 }>()
 
-const canRevertHunk = computed(() => props.allowRevert === true && props.groupByHunk === true)
+const canRunHunkAction = computed(() => props.hunkActionLabel != null && props.groupByHunk === true)
 
 interface AlignedLine {
   lineNo?: number
@@ -376,11 +376,11 @@ defineExpose({ goNextChange, goPrevChange, getScrollAnchor, scrollToLine })
                    <span v-else class="code">{{ row.left.content }}</span>
                    
                      <button
-                       v-if="canRevertHunk && row.left.hunkIndex != null && (row.left.kind === 'header' || row.left.isHunkStart)"
-                       class="hunk-revert-btn"
-                       @click.stop="emit('revert-hunk', row.left.hunkIndex)"
+                       v-if="canRunHunkAction && row.left.hunkIndex != null && (row.left.kind === 'header' || row.left.isHunkStart)"
+                       class="hunk-action-btn"
+                       @click.stop="emit('hunk-action', row.left.hunkIndex)"
                      >
-                       {{ t('diff.hunk.rollback') }}
+                       {{ hunkActionLabel }}
                      </button>
                  </div>
               </div>
@@ -419,11 +419,11 @@ defineExpose({ goNextChange, goPrevChange, getScrollAnchor, scrollToLine })
                    <span v-else-if="row.right.wordHtml" class="code" v-html="row.right.wordHtml" />
                    <span v-else class="code">{{ row.right.content }}</span>
                    <button
-                     v-if="canRevertHunk && row.right.hunkIndex != null && row.right.isHunkStart && row.left.kind !== 'del'"
-                     class="hunk-revert-btn"
-                     @click.stop="emit('revert-hunk', row.right.hunkIndex)"
+                     v-if="canRunHunkAction && row.right.hunkIndex != null && row.right.isHunkStart && row.left.kind !== 'del'"
+                     class="hunk-action-btn"
+                     @click.stop="emit('hunk-action', row.right.hunkIndex)"
                    >
-                     {{ t('diff.hunk.rollback') }}
+                     {{ hunkActionLabel }}
                    </button>
                  </div>
               </div>
@@ -573,7 +573,7 @@ defineExpose({ goNextChange, goPrevChange, getScrollAnchor, scrollToLine })
   color: var(--text-secondary);
 }
 
-.hunk-revert-btn {
+.hunk-action-btn {
   position: sticky;
   right: 12px;
   margin-left: auto;
@@ -589,7 +589,7 @@ defineExpose({ goNextChange, goPrevChange, getScrollAnchor, scrollToLine })
   white-space: nowrap;
 }
 
-.hunk-revert-btn:hover {
+.hunk-action-btn:hover {
   background: var(--bg-overlay);
   color: var(--text-primary);
   border-color: var(--text-muted);

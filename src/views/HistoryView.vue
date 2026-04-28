@@ -215,6 +215,7 @@ const {
   wipStats,
   commitStats,
   currentDiff,
+  currentWipFile,
   currentConflictFilePath,
 } = useHistoryDiffState({
   selectedWip,
@@ -682,6 +683,7 @@ onUnmounted(() => {
         :selected-file-idx="historyStore.selectedFileDiffIndex"
         :current-diff="currentDiff"
         :current-staged="diffStore.currentStaged"
+        :current-wip-file="currentWipFile"
         :current-conflict-file-path="currentConflictFilePath"
         :wip-stats="wipStats"
         :commit-stats="commitStats"

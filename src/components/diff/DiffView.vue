@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, nextTick, watch } from 'vue'
-import type { FileDiff } from '@/types/git'
+import { useI18n } from 'vue-i18n'
+import type { FileDiff, FileStatusKind } from '@/types/git'
 import SideBySideDiff from './SideBySideDiff.vue'
 import InlineDiff from './InlineDiff.vue'
 import ImageDiff from './ImageDiff.vue'
@@ -11,6 +12,7 @@ import { createVueSfcLineLangMap, isVuePath, type VueSfcLineLangMap } from '@/li
 import { detectPreviewKind } from '@/lib/preview'
 import { useUiStore } from '@/stores/ui'
 import { useRevertHunk } from '@/composables/diff/useRevertHunk'
+import { useWipHunkAction } from '@/composables/diff/useWipHunkAction'
 import { useGitCommands } from '@/composables/useGitCommands'
 import type { FullFileContent } from '@/lib/fullFileDiff'
 
@@ -19,13 +21,14 @@ const props = defineProps<{
   loading?: boolean
   repoId?: string
   /** WIP 场景传入；提交详情传 null 或不传 */
-  wip?: { staged: boolean } | null
+  wip?: { staged: boolean; status?: FileStatusKind } | null
   /** 当前选中文件是冲突文件时的路径。非空则切换到冲突解决视图 */
   conflictFilePath?: string | null
 }>()
 
 const emit = defineEmits<{ close: [] }>()
 
+const { t } = useI18n()
 const uiStore = useUiStore()
 const { getBlobBytes, readWorktreeFile } = useGitCommands()
 
@@ -123,6 +126,26 @@ const { allowRevert, revertHunk } = useRevertHunk({
   wip: () => props.wip ?? null,
 })
 const showHunkRevert = computed(() => allowRevert.value && uiStore.diffGroupByHunk)
+const { action: wipHunkAction, applyWipHunk } = useWipHunkAction({
+  repoId: () => props.repoId,
+  diff: () => props.diff,
+  wip: () => props.wip ?? null,
+})
+const hunkActionLabel = computed(() => {
+  if (!uiStore.diffGroupByHunk) return null
+  if (showHunkRevert.value) return t('diff.hunk.rollback')
+  if (wipHunkAction.value === 'stage') return t('diff.hunk.stage')
+  if (wipHunkAction.value === 'unstage') return t('diff.hunk.unstage')
+  return null
+})
+
+async function onHunkAction(hunkIndex: number) {
+  if (showHunkRevert.value) {
+    await revertHunk(hunkIndex)
+    return
+  }
+  await applyWipHunk(hunkIndex)
+}
 
 let vueLoadSeq = 0
 watch(
@@ -280,8 +303,8 @@ function normalizeTextDecoderLabel(encoding: string): string {
         :syntax-lang-for-line="syntaxLangForLine"
         :full-file-content="fullFileContent"
         :group-by-hunk="uiStore.diffGroupByHunk"
-        :allow-revert="showHunkRevert"
-        @revert-hunk="revertHunk"
+        :hunk-action-label="hunkActionLabel"
+        @hunk-action="onHunkAction"
       />
       <InlineDiff
         v-else
@@ -292,8 +315,8 @@ function normalizeTextDecoderLabel(encoding: string): string {
         :syntax-lang="syntaxLang"
         :syntax-lang-for-line="syntaxLangForLine"
         :full-file-content="fullFileContent"
-        :allow-revert="showHunkRevert"
-        @revert-hunk="revertHunk"
+        :hunk-action-label="hunkActionLabel"
+        @hunk-action="onHunkAction"
       />
     </div>
   </div>

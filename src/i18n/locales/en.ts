@@ -539,6 +539,8 @@ const messages = {
     },
     hunk: {
       rollback: 'Rollback hunk',
+      stage: 'Stage hunk',
+      unstage: 'Unstage hunk',
     },
     image: {
       oldSide: 'Before',

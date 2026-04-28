@@ -2957,6 +2957,15 @@ impl GitEngine {
         Ok(())
     }
 
+    /// 将 patch 应用到 index（用于暂存 / 取消暂存 hunk）
+    pub fn apply_patch_to_index(path: &str, patch_text: &str) -> GitResult<()> {
+        let repo = Self::open(path)?;
+        let diff = git2::Diff::from_buffer(patch_text.as_bytes())?;
+        let mut opts = git2::ApplyOptions::new();
+        repo.apply(&diff, git2::ApplyLocation::Index, Some(&mut opts))?;
+        Ok(())
+    }
+
     /// 读取 HEAD 的 reflog，返回最多 `limit` 条记录（最新在前）。
     pub fn get_reflog(path: &str, limit: usize) -> GitResult<Vec<ReflogEntry>> {
         let repo = Self::open(path)?;
@@ -3489,6 +3498,99 @@ mod tests {
         let parent_refs = parent_commits.iter().collect::<Vec<_>>();
         repo.commit(Some("HEAD"), &sig, &sig, message, &tree, &parent_refs)
             .unwrap()
+    }
+
+    fn multiline_base() -> String {
+        (1..=14)
+            .map(|i| format!("line{i}\n"))
+            .collect::<Vec<_>>()
+            .join("")
+    }
+
+    fn diff_contents(diff: &FileDiff) -> String {
+        diff.hunks
+            .iter()
+            .flat_map(|h| h.lines.iter())
+            .map(|l| l.content.as_str())
+            .collect::<Vec<_>>()
+            .join("")
+    }
+
+    #[test]
+    fn test_apply_patch_to_index_stages_single_hunk() {
+        let test_repo = TestRepo::new();
+        let path = test_repo.path_str();
+        let base = multiline_base();
+        commit_file(&test_repo, "base", "existing.txt", &base);
+
+        let modified = base
+            .replace("line2\n", "LINE2\n")
+            .replace("line12\n", "LINE12\n");
+        fs::write(test_repo.dir.path().join("existing.txt"), modified).unwrap();
+
+        let patch = concat!(
+            "diff --git a/existing.txt b/existing.txt\n",
+            "--- a/existing.txt\n",
+            "+++ b/existing.txt\n",
+            "@@ -1,5 +1,5 @@\n",
+            " line1\n",
+            "-line2\n",
+            "+LINE2\n",
+            " line3\n",
+            " line4\n",
+            " line5\n",
+        );
+
+        GitEngine::apply_patch_to_index(path, patch).unwrap();
+
+        let staged = GitEngine::get_file_diff(path, "existing.txt", true).unwrap();
+        let staged_content = diff_contents(&staged);
+        assert!(staged_content.contains("LINE2\n"));
+        assert!(!staged_content.contains("LINE12\n"));
+
+        let unstaged = GitEngine::get_file_diff(path, "existing.txt", false).unwrap();
+        let unstaged_content = diff_contents(&unstaged);
+        assert!(!unstaged_content.contains("LINE2\n"));
+        assert!(unstaged_content.contains("LINE12\n"));
+    }
+
+    #[test]
+    fn test_apply_patch_to_index_unstages_single_hunk() {
+        let test_repo = TestRepo::new();
+        let path = test_repo.path_str();
+        let base = multiline_base();
+        commit_file(&test_repo, "base", "existing.txt", &base);
+
+        let modified = base
+            .replace("line2\n", "LINE2\n")
+            .replace("line12\n", "LINE12\n");
+        fs::write(test_repo.dir.path().join("existing.txt"), modified).unwrap();
+        GitEngine::stage_file(path, "existing.txt").unwrap();
+
+        let patch = concat!(
+            "diff --git a/existing.txt b/existing.txt\n",
+            "--- a/existing.txt\n",
+            "+++ b/existing.txt\n",
+            "@@ -1,5 +1,5 @@\n",
+            " line1\n",
+            "+line2\n",
+            "-LINE2\n",
+            " line3\n",
+            " line4\n",
+            " line5\n",
+        );
+
+        GitEngine::apply_patch_to_index(path, patch).unwrap();
+
+        let staged = GitEngine::get_file_diff(path, "existing.txt", true).unwrap();
+        let staged_content = diff_contents(&staged);
+        assert!(!staged_content.contains("LINE2\n"));
+        assert!(staged_content.contains("LINE12\n"));
+
+        let unstaged = GitEngine::get_file_diff(path, "existing.txt", false).unwrap();
+        let unstaged_content = diff_contents(&unstaged);
+        assert!(unstaged_content.contains("LINE2\n"));
+        assert!(!unstaged_content.contains("LINE12\n"));
     }
 
     #[test]

@@ -12,12 +12,12 @@ describe('diff hunk rollback controls', () => {
       props: {
         diff: fileDiff(),
         groupByHunk: false,
-        allowRevert: true,
+        hunkActionLabel: 'Rollback hunk',
       },
       global: { plugins: [i18n] },
     })
 
-    expect(wrapper.find('.hunk-revert-btn').exists()).toBe(false)
+    expect(wrapper.find('.hunk-action-btn').exists()).toBe(false)
   })
 
   it('shows inline rollback controls when hunk grouping is on', () => {
@@ -25,12 +25,12 @@ describe('diff hunk rollback controls', () => {
       props: {
         diff: fileDiff(),
         groupByHunk: true,
-        allowRevert: true,
+        hunkActionLabel: 'Rollback hunk',
       },
       global: { plugins: [i18n] },
     })
 
-    expect(wrapper.find('.hunk-revert-btn').exists()).toBe(true)
+    expect(wrapper.find('.hunk-action-btn').exists()).toBe(true)
   })
 
   it('hides side-by-side rollback controls when hunk grouping is off', () => {
@@ -38,7 +38,7 @@ describe('diff hunk rollback controls', () => {
       props: {
         diff: fileDiff(),
         groupByHunk: false,
-        allowRevert: true,
+        hunkActionLabel: 'Rollback hunk',
         fullFileContent: {
           oldText: 'one\ntwo\n',
           newText: 'one\nTWO\n',
@@ -47,7 +47,7 @@ describe('diff hunk rollback controls', () => {
       global: { plugins: [i18n] },
     })
 
-    expect(wrapper.find('.hunk-revert-btn').exists()).toBe(false)
+    expect(wrapper.find('.hunk-action-btn').exists()).toBe(false)
   })
 
   it('shows side-by-side rollback controls when hunk grouping is on', () => {
@@ -55,12 +55,25 @@ describe('diff hunk rollback controls', () => {
       props: {
         diff: fileDiff(),
         groupByHunk: true,
-        allowRevert: true,
+        hunkActionLabel: 'Rollback hunk',
       },
       global: { plugins: [i18n] },
     })
 
-    expect(wrapper.find('.hunk-revert-btn').exists()).toBe(true)
+    expect(wrapper.find('.hunk-action-btn').exists()).toBe(true)
+  })
+
+  it('uses the provided hunk action label', () => {
+    const wrapper = mount(InlineDiff, {
+      props: {
+        diff: fileDiff(),
+        groupByHunk: true,
+        hunkActionLabel: 'Stage hunk',
+      },
+      global: { plugins: [i18n] },
+    })
+
+    expect(wrapper.find('.hunk-action-btn').text()).toBe('Stage hunk')
   })
 })
 

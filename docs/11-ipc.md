@@ -20,6 +20,7 @@ GitUI 采用 Tauri v2 的 IPC 机制实现前后端通信，包括双向的请�
 - `get_status` / `get_repo_state`：获取当前工作区状态及仓库特定状态（如 Merge/Rebase 中）。
 - `stage_file` / `unstage_file` / `stage_all` / `unstage_all`：索引区精细化管理。
 - `apply_patch`：将补丁文本应用到工作区（常用于历史记录的单个变动行/Hunk回滚）。
+- `apply_patch_to_index`：将补丁文本应用到 Index（用于工作区单个 Hunk 的暂存 / 取消暂存）。
 
 ### 提交管理 (Commit)
 - `create_commit` / `amend_commit` / `amend_commit_message`：提交创建与修补。

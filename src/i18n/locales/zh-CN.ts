@@ -538,6 +538,8 @@ const messages = {
     },
     hunk: {
       rollback: '回滚区块',
+      stage: '暂存区块',
+      unstage: '取消暂存区块',
     },
     image: {
       oldSide: '旧版',
