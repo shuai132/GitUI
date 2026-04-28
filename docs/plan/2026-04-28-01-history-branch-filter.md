@@ -31,6 +31,7 @@
 
 - 默认仍为 `all + includeRemoteBranches=true`，保持当前全量 DAG。
 - `current_first_parent` 只从 HEAD 起步并启用 first-parent 简化，用于主线浏览，不实现任意分支 solo。
+- `Solo 当前分支` 明确采用 first-parent 主线语义，不等同于当前分支可达的完整提交集合；未来如需完整当前分支子图，应单独增加 `current` 范围而不是改变现有语义。
 - 侧边栏只在当前本地分支上提供 Solo 快捷入口；非当前分支、远程分支和 Detached HEAD 虚拟项不提供任意分支 solo。
 - 隐藏远程分支同时影响日志来源和 branch chip；标签、HEAD、本地分支、stash、reflog 开关保持独立。
 - 不在前端对日志做全量过滤，避免绕过分页和增量提交图计算。
