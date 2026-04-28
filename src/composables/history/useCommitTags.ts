@@ -1,16 +1,22 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useHistoryStore } from '@/stores/history'
+import { useUiStore } from '@/stores/ui'
 import type { BranchInfo, TagInfo } from '@/types/git'
+
+export function filterBranchTags(branches: BranchInfo[], showRemoteBranches: boolean): BranchInfo[] {
+  return showRemoteBranches ? branches : branches.filter((b) => !b.is_remote)
+}
 
 export function useCommitTags() {
   const { t } = useI18n()
   const historyStore = useHistoryStore()
+  const uiStore = useUiStore()
 
   // ── Branch tag map (oid → branches pointing to this commit) ─────────
   const branchTagMap = computed(() => {
     const map = new Map<string, BranchInfo[]>()
-    for (const b of historyStore.branches) {
+    for (const b of filterBranchTags(historyStore.branches, uiStore.showRemoteBranches)) {
       if (b.commit_oid) {
         if (!map.has(b.commit_oid)) map.set(b.commit_oid, [])
         map.get(b.commit_oid)!.push(b)

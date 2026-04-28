@@ -105,6 +105,8 @@ export interface CommitInfo {
   is_reflog_tip: boolean
 }
 
+export type LogBranchScope = 'all' | 'current_first_parent'
+
 export interface BranchInfo {
   name: string
   is_remote: boolean

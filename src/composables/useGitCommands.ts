@@ -19,6 +19,7 @@ import type {
   ConflictFile,
   BuildInfo,
   RemoteInfo,
+  LogBranchScope,
 } from '@/types/git'
 import { useErrorsStore } from '@/stores/errors'
 import { useDebugStore } from '@/stores/debug'
@@ -220,6 +221,8 @@ export function useGitCommands() {
     limit: number,
     includeUnreachable: boolean,
     includeStashes: boolean,
+    branchScope: LogBranchScope,
+    includeRemoteBranches: boolean,
   ) =>
     call<LogPage>('get_log', {
       repoId,
@@ -227,6 +230,8 @@ export function useGitCommands() {
       limit,
       includeUnreachable,
       includeStashes,
+      branchScope,
+      includeRemoteBranches,
     })
 
   const getCommitSummary = (repoId: string, oid: string, includeStats = true) =>

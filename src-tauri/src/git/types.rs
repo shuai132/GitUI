@@ -189,6 +189,13 @@ pub struct CommitInfo {
     pub is_reflog_tip: bool,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum LogBranchScope {
+    All,
+    CurrentFirstParent,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BranchInfo {
     pub name: String,

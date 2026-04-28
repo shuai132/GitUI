@@ -368,9 +368,14 @@ watch(
   },
 )
 
-// ── 开关「显示丢失引用 / 显示贮藏」时重新加载历史 ─────────────────
+// ── 开关历史图过滤条件时重新加载历史 ───────────────────────────────
 watch(
-  () => [uiStore.showUnreachableCommits, uiStore.showStashCommits],
+  () => [
+    uiStore.showUnreachableCommits,
+    uiStore.showStashCommits,
+    uiStore.historyBranchScope,
+    uiStore.showRemoteBranches,
+  ],
   () => {
     if (repoStore.activeRepoId) historyStore.loadLog()
   },

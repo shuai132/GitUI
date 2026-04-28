@@ -365,6 +365,8 @@ impl GitEngine {
         limit: usize,
         include_unreachable: bool,
         include_stashes: bool,
+        branch_scope: LogBranchScope,
+        include_remote_branches: bool,
     ) -> GitResult<LogPage> {
         use std::collections::HashSet;
 
@@ -413,10 +415,20 @@ impl GitEngine {
         // ── Step C: 主 revwalk —— 推所有 ref + 可选 stash + 可选 reflog
         let mut revwalk = repo.revwalk()?;
         revwalk.set_sorting(git2::Sort::TOPOLOGICAL | git2::Sort::TIME)?;
-        revwalk.push_glob("refs/heads/*").ok();
-        revwalk.push_glob("refs/remotes/*").ok();
-        revwalk.push_glob("refs/tags/*").ok();
-        revwalk.push_head().ok();
+        match branch_scope {
+            LogBranchScope::All => {
+                revwalk.push_glob("refs/heads/*").ok();
+                if include_remote_branches {
+                    revwalk.push_glob("refs/remotes/*").ok();
+                }
+                revwalk.push_glob("refs/tags/*").ok();
+                revwalk.push_head().ok();
+            }
+            LogBranchScope::CurrentFirstParent => {
+                revwalk.push_head().ok();
+                revwalk.simplify_first_parent().ok();
+            }
+        }
 
         if include_stashes {
             for oid in &stash_set {
@@ -3418,8 +3430,66 @@ fn read_rebase_state(
 mod tests {
     use super::*;
     use crate::git::test_utils::TestRepo;
-    use git2::StashFlags;
+    use git2::{Oid, StashFlags};
     use std::fs;
+
+    fn checkout_branch(repo: &git2::Repository, name: &str) {
+        repo.set_head(&format!("refs/heads/{name}")).unwrap();
+        repo.checkout_head(Some(git2::build::CheckoutBuilder::default().force()))
+            .unwrap();
+    }
+
+    fn commit_file(test_repo: &TestRepo, message: &str, file_name: &str, content: &str) -> Oid {
+        fs::write(test_repo.dir.path().join(file_name), content).unwrap();
+        let repo = &test_repo.repo;
+        let mut index = repo.index().unwrap();
+        index.add_path(std::path::Path::new(file_name)).unwrap();
+        index.write().unwrap();
+        let tree_oid = index.write_tree().unwrap();
+        let tree = repo.find_tree(tree_oid).unwrap();
+        let sig = repo.signature().unwrap();
+        let parent = repo.head().unwrap().peel_to_commit().unwrap();
+        repo.commit(Some("HEAD"), &sig, &sig, message, &tree, &[&parent])
+            .unwrap()
+    }
+
+    fn commit_file_to_ref(
+        test_repo: &TestRepo,
+        reference: &str,
+        message: &str,
+        file_name: &str,
+        content: &str,
+    ) -> Oid {
+        fs::write(test_repo.dir.path().join(file_name), content).unwrap();
+        let repo = &test_repo.repo;
+        let mut index = repo.index().unwrap();
+        index.add_path(std::path::Path::new(file_name)).unwrap();
+        index.write().unwrap();
+        let tree_oid = index.write_tree().unwrap();
+        let tree = repo.find_tree(tree_oid).unwrap();
+        let sig = repo.signature().unwrap();
+        let parent = repo.head().unwrap().peel_to_commit().unwrap();
+        repo.commit(Some(reference), &sig, &sig, message, &tree, &[&parent])
+            .unwrap()
+    }
+
+    fn merge_commit(test_repo: &TestRepo, message: &str, parents: &[Oid]) -> Oid {
+        fs::write(test_repo.dir.path().join("merge.txt"), message).unwrap();
+        let repo = &test_repo.repo;
+        let mut index = repo.index().unwrap();
+        index.add_path(std::path::Path::new("merge.txt")).unwrap();
+        index.write().unwrap();
+        let tree_oid = index.write_tree().unwrap();
+        let tree = repo.find_tree(tree_oid).unwrap();
+        let sig = repo.signature().unwrap();
+        let parent_commits = parents
+            .iter()
+            .map(|oid| repo.find_commit(*oid).unwrap())
+            .collect::<Vec<_>>();
+        let parent_refs = parent_commits.iter().collect::<Vec<_>>();
+        repo.commit(Some("HEAD"), &sig, &sig, message, &tree, &parent_refs)
+            .unwrap()
+    }
 
     #[test]
     fn test_stash_diff_includes_untracked_and_staged_new_files() {
@@ -3490,16 +3560,108 @@ mod tests {
         let test_repo = TestRepo::new();
         let path = test_repo.path_str();
 
-        let log = GitEngine::get_log(path, 0, 10, false, false).expect("Failed to get log");
+        let log = GitEngine::get_log(
+            path,
+            0,
+            10,
+            false,
+            false,
+            LogBranchScope::All,
+            true,
+        ).expect("Failed to get log");
         
         // At least the initial commit should exist
         assert_eq!(log.commits.len(), 1);
         assert_eq!(log.commits[0].summary, "init");
         
         GitEngine::create_commit(path, "second commit").unwrap();
-        let log_after = GitEngine::get_log(path, 0, 10, false, false).unwrap();
+        let log_after = GitEngine::get_log(
+            path,
+            0,
+            10,
+            false,
+            false,
+            LogBranchScope::All,
+            true,
+        ).unwrap();
         
         assert_eq!(log_after.commits.len(), 2);
         assert_eq!(log_after.commits[0].summary, "second commit");
+    }
+
+    #[test]
+    fn test_get_log_can_exclude_remote_only_commits() {
+        let test_repo = TestRepo::new();
+        let path = test_repo.path_str();
+
+        let remote_oid = commit_file_to_ref(
+            &test_repo,
+            "refs/remotes/origin/feature",
+            "remote only",
+            "remote.txt",
+            "remote\n",
+        );
+
+        let with_remote = GitEngine::get_log(
+            path,
+            0,
+            10,
+            false,
+            false,
+            LogBranchScope::All,
+            true,
+        ).unwrap();
+        assert!(with_remote.commits.iter().any(|c| c.oid == remote_oid.to_string()));
+
+        let without_remote = GitEngine::get_log(
+            path,
+            0,
+            10,
+            false,
+            false,
+            LogBranchScope::All,
+            false,
+        ).unwrap();
+        assert!(!without_remote.commits.iter().any(|c| c.oid == remote_oid.to_string()));
+    }
+
+    #[test]
+    fn test_get_log_current_first_parent_excludes_merged_side_branch() {
+        let test_repo = TestRepo::new();
+        let repo = &test_repo.repo;
+        let path = test_repo.path_str();
+
+        let main1 = commit_file(&test_repo, "main 1", "main1.txt", "main 1\n");
+        repo.branch("side", &repo.find_commit(main1).unwrap(), false).unwrap();
+
+        checkout_branch(repo, "side");
+        let side1 = commit_file(&test_repo, "side 1", "side1.txt", "side 1\n");
+        let side2 = commit_file(&test_repo, "side 2", "side2.txt", "side 2\n");
+
+        checkout_branch(repo, "master");
+        let main2 = commit_file(&test_repo, "main 2", "main2.txt", "main 2\n");
+        let merge = merge_commit(&test_repo, "merge side", &[main2, side2]);
+
+        let log = GitEngine::get_log(
+            path,
+            0,
+            20,
+            false,
+            false,
+            LogBranchScope::CurrentFirstParent,
+            true,
+        ).unwrap();
+        let oids = log.commits.iter().map(|c| c.oid.as_str()).collect::<Vec<_>>();
+        let merge_oid = merge.to_string();
+        let main2_oid = main2.to_string();
+        let main1_oid = main1.to_string();
+        let side1_oid = side1.to_string();
+        let side2_oid = side2.to_string();
+
+        assert!(oids.contains(&merge_oid.as_str()));
+        assert!(oids.contains(&main2_oid.as_str()));
+        assert!(oids.contains(&main1_oid.as_str()));
+        assert!(!oids.contains(&side1_oid.as_str()));
+        assert!(!oids.contains(&side2_oid.as_str()));
     }
 }

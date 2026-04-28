@@ -31,9 +31,16 @@
 ### 搜索与过滤
 系统在前端实现实时的文本过滤，支持匹配标题、作者及 OID。在搜索模式下，系统会动态调整视图（如隐藏提交图）以优化信息密度。
 
+历史日志还支持两个持久化的图过滤偏好：
+- **Solo 当前分支**：`ui` store 的 `historyBranchScope = current_first_parent` 时，`get_log` 只从当前 HEAD 出发并按 first-parent 链构建日志，用于查看更干净的当前主线。
+- **显示远程分支**：`showRemoteBranches` 控制远程分支是否作为 `get_log` 的日志来源；关闭时提交行也不显示远程分支 chip。
+
+默认值保持 `all + showRemoteBranches=true`，也就是继续展示当前完整 DAG。
+
 ### 标签与同步状态
 - **分支/标签映射**：动态计算并展示指向特定提交的所有引用。
 - **远程同步感知**：通过后台比对，为标签提供远程同步状态指示（如已同步、仅本地等）。
+- **远程分支可见性**：远程分支 chip 跟随 `showRemoteBranches`，本地分支与 tag chip 不受影响。
 
 ## 详情面板功能
 

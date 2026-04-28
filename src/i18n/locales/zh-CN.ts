@@ -56,6 +56,8 @@ const messages = {
       force: 'Push --force（强制覆盖）',
     },
     actionsMenu: {
+      soloCurrentBranch: 'Solo 当前分支',
+      showRemoteBranches: '显示远程分支',
       showUnreachable: '显示悬垂引用',
       showStashes: '显示贮藏',
       debugLog: '调试日志',
@@ -666,6 +668,10 @@ const messages = {
     },
     advanced: {
       viewTitle: '视图',
+      soloCurrentBranch: 'Solo 当前分支',
+      soloCurrentBranchHint: '历史图只显示当前 HEAD 的 first-parent 主线',
+      showRemoteBranches: '显示远程分支',
+      showRemoteBranchesHint: '关闭后远程分支不作为历史来源，提交行也不显示远程分支标签',
       showUnreachable: '显示悬垂引用',
       showUnreachableHint: '在历史图中绘制 HEAD reflog 中不可达的提交',
       showStashes: '显示贮藏',

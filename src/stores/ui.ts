@@ -8,6 +8,8 @@ const KEYS = {
   historyLayout: 'gitui.history.layout',
   showUnreachable: 'gitui.history.showUnreachable',
   showStashes: 'gitui.history.showStashes',
+  historyBranchScope: 'gitui.history.branchScope',
+  showRemoteBranches: 'gitui.history.showRemoteBranches',
   historySizes: 'gitui.history.sizes',
   diffViewMode: 'gitui.diff.viewMode',
   diffHighlight: 'gitui.diff.syntax-highlight',
@@ -55,6 +57,7 @@ function loadJson<T>(key: string, fallback: T): T {
 
 // ── 类型 ──────────────────────────────────────────────────────────────
 export type HistoryLayoutMode = 'horizontal' | 'vertical'
+export type HistoryBranchScope = 'all' | 'current_first_parent'
 export type LayoutPreset = 'custom' | 'vertical' | 'horizontal'
 export type DiffViewMode = 'side-by-side' | 'inline' | 'by-hunk'
 export type PanelId = 'commits' | 'info' | 'diff'
@@ -68,6 +71,7 @@ export interface DockLayout {
 }
 
 const DIFF_MODE_VALUES = ['side-by-side', 'inline', 'by-hunk'] as const
+const HISTORY_BRANCH_SCOPE_VALUES = ['all', 'current_first_parent'] as const
 
 export type TerminalDock = 'bottom' | 'right'
 const TERMINAL_DOCK_VALUES = ['bottom', 'right'] as const
@@ -157,6 +161,10 @@ export const useUiStore = defineStore('ui', () => {
 
   const showUnreachableCommits = ref<boolean>(loadBool(KEYS.showUnreachable, true))
   const showStashCommits = ref<boolean>(loadBool(KEYS.showStashes, true))
+  const historyBranchScope = ref<HistoryBranchScope>(
+    loadString<HistoryBranchScope>(KEYS.historyBranchScope, 'all', HISTORY_BRANCH_SCOPE_VALUES),
+  )
+  const showRemoteBranches = ref<boolean>(loadBool(KEYS.showRemoteBranches, true))
 
   const historyPaneSizes = ref<HistoryPaneSizes>(
     loadJson<HistoryPaneSizes>(KEYS.historySizes, DEFAULT_HISTORY_SIZES),
@@ -234,6 +242,22 @@ export const useUiStore = defineStore('ui', () => {
   function toggleShowStashes() {
     showStashCommits.value = !showStashCommits.value
     localStorage.setItem(KEYS.showStashes, String(showStashCommits.value))
+  }
+
+  function setHistoryBranchScope(scope: HistoryBranchScope) {
+    historyBranchScope.value = scope
+    localStorage.setItem(KEYS.historyBranchScope, scope)
+  }
+
+  function toggleHistoryBranchScope() {
+    setHistoryBranchScope(
+      historyBranchScope.value === 'all' ? 'current_first_parent' : 'all',
+    )
+  }
+
+  function toggleShowRemoteBranches() {
+    showRemoteBranches.value = !showRemoteBranches.value
+    localStorage.setItem(KEYS.showRemoteBranches, String(showRemoteBranches.value))
   }
 
   function setDiffViewMode(mode: DiffViewMode) {
@@ -328,6 +352,8 @@ export const useUiStore = defineStore('ui', () => {
     historyLayoutMode,
     showUnreachableCommits,
     showStashCommits,
+    historyBranchScope,
+    showRemoteBranches,
     historyPaneSizes,
     diffViewMode,
     diffHighlightEnabled,
@@ -348,6 +374,9 @@ export const useUiStore = defineStore('ui', () => {
     toggleHistoryLayout,
     toggleShowUnreachable,
     toggleShowStashes,
+    setHistoryBranchScope,
+    toggleHistoryBranchScope,
+    toggleShowRemoteBranches,
     setDiffViewMode,
     toggleDiffHighlight,
     toggleDebugPanel,

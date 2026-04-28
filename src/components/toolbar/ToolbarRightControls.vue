@@ -97,6 +97,21 @@ const actionsBtnRef = ref<HTMLButtonElement | null>(null)
 const actionsMenuItems = computed<ContextMenuItem[]>(() => [
   {
     label:
+      (uiStore.historyBranchScope === 'current_first_parent' ? '✓ ' : '   ') +
+      t('toolbar.actionsMenu.soloCurrentBranch'),
+    action: 'toggle-current-first-parent',
+    disabled: !hasRepo.value,
+  },
+  {
+    label:
+      (uiStore.showRemoteBranches ? '✓ ' : '   ') +
+      t('toolbar.actionsMenu.showRemoteBranches'),
+    action: 'toggle-remote-branches',
+    disabled: !hasRepo.value,
+  },
+  { separator: true },
+  {
+    label:
       (uiStore.showUnreachableCommits ? '✓ ' : '   ') +
       t('toolbar.actionsMenu.showUnreachable'),
     action: 'toggle-unreachable',
@@ -190,6 +205,12 @@ async function onActionsSelect(action: string) {
       break
     case 'toggle-stashes':
       uiStore.toggleShowStashes()
+      break
+    case 'toggle-current-first-parent':
+      uiStore.toggleHistoryBranchScope()
+      break
+    case 'toggle-remote-branches':
+      uiStore.toggleShowRemoteBranches()
       break
     case 'toggle-debug':
       uiStore.toggleDebugPanel()

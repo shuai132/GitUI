@@ -56,6 +56,8 @@ const messages = {
       force: 'Push --force (overwrite remote)',
     },
     actionsMenu: {
+      soloCurrentBranch: 'Solo current branch',
+      showRemoteBranches: 'Show remote branches',
       showUnreachable: 'Show dangling refs',
       showStashes: 'Show stashes',
       debugLog: 'Debug log',
@@ -667,6 +669,10 @@ const messages = {
     },
     advanced: {
       viewTitle: 'View',
+      soloCurrentBranch: 'Solo current branch',
+      soloCurrentBranchHint: 'Show only the first-parent line from the current HEAD',
+      showRemoteBranches: 'Show remote branches',
+      showRemoteBranchesHint: 'When off, remote branches are excluded from history sources and commit chips',
       showUnreachable: 'Show dangling refs',
       showUnreachableHint: 'Draw commits unreachable via HEAD reflog on the history graph',
       showStashes: 'Show stashes',

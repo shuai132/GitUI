@@ -1,7 +1,7 @@
 use tauri::State;
 
 use crate::{
-    git::{engine::GitEngine, error::GitError, types::{CommitDetail, CommitInfo, LogPage}},
+    git::{engine::GitEngine, error::GitError, types::{CommitDetail, CommitInfo, LogBranchScope, LogPage}},
     repo_manager::RepoManager,
 };
 
@@ -12,6 +12,8 @@ pub async fn get_log(
     limit: usize,
     include_unreachable: bool,
     include_stashes: bool,
+    branch_scope: LogBranchScope,
+    include_remote_branches: bool,
     repo_manager: State<'_, RepoManager>,
 ) -> Result<LogPage, GitError> {
     let meta = repo_manager
@@ -19,7 +21,15 @@ pub async fn get_log(
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
 
     let limit = limit.min(500); // cap at 500 per page
-    GitEngine::get_log(&meta.path, offset, limit, include_unreachable, include_stashes)
+    GitEngine::get_log(
+        &meta.path,
+        offset,
+        limit,
+        include_unreachable,
+        include_stashes,
+        branch_scope,
+        include_remote_branches,
+    )
 }
 
 #[tauri::command]

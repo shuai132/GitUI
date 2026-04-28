@@ -22,6 +22,20 @@ interface ToggleRow {
 
 const viewToggles = computed<ToggleRow[]>(() => [
   {
+    key: 'soloCurrentBranch',
+    label: t('settings.advanced.soloCurrentBranch'),
+    hint: t('settings.advanced.soloCurrentBranchHint'),
+    get: () => uiStore.historyBranchScope === 'current_first_parent',
+    toggle: () => uiStore.toggleHistoryBranchScope(),
+  },
+  {
+    key: 'showRemoteBranches',
+    label: t('settings.advanced.showRemoteBranches'),
+    hint: t('settings.advanced.showRemoteBranchesHint'),
+    get: () => uiStore.showRemoteBranches,
+    toggle: () => uiStore.toggleShowRemoteBranches(),
+  },
+  {
     key: 'showUnreachable',
     label: t('settings.advanced.showUnreachable'),
     hint: t('settings.advanced.showUnreachableHint'),

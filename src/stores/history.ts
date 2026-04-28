@@ -49,6 +49,8 @@ export const useHistoryStore = defineStore('history', () => {
         PAGE_SIZE,
         uiStore.showUnreachableCommits,
         uiStore.showStashCommits,
+        uiStore.historyBranchScope,
+        uiStore.showRemoteBranches,
       )
       // 若 HEAD / 尾部 / 总数 / has_more 都没变，且每个提交的可达/stash/reflog-tip 标志
       // 也没变，认为提交序列的结构与渲染相关信息都未改动，跳过赋值避免响应式重渲染
@@ -103,6 +105,8 @@ export const useHistoryStore = defineStore('history', () => {
         PAGE_SIZE,
         uiStore.showUnreachableCommits,
         uiStore.showStashCommits,
+        uiStore.historyBranchScope,
+        uiStore.showRemoteBranches,
       )
       // 只计算新增的这一页，从上次的末尾 lane 状态接续，O(200) 而非 O(N)
       const { rows: newRows, finalState } = computeGraphLayout(
