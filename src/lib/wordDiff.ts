@@ -1,7 +1,7 @@
 /**
  * wordDiff.ts — 字符级 diff 工具
  *
- * 使用 Myers LCS 算法对两个字符串做逐字符对比，返回一组 DiffToken，
+ * 使用 LCS 算法对两个字符串做逐字符对比，返回一组 DiffToken，
  * 分别标记 `eq`（相同）、`del`（仅左侧有）、`add`（仅右侧有）。
  *
  * 使用场景：在 SideBySideDiff 和 InlineDiff 的配对 del/add 行中
@@ -20,7 +20,7 @@ export interface DiffToken {
 const MAX_LEN = 500
 
 /**
- * 对两个字符串做字符级 Myers diff。
+ * 对两个字符串做字符级 diff。
  * 返回 `left` 侧的 token 序列（含 eq/del）和 `right` 侧的 token 序列（含 eq/add）。
  */
 export function diffChars(
@@ -43,7 +43,7 @@ export function diffChars(
     }
   }
 
-  const ops = myersDiff(left, right)
+  const ops = lcsDiff(left, right)
 
   const leftTokens: DiffToken[] = []
   const rightTokens: DiffToken[] = []
@@ -62,100 +62,90 @@ export function diffChars(
   return { leftTokens, rightTokens }
 }
 
-// ── Myers 算法核心 ────────────────────────────────────────────────────
+// ── LCS 算法核心 ──────────────────────────────────────────────────────
 
 interface Op {
   kind: 'eq' | 'del' | 'add'
   text: string
 }
 
-function myersDiff(a: string, b: string): Op[] {
+function lcsDiff(a: string, b: string): Op[] {
   const n = a.length
   const m = b.length
-  const max = n + m
 
-  if (max === 0) return []
+  if (n === 0 && m === 0) return []
+  if (n === 0) return [{ kind: 'add', text: b }]
+  if (m === 0) return [{ kind: 'del', text: a }]
 
-  // V[k] = 最远到达 x（在 diagonal k = x - y 上）
-  const V: Int32Array = new Int32Array(2 * max + 2)
-  // trace[d] = 该步 V 的快照（用于回溯）
-  const trace: Int32Array[] = []
-
-  outer: for (let d = 0; d <= max; d++) {
-    trace.push(new Int32Array(V))
-    for (let k = -d; k <= d; k += 2) {
-      let x: number
-      const kIdx = k + max
-      if (k === -d || (k !== d && V[kIdx - 1] < V[kIdx + 1])) {
-        x = V[kIdx + 1]
-      } else {
-        x = V[kIdx - 1] + 1
-      }
-      let y = x - k
-      while (x < n && y < m && a[x] === b[y]) {
-        x++
-        y++
-      }
-      V[kIdx] = x
-      if (x >= n && y >= m) {
-        trace.push(new Int32Array(V))
-        break outer
-      }
-    }
+  let prefixLen = 0
+  while (prefixLen < n && prefixLen < m && a[prefixLen] === b[prefixLen]) {
+    prefixLen++
   }
 
-  return backtrack(a, b, trace, max)
+  let suffixLen = 0
+  while (
+    suffixLen < n - prefixLen &&
+    suffixLen < m - prefixLen &&
+    a[n - 1 - suffixLen] === b[m - 1 - suffixLen]
+  ) {
+    suffixLen++
+  }
+
+  const prefix = a.slice(0, prefixLen)
+  const suffix = a.slice(n - suffixLen)
+  const midA = a.slice(prefixLen, n - suffixLen)
+  const midB = b.slice(prefixLen, m - suffixLen)
+
+  const ops: Op[] = []
+  if (prefix) ops.push({ kind: 'eq', text: prefix })
+  ops.push(...lcsMiddleDiff(midA, midB))
+  if (suffix) ops.push({ kind: 'eq', text: suffix })
+
+  return mergeOps(ops)
 }
 
-function backtrack(
-  a: string,
-  b: string,
-  trace: Int32Array[],
-  offset: number,
-): Op[] {
-  const ops: Op[] = []
-  let x = a.length
-  let y = b.length
+function lcsMiddleDiff(a: string, b: string): Op[] {
+  const n = a.length
+  const m = b.length
+  if (n === 0 && m === 0) return []
+  if (n === 0) return [{ kind: 'add', text: b }]
+  if (m === 0) return [{ kind: 'del', text: a }]
 
-  for (let d = trace.length - 1; d >= 0; d--) {
-    const V = trace[d]
-    const k = x - y
-    const kIdx = k + offset
-
-    let prevK: number
-    if (k === -d || (k !== d && V[kIdx - 1] < V[kIdx + 1])) {
-      prevK = k + 1
-    } else {
-      prevK = k - 1
-    }
-
-    const prevX = V[prevK + offset]
-    const prevY = prevX - prevK
-
-    // 对角线（相等）
-    while (x > prevX + 1 && y > prevY + 1 && x > 0 && y > 0) {
-      x--; y--
-      ops.unshift({ kind: 'eq', text: a[x] })
-    }
-
-    if (d > 0) {
-      if (x === prevX) {
-        ops.unshift({ kind: 'add', text: b[y - 1] })
-        y--
+  const width = m + 1
+  const lengths = new Uint16Array((n + 1) * width)
+  for (let i = n - 1; i >= 0; i--) {
+    for (let j = m - 1; j >= 0; j--) {
+      const idx = i * width + j
+      if (a[i] === b[j]) {
+        lengths[idx] = lengths[(i + 1) * width + j + 1] + 1
       } else {
-        ops.unshift({ kind: 'del', text: a[x - 1] })
-        x--
+        const delLen = lengths[(i + 1) * width + j]
+        const addLen = lengths[i * width + j + 1]
+        lengths[idx] = delLen >= addLen ? delLen : addLen
       }
-    }
-
-    // 最后一段对角线
-    while (x > prevX && y > prevY && x > 0 && y > 0) {
-      x--; y--
-      ops.unshift({ kind: 'eq', text: a[x] })
     }
   }
 
-  // 合并相邻同类 token，减少 DOM 节点数
+  const ops: Op[] = []
+  let i = 0
+  let j = 0
+  while (i < n || j < m) {
+    if (i < n && j < m && a[i] === b[j]) {
+      ops.push({ kind: 'eq', text: a[i] })
+      i++
+      j++
+    } else if (
+      j >= m ||
+      (i < n && lengths[(i + 1) * width + j] >= lengths[i * width + j + 1])
+    ) {
+      ops.push({ kind: 'del', text: a[i] })
+      i++
+    } else {
+      ops.push({ kind: 'add', text: b[j] })
+      j++
+    }
+  }
+
   return mergeOps(ops)
 }
 
