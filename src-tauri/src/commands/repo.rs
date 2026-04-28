@@ -43,7 +43,7 @@ pub async fn open_repo(
     // Set up file watcher for working directory (includes .git/).
     // 监控整个工作目录否则会漏掉 tracked 文件的外部编辑；
     // 代价是 node_modules / target 等目录也会触发大量事件——
-    // 用 IgnoreFilter 读根 .gitignore 做路径前置过滤。
+    // 用 IgnoreFilter 按 Git ignore 规则对未跟踪路径做前置过滤。
     let watch_dir = workdir.to_path_buf();
     let ignore_filter = Some(IgnoreFilter::build(watch_dir.clone()));
     let app_clone = app.clone();
