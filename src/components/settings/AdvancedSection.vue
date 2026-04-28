@@ -48,6 +48,13 @@ const viewToggles = computed<ToggleRow[]>(() => [
     toggle: () => uiStore.toggleShowRemoteBranches(),
   },
   {
+    key: 'showChangeStatsColumn',
+    label: t('settings.advanced.showChangeStatsColumn'),
+    hint: t('settings.advanced.showChangeStatsColumnHint'),
+    get: () => uiStore.showChangeStatsColumn,
+    toggle: () => uiStore.toggleShowChangeStatsColumn(),
+  },
+  {
     key: 'showUnreachable',
     label: t('settings.advanced.showUnreachable'),
     hint: t('settings.advanced.showUnreachableHint'),

@@ -11,6 +11,8 @@ const KEYS = {
   historyBranchScope: 'gitui.history.branchScope',
   showRemoteBranches: 'gitui.history.showRemoteBranches',
   historySizes: 'gitui.history.sizes',
+  historyColumnOrder: 'gitui.history.columnOrder',
+  showChangeStatsColumn: 'gitui.history.showChangeStatsColumn',
   diffViewMode: 'gitui.diff.viewMode',
   diffLayoutMode: 'gitui.diff.layoutMode',
   diffGroupByHunk: 'gitui.diff.groupByHunk',
@@ -57,6 +59,16 @@ function loadJson<T>(key: string, fallback: T): T {
   }
 }
 
+function loadJsonArray<T extends string>(key: string, fallback: readonly T[], allowed: readonly T[]): T[] {
+  const raw = localStorage.getItem(key)
+  if (!raw) return [...fallback]
+  try {
+    return normalizeHistoryColumnOrder(JSON.parse(raw), allowed, fallback)
+  } catch {
+    return [...fallback]
+  }
+}
+
 // ── 类型 ──────────────────────────────────────────────────────────────
 export type HistoryLayoutMode = 'horizontal' | 'vertical'
 export type HistoryBranchScope = 'all' | 'current_first_parent'
@@ -65,6 +77,7 @@ export type LegacyDiffViewMode = 'side-by-side' | 'inline' | 'by-hunk'
 export type DiffLayoutMode = 'side-by-side' | 'inline'
 export type PanelId = 'commits' | 'info' | 'diff'
 export type DockEdge = 'top' | 'bottom' | 'left' | 'right'
+export type HistoryColumnId = 'description' | 'changes' | 'commit' | 'author' | 'date'
 
 export interface DockLayout {
   spanning: PanelId
@@ -76,6 +89,14 @@ export interface DockLayout {
 const LEGACY_DIFF_MODE_VALUES = ['side-by-side', 'inline', 'by-hunk'] as const
 const DIFF_LAYOUT_VALUES = ['side-by-side', 'inline'] as const
 const HISTORY_BRANCH_SCOPE_VALUES = ['all', 'current_first_parent'] as const
+export const DEFAULT_HISTORY_COLUMN_ORDER: readonly HistoryColumnId[] = [
+  'description',
+  'changes',
+  'commit',
+  'author',
+  'date',
+]
+const HISTORY_COLUMN_VALUES = DEFAULT_HISTORY_COLUMN_ORDER
 
 export type TerminalDock = 'bottom' | 'right'
 const TERMINAL_DOCK_VALUES = ['bottom', 'right'] as const
@@ -125,6 +146,46 @@ const DEFAULT_HISTORY_SIZES: HistoryPaneSizes = {
   commitInfoTopH: 0,
 }
 
+export function normalizeHistoryColumnOrder<T extends string>(
+  value: unknown,
+  allowed: readonly T[],
+  fallback: readonly T[] = allowed,
+): T[] {
+  if (!Array.isArray(value)) return [...fallback]
+
+  const allowedSet = new Set<T>(allowed)
+  const seen = new Set<T>()
+  const normalized: T[] = []
+  for (const item of value) {
+    if (typeof item !== 'string') continue
+    const col = item as T
+    if (!allowedSet.has(col) || seen.has(col)) continue
+    seen.add(col)
+    normalized.push(col)
+  }
+  for (const col of fallback) {
+    if (!seen.has(col)) normalized.push(col)
+  }
+  return normalized
+}
+
+export function moveHistoryColumn<T extends string>(
+  order: readonly T[],
+  from: T,
+  to: T,
+  placement: 'before' | 'after' = 'before',
+): T[] {
+  const fromIndex = order.indexOf(from)
+  const toIndex = order.indexOf(to)
+  if (fromIndex < 0 || toIndex < 0 || fromIndex === toIndex) return [...order]
+
+  const next = [...order]
+  const [moved] = next.splice(fromIndex, 1)
+  const targetIndex = next.indexOf(to)
+  next.splice(placement === 'after' ? targetIndex + 1 : targetIndex, 0, moved)
+  return next
+}
+
 // ── Store ─────────────────────────────────────────────────────────────
 export const useUiStore = defineStore('ui', () => {
   // 粘性请求：从 Actions 菜单转发 "丢弃所有变更" 给 WipPanel
@@ -172,6 +233,14 @@ export const useUiStore = defineStore('ui', () => {
     loadString<HistoryBranchScope>(KEYS.historyBranchScope, 'all', HISTORY_BRANCH_SCOPE_VALUES),
   )
   const showRemoteBranches = ref<boolean>(loadBool(KEYS.showRemoteBranches, true))
+  const historyColumnOrder = ref<HistoryColumnId[]>(
+    loadJsonArray<HistoryColumnId>(
+      KEYS.historyColumnOrder,
+      DEFAULT_HISTORY_COLUMN_ORDER,
+      HISTORY_COLUMN_VALUES,
+    ),
+  )
+  const showChangeStatsColumn = ref<boolean>(loadBool(KEYS.showChangeStatsColumn, true))
 
   const historyPaneSizes = ref<HistoryPaneSizes>(
     loadJson<HistoryPaneSizes>(KEYS.historySizes, DEFAULT_HISTORY_SIZES),
@@ -278,6 +347,24 @@ export const useUiStore = defineStore('ui', () => {
     localStorage.setItem(KEYS.showRemoteBranches, String(showRemoteBranches.value))
   }
 
+  function setHistoryColumnOrder(order: readonly HistoryColumnId[]) {
+    historyColumnOrder.value = normalizeHistoryColumnOrder(
+      order,
+      HISTORY_COLUMN_VALUES,
+      DEFAULT_HISTORY_COLUMN_ORDER,
+    )
+    localStorage.setItem(KEYS.historyColumnOrder, JSON.stringify(historyColumnOrder.value))
+  }
+
+  function moveHistoryColumnTo(from: HistoryColumnId, to: HistoryColumnId, placement: 'before' | 'after') {
+    setHistoryColumnOrder(moveHistoryColumn(historyColumnOrder.value, from, to, placement))
+  }
+
+  function toggleShowChangeStatsColumn() {
+    showChangeStatsColumn.value = !showChangeStatsColumn.value
+    localStorage.setItem(KEYS.showChangeStatsColumn, String(showChangeStatsColumn.value))
+  }
+
   function setDiffLayoutMode(mode: DiffLayoutMode) {
     diffLayoutMode.value = mode
     localStorage.setItem(KEYS.diffLayoutMode, mode)
@@ -381,6 +468,8 @@ export const useUiStore = defineStore('ui', () => {
     showStashCommits,
     historyBranchScope,
     showRemoteBranches,
+    historyColumnOrder,
+    showChangeStatsColumn,
     historyPaneSizes,
     diffLayoutMode,
     diffGroupByHunk,
@@ -405,6 +494,9 @@ export const useUiStore = defineStore('ui', () => {
     setHistoryBranchScope,
     toggleHistoryBranchScope,
     toggleShowRemoteBranches,
+    setHistoryColumnOrder,
+    moveHistoryColumnTo,
+    toggleShowChangeStatsColumn,
     setDiffLayoutMode,
     setDiffGroupByHunk,
     toggleDiffGroupByHunk,

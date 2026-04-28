@@ -1,31 +1,112 @@
 <script setup lang="ts">
+import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import type { HistoryColumnId } from '@/stores/ui'
 
 const { t } = useI18n()
+
+type ResizableColumnId = 'desc' | 'stats' | 'hash' | 'author' | 'date'
+
+interface HeaderColumn {
+  id: HistoryColumnId
+  className: string
+  width: number
+  resizeCol: ResizableColumnId
+  label: string
+}
 
 defineProps<{
   commitListMinWidth: number
   headerScrollLeft: number
   graphColWidth: number
-  sizes: {
-    descColW: number
-    hashColW: number
-    authorColW: number
-    dateColW: number
-    dateCol2W: number
-    commitPanePct: number
-    commitRowPct: number
-    diffRowPct: number
-    infoPanePct: number
-    statsColW: number
-  }
+  columns: HeaderColumn[]
 }>()
 
 const emit = defineEmits<{
   listBodyWheel: [e: WheelEvent]
   dragHandlePointerDown: [pane: 'commits', e: PointerEvent]
-  colResizeStart: [e: PointerEvent, col: 'desc' | 'stats' | 'hash' | 'author' | 'date']
+  colResizeStart: [e: PointerEvent, col: ResizableColumnId]
+  columnReorder: [from: HistoryColumnId, to: HistoryColumnId, placement: 'before' | 'after']
 }>()
+
+interface ColumnDragState {
+  id: HistoryColumnId
+  startX: number
+  startY: number
+  isDragging: boolean
+}
+
+const dragState = ref<ColumnDragState | null>(null)
+const dragOverColumn = ref<HistoryColumnId | null>(null)
+const dragPlacement = ref<'before' | 'after'>('before')
+const DRAG_THRESHOLD = 4
+
+function onColumnPointerDown(e: PointerEvent, id: HistoryColumnId) {
+  if (e.button !== 0) return
+  dragState.value = {
+    id,
+    startX: e.clientX,
+    startY: e.clientY,
+    isDragging: false,
+  }
+  window.addEventListener('pointermove', onPointerMove)
+  window.addEventListener('pointerup', onPointerUp)
+  window.addEventListener('pointercancel', onPointerUp)
+}
+
+function updateDragTarget(e: PointerEvent) {
+  const target = (e.target as HTMLElement | null)?.closest<HTMLElement>('[data-history-column]')
+  if (!target) {
+    dragOverColumn.value = null
+    return
+  }
+  const id = target.dataset.historyColumn as HistoryColumnId | undefined
+  if (!id) {
+    dragOverColumn.value = null
+    return
+  }
+  const rect = target.getBoundingClientRect()
+  dragOverColumn.value = id
+  dragPlacement.value = e.clientX < rect.left + rect.width / 2 ? 'before' : 'after'
+}
+
+function onPointerMove(e: PointerEvent) {
+  const state = dragState.value
+  if (!state) return
+  if (!state.isDragging) {
+    const dx = e.clientX - state.startX
+    const dy = e.clientY - state.startY
+    if (Math.hypot(dx, dy) < DRAG_THRESHOLD) return
+    state.isDragging = true
+  }
+  updateDragTarget(e)
+  e.preventDefault()
+}
+
+function onPointerUp() {
+  window.removeEventListener('pointermove', onPointerMove)
+  window.removeEventListener('pointerup', onPointerUp)
+  window.removeEventListener('pointercancel', onPointerUp)
+
+  const state = dragState.value
+  const target = dragOverColumn.value
+  const placement = dragPlacement.value
+  dragState.value = null
+  dragOverColumn.value = null
+
+  if (!state?.isDragging || !target || target === state.id) return
+  emit('columnReorder', state.id, target, placement)
+}
+
+function resizeTitle(col: ResizableColumnId): string {
+  switch (col) {
+    case 'desc': return t('history.columns.resizeDescription')
+    case 'stats': return t('history.columns.resizeChanges')
+    case 'hash': return t('history.columns.resizeCommit')
+    case 'author': return t('history.columns.resizeAuthor')
+    case 'date': return t('history.columns.resizeDateWidth')
+  }
+}
 </script>
 
 <template>
@@ -39,26 +120,28 @@ const emit = defineEmits<{
         <svg width="8" height="14" viewBox="0 0 8 14"><circle cx="2" cy="2" r="1" fill="currentColor"/><circle cx="6" cy="2" r="1" fill="currentColor"/><circle cx="2" cy="7" r="1" fill="currentColor"/><circle cx="6" cy="7" r="1" fill="currentColor"/><circle cx="2" cy="12" r="1" fill="currentColor"/><circle cx="6" cy="12" r="1" fill="currentColor"/></svg>
       </div>
       <div class="col-graph" :style="{ width: graphColWidth + 'px' }"></div>
-      <div class="col-message" :style="{ width: sizes.descColW + 'px' }">{{ t('history.columns.description') }}</div>
-      <div class="col-change-stats header-col" :style="{ width: sizes.statsColW + 'px' }">
-        {{ t('history.columns.changes') }}
-        <div class="col-resize" @pointerdown="emit('colResizeStart', $event, 'desc')" :title="t('history.columns.resizeChangeGroup')" />
-      </div>
-      <div class="col-hash header-col" :style="{ width: sizes.hashColW + 'px' }">
-        {{ t('history.columns.commit') }}
-        <div class="col-resize" @pointerdown="emit('colResizeStart', $event, 'stats')" :title="t('history.columns.resizeChanges')" />
-      </div>
-      <div class="col-author header-col" :style="{ width: sizes.authorColW + 'px' }">
-        {{ t('history.columns.author') }}
-        <div class="col-resize" @pointerdown="emit('colResizeStart', $event, 'hash')" :title="t('history.columns.resizeAuthor')" />
-      </div>
-      <div class="col-date header-col" :style="{ width: sizes.dateColW + 'px' }">
-        {{ t('history.columns.date') }}
-        <div class="col-resize" @pointerdown="emit('colResizeStart', $event, 'author')" :title="t('history.columns.resizeDate')" />
-      </div>
-      <div class="col-date header-col" :style="{ width: sizes.dateCol2W + 'px' }">
-        <span style="visibility: hidden">&nbsp;</span>
-        <div class="col-resize" @pointerdown="emit('colResizeStart', $event, 'date')" :title="t('history.columns.resizeDateWidth')" />
+      <div
+        v-for="col in columns"
+        :key="col.id"
+        class="header-col history-header-col"
+        :class="[
+          col.className,
+          {
+            'column-drag-source': dragState?.isDragging && dragState.id === col.id,
+            'column-drop-before': dragOverColumn === col.id && dragPlacement === 'before',
+            'column-drop-after': dragOverColumn === col.id && dragPlacement === 'after',
+          },
+        ]"
+        :style="{ width: col.width + 'px' }"
+        :data-history-column="col.id"
+        @pointerdown="onColumnPointerDown($event, col.id)"
+      >
+        {{ col.label }}
+        <div
+          class="col-resize"
+          @pointerdown.stop="emit('colResizeStart', $event, col.resizeCol)"
+          :title="resizeTitle(col.resizeCol)"
+        />
       </div>
     </div>
   </div>
@@ -150,6 +233,38 @@ const emit = defineEmits<{
   overflow: visible;
 }
 
+.history-header-col {
+  cursor: grab;
+  user-select: none;
+}
+
+.history-header-col:active {
+  cursor: grabbing;
+}
+
+.history-header-col.column-drag-source {
+  opacity: 0.45;
+}
+
+.history-header-col.column-drop-before::before,
+.history-header-col.column-drop-after::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--accent-blue);
+  z-index: 4;
+}
+
+.history-header-col.column-drop-before::before {
+  left: 0;
+}
+
+.history-header-col.column-drop-after::after {
+  right: 0;
+}
+
 .col-header > .col-message,
 .col-header > .col-change-stats,
 .col-header > .header-col {
@@ -159,10 +274,10 @@ const emit = defineEmits<{
 .col-resize {
   position: absolute;
   top: 0;
-  left: 0;
+  right: 0;
   bottom: 0;
   width: 6px;
-  transform: translateX(-3px);
+  transform: translateX(3px);
   cursor: col-resize;
   z-index: 2;
 }

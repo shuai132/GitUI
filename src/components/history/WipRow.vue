@@ -1,8 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { LANE_W, CIRCLE_R, laneX } from '@/utils/graph'
-import { useSettingsStore } from '@/stores/settings'
 
 const { t } = useI18n()
 
@@ -11,44 +9,15 @@ const props = defineProps<{
   untrackedCount: number
   stagedCount: number
   branchName: string
-  isSelected?: boolean
-  graphColWidth: number
   descColWidth: number
 }>()
 
-const settings = useSettingsStore()
-const rowH = computed(() => settings.historyRowHeight)
-const midY = computed(() => rowH.value / 2)
-const circleX = laneX(0)
-// 确保 SVG 宽度不小于 graph 列的宽度，让虚线圆和后面的 commit 行对齐
-const svgWidth = computed(() => Math.max(LANE_W, props.graphColWidth))
 const totalCount = computed(() =>
   props.unstagedCount + props.untrackedCount + props.stagedCount,
 )
 </script>
 
 <template>
-  <!-- Graph 列：虚线圆 -->
-  <div class="col-graph" :style="{ width: graphColWidth + 'px' }">
-    <svg
-      :width="svgWidth"
-      :height="rowH"
-      class="wip-graph"
-      :style="{ minWidth: svgWidth + 'px' }"
-      xmlns="http://www.w3.org/2000/svg"
-    >
-      <circle
-        :cx="circleX"
-        :cy="midY"
-        :r="isSelected ? CIRCLE_R + 1 : CIRCLE_R"
-        fill="none"
-        stroke="var(--text-muted)"
-        :stroke-width="isSelected ? 2 : 1.5"
-        stroke-dasharray="2 2"
-      />
-    </svg>
-  </div>
-
   <!-- Message 列：// WIP 文本 + 计数徽章 -->
   <div class="col-message" :style="{ width: descColWidth + 'px' }">
     <span class="wip-label">// WIP</span>
@@ -75,23 +44,9 @@ const totalCount = computed(() =>
     <span class="wip-hint">{{ t('history.wipRow.pendingHint', { count: totalCount, branch: branchName }) }}</span>
   </div>
 
-  <!-- 占位的 hash / author / date 列（保持和 commit-row 对齐） -->
-  <slot name="trailing" />
 </template>
 
 <style scoped>
-.col-graph {
-  flex-shrink: 0;
-  overflow: hidden;
-  display: flex;
-  align-items: center;
-}
-
-.wip-graph {
-  display: block;
-  flex-shrink: 0;
-}
-
 .col-message {
   flex-shrink: 0;
   padding: 0 8px;

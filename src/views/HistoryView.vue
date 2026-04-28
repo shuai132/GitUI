@@ -11,7 +11,7 @@ import { useStashStore } from '@/stores/stash'
 import { useUiStore } from '@/stores/ui'
 import { useSettingsStore } from '@/stores/settings'
 import { formatAuthor, formatHistoryTime } from '@/utils/format'
-import { LANE_W } from '@/utils/graph'
+import { CIRCLE_R, LANE_W, laneX } from '@/utils/graph'
 import CommitGraphRow from '@/components/history/CommitGraphRow.vue'
 import WipRow from '@/components/history/WipRow.vue'
 import ChangeStatsCell from '@/components/history/ChangeStatsCell.vue'
@@ -21,7 +21,7 @@ import ContextMenu from '@/components/common/ContextMenu.vue'
 import OngoingOpBanner from '@/components/common/OngoingOpBanner.vue'
 import { useMergeRebaseStore } from '@/stores/mergeRebase'
 import { usePanelDock } from '@/composables/usePanelDock'
-import type { PanelId } from '@/stores/ui'
+import type { HistoryColumnId, PanelId } from '@/stores/ui'
 import type { CommitInfo } from '@/types/git'
 
 import { useHistoryPanes } from '@/composables/history/useHistoryPanes'
@@ -67,6 +67,68 @@ const {
   startSecondaryResize,
   startColResize,
 } = useHistoryPanes(contentAreaRef, showDetail)
+
+type ResizableColumnId = 'desc' | 'stats' | 'hash' | 'author' | 'date'
+interface HistoryColumnView {
+  id: HistoryColumnId
+  className: string
+  width: number
+  resizeCol: ResizableColumnId
+  label: string
+}
+
+const visibleHistoryColumns = computed(() =>
+  uiStore.historyColumnOrder.filter(
+    (id) => id !== 'changes' || uiStore.showChangeStatsColumn,
+  ),
+)
+
+const historyColumns = computed<HistoryColumnView[]>(() =>
+  visibleHistoryColumns.value.map((id) => {
+    switch (id) {
+      case 'description':
+        return {
+          id,
+          className: 'col-message',
+          width: sizes.descColW,
+          resizeCol: 'desc',
+          label: t('history.columns.description'),
+        }
+      case 'changes':
+        return {
+          id,
+          className: 'col-change-stats',
+          width: sizes.statsColW,
+          resizeCol: 'stats',
+          label: t('history.columns.changes'),
+        }
+      case 'commit':
+        return {
+          id,
+          className: 'col-hash',
+          width: sizes.hashColW,
+          resizeCol: 'hash',
+          label: t('history.columns.commit'),
+        }
+      case 'author':
+        return {
+          id,
+          className: 'col-author',
+          width: sizes.authorColW,
+          resizeCol: 'author',
+          label: t('history.columns.author'),
+        }
+      case 'date':
+        return {
+          id,
+          className: 'col-date',
+          width: sizes.dateColW,
+          resizeCol: 'date',
+          label: t('history.columns.date'),
+        }
+    }
+  }),
+)
 
 // ── Search / filter ─────────────────────────────────────────────────
 const filteredCommits = computed(() => {
@@ -187,11 +249,15 @@ const graphColWidth = computed(() => {
   return maxCols * LANE_W
 })
 
+const wipCircleX = laneX(0)
+const wipSvgWidth = computed(() => Math.max(LANE_W, graphColWidth.value))
+const wipCircleY = computed(() => rowH.value / 2)
+
 // 提交列表内容的最小宽度：图形 + 描述 + 右三列
 // 面板窄于此时会出现横向滚动条，描述优先、右三列通过滑动查看
 // descColW 可由用户拖动"提交"列左边缘调整（整体移动右三列组）
 const commitListMinWidth = computed(() => {
-  return graphColWidth.value + sizes.descColW + sizes.statsColW + sizes.hashColW + sizes.authorColW + sizes.dateColW + sizes.dateCol2W
+  return graphColWidth.value + historyColumns.value.reduce((sum, col) => sum + col.width, 0)
 })
 
 const wipChangeStats = computed(() => {
@@ -230,6 +296,7 @@ function visibleCommitOidsForStats(): string[] {
 }
 
 function ensureVisibleCommitChangeStats() {
+  if (!uiStore.showChangeStatsColumn) return
   const oids = visibleCommitOidsForStats()
   if (oids.length > 0) historyStore.ensureCommitChangeStats(oids)
 }
@@ -238,6 +305,7 @@ watch(
   () => [
     filteredCommits.value.map((c) => c.oid).join(','),
     isWipVisible.value ? '1' : '0',
+    uiStore.showChangeStatsColumn ? '1' : '0',
   ],
   () => nextTick(ensureVisibleCommitChangeStats),
   { immediate: true },
@@ -547,10 +615,11 @@ onUnmounted(() => {
           :commit-list-min-width="commitListMinWidth"
           :header-scroll-left="headerScrollLeft"
           :graph-col-width="graphColWidth"
-          :sizes="sizes"
+          :columns="historyColumns"
           @list-body-wheel="onListBodyWheel"
           @drag-handle-pointer-down="onDragHandlePointerDown"
           @col-resize-start="startColResize"
+          @column-reorder="uiStore.moveHistoryColumnTo"
         />
 
         <!-- Virtual list body：水平 + 垂直滚动都收在这里，垂直滚动条永远在 body 右缘 -->
@@ -599,22 +668,57 @@ onUnmounted(() => {
                 </template>
                 <!-- 正常 WIP 行 -->
                 <template v-else>
-                <WipRow
-                  :unstaged-count="workspaceStore.status?.unstaged.length ?? 0"
-                  :untracked-count="workspaceStore.status?.untracked.length ?? 0"
-                  :staged-count="workspaceStore.status?.staged.length ?? 0"
-                  :branch-name="workspaceStore.status?.head_branch ?? 'HEAD'"
-                  :is-selected="selectedWip"
-                  :graph-col-width="graphColWidth"
-                  :desc-col-width="sizes.descColW"
-                />
-                <div class="col-change-stats" :style="{ width: sizes.statsColW + 'px' }">
-                  <ChangeStatsCell :wip-stats="wipChangeStats" />
-                </div>
-                <div class="col-hash" :style="{ width: sizes.hashColW + 'px' }">—</div>
-                <div class="col-author" :style="{ width: sizes.authorColW + 'px' }">—</div>
-                <div class="col-date" :style="{ width: sizes.dateColW + 'px' }">—</div>
-                <div class="col-date" :style="{ width: sizes.dateCol2W + 'px' }"></div>
+                  <div class="col-graph" :style="{ width: graphColWidth + 'px' }">
+                    <svg
+                      :width="wipSvgWidth"
+                      :height="rowH"
+                      class="wip-graph"
+                      :style="{ minWidth: wipSvgWidth + 'px' }"
+                      xmlns="http://www.w3.org/2000/svg"
+                    >
+                      <circle
+                        :cx="wipCircleX"
+                        :cy="wipCircleY"
+                        :r="selectedWip ? CIRCLE_R + 1 : CIRCLE_R"
+                        fill="none"
+                        stroke="var(--text-muted)"
+                        :stroke-width="selectedWip ? 2 : 1.5"
+                        stroke-dasharray="2 2"
+                      />
+                    </svg>
+                  </div>
+                  <template v-for="col in historyColumns" :key="col.id">
+                    <WipRow
+                      v-if="col.id === 'description'"
+                      :unstaged-count="workspaceStore.status?.unstaged.length ?? 0"
+                      :untracked-count="workspaceStore.status?.untracked.length ?? 0"
+                      :staged-count="workspaceStore.status?.staged.length ?? 0"
+                      :branch-name="workspaceStore.status?.head_branch ?? 'HEAD'"
+                      :desc-col-width="col.width"
+                    />
+                    <div
+                      v-else-if="col.id === 'changes'"
+                      class="col-change-stats"
+                      :style="{ width: col.width + 'px' }"
+                    >
+                      <ChangeStatsCell :wip-stats="wipChangeStats" />
+                    </div>
+                    <div
+                      v-else-if="col.id === 'commit'"
+                      class="col-hash"
+                      :style="{ width: col.width + 'px' }"
+                    >—</div>
+                    <div
+                      v-else-if="col.id === 'author'"
+                      class="col-author"
+                      :style="{ width: col.width + 'px' }"
+                    >—</div>
+                    <div
+                      v-else
+                      class="col-date"
+                      :style="{ width: col.width + 'px' }"
+                    >—</div>
+                  </template>
                 </template>
               </div>
 
@@ -653,84 +757,97 @@ onUnmounted(() => {
                   />
                 </div>
 
-                <!-- Message column with branch tags -->
-                <div
-                  class="col-message"
-                  :style="{ width: sizes.descColW + 'px' }"
-                  @mouseenter="showCommitTooltip($event, filteredCommits[toRealIdx(vRow.index)])"
-                  @mousemove="moveCommitTooltip"
-                  @mouseleave="hideCommitTooltip"
-                >
-                  <span
-                    v-for="tagItem in tagsByCommit.get(filteredCommits[toRealIdx(vRow.index)]?.oid ?? '')"
-                    :key="'tag:' + tagItem.name"
-                    class="tag-chip"
-                    :class="'tag-chip--' + tagRemoteStatus(tagItem)"
-                    :title="tagChipTitle(tagItem)"
+                <template v-for="col in historyColumns" :key="col.id">
+                  <!-- Message column with branch tags -->
+                  <div
+                    v-if="col.id === 'description'"
+                    class="col-message"
+                    :style="{ width: col.width + 'px' }"
+                    @mouseenter="showCommitTooltip($event, filteredCommits[toRealIdx(vRow.index)])"
+                    @mousemove="moveCommitTooltip"
+                    @mouseleave="hideCommitTooltip"
                   >
-                    <svg
-                      width="9"
-                      height="9"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2.5"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
+                    <span
+                      v-for="tagItem in tagsByCommit.get(filteredCommits[toRealIdx(vRow.index)]?.oid ?? '')"
+                      :key="'tag:' + tagItem.name"
+                      class="tag-chip"
+                      :class="'tag-chip--' + tagRemoteStatus(tagItem)"
+                      :title="tagChipTitle(tagItem)"
                     >
-                      <path d="M20.59 13.41 13.42 20.58a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/>
-                      <line x1="7" y1="7" x2="7.01" y2="7"/>
-                    </svg>
-                    {{ tagItem.name }}
+                      <svg
+                        width="9"
+                        height="9"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2.5"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path d="M20.59 13.41 13.42 20.58a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/>
+                        <line x1="7" y1="7" x2="7.01" y2="7"/>
+                      </svg>
+                      {{ tagItem.name }}
+                      <span
+                        v-if="tagRemoteStatus(tagItem) === 'synced'"
+                        class="tag-status-icon tag-status-icon--synced"
+                        aria-hidden="true"
+                      >✓</span>
+                      <span
+                        v-else-if="tagRemoteStatus(tagItem) === 'local_only'"
+                        class="tag-status-icon tag-status-icon--local"
+                        aria-hidden="true"
+                      >↑</span>
+                    </span>
                     <span
-                      v-if="tagRemoteStatus(tagItem) === 'synced'"
-                      class="tag-status-icon tag-status-icon--synced"
-                      aria-hidden="true"
-                    >✓</span>
+                      v-for="tag in branchTagMap.get(filteredCommits[toRealIdx(vRow.index)]?.oid ?? '')"
+                      :key="tag.name"
+                      class="branch-tag"
+                      :style="{ color: branchTagColor(tag), borderColor: branchTagColor(tag) }"
+                    >{{ tag.name }}</span>
                     <span
-                      v-else-if="tagRemoteStatus(tagItem) === 'local_only'"
-                      class="tag-status-icon tag-status-icon--local"
+                      v-if="filteredCommits[toRealIdx(vRow.index)]?.is_reflog_tip"
+                      class="reflog-tip-dot"
+                      :title="t('history.reflogTip')"
                       aria-hidden="true"
-                    >↑</span>
-                  </span>
-                  <span
-                    v-for="tag in branchTagMap.get(filteredCommits[toRealIdx(vRow.index)]?.oid ?? '')"
-                    :key="tag.name"
-                    class="branch-tag"
-                    :style="{ color: branchTagColor(tag), borderColor: branchTagColor(tag) }"
-                  >{{ tag.name }}</span>
-                  <span
-                    v-if="filteredCommits[toRealIdx(vRow.index)]?.is_reflog_tip"
-                    class="reflog-tip-dot"
-                    :title="t('history.reflogTip')"
-                    aria-hidden="true"
-                  >◉ </span>
-                  <span class="commit-msg">{{ filteredCommits[toRealIdx(vRow.index)]?.summary }}</span>
-                </div>
+                    >◉ </span>
+                    <span class="commit-msg">{{ filteredCommits[toRealIdx(vRow.index)]?.summary }}</span>
+                  </div>
 
-                <!-- Change stats column -->
-                <div
-                  class="col-change-stats"
-                  :style="{ width: sizes.statsColW + 'px' }"
-                >
-                  <ChangeStatsCell
-                    :stats="changeStatsForCommit(commitAtVirtualIndex(vRow.index))"
-                    :loading="isChangeStatsLoading(commitAtVirtualIndex(vRow.index))"
-                    :failed="isChangeStatsFailed(commitAtVirtualIndex(vRow.index))"
-                  />
-                </div>
+                  <!-- Change stats column -->
+                  <div
+                    v-else-if="col.id === 'changes'"
+                    class="col-change-stats"
+                    :style="{ width: col.width + 'px' }"
+                  >
+                    <ChangeStatsCell
+                      :stats="changeStatsForCommit(commitAtVirtualIndex(vRow.index))"
+                      :loading="isChangeStatsLoading(commitAtVirtualIndex(vRow.index))"
+                      :failed="isChangeStatsFailed(commitAtVirtualIndex(vRow.index))"
+                    />
+                  </div>
 
-                <!-- Hash column -->
-                <div class="col-hash" :style="{ width: sizes.hashColW + 'px' }">{{ filteredCommits[toRealIdx(vRow.index)]?.short_oid }}</div>
+                  <!-- Hash column -->
+                  <div
+                    v-else-if="col.id === 'commit'"
+                    class="col-hash"
+                    :style="{ width: col.width + 'px' }"
+                  >{{ filteredCommits[toRealIdx(vRow.index)]?.short_oid }}</div>
 
-                <!-- Author column -->
-                <div class="col-author" :style="{ width: sizes.authorColW + 'px' }">{{ formatAuthor(filteredCommits[toRealIdx(vRow.index)]?.author_name ?? '', filteredCommits[toRealIdx(vRow.index)]?.author_email) }}</div>
+                  <!-- Author column -->
+                  <div
+                    v-else-if="col.id === 'author'"
+                    class="col-author"
+                    :style="{ width: col.width + 'px' }"
+                  >{{ formatAuthor(filteredCommits[toRealIdx(vRow.index)]?.author_name ?? '', filteredCommits[toRealIdx(vRow.index)]?.author_email) }}</div>
 
-                <!-- Date column -->
-                <div class="col-date" :style="{ width: sizes.dateColW + 'px' }">{{ formatHistoryTime(filteredCommits[toRealIdx(vRow.index)]?.time ?? 0) }}</div>
-
-                <!-- Date2 column (空白，仅用于承载日期列右侧拖拽 handle) -->
-                <div class="col-date" :style="{ width: sizes.dateCol2W + 'px' }"></div>
+                  <!-- Date column -->
+                  <div
+                    v-else
+                    class="col-date"
+                    :style="{ width: col.width + 'px' }"
+                  >{{ formatHistoryTime(filteredCommits[toRealIdx(vRow.index)]?.time ?? 0) }}</div>
+                </template>
               </div>
             </template>
           </div>
@@ -1086,6 +1203,11 @@ onUnmounted(() => {
   overflow: hidden;
   display: flex;
   align-items: center;
+}
+
+.wip-graph {
+  display: block;
+  flex-shrink: 0;
 }
 
 .col-message {
