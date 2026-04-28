@@ -3,6 +3,7 @@ import { computed, ref, watch, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { FileDiff, DiffLine } from '@/types/git'
 import { highlightLine } from '@/lib/highlight'
+import type { DiffSide, SyntaxLangResolver } from '@/lib/highlight'
 import { diffChars, tokensToHtml } from '@/lib/wordDiff'
 
 const { t } = useI18n()
@@ -12,6 +13,8 @@ const props = defineProps<{
   loading?: boolean
   /** 语法高亮语言（null 表示关闭高亮） */
   syntaxLang?: string | null
+  /** 按左右侧和文件行号解析语法高亮语言，用于 Vue SFC 这类嵌入语言文件。 */
+  syntaxLangForLine?: SyntaxLangResolver | null
   /** 是否允许回滚变动行 */
   allowRevert?: boolean
 }>()
@@ -61,7 +64,7 @@ const alignedRows = computed((): AlignedRow[] => {
         // Word-diff：仅当左右都有内容时配对计算（语法高亮关闭时生效，避免与 v-html 冲突）
         let leftWordHtml: string | undefined
         let rightWordHtml: string | undefined
-        if (dl && al && !props.syntaxLang) {
+        if (dl && al && !props.syntaxLang && !props.syntaxLangForLine) {
           const { leftTokens, rightTokens } = diffChars(dlContent, alContent)
           leftWordHtml = tokensToHtml(leftTokens)
           rightWordHtml = tokensToHtml(rightTokens)
@@ -179,6 +182,12 @@ watch(alignedRows, () => {
   currentChangeIdx.value = -1
 })
 
+function langForLine(side: DiffSide, line: AlignedLine): string | null {
+  if (props.syntaxLang) return props.syntaxLang
+  if (!props.syntaxLangForLine) return null
+  return props.syntaxLangForLine(side, line.lineNo)
+}
+
 function scrollToRow(rowIndex: number) {
   const body = bodyRef.value
   const scroll = leftScrollRef.value
@@ -256,7 +265,7 @@ defineExpose({ goNextChange, goPrevChange })
                    :class="'line-' + row.left.kind"
                    :data-row="i"
                  >
-                   <span v-if="syntaxLang" class="code" v-html="highlightLine(row.left.content, syntaxLang)" />
+                   <span v-if="langForLine('old', row.left)" class="code" v-html="highlightLine(row.left.content, langForLine('old', row.left))" />
                    <span v-else-if="row.left.wordHtml" class="code" v-html="row.left.wordHtml" />
                    <span v-else class="code">{{ row.left.content }}</span>
                    
@@ -300,7 +309,7 @@ defineExpose({ goNextChange, goPrevChange })
                    class="sbs-line"
                    :class="'line-' + row.right.kind"
                  >
-                   <span v-if="syntaxLang" class="code" v-html="highlightLine(row.right.content, syntaxLang)" />
+                   <span v-if="langForLine('new', row.right)" class="code" v-html="highlightLine(row.right.content, langForLine('new', row.right))" />
                    <span v-else-if="row.right.wordHtml" class="code" v-html="row.right.wordHtml" />
                    <span v-else class="code">{{ row.right.content }}</span>
                  </div>

@@ -1,15 +1,17 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import type { FileDiff } from '@/types/git'
 import SideBySideDiff from './SideBySideDiff.vue'
 import InlineDiff from './InlineDiff.vue'
 import ImageDiff from './ImageDiff.vue'
 import ConflictView from './ConflictView.vue'
 import DiffToolbar from './DiffToolbar.vue'
-import { EXT_TO_LANG } from '@/lib/highlight'
+import { EXT_TO_LANG, type DiffSide, type SyntaxLangResolver } from '@/lib/highlight'
+import { createVueSfcLineLangMap, isVuePath, type VueSfcLineLangMap } from '@/lib/vueSfcHighlight'
 import { detectPreviewKind } from '@/lib/preview'
 import { useUiStore } from '@/stores/ui'
 import { useRevertHunk } from '@/composables/diff/useRevertHunk'
+import { useGitCommands } from '@/composables/useGitCommands'
 
 const props = defineProps<{
   diff: FileDiff | null
@@ -24,12 +26,29 @@ const props = defineProps<{
 const emit = defineEmits<{ close: [] }>()
 
 const uiStore = useUiStore()
+const { getBlobBytes, readWorktreeFile } = useGitCommands()
 
 const syntaxLang = computed<string | null>(() => {
   if (!uiStore.diffHighlightEnabled || !props.diff) return null
   const filePath = props.diff.new_path ?? props.diff.old_path ?? ''
+  if (isVuePath(filePath)) return null
   const ext = filePath.split('.').pop()?.toLowerCase() ?? ''
   return EXT_TO_LANG[ext] ?? null
+})
+
+const vueLangMaps = ref<{ old: VueSfcLineLangMap | null; new: VueSfcLineLangMap | null }>({
+  old: null,
+  new: null,
+})
+
+const isVueDiff = computed(() => isVuePath(props.diff?.new_path ?? props.diff?.old_path))
+
+const syntaxLangForLine = computed<SyntaxLangResolver | null>(() => {
+  if (!uiStore.diffHighlightEnabled || !isVueDiff.value) return null
+  return (side: DiffSide, lineNo: number | null | undefined) => {
+    const map = side === 'old' ? vueLangMaps.value.old : vueLangMaps.value.new
+    return map?.langForLine(lineNo) ?? 'html'
+  }
 })
 
 const previewKind = computed(() => {
@@ -64,6 +83,64 @@ const { allowRevert, revertHunk } = useRevertHunk({
   diff: () => props.diff,
   wip: () => props.wip ?? null,
 })
+
+let vueLoadSeq = 0
+watch(
+  () => [
+    props.repoId,
+    props.diff?.old_blob_oid,
+    props.diff?.new_blob_oid,
+    props.diff?.old_path,
+    props.diff?.new_path,
+    props.wip?.staged,
+    uiStore.diffHighlightEnabled,
+  ] as const,
+  async () => {
+    const seq = ++vueLoadSeq
+    vueLangMaps.value = { old: null, new: null }
+    if (!uiStore.diffHighlightEnabled || !props.diff || !props.repoId || !isVueDiff.value) return
+
+    const [oldText, newText] = await Promise.all([
+      loadSideText('old', props.diff),
+      loadSideText('new', props.diff),
+    ])
+    if (seq !== vueLoadSeq) return
+    vueLangMaps.value = {
+      old: createVueSfcLineLangMap(oldText),
+      new: createVueSfcLineLangMap(newText),
+    }
+  },
+  { immediate: true },
+)
+
+async function loadSideText(side: DiffSide, diff: FileDiff): Promise<string | null> {
+  try {
+    if (side === 'old') {
+      if (!diff.old_blob_oid) return null
+      const blob = await getBlobBytes(props.repoId!, diff.old_blob_oid, true)
+      return blob.truncated ? null : decodeBase64Utf8(blob.bytes_base64)
+    }
+
+    if (props.wip && !props.wip.staged && diff.new_path) {
+      const blob = await readWorktreeFile(props.repoId!, diff.new_path, true)
+      return blob.truncated ? null : decodeBase64Utf8(blob.bytes_base64)
+    }
+    if (!diff.new_blob_oid) return null
+    const blob = await getBlobBytes(props.repoId!, diff.new_blob_oid, true)
+    return blob.truncated ? null : decodeBase64Utf8(blob.bytes_base64)
+  } catch {
+    return null
+  }
+}
+
+function decodeBase64Utf8(base64: string): string {
+  const binary = atob(base64)
+  const bytes = new Uint8Array(binary.length)
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i)
+  }
+  return new TextDecoder().decode(bytes)
+}
 </script>
 
 <template>
@@ -100,6 +177,7 @@ const { allowRevert, revertHunk } = useRevertHunk({
         :diff="diff"
         :loading="loading"
         :syntax-lang="syntaxLang"
+        :syntax-lang-for-line="syntaxLangForLine"
         :allow-revert="allowRevert"
         @revert-hunk="revertHunk"
       />
@@ -110,6 +188,7 @@ const { allowRevert, revertHunk } = useRevertHunk({
         :loading="loading"
         :group-by-hunk="uiStore.diffViewMode === 'by-hunk'"
         :syntax-lang="syntaxLang"
+        :syntax-lang-for-line="syntaxLangForLine"
         :allow-revert="allowRevert"
         @revert-hunk="revertHunk"
       />

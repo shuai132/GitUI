@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { FileDiff } from '@/types/git'
 import { highlightLine } from '@/lib/highlight'
+import type { DiffSide, SyntaxLangResolver } from '@/lib/highlight'
 import { diffChars, tokensToHtml } from '@/lib/wordDiff'
 
 const { t } = useI18n()
@@ -14,6 +15,8 @@ const props = defineProps<{
   groupByHunk: boolean
   /** 语法高亮语言（null 表示关闭高亮） */
   syntaxLang?: string | null
+  /** 按左右侧和文件行号解析语法高亮语言，用于 Vue SFC 这类嵌入语言文件。 */
+  syntaxLangForLine?: SyntaxLangResolver | null
   /** 是否允许回滚变动行 */
   allowRevert?: boolean
 }>()
@@ -55,7 +58,7 @@ const rows = computed<InlineRow[]>(() => {
     }
 
     // Word-diff 配对：在语法高亮关闭时，把紧邻的 del+add 行两两配对
-    if (!props.syntaxLang) {
+    if (!props.syntaxLang && !props.syntaxLangForLine) {
       for (let i = 0; i < hunkRows.length; i++) {
         const cur = hunkRows[i]
         const nxt = hunkRows[i + 1]
@@ -119,6 +122,14 @@ const scrollEl = ref<HTMLElement | null>(null)
 watch(rows, () => {
   currentChangeIdx.value = -1
 })
+
+function langForRow(row: InlineRow): string | null {
+  if (props.syntaxLang) return props.syntaxLang
+  if (!props.syntaxLangForLine) return null
+  const side: DiffSide = row.kind === 'del' ? 'old' : 'new'
+  const lineNo = row.kind === 'del' ? row.oldLineNo : row.newLineNo
+  return props.syntaxLangForLine(side, lineNo)
+}
 
 function scrollToRow(rowIndex: number) {
   const root = scrollEl.value
@@ -189,7 +200,7 @@ defineExpose({ goNextChange, goPrevChange })
             <span class="sign">{{
               row.kind === 'del' ? '-' : row.kind === 'add' ? '+' : ' '
             }}</span>
-            <span v-if="syntaxLang" class="code" v-html="highlightLine(row.content, syntaxLang)" />
+            <span v-if="langForRow(row)" class="code" v-html="highlightLine(row.content, langForRow(row))" />
             <span v-else-if="row.wordHtml" class="code" v-html="row.wordHtml" />
             <span v-else class="code">{{ row.content }}</span>
           </template>
@@ -235,7 +246,7 @@ defineExpose({ goNextChange, goPrevChange })
               <span class="sign">{{
                 row.kind === 'del' ? '-' : row.kind === 'add' ? '+' : ' '
               }}</span>
-              <span v-if="syntaxLang" class="code" v-html="highlightLine(row.content, syntaxLang)" />
+              <span v-if="langForRow(row)" class="code" v-html="highlightLine(row.content, langForRow(row))" />
               <span v-else class="code">{{ row.content }}</span>
             </div>
           </template>

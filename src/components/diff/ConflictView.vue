@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import type { ConflictFile } from '@/types/git'
 import { useMergeRebaseStore } from '@/stores/mergeRebase'
 import { highlightLine, detectLangByPath } from '@/lib/highlight'
+import { createVueSfcLineLangMap, isVuePath } from '@/lib/vueSfcHighlight'
 import { buildConflictAlignment, buildConflictOutputMap } from '@/lib/conflictMerge'
 import { useConflictSelection } from '@/composables/diff/useConflictSelection'
 import { useSyncedConflictPanes } from '@/composables/diff/useSyncedConflictPanes'
@@ -70,11 +71,17 @@ const {
   toggleHunk,
 } = useConflictSelection(rows, hunks)
 
-const syntaxLang = computed(() => detectLangByPath(props.filePath))
+const syntaxLang = computed(() => {
+  if (isVuePath(props.filePath)) return null
+  return detectLangByPath(props.filePath)
+})
 
-function lineHtml(content: string): string {
-  return content === '' ? '' : highlightLine(content, syntaxLang.value)
-}
+const oursVueLangMap = computed(() => (
+  isVuePath(props.filePath) ? createVueSfcLineLangMap(conflict.value?.ours) : null
+))
+const theirsVueLangMap = computed(() => (
+  isVuePath(props.filePath) ? createVueSfcLineLangMap(conflict.value?.theirs) : null
+))
 
 const outputMap = computed(() => buildConflictOutputMap(rows.value, selectedRows.value))
 
@@ -83,6 +90,9 @@ const rowIdxToOutputLine = computed(() => outputMap.value.rowToLine)
 const outputLineToRowIdx = computed(() => outputMap.value.lineToRow)
 
 const savedText = computed(() => outputLines.value.join('\n'))
+const outputVueLangMap = computed(() => (
+  isVuePath(props.filePath) ? createVueSfcLineLangMap(savedText.value) : null
+))
 const hasMarkers = computed(() => /^<<<<<<< /m.test(savedText.value))
 
 // 按实际最大行号计算 lineno 宽度，避免 2 位数行号在 40px 右对齐列中飘远
@@ -119,6 +129,18 @@ const {
   outputLineToRowIdx,
   currentHunkIdx,
 })
+
+function lineHtml(content: string, side: 'ours' | 'theirs' | 'output', lineNo: number | null): string {
+  if (content === '') return ''
+  if (syntaxLang.value) return highlightLine(content, syntaxLang.value)
+  if (!isVuePath(props.filePath)) return highlightLine(content, null)
+  const map = side === 'ours'
+    ? oursVueLangMap.value
+    : side === 'theirs'
+      ? theirsVueLangMap.value
+      : outputVueLangMap.value
+  return highlightLine(content, map?.langForLine(lineNo) ?? 'html')
+}
 
 async function onSave() {
   if (!props.filePath) return
@@ -227,7 +249,7 @@ async function onSave() {
                   />
                 </span>
                 <span class="lineno">{{ rows[vRow.index].leftNo ?? '' }}</span>
-                <span class="code" v-html="lineHtml(rows[vRow.index].left ?? '')" />
+                <span class="code" v-html="lineHtml(rows[vRow.index].left ?? '', 'ours', rows[vRow.index].leftNo)" />
               </div>
             </div>
           </div>
@@ -278,7 +300,7 @@ async function onSave() {
                   />
                 </span>
                 <span class="lineno">{{ rows[vRow.index].rightNo ?? '' }}</span>
-                <span class="code" v-html="lineHtml(rows[vRow.index].right ?? '')" />
+                <span class="code" v-html="lineHtml(rows[vRow.index].right ?? '', 'theirs', rows[vRow.index].rightNo)" />
               </div>
             </div>
           </div>
@@ -326,7 +348,7 @@ async function onSave() {
               :style="{ position: 'absolute', top: vRow.start + 'px', left: '0', right: '0' }"
             >
               <span class="lineno">{{ vRow.index + 1 }}</span>
-              <span class="code" v-html="lineHtml(outputLines[vRow.index] ?? '')" />
+              <span class="code" v-html="lineHtml(outputLines[vRow.index] ?? '', 'output', vRow.index + 1)" />
             </div>
           </div>
         </div>

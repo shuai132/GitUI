@@ -9,6 +9,7 @@ import { formatTime, formatAbsoluteTime } from '@/utils/format'
 import { EXT_TO_LANG } from '@/lib/highlight'
 import { highlightLine } from '@/lib/highlight'
 import { GRAPH_COLORS } from '@/utils/graph'
+import { createVueSfcLineLangMap, isVuePath } from '@/lib/vueSfcHighlight'
 
 const { t } = useI18n()
 
@@ -111,9 +112,20 @@ const commitColorMap = computed<Map<string, string>>(() => {
 
 // 语法高亮语言
 const syntaxLang = computed<string | null>(() => {
+  if (isVuePath(props.filePath)) return null
   const ext = props.filePath.split('.').pop()?.toLowerCase() ?? ''
   return EXT_TO_LANG[ext] ?? null
 })
+
+const blameVueLangMap = computed(() => (
+  isVuePath(props.filePath) ? createVueSfcLineLangMap(blame.value?.lines.join('\n')) : null
+))
+
+function blameLineHtml(line: string, lineNo: number): string {
+  if (syntaxLang.value) return highlightLine(line, syntaxLang.value)
+  if (!isVuePath(props.filePath)) return highlightLine(line, null)
+  return highlightLine(line, blameVueLangMap.value?.langForLine(lineNo) ?? 'html')
+}
 
 function blameBg(lineIdx: number): string {
   const hunk = blameLineHunks.value[lineIdx]
@@ -259,7 +271,7 @@ function onKeydown(e: KeyboardEvent) {
           <div v-if="!selectedCommit" class="diff-empty">
             {{ t('fileHistory.selectCommit') }}
           </div>
-          <DiffView v-else :diff="selectedDiff" :loading="diffLoading" />
+          <DiffView v-else :diff="selectedDiff" :loading="diffLoading" :repo-id="repoStore.activeRepoId ?? undefined" />
         </div>
       </div>
 
@@ -287,8 +299,8 @@ function onKeydown(e: KeyboardEvent) {
             <!-- 行内容（语法高亮） -->
             <span
               class="blame-code"
-              v-if="syntaxLang"
-              v-html="highlightLine(line, syntaxLang)"
+              v-if="syntaxLang || isVuePath(filePath)"
+              v-html="blameLineHtml(line, idx + 1)"
             ></span>
             <span class="blame-code" v-else>{{ line }}</span>
           </div>

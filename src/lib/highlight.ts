@@ -31,6 +31,9 @@ import dockerfile from 'highlight.js/lib/languages/dockerfile'
 import makefile from 'highlight.js/lib/languages/makefile'
 import protobuf from 'highlight.js/lib/languages/protobuf'
 
+export type DiffSide = 'old' | 'new'
+export type SyntaxLangResolver = (side: DiffSide, lineNo: number | null | undefined) => string | null
+
 hljs.registerLanguage('javascript', javascript)
 hljs.registerLanguage('typescript', typescript)
 hljs.registerLanguage('python', python)
@@ -73,7 +76,7 @@ export const EXT_TO_LANG: Record<string, string> = {
   go: 'go',
   json: 'json',
   css: 'css',
-  html: 'html', htm: 'html', xml: 'xml', vue: 'html', svelte: 'html',
+  html: 'html', htm: 'html', xml: 'xml', vue: 'vue', svelte: 'html',
   md: 'markdown', mdx: 'markdown',
   java: 'java',
   sh: 'bash', bash: 'bash', zsh: 'bash',
@@ -105,14 +108,19 @@ function escapeHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 }
 
-/** 对单行代码做语法高亮，返回安全的 HTML 字符串。lang 为 null 时退化为纯 escape。 */
-export function highlightLine(content: string, lang: string | null): string {
-  if (!lang) return escapeHtml(content)
+function highlightKnownLanguage(content: string, lang: string): string {
   try {
     return hljs.highlight(content, { language: lang, ignoreIllegals: true }).value
   } catch {
     return escapeHtml(content)
   }
+}
+
+/** 对单行代码做语法高亮，返回安全的 HTML 字符串。lang 为 null 时退化为纯 escape。 */
+export function highlightLine(content: string, lang: string | null): string {
+  if (!lang) return escapeHtml(content)
+  if (lang === 'vue') return highlightKnownLanguage(content, 'html')
+  return highlightKnownLanguage(content, lang)
 }
 
 /** 按文件路径扩展名推断 hljs 语言；未知类型返回 null。 */
