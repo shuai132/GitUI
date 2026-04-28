@@ -41,7 +41,20 @@ git rev-parse vX.Y.Z 2>/dev/null
 读三个文件的当前版本号，跟目标 `X.Y.Z` 比。
 
 - 三处都等于 `X.Y.Z`：跳到步骤 3。
-- 否则：用 Edit 把不一致的改成 `X.Y.Z`（只改版本号字段），`Cargo.lock` 里 `name = "gitui"` 附近若有旧版本号一并改掉（没有则跳过）。**修改后必须执行 `npm install` 以更新 `package-lock.json`**，然后只 add 这些文件（包括 `package-lock.json` 和 `src-tauri/Cargo.lock`）提交：
+- 否则：用 Edit 把不一致的 manifest 版本号改成 `X.Y.Z`，只允许直接修改这三处 manifest：
+
+  - `package.json`
+  - `src-tauri/Cargo.toml`
+  - `src-tauri/tauri.conf.json`
+
+  **不要手工修改 lock 文件里的版本字段。**修改 manifest 后必须执行：
+
+  ```bash
+  npm install
+  cd src-tauri && cargo check
+  ```
+
+  由工具根据 manifest 自动更新 `package-lock.json` 和 `src-tauri/Cargo.lock`。`cargo check` 会在 lock 缺失或过期时更新 `Cargo.lock`，同时避免 `cargo generate-lockfile` 重新解析并刷新依赖版本。若 `src-tauri/Cargo.lock` 除项目自身版本外出现依赖版本变动，停下来核对原因，不要把依赖升级夹进发布提交。然后只 add 这些文件（包括工具生成变更后的 `package-lock.json` 和 `src-tauri/Cargo.lock`）提交：
 
   ```bash
   git commit -m "chore: release vX.Y.Z"
