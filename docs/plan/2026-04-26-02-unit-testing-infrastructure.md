@@ -32,6 +32,7 @@
 - [x] **阶段 3：CI/CD 自动化**
   - [x] 添加 `.github/workflows/test.yml`。
   - [x] 配置前置的依赖安装、Lint、TypeScript Type Check、前端 Test 以及 后端 Cargo Test。
+  - [x] 前端测试在 CI 中生成 Vitest JSON 报告，并写入 GitHub Actions summary，展示测试文件、用例和失败详情。
   - [x] 提交 Commit: `ci: 添加 GitHub Actions 自动化测试工作流`
 
 ## 关键决策
@@ -42,3 +43,4 @@
 执行 `npm run test` 应当全量通过。
 执行 `cd src-tauri && cargo test` 应当全量通过。
 推送到 GitHub 应当触发 CI 且全部变为绿灯。
+GitHub Actions 的前端测试任务应当在 summary 中展示 Vitest 测试文件、用例明细；失败时直接显示失败用例和错误信息。
