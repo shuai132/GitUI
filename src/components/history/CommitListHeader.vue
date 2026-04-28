@@ -17,13 +17,14 @@ defineProps<{
     commitRowPct: number
     diffRowPct: number
     infoPanePct: number
+    statsColW: number
   }
 }>()
 
 const emit = defineEmits<{
   listBodyWheel: [e: WheelEvent]
   dragHandlePointerDown: [pane: 'commits', e: PointerEvent]
-  colResizeStart: [e: PointerEvent, col: 'desc' | 'hash' | 'author' | 'date']
+  colResizeStart: [e: PointerEvent, col: 'desc' | 'stats' | 'hash' | 'author' | 'date']
 }>()
 </script>
 
@@ -39,9 +40,13 @@ const emit = defineEmits<{
       </div>
       <div class="col-graph" :style="{ width: graphColWidth + 'px' }"></div>
       <div class="col-message" :style="{ width: sizes.descColW + 'px' }">{{ t('history.columns.description') }}</div>
+      <div class="col-change-stats header-col" :style="{ width: sizes.statsColW + 'px' }">
+        {{ t('history.columns.changes') }}
+        <div class="col-resize" @pointerdown="emit('colResizeStart', $event, 'desc')" :title="t('history.columns.resizeChangeGroup')" />
+      </div>
       <div class="col-hash header-col" :style="{ width: sizes.hashColW + 'px' }">
         {{ t('history.columns.commit') }}
-        <div class="col-resize" @pointerdown="emit('colResizeStart', $event, 'desc')" :title="t('history.columns.resizeGroup')" />
+        <div class="col-resize" @pointerdown="emit('colResizeStart', $event, 'stats')" :title="t('history.columns.resizeChanges')" />
       </div>
       <div class="col-author header-col" :style="{ width: sizes.authorColW + 'px' }">
         {{ t('history.columns.author') }}
@@ -107,13 +112,14 @@ const emit = defineEmits<{
   text-align: left;
 }
 
-.col-hash, .col-author, .col-date {
+.col-change-stats, .col-hash, .col-author, .col-date {
   flex-shrink: 0;
   overflow: hidden;
   white-space: nowrap;
   text-align: left;
 }
 
+.col-change-stats { padding: 0 6px; }
 .col-hash { padding: 0 6px; }
 .col-author { padding: 0 6px; }
 .col-date { padding: 0 8px; }
@@ -124,6 +130,7 @@ const emit = defineEmits<{
 }
 
 .col-header > .col-message,
+.col-header > .col-change-stats,
 .col-header > .header-col {
   border-left: 1px solid var(--border);
 }

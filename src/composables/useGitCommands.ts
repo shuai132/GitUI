@@ -4,6 +4,7 @@ import type {
   WorkspaceStatus,
   CommitDetail,
   CommitInfo,
+  CommitChangeStats,
   LogPage,
   FileDiff,
   FileBlame,
@@ -236,6 +237,9 @@ export function useGitCommands() {
       branchScope,
       includeRemoteBranches,
     })
+
+  const getCommitChangeStats = (repoId: string, oids: string[]) =>
+    call<CommitChangeStats[]>('get_commit_change_stats', { repoId, oids }, { silent: true })
 
   const getCommitSummary = (repoId: string, oid: string, includeStats = true) =>
     call<CommitDetail>('get_commit_summary', { repoId, oid, includeStats })
@@ -492,6 +496,7 @@ export function useGitCommands() {
     resetToCommit,
     createTag,
     getLog,
+    getCommitChangeStats,
     getCommitSummary,
     getCommitDetail,
     getFileLog,

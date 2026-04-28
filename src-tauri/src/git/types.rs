@@ -283,6 +283,18 @@ pub struct CommitDetail {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CommitChangeStats {
+    pub oid: String,
+    pub files_changed: usize,
+    pub additions: usize,
+    pub deletions: usize,
+    pub binary_files: usize,
+    pub large_blob_count: usize,
+    pub large_blob_bytes: u64,
+    pub largest_blob_bytes: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LogPage {
     pub commits: Vec<CommitInfo>,
     pub has_more: bool,

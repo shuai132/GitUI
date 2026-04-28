@@ -69,6 +69,7 @@ fn build_commit_info(
 
 /// 二进制预览（图片等）最大读取字节数，超过则不返回原始字节。
 pub const MAX_PREVIEW_BYTES: u64 = 10 * 1024 * 1024;
+const LARGE_BLOB_THRESHOLD_BYTES: u64 = 1024 * 1024;
 
 pub struct GitEngine;
 
@@ -524,6 +525,119 @@ impl GitEngine {
             has_more,
             total_loaded,
         })
+    }
+
+    pub fn get_commit_change_stats(
+        path: &str,
+        oid_strs: Vec<String>,
+    ) -> GitResult<Vec<CommitChangeStats>> {
+        let repo = Self::open(path)?;
+        let mut out = Vec::with_capacity(oid_strs.len());
+
+        for oid_str in oid_strs {
+            let oid = git2::Oid::from_str(&oid_str)
+                .map_err(|e| GitError::OperationFailed(e.message().to_string()))?;
+            let commit = repo.find_commit(oid)?;
+            out.push(Self::commit_change_stats(&repo, &commit)?);
+        }
+
+        Ok(out)
+    }
+
+    fn commit_change_stats(
+        repo: &Repository,
+        commit: &git2::Commit<'_>,
+    ) -> GitResult<CommitChangeStats> {
+        let mut stats = CommitChangeStats {
+            oid: commit.id().to_string(),
+            files_changed: 0,
+            additions: 0,
+            deletions: 0,
+            binary_files: 0,
+            large_blob_count: 0,
+            large_blob_bytes: 0,
+            largest_blob_bytes: 0,
+        };
+
+        let commit_tree = commit.tree()?;
+        if commit.parent_count() > 0 {
+            let parent = commit.parent(0)?;
+            let parent_tree = parent.tree()?;
+            Self::add_tree_change_stats(repo, Some(&parent_tree), Some(&commit_tree), &mut stats)?;
+        } else {
+            Self::add_tree_change_stats(repo, None, Some(&commit_tree), &mut stats)?;
+        }
+
+        if commit.parent_count() == 3 {
+            if let Ok(untracked_commit) = commit.parent(2) {
+                if untracked_commit.parent_count() == 0
+                    && untracked_commit
+                        .message()
+                        .unwrap_or("")
+                        .starts_with("untracked")
+                {
+                    if let Ok(untracked_tree) = untracked_commit.tree() {
+                        Self::add_tree_change_stats(repo, None, Some(&untracked_tree), &mut stats)?;
+                    }
+                }
+            }
+        }
+
+        Ok(stats)
+    }
+
+    fn add_tree_change_stats(
+        repo: &Repository,
+        old_tree: Option<&git2::Tree<'_>>,
+        new_tree: Option<&git2::Tree<'_>>,
+        stats: &mut CommitChangeStats,
+    ) -> GitResult<()> {
+        let mut opts = git2::DiffOptions::new();
+        opts.context_lines(0).interhunk_lines(0);
+        let diff = repo.diff_tree_to_tree(old_tree, new_tree, Some(&mut opts))?;
+        Self::add_diff_change_stats(repo, &diff, stats)
+    }
+
+    fn add_diff_change_stats(
+        repo: &Repository,
+        diff: &git2::Diff<'_>,
+        stats: &mut CommitChangeStats,
+    ) -> GitResult<()> {
+        let diff_stats = diff.stats()?;
+        stats.files_changed += diff_stats.files_changed();
+        stats.additions += diff_stats.insertions();
+        stats.deletions += diff_stats.deletions();
+
+        for delta in diff.deltas() {
+            let old_file = delta.old_file();
+            let new_file = delta.new_file();
+            let (old_size, old_blob_binary) = Self::diff_file_blob_metadata(repo, &old_file);
+            let (new_size, new_blob_binary) = Self::diff_file_blob_metadata(repo, &new_file);
+
+            if old_file.is_binary() || new_file.is_binary() || old_blob_binary || new_blob_binary {
+                stats.binary_files += 1;
+            }
+
+            let changed_blob_size = old_size.max(new_size);
+            stats.largest_blob_bytes = stats.largest_blob_bytes.max(changed_blob_size);
+
+            if changed_blob_size >= LARGE_BLOB_THRESHOLD_BYTES {
+                stats.large_blob_count += 1;
+                stats.large_blob_bytes = stats.large_blob_bytes.saturating_add(changed_blob_size);
+            }
+        }
+
+        Ok(())
+    }
+
+    fn diff_file_blob_metadata(repo: &Repository, file: &git2::DiffFile<'_>) -> (u64, bool) {
+        let oid = file.id();
+        if oid.is_zero() {
+            return (0, false);
+        }
+        repo.find_blob(oid)
+            .map(|blob| (blob.size() as u64, blob.is_binary()))
+            .unwrap_or_else(|_| (file.size(), false))
     }
 
     pub fn get_commit_summary(
@@ -3478,6 +3592,25 @@ mod tests {
             .unwrap()
     }
 
+    fn commit_file_bytes(
+        test_repo: &TestRepo,
+        message: &str,
+        file_name: &str,
+        content: &[u8],
+    ) -> Oid {
+        fs::write(test_repo.dir.path().join(file_name), content).unwrap();
+        let repo = &test_repo.repo;
+        let mut index = repo.index().unwrap();
+        index.add_path(std::path::Path::new(file_name)).unwrap();
+        index.write().unwrap();
+        let tree_oid = index.write_tree().unwrap();
+        let tree = repo.find_tree(tree_oid).unwrap();
+        let sig = repo.signature().unwrap();
+        let parent = repo.head().unwrap().peel_to_commit().unwrap();
+        repo.commit(Some("HEAD"), &sig, &sig, message, &tree, &[&parent])
+            .unwrap()
+    }
+
     fn commit_file_to_ref(
         test_repo: &TestRepo,
         reference: &str,
@@ -3793,5 +3926,81 @@ mod tests {
         assert!(oids.contains(&main1_oid.as_str()));
         assert!(!oids.contains(&side1_oid.as_str()));
         assert!(!oids.contains(&side2_oid.as_str()));
+    }
+
+    #[test]
+    fn test_get_commit_change_stats_for_root_and_text_commit() {
+        let test_repo = TestRepo::new();
+        let path = test_repo.path_str();
+        let root_oid = test_repo
+            .repo
+            .head()
+            .unwrap()
+            .peel_to_commit()
+            .unwrap()
+            .id();
+
+        let text_oid = commit_file(&test_repo, "expand text", "existing.txt", "hello\nworld\n");
+
+        let stats = GitEngine::get_commit_change_stats(
+            path,
+            vec![root_oid.to_string(), text_oid.to_string()],
+        )
+        .unwrap();
+
+        assert_eq!(stats.len(), 2);
+        assert_eq!(stats[0].oid, root_oid.to_string());
+        assert_eq!(stats[0].files_changed, 1);
+        assert_eq!(stats[0].additions, 1);
+        assert_eq!(stats[0].deletions, 0);
+
+        assert_eq!(stats[1].oid, text_oid.to_string());
+        assert_eq!(stats[1].files_changed, 1);
+        assert_eq!(stats[1].additions, 1);
+        assert_eq!(stats[1].deletions, 0);
+        assert_eq!(stats[1].binary_files, 0);
+        assert_eq!(stats[1].large_blob_count, 0);
+    }
+
+    #[test]
+    fn test_get_commit_change_stats_flags_binary_and_large_blob() {
+        let test_repo = TestRepo::new();
+        let path = test_repo.path_str();
+        let bytes = vec![0u8; LARGE_BLOB_THRESHOLD_BYTES as usize + 1];
+        let oid = commit_file_bytes(&test_repo, "add large binary", "large.bin", &bytes);
+
+        let stats = GitEngine::get_commit_change_stats(path, vec![oid.to_string()]).unwrap();
+        let item = &stats[0];
+
+        assert_eq!(item.files_changed, 1);
+        assert_eq!(item.binary_files, 1);
+        assert_eq!(item.large_blob_count, 1);
+        assert!(item.large_blob_bytes >= LARGE_BLOB_THRESHOLD_BYTES);
+        assert!(item.largest_blob_bytes >= LARGE_BLOB_THRESHOLD_BYTES);
+    }
+
+    #[test]
+    fn test_get_commit_change_stats_uses_first_parent_for_merge() {
+        let test_repo = TestRepo::new();
+        let repo = &test_repo.repo;
+        let path = test_repo.path_str();
+
+        let main1 = commit_file(&test_repo, "main 1", "main1.txt", "main 1\n");
+        repo.branch("side", &repo.find_commit(main1).unwrap(), false)
+            .unwrap();
+
+        checkout_branch(repo, "side");
+        let side = commit_file(&test_repo, "side", "side.txt", "side\n");
+
+        checkout_branch(repo, "master");
+        let main2 = commit_file(&test_repo, "main 2", "main2.txt", "main 2\n");
+        let merge = merge_commit(&test_repo, "merge side", &[main2, side]);
+
+        let stats = GitEngine::get_commit_change_stats(path, vec![merge.to_string()]).unwrap();
+        let item = &stats[0];
+
+        assert_eq!(item.files_changed, 1);
+        assert_eq!(item.additions, 1);
+        assert_eq!(item.deletions, 0);
     }
 }

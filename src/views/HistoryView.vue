@@ -10,7 +10,7 @@ import { useDiffStore } from '@/stores/diff'
 import { useStashStore } from '@/stores/stash'
 import { useUiStore } from '@/stores/ui'
 import { useSettingsStore } from '@/stores/settings'
-import { formatAuthor, formatHistoryTime } from '@/utils/format'
+import { formatAuthor, formatBytes, formatHistoryTime } from '@/utils/format'
 import { LANE_W } from '@/utils/graph'
 import CommitGraphRow from '@/components/history/CommitGraphRow.vue'
 import WipRow from '@/components/history/WipRow.vue'
@@ -21,7 +21,7 @@ import OngoingOpBanner from '@/components/common/OngoingOpBanner.vue'
 import { useMergeRebaseStore } from '@/stores/mergeRebase'
 import { usePanelDock } from '@/composables/usePanelDock'
 import type { PanelId } from '@/stores/ui'
-import type { CommitInfo } from '@/types/git'
+import type { CommitChangeStats, CommitInfo } from '@/types/git'
 
 import { useHistoryPanes } from '@/composables/history/useHistoryPanes'
 import { useCommitContextMenu } from '@/composables/history/useCommitContextMenu'
@@ -130,6 +130,7 @@ function onScroll() {
   if (el.scrollHeight - el.scrollTop - el.clientHeight < rowH.value * 5) {
     historyStore.loadMore()
   }
+  ensureVisibleCommitChangeStats()
 }
 
 const {
@@ -189,8 +190,91 @@ const graphColWidth = computed(() => {
 // 面板窄于此时会出现横向滚动条，描述优先、右三列通过滑动查看
 // descColW 可由用户拖动"提交"列左边缘调整（整体移动右三列组）
 const commitListMinWidth = computed(() => {
-  return graphColWidth.value + sizes.descColW + sizes.hashColW + sizes.authorColW + sizes.dateColW + sizes.dateCol2W
+  return graphColWidth.value + sizes.descColW + sizes.statsColW + sizes.hashColW + sizes.authorColW + sizes.dateColW + sizes.dateCol2W
 })
+
+const wipChangeStats = computed(() => {
+  const status = workspaceStore.status
+  const files = status ? [...status.staged, ...status.unstaged, ...status.untracked] : []
+  return {
+    files_changed: files.length,
+    additions: files.reduce((sum, file) => sum + file.additions, 0),
+    deletions: files.reduce((sum, file) => sum + file.deletions, 0),
+  }
+})
+
+function commitAtVirtualIndex(index: number): CommitInfo | undefined {
+  return filteredCommits.value[toRealIdx(index)]
+}
+
+function changeStatsForCommit(commit: CommitInfo | undefined): CommitChangeStats | undefined {
+  return commit ? historyStore.commitChangeStats.get(commit.oid) : undefined
+}
+
+function isChangeStatsLoading(commit: CommitInfo | undefined): boolean {
+  return commit ? historyStore.commitChangeStatsLoading.has(commit.oid) : false
+}
+
+function isChangeStatsFailed(commit: CommitInfo | undefined): boolean {
+  return commit ? historyStore.commitChangeStatsFailed.has(commit.oid) : false
+}
+
+function changeFilesText(count: number): string {
+  return t('history.changeStats.files', { count })
+}
+
+function largeChangeBadge(stats: CommitChangeStats | undefined): string {
+  if (!stats || stats.large_blob_count === 0) return ''
+  return `BIG ${formatBytes(stats.largest_blob_bytes)}`
+}
+
+function changeStatsTitle(stats: CommitChangeStats): string {
+  const bits = [
+    t('history.changeStats.filesTitle', { count: stats.files_changed }),
+    t('history.changeStats.additionsTitle', { count: stats.additions }),
+    t('history.changeStats.deletionsTitle', { count: stats.deletions }),
+  ]
+  if (stats.binary_files > 0) {
+    bits.push(t('history.changeStats.binaryTitle', { count: stats.binary_files }))
+  }
+  if (stats.large_blob_count > 0) {
+    bits.push(t('history.changeStats.largeTitle', {
+      count: stats.large_blob_count,
+      size: formatBytes(stats.large_blob_bytes),
+      largest: formatBytes(stats.largest_blob_bytes),
+    }))
+  }
+  return bits.join('\n')
+}
+
+function visibleCommitOidsForStats(): string[] {
+  const oids: string[] = []
+  for (const item of virtualizer.value.getVirtualItems()) {
+    const commit = commitAtVirtualIndex(item.index)
+    if (commit) oids.push(commit.oid)
+  }
+  return oids
+}
+
+function ensureVisibleCommitChangeStats() {
+  const oids = visibleCommitOidsForStats()
+  if (oids.length > 0) historyStore.ensureCommitChangeStats(oids)
+}
+
+watch(
+  () => [
+    filteredCommits.value.map((c) => c.oid).join(','),
+    isWipVisible.value ? '1' : '0',
+  ],
+  () => nextTick(ensureVisibleCommitChangeStats),
+  { immediate: true },
+)
+
+watch(
+  () => virtualizer.value.getVirtualItems().map((item) => item.index).join(','),
+  ensureVisibleCommitChangeStats,
+  { flush: 'post' },
+)
 
 // ── Row selection ────────────────────────────────────────────────────
 const {
@@ -551,6 +635,11 @@ onUnmounted(() => {
                   :graph-col-width="graphColWidth"
                   :desc-col-width="sizes.descColW"
                 />
+                <div class="col-change-stats" :style="{ width: sizes.statsColW + 'px' }">
+                  <span class="change-files">{{ changeFilesText(wipChangeStats.files_changed) }}</span>
+                  <span class="change-add" v-if="wipChangeStats.additions > 0">+{{ wipChangeStats.additions }}</span>
+                  <span class="change-del" v-if="wipChangeStats.deletions > 0">-{{ wipChangeStats.deletions }}</span>
+                </div>
                 <div class="col-hash" :style="{ width: sizes.hashColW + 'px' }">—</div>
                 <div class="col-author" :style="{ width: sizes.authorColW + 'px' }">—</div>
                 <div class="col-date" :style="{ width: sizes.dateColW + 'px' }">—</div>
@@ -646,6 +735,47 @@ onUnmounted(() => {
                     aria-hidden="true"
                   >◉ </span>
                   <span class="commit-msg">{{ filteredCommits[toRealIdx(vRow.index)]?.summary }}</span>
+                </div>
+
+                <!-- Change stats column -->
+                <div
+                  class="col-change-stats"
+                  :style="{ width: sizes.statsColW + 'px' }"
+                >
+                  <template v-if="changeStatsForCommit(commitAtVirtualIndex(vRow.index))">
+                    <span
+                      class="change-files"
+                      :title="changeStatsTitle(changeStatsForCommit(commitAtVirtualIndex(vRow.index))!)"
+                    >{{ changeFilesText(changeStatsForCommit(commitAtVirtualIndex(vRow.index))!.files_changed) }}</span>
+                    <span
+                      class="change-add"
+                      v-if="changeStatsForCommit(commitAtVirtualIndex(vRow.index))!.additions > 0"
+                    >+{{ changeStatsForCommit(commitAtVirtualIndex(vRow.index))!.additions }}</span>
+                    <span
+                      class="change-del"
+                      v-if="changeStatsForCommit(commitAtVirtualIndex(vRow.index))!.deletions > 0"
+                    >-{{ changeStatsForCommit(commitAtVirtualIndex(vRow.index))!.deletions }}</span>
+                    <span
+                      v-if="changeStatsForCommit(commitAtVirtualIndex(vRow.index))!.binary_files > 0"
+                      class="change-badge change-badge-bin"
+                      :title="t('history.changeStats.binaryTitle', { count: changeStatsForCommit(commitAtVirtualIndex(vRow.index))!.binary_files })"
+                    >BIN</span>
+                    <span
+                      v-if="changeStatsForCommit(commitAtVirtualIndex(vRow.index))!.large_blob_count > 0"
+                      class="change-badge change-badge-big"
+                      :title="changeStatsTitle(changeStatsForCommit(commitAtVirtualIndex(vRow.index))!)"
+                    >{{ largeChangeBadge(changeStatsForCommit(commitAtVirtualIndex(vRow.index))) }}</span>
+                  </template>
+                  <span
+                    v-else-if="isChangeStatsFailed(commitAtVirtualIndex(vRow.index))"
+                    class="change-stats-failed"
+                    :title="t('history.changeStats.failed')"
+                  >!</span>
+                  <span
+                    v-else-if="isChangeStatsLoading(commitAtVirtualIndex(vRow.index))"
+                    class="change-stats-placeholder"
+                  >…</span>
+                  <span v-else class="change-stats-placeholder">…</span>
                 </div>
 
                 <!-- Hash column -->
@@ -969,6 +1099,7 @@ onUnmounted(() => {
 }
 
 .commit-row.selected .commit-msg,
+.commit-row.selected .col-change-stats,
 .commit-row.selected .col-hash,
 .commit-row.selected .col-author,
 .commit-row.selected .col-date {
@@ -1024,6 +1155,19 @@ onUnmounted(() => {
   overflow: hidden;
 }
 
+.col-change-stats {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  padding: 0 6px;
+  overflow: hidden;
+  white-space: nowrap;
+  font-size: var(--font-xs);
+  color: var(--text-secondary);
+}
+
 .col-hash {
   flex-shrink: 0;
   font-family: Menlo, 'SF Mono', monospace;
@@ -1063,6 +1207,7 @@ onUnmounted(() => {
 
 /* 列头之间的垂直分隔线（每个列头左侧）。col-resize 拖拽手柄浮在 border 之上，不影响操作。 */
 .col-header > .col-message,
+.col-header > .col-change-stats,
 .col-header > .header-col {
   border-left: 1px solid var(--border);
 }
@@ -1070,6 +1215,7 @@ onUnmounted(() => {
 /* Header 单元格：不继承数据行列的字体/颜色（如 hash 的蓝 monospace），
    而是延用 .col-header 的灰色大写粗体样式，且明确左对齐。 */
 .col-header > .col-hash,
+.col-header > .col-change-stats,
 .col-header > .col-author,
 .col-header > .col-date,
 .col-header > .col-message {
@@ -1104,6 +1250,76 @@ onUnmounted(() => {
   white-space: nowrap;
 }
 
+.change-files {
+  flex-shrink: 0;
+  color: var(--text-muted);
+}
+
+.change-add {
+  flex-shrink: 0;
+  color: var(--accent-green);
+}
+
+.change-del {
+  flex-shrink: 0;
+  color: var(--accent-red);
+}
+
+.change-badge {
+  flex-shrink: 0;
+  border: 1px solid currentColor;
+  border-radius: 3px;
+  padding: 0 4px;
+  line-height: 14px;
+  font-size: var(--font-xs);
+  font-weight: 700;
+}
+
+.change-badge-bin {
+  color: var(--accent-orange);
+}
+
+.change-badge-big {
+  color: var(--accent-yellow);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.change-stats-placeholder {
+  color: var(--text-muted);
+  opacity: 0.65;
+}
+
+.change-stats-failed {
+  color: var(--accent-red);
+  font-weight: 700;
+}
+
+.commit-row.selected .change-files,
+.commit-row.selected .change-add,
+.commit-row.selected .change-del,
+.commit-row.selected .change-badge,
+.commit-row.selected .change-stats-placeholder,
+.commit-row.selected .change-stats-failed {
+  color: var(--row-selected-fg);
+}
+
+.commit-row.wip-row.selected .col-change-stats {
+  color: var(--text-secondary);
+}
+
+.commit-row.wip-row.selected .change-files {
+  color: var(--text-muted);
+}
+
+.commit-row.wip-row.selected .change-add {
+  color: var(--accent-green);
+}
+
+.commit-row.wip-row.selected .change-del {
+  color: var(--accent-red);
+}
+
 /* ── 提交悬停 tooltip（自定义，适配 Catppuccin 色彩） ─────────────── */
 .commit-tooltip {
   position: fixed;
@@ -1123,6 +1339,7 @@ onUnmounted(() => {
 
 /* ── 丢失引用的提交（unreachable）：整行变灰 ─────────────────── */
 .commit-row.commit-dim .commit-msg,
+.commit-row.commit-dim .col-change-stats,
 .commit-row.commit-dim .col-hash,
 .commit-row.commit-dim .col-author,
 .commit-row.commit-dim .col-date {
@@ -1148,6 +1365,7 @@ onUnmounted(() => {
 
 /* 选中时覆盖 dim / stash 的淡化规则：文字统一变白（保留斜体视觉标识） */
 .commit-row.selected.commit-dim .commit-msg,
+.commit-row.selected.commit-dim .col-change-stats,
 .commit-row.selected.commit-dim .col-hash,
 .commit-row.selected.commit-dim .col-author,
 .commit-row.selected.commit-dim .col-date,

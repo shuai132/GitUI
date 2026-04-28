@@ -1,12 +1,20 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import type { CommitInfo, BranchInfo, CommitDetail, TagInfo, RemoteInfo } from '@/types/git'
+import type {
+  CommitInfo,
+  BranchInfo,
+  CommitDetail,
+  CommitChangeStats,
+  TagInfo,
+  RemoteInfo,
+} from '@/types/git'
 import { useGitCommands } from '@/composables/useGitCommands'
 import { useRepoStore } from './repos'
 import { useUiStore } from './ui'
 import { computeGraphLayout, type GraphRow, type LaneState } from '@/utils/graph'
 
 const PAGE_SIZE = 200
+const CHANGE_STATS_BATCH_SIZE = 40
 
 export const useHistoryStore = defineStore('history', () => {
   const commits = ref<CommitInfo[]>([])
@@ -34,13 +42,80 @@ export const useHistoryStore = defineStore('history', () => {
   const pendingJumpOid = ref<string | null>(null)
   // 由 App 设置，HistoryView 消费后清空；只把目标 commit 滚入视野，不选中也不打开详情
   const pendingRevealOid = ref<string | null>(null)
+  const commitChangeStats = ref<Map<string, CommitChangeStats>>(new Map())
+  const commitChangeStatsLoading = ref<Set<string>>(new Set())
+  const commitChangeStatsFailed = ref<Set<string>>(new Set())
+  const commitChangeStatsRepoId = ref<string | null>(null)
 
   const git = useGitCommands()
+
+  function clearCommitChangeStats() {
+    commitChangeStats.value = new Map()
+    commitChangeStatsLoading.value = new Set()
+    commitChangeStatsFailed.value = new Set()
+  }
+
+  function ensureCommitChangeStatsRepo(repoId: string) {
+    if (commitChangeStatsRepoId.value === repoId) return
+    commitChangeStatsRepoId.value = repoId
+    clearCommitChangeStats()
+  }
+
+  function markStatsLoading(oids: string[]) {
+    const next = new Set(commitChangeStatsLoading.value)
+    for (const oid of oids) next.add(oid)
+    commitChangeStatsLoading.value = next
+  }
+
+  function unmarkStatsLoading(oids: string[]) {
+    const next = new Set(commitChangeStatsLoading.value)
+    for (const oid of oids) next.delete(oid)
+    commitChangeStatsLoading.value = next
+  }
+
+  function markStatsFailed(oids: string[]) {
+    const next = new Set(commitChangeStatsFailed.value)
+    for (const oid of oids) next.add(oid)
+    commitChangeStatsFailed.value = next
+  }
+
+  async function ensureCommitChangeStats(oids: string[]) {
+    const repoStore = useRepoStore()
+    const repoId = repoStore.activeRepoId
+    if (!repoId || oids.length === 0) return
+    ensureCommitChangeStatsRepo(repoId)
+
+    const unique = Array.from(new Set(oids.filter(Boolean)))
+    const missing = unique.filter(
+      (oid) =>
+        !commitChangeStats.value.has(oid) &&
+        !commitChangeStatsLoading.value.has(oid) &&
+        !commitChangeStatsFailed.value.has(oid),
+    )
+    if (missing.length === 0) return
+
+    for (let i = 0; i < missing.length; i += CHANGE_STATS_BATCH_SIZE) {
+      const batch = missing.slice(i, i + CHANGE_STATS_BATCH_SIZE)
+      markStatsLoading(batch)
+      try {
+        const stats = await git.getCommitChangeStats(repoId, batch)
+        const next = new Map(commitChangeStats.value)
+        for (const item of stats) next.set(item.oid, item)
+        commitChangeStats.value = next
+      } catch (e: unknown) {
+        error.value = String(e)
+        markStatsFailed(batch)
+      } finally {
+        unmarkStatsLoading(batch)
+      }
+    }
+  }
 
   async function loadLog() {
     const repoStore = useRepoStore()
     const uiStore = useUiStore()
     if (!repoStore.activeRepoId) return
+    ensureCommitChangeStatsRepo(repoStore.activeRepoId)
 
     loading.value = true
     error.value = null
@@ -476,6 +551,8 @@ export const useHistoryStore = defineStore('history', () => {
     hasMore.value = false
     pendingJumpOid.value = null
     pendingRevealOid.value = null
+    commitChangeStatsRepoId.value = null
+    clearCommitChangeStats()
   }
 
   return {
@@ -491,6 +568,9 @@ export const useHistoryStore = defineStore('history', () => {
     selectedWip,
     showDetail,
     graphRows,
+    commitChangeStats,
+    commitChangeStatsLoading,
+    commitChangeStatsFailed,
     selectedFileDiffIndex,
     loadingDetail,
     hasMore,
@@ -502,6 +582,7 @@ export const useHistoryStore = defineStore('history', () => {
     loadLog,
     loadMore,
     ensureCommitLoaded,
+    ensureCommitChangeStats,
     loadBranches,
     loadTags,
     loadRemoteTags,

@@ -169,6 +169,17 @@ export interface CommitDetail {
   diffs: FileDiff[]
 }
 
+export interface CommitChangeStats {
+  oid: string
+  files_changed: number
+  additions: number
+  deletions: number
+  binary_files: number
+  large_blob_count: number
+  large_blob_bytes: number
+  largest_blob_bytes: number
+}
+
 export interface LogPage {
   commits: CommitInfo[]
   has_more: boolean

@@ -126,16 +126,18 @@ export function useHistoryPanes(contentAreaRef: Ref<HTMLElement | null>, showDet
     document.body.style.userSelect = 'none'
   }
 
-  // ── Column resize (hash / author / date) ─────────────────────────────
-  type ColKey = 'desc' | 'hash' | 'author' | 'date'
+  // ── Column resize (change stats / hash / author / date) ──────────────
+  type ColKey = 'desc' | 'stats' | 'hash' | 'author' | 'date'
   const COL_LIMITS: Record<ColKey, [number, number]> = {
     desc: [200, 1200],
+    stats: [90, 260],
     hash: [48, 240],
     author: [60, 420],
     date: [60, 300],
   }
-  const COL_KEY_MAP: Record<ColKey, 'descColW' | 'hashColW' | 'authorColW' | 'dateColW'> = {
+  const COL_KEY_MAP: Record<ColKey, 'descColW' | 'statsColW' | 'hashColW' | 'authorColW' | 'dateColW'> = {
     desc: 'descColW',
+    stats: 'statsColW',
     hash: 'hashColW',
     author: 'authorColW',
     date: 'dateColW',

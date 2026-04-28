@@ -4,7 +4,7 @@ use crate::{
     git::{
         engine::GitEngine,
         error::GitError,
-        types::{CommitDetail, CommitInfo, LogBranchScope, LogPage},
+        types::{CommitChangeStats, CommitDetail, CommitInfo, LogBranchScope, LogPage},
     },
     repo_manager::RepoManager,
 };
@@ -34,6 +34,18 @@ pub async fn get_log(
         branch_scope,
         include_remote_branches,
     )
+}
+
+#[tauri::command]
+pub async fn get_commit_change_stats(
+    repo_id: String,
+    oids: Vec<String>,
+    repo_manager: State<'_, RepoManager>,
+) -> Result<Vec<CommitChangeStats>, GitError> {
+    let meta = repo_manager
+        .get_meta(&repo_id)
+        .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
+    GitEngine::get_commit_change_stats(&meta.path, oids)
 }
 
 #[tauri::command]

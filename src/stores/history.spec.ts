@@ -3,10 +3,11 @@ import { createPinia, setActivePinia } from 'pinia'
 import { useHistoryStore } from './history'
 import { useRepoStore } from './repos'
 import { useUiStore } from './ui'
-import type { LogPage } from '@/types/git'
+import type { CommitChangeStats, LogPage } from '@/types/git'
 
-const { getLogMock } = vi.hoisted(() => ({
+const { getLogMock, getCommitChangeStatsMock } = vi.hoisted(() => ({
   getLogMock: vi.fn(),
+  getCommitChangeStatsMock: vi.fn(),
 }))
 
 vi.mock('@tauri-apps/plugin-store', () => ({
@@ -20,6 +21,7 @@ vi.mock('@tauri-apps/plugin-store', () => ({
 vi.mock('@/composables/useGitCommands', () => ({
   useGitCommands: () => ({
     getLog: getLogMock,
+    getCommitChangeStats: getCommitChangeStatsMock,
   }),
 }))
 
@@ -45,6 +47,19 @@ function page(hasMore = false, oids = ['aaa']): LogPage {
     commits: oids.map(commit),
     has_more: hasMore,
     total_loaded: oids.length,
+  }
+}
+
+function stat(oid: string): CommitChangeStats {
+  return {
+    oid,
+    files_changed: 1,
+    additions: 2,
+    deletions: 3,
+    binary_files: 0,
+    large_blob_count: 0,
+    large_blob_bytes: 0,
+    largest_blob_bytes: 12,
   }
 }
 
@@ -77,6 +92,7 @@ describe('history store log filters', () => {
   beforeEach(() => {
     stubLocalStorage()
     getLogMock.mockReset()
+    getCommitChangeStatsMock.mockReset()
     setActivePinia(createPinia())
   })
 
@@ -189,5 +205,58 @@ describe('history store log filters', () => {
 
     expect(getLogMock).toHaveBeenCalledTimes(1)
     expect(historyStore.commits.map((c) => c.oid)).toEqual(['newer'])
+  })
+
+  it('loads missing change stats once and caches results', async () => {
+    getCommitChangeStatsMock.mockResolvedValueOnce([stat('a'), stat('b')])
+    const repoStore = useRepoStore()
+    const historyStore = useHistoryStore()
+
+    repoStore.activeRepoId = 'repo-1'
+    await historyStore.ensureCommitChangeStats(['a', 'b', 'a'])
+    await historyStore.ensureCommitChangeStats(['a', 'b'])
+
+    expect(getCommitChangeStatsMock).toHaveBeenCalledTimes(1)
+    expect(getCommitChangeStatsMock).toHaveBeenCalledWith('repo-1', ['a', 'b'])
+    expect(historyStore.commitChangeStats.get('a')?.additions).toBe(2)
+    expect(historyStore.commitChangeStats.get('b')?.deletions).toBe(3)
+  })
+
+  it('does not duplicate in-flight change stats requests', async () => {
+    let resolveStats!: (value: CommitChangeStats[]) => void
+    const pending = new Promise<CommitChangeStats[]>((resolve) => {
+      resolveStats = resolve
+    })
+    getCommitChangeStatsMock.mockReturnValueOnce(pending)
+    const repoStore = useRepoStore()
+    const historyStore = useHistoryStore()
+
+    repoStore.activeRepoId = 'repo-1'
+    const first = historyStore.ensureCommitChangeStats(['a'])
+    const second = historyStore.ensureCommitChangeStats(['a'])
+
+    expect(getCommitChangeStatsMock).toHaveBeenCalledTimes(1)
+    resolveStats([stat('a')])
+    await Promise.all([first, second])
+
+    expect(historyStore.commitChangeStats.get('a')?.files_changed).toBe(1)
+  })
+
+  it('clears cached change stats when the active repo changes', async () => {
+    getCommitChangeStatsMock
+      .mockResolvedValueOnce([stat('a')])
+      .mockResolvedValueOnce([stat('b')])
+    const repoStore = useRepoStore()
+    const historyStore = useHistoryStore()
+
+    repoStore.activeRepoId = 'repo-1'
+    await historyStore.ensureCommitChangeStats(['a'])
+    expect(historyStore.commitChangeStats.has('a')).toBe(true)
+
+    repoStore.activeRepoId = 'repo-2'
+    await historyStore.ensureCommitChangeStats(['b'])
+
+    expect(historyStore.commitChangeStats.has('a')).toBe(false)
+    expect(historyStore.commitChangeStats.has('b')).toBe(true)
   })
 })
