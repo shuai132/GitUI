@@ -61,12 +61,12 @@ pub fn decode_commit_text(bytes: &[u8], hint: Option<&str>) -> String {
             return decode_with(enc, bytes);
         }
     }
-    
+
     let (clean_bytes, bom_enc) = strip_bom(bytes);
     if let Some(enc) = bom_enc {
         return decode_with(enc, bytes);
     }
-    
+
     if std::str::from_utf8(clean_bytes).is_ok() {
         return decode_with(UTF_8, bytes);
     }
@@ -93,11 +93,11 @@ pub fn detect_file_encoding(
             return enc;
         }
     }
-    
+
     if std::str::from_utf8(clean_bytes).is_ok() {
         return UTF_8;
     }
-    
+
     let mut det = EncodingDetector::new();
     det.feed(clean_bytes, true);
     det.guess(None, false)
@@ -164,10 +164,10 @@ mod tests {
         let original = "BOM test 中文";
         let mut bytes = vec![0xef, 0xbb, 0xbf];
         bytes.extend_from_slice(original.as_bytes());
-        
+
         // decode_commit_text should strip BOM
         assert_eq!(decode_commit_text(&bytes, None), original);
-        
+
         // detect_file_encoding should return UTF_8
         let enc = detect_file_encoding(&bytes, None, None);
         assert_eq!(enc, UTF_8);
@@ -180,12 +180,14 @@ mod tests {
         // A: 41 00, B: 42 00, C: 43 00, space: 20 00
         // 中: 2D 4E, 文: 87 65  (U+4E2D, U+6587)
         let mut bytes = vec![0xff, 0xfe]; // LE BOM
-        bytes.extend_from_slice(&[0x41, 0x00, 0x42, 0x00, 0x43, 0x00, 0x20, 0x00, 0x2D, 0x4E, 0x87, 0x65]);
-        
+        bytes.extend_from_slice(&[
+            0x41, 0x00, 0x42, 0x00, 0x43, 0x00, 0x20, 0x00, 0x2D, 0x4E, 0x87, 0x65,
+        ]);
+
         // detect_file_encoding should return UTF_16LE
         let enc = detect_file_encoding(&bytes, None, None);
         assert_eq!(enc, encoding_rs::UTF_16LE);
-        
+
         assert_eq!(decode_with(enc, &bytes), original);
     }
 

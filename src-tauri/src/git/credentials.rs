@@ -104,9 +104,8 @@ pub fn make_credentials_callback(
         if allowed_types.contains(CredentialType::USER_PASS_PLAINTEXT) {
             log::debug!("[credentials] trying default credential helper (userpass)");
             return Cred::credential_helper(
-                &git2::Config::open_default().map_err(|e| {
-                    Git2Error::from_str(&format!("failed to open git config: {e}"))
-                })?,
+                &git2::Config::open_default()
+                    .map_err(|e| Git2Error::from_str(&format!("failed to open git config: {e}")))?,
                 url,
                 username,
             );

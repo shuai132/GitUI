@@ -49,14 +49,9 @@ pub async fn open_repo(
     let app_clone = app.clone();
     let repo_id_clone = id.clone();
 
-    let _ = watcher.watch(
-        id.clone(),
-        watch_dir,
-        ignore_filter,
-        move |_result| {
-            let _ = app_clone.emit("repo://status-changed", &repo_id_clone);
-        },
-    );
+    let _ = watcher.watch(id.clone(), watch_dir, ignore_filter, move |_result| {
+        let _ = app_clone.emit("repo://status-changed", &repo_id_clone);
+    });
 
     Ok(meta)
 }
@@ -73,16 +68,13 @@ pub async fn close_repo(
 }
 
 #[tauri::command]
-pub async fn list_repos(
-    repo_manager: State<'_, RepoManager>,
-) -> Result<Vec<RepoMeta>, GitError> {
+pub async fn list_repos(repo_manager: State<'_, RepoManager>) -> Result<Vec<RepoMeta>, GitError> {
     Ok(repo_manager.list_repos())
 }
 
 #[tauri::command]
 pub async fn validate_repo_path(path: String) -> Result<bool, GitError> {
-    Ok(Path::new(&path).join(".git").exists()
-        || GitEngine::open(&path).is_ok())
+    Ok(Path::new(&path).join(".git").exists() || GitEngine::open(&path).is_ok())
 }
 
 // ── Clone / Init ────────────────────────────────────────────────────

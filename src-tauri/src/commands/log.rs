@@ -1,7 +1,11 @@
 use tauri::State;
 
 use crate::{
-    git::{engine::GitEngine, error::GitError, types::{CommitDetail, CommitInfo, LogBranchScope, LogPage}},
+    git::{
+        engine::GitEngine,
+        error::GitError,
+        types::{CommitDetail, CommitInfo, LogBranchScope, LogPage},
+    },
     repo_manager::RepoManager,
 };
 

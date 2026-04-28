@@ -1,10 +1,6 @@
 use tauri::{AppHandle, State};
 
-use crate::{
-    git::error::GitError,
-    repo_manager::RepoManager,
-    terminal::TerminalManager,
-};
+use crate::{git::error::GitError, repo_manager::RepoManager, terminal::TerminalManager};
 
 /// 在当前仓库目录下启动一个 PTY shell 会话。返回 session_id。
 #[tauri::command]

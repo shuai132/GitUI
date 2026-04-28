@@ -31,7 +31,8 @@ impl GitEngine {
 
         if repo.state() != RepositoryState::Clean {
             return Err(GitError::OperationFailed(
-                "仓库处于进行中的 merge/rebase/cherry-pick 状态，请先继续或中止当前操作".to_string(),
+                "仓库处于进行中的 merge/rebase/cherry-pick 状态，请先继续或中止当前操作"
+                    .to_string(),
             ));
         }
 
@@ -125,9 +126,7 @@ impl GitEngine {
 
         let mut index = repo.index()?;
         if index.has_conflicts() {
-            return Err(GitError::OperationFailed(
-                "仍有未解决的冲突".to_string(),
-            ));
+            return Err(GitError::OperationFailed("仍有未解决的冲突".to_string()));
         }
 
         let merge_head_oid = {
@@ -145,8 +144,7 @@ impl GitEngine {
         let sig = repo.signature()?;
 
         let msg = if message.trim().is_empty() {
-            read_merge_msg(&repo)
-                .unwrap_or_else(|| format!("Merge commit {}", source.id()))
+            read_merge_msg(&repo).unwrap_or_else(|| format!("Merge commit {}", source.id()))
         } else {
             message.to_string()
         };
@@ -180,10 +178,7 @@ impl GitEngine {
     }
 }
 
-fn resolve_annotated<'a>(
-    repo: &'a Repository,
-    spec: &str,
-) -> GitResult<git2::AnnotatedCommit<'a>> {
+fn resolve_annotated<'a>(repo: &'a Repository, spec: &str) -> GitResult<git2::AnnotatedCommit<'a>> {
     // 先尝试当作 ref 解析，失败再当 oid
     if let Ok(reference) = repo.find_reference(spec) {
         return Ok(repo.reference_to_annotated_commit(&reference)?);
@@ -191,9 +186,8 @@ fn resolve_annotated<'a>(
     if let Ok(reference) = repo.resolve_reference_from_short_name(spec) {
         return Ok(repo.reference_to_annotated_commit(&reference)?);
     }
-    let oid = git2::Oid::from_str(spec).map_err(|_| {
-        GitError::OperationFailed(format!("无法识别的分支或提交：{spec}"))
-    })?;
+    let oid = git2::Oid::from_str(spec)
+        .map_err(|_| GitError::OperationFailed(format!("无法识别的分支或提交：{spec}")))?;
     Ok(repo.find_annotated_commit(oid)?)
 }
 

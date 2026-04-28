@@ -143,14 +143,17 @@ impl TerminalManager {
             .sessions
             .lock()
             .map_err(|e| GitError::OperationFailed(format!("terminal state poisoned: {}", e)))?;
-        let session = map
-            .get_mut(session_id)
-            .ok_or_else(|| GitError::OperationFailed(format!("session not found: {}", session_id)))?;
+        let session = map.get_mut(session_id).ok_or_else(|| {
+            GitError::OperationFailed(format!("session not found: {}", session_id))
+        })?;
         session
             .writer
             .write_all(&bytes)
             .map_err(|e| GitError::Io(e.to_string()))?;
-        session.writer.flush().map_err(|e| GitError::Io(e.to_string()))
+        session
+            .writer
+            .flush()
+            .map_err(|e| GitError::Io(e.to_string()))
     }
 
     pub fn resize(&self, session_id: &str, cols: u16, rows: u16) -> Result<(), GitError> {
@@ -158,9 +161,9 @@ impl TerminalManager {
             .sessions
             .lock()
             .map_err(|e| GitError::OperationFailed(format!("terminal state poisoned: {}", e)))?;
-        let session = map
-            .get(session_id)
-            .ok_or_else(|| GitError::OperationFailed(format!("session not found: {}", session_id)))?;
+        let session = map.get(session_id).ok_or_else(|| {
+            GitError::OperationFailed(format!("session not found: {}", session_id))
+        })?;
         session
             .master
             .resize(PtySize {

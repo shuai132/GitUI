@@ -15,7 +15,7 @@ pub async fn fetch_remote(
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    
+
     if remote_name == "--all" {
         let remotes = GitEngine::list_remotes(&meta.path)?;
         for remote in remotes {
@@ -39,7 +39,7 @@ pub async fn fetch_tags_from_remote(
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    
+
     if remote_name == "--all" {
         let remotes = GitEngine::list_remotes(&meta.path)?;
         for remote in remotes {

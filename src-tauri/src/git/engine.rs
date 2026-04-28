@@ -526,7 +526,11 @@ impl GitEngine {
         })
     }
 
-    pub fn get_commit_summary(path: &str, oid_str: &str, include_stats: bool) -> GitResult<CommitDetail> {
+    pub fn get_commit_summary(
+        path: &str,
+        oid_str: &str,
+        include_stats: bool,
+    ) -> GitResult<CommitDetail> {
         let repo = Self::open(path)?;
         let oid = git2::Oid::from_str(oid_str)
             .map_err(|e| GitError::OperationFailed(e.message().to_string()))?;
@@ -542,11 +546,7 @@ impl GitEngine {
             let parent = commit.parent(0)?;
             let parent_tree = parent.tree()?;
             let commit_tree = commit.tree()?;
-            repo.diff_tree_to_tree(
-                Some(&parent_tree),
-                Some(&commit_tree),
-                Some(&mut opts),
-            )?
+            repo.diff_tree_to_tree(Some(&parent_tree), Some(&commit_tree), Some(&mut opts))?
         } else {
             let commit_tree = commit.tree()?;
             repo.diff_tree_to_tree(None, Some(&commit_tree), Some(&mut opts))?
@@ -563,11 +563,9 @@ impl GitEngine {
                         .starts_with("untracked")
                 {
                     if let Ok(untracked_tree) = untracked_commit.tree() {
-                        if let Ok(untracked_diff) = repo.diff_tree_to_tree(
-                            None,
-                            Some(&untracked_tree),
-                            Some(&mut opts),
-                        ) {
+                        if let Ok(untracked_diff) =
+                            repo.diff_tree_to_tree(None, Some(&untracked_tree), Some(&mut opts))
+                        {
                             if let Ok(mut untracked_diffs) =
                                 Self::parse_diff_summary(&repo, &untracked_diff, include_stats)
                             {
@@ -598,11 +596,7 @@ impl GitEngine {
             let parent = commit.parent(0)?;
             let parent_tree = parent.tree()?;
             let commit_tree = commit.tree()?;
-            repo.diff_tree_to_tree(
-                Some(&parent_tree),
-                Some(&commit_tree),
-                Some(&mut opts),
-            )?
+            repo.diff_tree_to_tree(Some(&parent_tree), Some(&commit_tree), Some(&mut opts))?
         } else {
             let commit_tree = commit.tree()?;
             repo.diff_tree_to_tree(None, Some(&commit_tree), Some(&mut opts))?
@@ -621,11 +615,9 @@ impl GitEngine {
                         .starts_with("untracked")
                 {
                     if let Ok(untracked_tree) = untracked_commit.tree() {
-                        if let Ok(untracked_diff) = repo.diff_tree_to_tree(
-                            None,
-                            Some(&untracked_tree),
-                            Some(&mut opts),
-                        ) {
+                        if let Ok(untracked_diff) =
+                            repo.diff_tree_to_tree(None, Some(&untracked_tree), Some(&mut opts))
+                        {
                             if let Ok(mut untracked_diffs) =
                                 Self::parse_diff(&repo, &untracked_diff)
                             {
@@ -892,7 +884,10 @@ impl GitEngine {
                     };
 
                     if let Some(last) = files.last_mut() {
-                        if last.new_path == new_path && last.old_path == old_path && last.new_path.is_some() {
+                        if last.new_path == new_path
+                            && last.old_path == old_path
+                            && last.new_path.is_some()
+                        {
                             let mut merged = files.pop().unwrap();
                             if new_id.is_zero() {
                                 merged.old_blob_oid = Some(old_id.to_string());
@@ -1045,11 +1040,12 @@ impl GitEngine {
 
             let enc = detect_file_encoding(&sample, attr_encoding.as_deref(), file_bom_enc);
             // UTF-8 有 BOM 时显示 "UTF-8 BOM" 以示区分
-            let encoding_name = if enc == encoding_rs::UTF_8 && file_bom_enc == Some(encoding_rs::UTF_8) {
-                "UTF-8 BOM".to_owned()
-            } else {
-                enc.name().to_owned()
-            };
+            let encoding_name =
+                if enc == encoding_rs::UTF_8 && file_bom_enc == Some(encoding_rs::UTF_8) {
+                    "UTF-8 BOM".to_owned()
+                } else {
+                    enc.name().to_owned()
+                };
 
             let hunks: Vec<DiffHunk> = pending
                 .hunks
@@ -1090,7 +1086,11 @@ impl GitEngine {
     }
 
     /// 仅解析 diff 概览（文件列表及增删行数），不加载具体 hunk/line 内容。
-    fn parse_diff_summary(_repo: &Repository, diff: &git2::Diff, include_stats: bool) -> GitResult<Vec<FileDiff>> {
+    fn parse_diff_summary(
+        _repo: &Repository,
+        diff: &git2::Diff,
+        include_stats: bool,
+    ) -> GitResult<Vec<FileDiff>> {
         let files = std::cell::RefCell::new(Vec::<FileDiff>::with_capacity(diff.deltas().len()));
 
         let mut file_cb = |delta: git2::DiffDelta<'_>, _: f32| {
@@ -1107,13 +1107,16 @@ impl GitEngine {
 
             let mut files_ref = files.borrow_mut();
             if let Some(last) = files_ref.last_mut() {
-                if last.new_path == new_path && last.old_path == old_path && last.new_path.is_some() {
+                if last.new_path == new_path && last.old_path == old_path && last.new_path.is_some()
+                {
                     if new_id.is_zero() {
                         last.old_blob_oid = Some(old_id.to_string());
                     } else if old_id.is_zero() {
                         last.new_blob_oid = Some(new_id.to_string());
                     }
-                    last.is_binary = last.is_binary || delta.old_file().is_binary() || delta.new_file().is_binary();
+                    last.is_binary = last.is_binary
+                        || delta.old_file().is_binary()
+                        || delta.new_file().is_binary();
                     return true;
                 }
             }
@@ -1141,7 +1144,9 @@ impl GitEngine {
         };
 
         if include_stats {
-            let mut line_cb = |_: git2::DiffDelta<'_>, _: Option<git2::DiffHunk<'_>>, line: git2::DiffLine<'_>| {
+            let mut line_cb = |_: git2::DiffDelta<'_>,
+                               _: Option<git2::DiffHunk<'_>>,
+                               line: git2::DiffLine<'_>| {
                 if let Some(f) = files.borrow_mut().last_mut() {
                     match line.origin() {
                         '+' => f.additions += 1,
@@ -1458,37 +1463,44 @@ impl GitEngine {
         let url = get_remote_url(path, remote_name)?;
         if is_ssh_url(&url) {
             let stdout = run_git(path, &["ls-remote", "--tags", remote_name])?;
-            let mut map: std::collections::HashMap<String, TagInfo> = std::collections::HashMap::new();
+            let mut map: std::collections::HashMap<String, TagInfo> =
+                std::collections::HashMap::new();
             for line in stdout.lines() {
                 if let Some((oid, refname)) = line.split_once('\t') {
                     if !refname.starts_with("refs/tags/") {
                         continue;
                     }
                     if refname.ends_with("^{}") {
-                        let tag_name = refname["refs/tags/".len()..refname.len()-3].to_string();
+                        let tag_name = refname["refs/tags/".len()..refname.len() - 3].to_string();
                         if let Some(tag) = map.get_mut(&tag_name) {
                             tag.commit_oid = oid.to_string();
                             tag.is_annotated = true;
                         } else {
-                            map.insert(tag_name.clone(), TagInfo {
-                                name: tag_name,
-                                commit_oid: oid.to_string(),
-                                is_annotated: true,
-                                message: None,
-                                tagger_name: None,
-                                time: None,
-                            });
+                            map.insert(
+                                tag_name.clone(),
+                                TagInfo {
+                                    name: tag_name,
+                                    commit_oid: oid.to_string(),
+                                    is_annotated: true,
+                                    message: None,
+                                    tagger_name: None,
+                                    time: None,
+                                },
+                            );
                         }
                     } else {
                         let tag_name = refname["refs/tags/".len()..].to_string();
-                        map.insert(tag_name.clone(), TagInfo {
-                            name: tag_name,
-                            commit_oid: oid.to_string(),
-                            is_annotated: false,
-                            message: None,
-                            tagger_name: None,
-                            time: None,
-                        });
+                        map.insert(
+                            tag_name.clone(),
+                            TagInfo {
+                                name: tag_name,
+                                commit_oid: oid.to_string(),
+                                is_annotated: false,
+                                message: None,
+                                tagger_name: None,
+                                time: None,
+                            },
+                        );
                     }
                 }
             }
@@ -1513,30 +1525,36 @@ impl GitEngine {
                 continue;
             }
             if name.ends_with("^{}") {
-                let tag_name = name["refs/tags/".len()..name.len()-3].to_string();
+                let tag_name = name["refs/tags/".len()..name.len() - 3].to_string();
                 if let Some(tag) = map.get_mut(&tag_name) {
                     tag.commit_oid = head.oid().to_string();
                     tag.is_annotated = true;
                 } else {
-                    map.insert(tag_name.clone(), TagInfo {
-                        name: tag_name,
-                        commit_oid: head.oid().to_string(),
-                        is_annotated: true,
-                        message: None,
-                        tagger_name: None,
-                        time: None,
-                    });
+                    map.insert(
+                        tag_name.clone(),
+                        TagInfo {
+                            name: tag_name,
+                            commit_oid: head.oid().to_string(),
+                            is_annotated: true,
+                            message: None,
+                            tagger_name: None,
+                            time: None,
+                        },
+                    );
                 }
             } else {
                 let tag_name = name["refs/tags/".len()..].to_string();
-                map.insert(tag_name.clone(), TagInfo {
-                    name: tag_name,
-                    commit_oid: head.oid().to_string(),
-                    is_annotated: false,
-                    message: None,
-                    tagger_name: None,
-                    time: None,
-                });
+                map.insert(
+                    tag_name.clone(),
+                    TagInfo {
+                        name: tag_name,
+                        commit_oid: head.oid().to_string(),
+                        is_annotated: false,
+                        message: None,
+                        tagger_name: None,
+                        time: None,
+                    },
+                );
             }
         }
         let _ = remote.disconnect();
@@ -2359,7 +2377,10 @@ impl GitEngine {
             if name.is_empty() {
                 continue;
             }
-            let url = repo.find_remote(&name).ok().and_then(|r| r.url().map(|s| s.to_string()));
+            let url = repo
+                .find_remote(&name)
+                .ok()
+                .and_then(|r| r.url().map(|s| s.to_string()));
             result.push(RemoteInfo { name, url });
         }
         Ok(result)
@@ -2381,12 +2402,7 @@ impl GitEngine {
     }
 
     /// 修改 remote 的名称和/或 URL。
-    pub fn edit_remote(
-        path: &str,
-        old_name: &str,
-        new_name: &str,
-        new_url: &str,
-    ) -> GitResult<()> {
+    pub fn edit_remote(path: &str, old_name: &str, new_name: &str, new_url: &str) -> GitResult<()> {
         let repo = Self::open(path)?;
         if old_name != new_name {
             repo.remote_rename(old_name, new_name)?;
@@ -3282,7 +3298,7 @@ impl GitEngine {
         let full_path = workdir.join(file_path);
         let bytes = std::fs::read(&full_path)
             .map_err(|e| GitError::OperationFailed(format!("读取文件失败：{}", e)))?;
-        
+
         let attr_encoding: Option<String> = repo
             .get_attr(
                 Path::new(file_path),
@@ -3600,17 +3616,32 @@ mod tests {
         let repo = &mut test_repo.repo;
 
         // Create staged new file
-        fs::write(test_repo.dir.path().join("staged_new.txt"), "staged content\n").unwrap();
+        fs::write(
+            test_repo.dir.path().join("staged_new.txt"),
+            "staged content\n",
+        )
+        .unwrap();
         let mut index = repo.index().unwrap();
-        index.add_path(std::path::Path::new("staged_new.txt")).unwrap();
+        index
+            .add_path(std::path::Path::new("staged_new.txt"))
+            .unwrap();
         index.write().unwrap();
 
         // Create untracked file (NOT staged)
-        fs::write(test_repo.dir.path().join("untracked_new.txt"), "untracked content\n").unwrap();
+        fs::write(
+            test_repo.dir.path().join("untracked_new.txt"),
+            "untracked content\n",
+        )
+        .unwrap();
 
         // Stash using libgit2 with INCLUDE_UNTRACKED
         let sig = repo.signature().unwrap();
-        repo.stash_save2(&sig, Some("test stash"), Some(StashFlags::INCLUDE_UNTRACKED)).unwrap();
+        repo.stash_save2(
+            &sig,
+            Some("test stash"),
+            Some(StashFlags::INCLUDE_UNTRACKED),
+        )
+        .unwrap();
 
         // Get the stash commit OID
         let stash_oid = {
@@ -3621,20 +3652,33 @@ mod tests {
         // Test get_commit_detail
         let detail = GitEngine::get_commit_detail(&path, &stash_oid.to_string()).unwrap();
 
-        let file_names: Vec<&str> = detail.diffs.iter()
+        let file_names: Vec<&str> = detail
+            .diffs
+            .iter()
             .filter_map(|d| d.new_path.as_deref())
             .collect();
 
         // Both files should appear
-        assert!(file_names.contains(&"staged_new.txt"), "staged_new.txt should be in stash diff");
-        assert!(file_names.contains(&"untracked_new.txt"), "untracked_new.txt should be in stash diff");
+        assert!(
+            file_names.contains(&"staged_new.txt"),
+            "staged_new.txt should be in stash diff"
+        );
+        assert!(
+            file_names.contains(&"untracked_new.txt"),
+            "untracked_new.txt should be in stash diff"
+        );
 
         // Verify hunks are not empty
         for diff in &detail.diffs {
-            if diff.new_path.as_deref() == Some("existing.txt") { continue; }
-            assert!(!diff.hunks.is_empty(),
+            if diff.new_path.as_deref() == Some("existing.txt") {
+                continue;
+            }
+            assert!(
+                !diff.hunks.is_empty(),
                 "File {:?} should have non-empty hunks (additions={})",
-                diff.new_path, diff.additions);
+                diff.new_path,
+                diff.additions
+            );
         }
     }
 
@@ -3652,7 +3696,7 @@ mod tests {
         let status = GitEngine::get_status(path).expect("Failed to get status");
         assert_eq!(status.untracked.len(), 1);
         assert_eq!(status.untracked[0].path, "new_file.txt");
-        
+
         assert_eq!(status.unstaged.len(), 1);
         assert_eq!(status.unstaged[0].path, "existing.txt");
     }
@@ -3662,31 +3706,17 @@ mod tests {
         let test_repo = TestRepo::new();
         let path = test_repo.path_str();
 
-        let log = GitEngine::get_log(
-            path,
-            0,
-            10,
-            false,
-            false,
-            LogBranchScope::All,
-            true,
-        ).expect("Failed to get log");
-        
+        let log = GitEngine::get_log(path, 0, 10, false, false, LogBranchScope::All, true)
+            .expect("Failed to get log");
+
         // At least the initial commit should exist
         assert_eq!(log.commits.len(), 1);
         assert_eq!(log.commits[0].summary, "init");
-        
+
         GitEngine::create_commit(path, "second commit").unwrap();
-        let log_after = GitEngine::get_log(
-            path,
-            0,
-            10,
-            false,
-            false,
-            LogBranchScope::All,
-            true,
-        ).unwrap();
-        
+        let log_after =
+            GitEngine::get_log(path, 0, 10, false, false, LogBranchScope::All, true).unwrap();
+
         assert_eq!(log_after.commits.len(), 2);
         assert_eq!(log_after.commits[0].summary, "second commit");
     }
@@ -3704,27 +3734,19 @@ mod tests {
             "remote\n",
         );
 
-        let with_remote = GitEngine::get_log(
-            path,
-            0,
-            10,
-            false,
-            false,
-            LogBranchScope::All,
-            true,
-        ).unwrap();
-        assert!(with_remote.commits.iter().any(|c| c.oid == remote_oid.to_string()));
+        let with_remote =
+            GitEngine::get_log(path, 0, 10, false, false, LogBranchScope::All, true).unwrap();
+        assert!(with_remote
+            .commits
+            .iter()
+            .any(|c| c.oid == remote_oid.to_string()));
 
-        let without_remote = GitEngine::get_log(
-            path,
-            0,
-            10,
-            false,
-            false,
-            LogBranchScope::All,
-            false,
-        ).unwrap();
-        assert!(!without_remote.commits.iter().any(|c| c.oid == remote_oid.to_string()));
+        let without_remote =
+            GitEngine::get_log(path, 0, 10, false, false, LogBranchScope::All, false).unwrap();
+        assert!(!without_remote
+            .commits
+            .iter()
+            .any(|c| c.oid == remote_oid.to_string()));
     }
 
     #[test]
@@ -3734,7 +3756,8 @@ mod tests {
         let path = test_repo.path_str();
 
         let main1 = commit_file(&test_repo, "main 1", "main1.txt", "main 1\n");
-        repo.branch("side", &repo.find_commit(main1).unwrap(), false).unwrap();
+        repo.branch("side", &repo.find_commit(main1).unwrap(), false)
+            .unwrap();
 
         checkout_branch(repo, "side");
         let side1 = commit_file(&test_repo, "side 1", "side1.txt", "side 1\n");
@@ -3752,8 +3775,13 @@ mod tests {
             false,
             LogBranchScope::CurrentFirstParent,
             true,
-        ).unwrap();
-        let oids = log.commits.iter().map(|c| c.oid.as_str()).collect::<Vec<_>>();
+        )
+        .unwrap();
+        let oids = log
+            .commits
+            .iter()
+            .map(|c| c.oid.as_str())
+            .collect::<Vec<_>>();
         let merge_oid = merge.to_string();
         let main2_oid = main2.to_string();
         let main1_oid = main1.to_string();

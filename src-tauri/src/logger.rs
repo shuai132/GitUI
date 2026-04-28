@@ -30,12 +30,7 @@ impl Log for FrontendLogger {
         }
 
         // 输出到 stderr（终端）
-        eprintln!(
-            "[{} {}] {}",
-            record.level(),
-            record.target(),
-            record.args()
-        );
+        eprintln!("[{} {}] {}", record.level(), record.target(), record.args());
 
         // 发送到前端
         if let Some(handle) = APP_HANDLE.get() {

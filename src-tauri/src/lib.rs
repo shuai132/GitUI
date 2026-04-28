@@ -9,21 +9,21 @@ mod terminal;
 mod tray;
 mod watcher;
 
+use auto_fetch::AutoFetchService;
+use commands::system::StartupRepo;
 use commands::{
     branch::*, commit::*, diff::*, log::*, merge_rebase::*, remote::*, repo::*, stash::*,
     status::*, submodule::*, system::*, tag::*, terminal::*,
 };
-use commands::system::StartupRepo;
-use auto_fetch::AutoFetchService;
 use repo_manager::RepoManager;
-use terminal::TerminalManager;
 use tauri::{Manager, WindowEvent};
+use terminal::TerminalManager;
 // RunEvent::Reopen 仅在 macOS 的 tauri 枚举里存在（Dock 图标点击事件），
 // 在 Linux / Windows 上该变体不存在，需要 cfg 隔离 use 和匹配逻辑。
 #[cfg(target_os = "macos")]
-use tauri::RunEvent;
-#[cfg(target_os = "macos")]
 use tauri::Emitter;
+#[cfg(target_os = "macos")]
+use tauri::RunEvent;
 use watcher::WatcherService;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -151,13 +151,13 @@ pub fn run() {
             preview_drop_unreachable_commit,
             reveal_file,
             open_file_in_editor,
-             open_terminal_here,
-             add_to_gitignore,
-             checkout_file_at_commit,
-             get_build_info,
-             list_system_fonts,
-             set_auto_fetch_interval,
-             set_active_repo_for_fetch,
+            open_terminal_here,
+            add_to_gitignore,
+            checkout_file_at_commit,
+            get_build_info,
+            list_system_fonts,
+            set_auto_fetch_interval,
+            set_active_repo_for_fetch,
             // Terminal
             terminal_spawn,
             terminal_write,
@@ -201,7 +201,11 @@ pub fn run() {
                     let _ = window.set_focus();
                 }
                 let path = urls.iter().find_map(|u| {
-                    if u.scheme() == "file" { u.to_file_path().ok() } else { None }
+                    if u.scheme() == "file" {
+                        u.to_file_path().ok()
+                    } else {
+                        None
+                    }
                 });
                 if let Some(p) = path {
                     let path_str = p.to_string_lossy().into_owned();

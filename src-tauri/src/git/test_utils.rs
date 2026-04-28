@@ -1,6 +1,6 @@
-use tempfile::TempDir;
 use git2::{Repository, Signature};
 use std::fs;
+use tempfile::TempDir;
 
 pub struct TestRepo {
     pub dir: TempDir,
@@ -11,7 +11,7 @@ impl TestRepo {
     pub fn new() -> Self {
         let dir = tempfile::tempdir().unwrap();
         let repo = Repository::init(dir.path()).unwrap();
-        
+
         let mut config = repo.config().unwrap();
         config.set_str("user.name", "test").unwrap();
         config.set_str("user.email", "test@test.com").unwrap();
@@ -21,11 +21,14 @@ impl TestRepo {
         // Initial commit to make HEAD exist
         fs::write(dir.path().join("existing.txt"), "hello\n").unwrap();
         let mut index = repo.index().unwrap();
-        index.add_path(std::path::Path::new("existing.txt")).unwrap();
+        index
+            .add_path(std::path::Path::new("existing.txt"))
+            .unwrap();
         index.write().unwrap();
         let tree_oid = index.write_tree().unwrap();
         let tree = repo.find_tree(tree_oid).unwrap();
-        repo.commit(Some("HEAD"), &sig, &sig, "init", &tree, &[]).unwrap();
+        repo.commit(Some("HEAD"), &sig, &sig, "init", &tree, &[])
+            .unwrap();
         drop(tree);
 
         Self { dir, repo }

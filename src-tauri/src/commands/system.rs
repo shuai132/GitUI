@@ -4,7 +4,11 @@ use tauri::{AppHandle, Manager, State};
 
 use crate::{
     auto_fetch::AutoFetchService,
-    git::{engine::GitEngine, error::GitError, types::{BuildInfo, ReflogEntry}},
+    git::{
+        engine::GitEngine,
+        error::GitError,
+        types::{BuildInfo, ReflogEntry},
+    },
     repo_manager::RepoManager,
 };
 
@@ -58,7 +62,10 @@ pub async fn open_terminal(
                 vec![format!("--working-directory={}", path)],
             ),
             ("konsole", vec!["--workdir".to_string(), path.clone()]),
-            ("xterm", vec!["-e".to_string(), format!("cd {}; $SHELL", path)]),
+            (
+                "xterm",
+                vec!["-e".to_string(), format!("cd {}; $SHELL", path)],
+            ),
         ];
         for (bin, args) in candidates {
             if Command::new(bin).args(args).spawn().is_ok() {
@@ -171,9 +178,8 @@ pub async fn open_in_new_window(
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
     let path = meta.path.clone();
 
-    let current_exe = std::env::current_exe().map_err(|e| {
-        GitError::OperationFailed(format!("定位当前可执行文件失败: {}", e))
-    })?;
+    let current_exe = std::env::current_exe()
+        .map_err(|e| GitError::OperationFailed(format!("定位当前可执行文件失败: {}", e)))?;
 
     #[cfg(target_os = "macos")]
     {
@@ -274,9 +280,11 @@ pub async fn reveal_in_file_manager(
 pub async fn consume_startup_repo(
     startup: State<'_, StartupRepo>,
 ) -> Result<Option<String>, GitError> {
-    Ok(startup.0.lock().map_err(|e| {
-        GitError::OperationFailed(format!("startup state poisoned: {}", e))
-    })?.take())
+    Ok(startup
+        .0
+        .lock()
+        .map_err(|e| GitError::OperationFailed(format!("startup state poisoned: {}", e)))?
+        .take())
 }
 
 /// 丢弃单个文件的工作区变更
@@ -338,10 +346,7 @@ pub async fn reveal_file(path: String) -> Result<(), GitError> {
 
 /// 用系统默认应用打开指定文件（通常是默认编辑器）。
 #[tauri::command]
-pub async fn open_file_in_editor(
-    path: String,
-    app: tauri::AppHandle,
-) -> Result<(), GitError> {
+pub async fn open_file_in_editor(path: String, app: tauri::AppHandle) -> Result<(), GitError> {
     use tauri_plugin_opener::OpenerExt;
     app.opener()
         .open_path(&path, None::<&str>)
@@ -385,7 +390,10 @@ pub async fn open_terminal_here(
                 vec![format!("--working-directory={}", path)],
             ),
             ("konsole", vec!["--workdir".to_string(), path.clone()]),
-            ("xterm", vec!["-e".to_string(), format!("cd {}; $SHELL", path)]),
+            (
+                "xterm",
+                vec!["-e".to_string(), format!("cd {}; $SHELL", path)],
+            ),
         ];
         for (bin, args) in candidates {
             if Command::new(bin).args(args).spawn().is_ok() {
@@ -462,11 +470,9 @@ pub async fn checkout_file_at_commit(
 /// 设置自动 fetch 间隔（秒），0 表示禁用自动 fetch。
 /// 会中止当前后台任务并以新间隔重新启动。
 #[tauri::command]
-pub async fn set_auto_fetch_interval(
-    secs: u64,
-    app: AppHandle,
-) -> Result<(), GitError> {
-    app.state::<AutoFetchService>().set_interval(secs, app.clone());
+pub async fn set_auto_fetch_interval(secs: u64, app: AppHandle) -> Result<(), GitError> {
+    app.state::<AutoFetchService>()
+        .set_interval(secs, app.clone());
     Ok(())
 }
 
@@ -487,7 +493,9 @@ pub async fn set_active_repo_for_fetch(
 pub fn get_build_info() -> BuildInfo {
     BuildInfo {
         version: env!("CARGO_PKG_VERSION").to_string(),
-        git_hash: option_env!("GIT_HASH").filter(|s| !s.is_empty()).map(str::to_string),
+        git_hash: option_env!("GIT_HASH")
+            .filter(|s| !s.is_empty())
+            .map(str::to_string),
     }
 }
 

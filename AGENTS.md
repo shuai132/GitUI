@@ -34,6 +34,8 @@ GitUI 是一个跨平台 Git 桌面客户端，基于 **Tauri v2（Rust 后端�
 
 **提交前必须运行构建检查**：执行 `npx vue-tsc --noEmit` 和 `cd src-tauri && cargo check` 确保无类型或编译错误。
 
+**提交前必须统一格式化**：执行 `cd src-tauri && cargo fmt`；前端 / JS 侧如果 `package.json` 配置了 `fmt` / `format` 脚本，或仓库配置了本地格式化器（如 Prettier、Biome），也必须执行对应的格式化命令。没有前端格式化配置时，不临时引入新工具。
+
 **提交前 `git diff --cached` 核对**：staged 内容要和你"我改了什么"对得上。如果某个文件出现了 Claude 没动过的修改（你只改了 A 函数，diff 里冒出 B 函数变动），说明该文件可能在另一个窗口被并发编辑——**停下来告诉用户**，由用户决定一起提交、拆分、还是 `git restore --staged <file>` 还原。
 
 完成提交后用 `git status` 回报哪些文件被保留未提交。不确定某个文件是否该一起提交时，先问。

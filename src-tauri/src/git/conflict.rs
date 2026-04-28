@@ -77,11 +77,7 @@ impl GitEngine {
     }
 
     /// 把解决后的内容写回工作区并标记为已解决（stage）。
-    pub fn mark_conflict_resolved(
-        path: &str,
-        file_path: &str,
-        content: &str,
-    ) -> GitResult<()> {
+    pub fn mark_conflict_resolved(path: &str, file_path: &str, content: &str) -> GitResult<()> {
         let repo = Self::open(path)?;
         let workdir = repo
             .workdir()
@@ -102,11 +98,7 @@ impl GitEngine {
     }
 
     /// 使用冲突的某一侧（ours 或 theirs）作为解决方案。
-    pub fn checkout_conflict_side(
-        path: &str,
-        file_path: &str,
-        side: &str,
-    ) -> GitResult<()> {
+    pub fn checkout_conflict_side(path: &str, file_path: &str, side: &str) -> GitResult<()> {
         let repo = Self::open(path)?;
         let index = repo.index()?;
         let conflict = find_conflict(&index, file_path)?;
@@ -115,9 +107,7 @@ impl GitEngine {
             "ours" => conflict.our.as_ref(),
             "theirs" => conflict.their.as_ref(),
             other => {
-                return Err(GitError::OperationFailed(format!(
-                    "未知的冲突侧：{other}"
-                )));
+                return Err(GitError::OperationFailed(format!("未知的冲突侧：{other}")));
             }
         };
         let bytes = match entry {
@@ -158,11 +148,7 @@ fn find_conflict(index: &git2::Index, file_path: &str) -> GitResult<IndexConflic
     let conflicts = index.conflicts()?;
     for c in conflicts {
         let c = c?;
-        let any_entry = c
-            .ancestor
-            .as_ref()
-            .or(c.our.as_ref())
-            .or(c.their.as_ref());
+        let any_entry = c.ancestor.as_ref().or(c.our.as_ref()).or(c.their.as_ref());
         if let Some(e) = any_entry {
             let p = std::str::from_utf8(&e.path).unwrap_or("");
             if p == file_path {

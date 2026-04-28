@@ -179,9 +179,7 @@ pub async fn create_tag(
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
     if name.trim().is_empty() {
-        return Err(GitError::OperationFailed(
-            "标签名不能为空".to_string(),
-        ));
+        return Err(GitError::OperationFailed("标签名不能为空".to_string()));
     }
     GitEngine::create_tag(&meta.path, &name, &oid, message.as_deref())
 }

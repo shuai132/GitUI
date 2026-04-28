@@ -1,6 +1,6 @@
 use parking_lot::Mutex;
 use std::{sync::Arc, time::Duration};
-use tauri::{AppHandle, Emitter, Manager, async_runtime::JoinHandle};
+use tauri::{async_runtime::JoinHandle, AppHandle, Emitter, Manager};
 
 use crate::{git::engine::GitEngine, repo_manager::RepoManager};
 
@@ -91,7 +91,8 @@ impl AutoFetchService {
                             if let Err(e) = GitEngine::fetch(&meta.path, &remote.name) {
                                 log::warn!(
                                     "[auto_fetch] fetch failed for {} remote={}: {e}",
-                                    meta.id, remote.name
+                                    meta.id,
+                                    remote.name
                                 );
                                 let _ = app.emit(
                                     "repo://error",
@@ -105,10 +106,7 @@ impl AutoFetchService {
                         let _ = app.emit("repo://remote-updated", &meta.id);
                     }
                     Err(e) => {
-                        log::warn!(
-                            "[auto_fetch] list_remotes failed for {}: {e}",
-                            meta.id
-                        );
+                        log::warn!("[auto_fetch] list_remotes failed for {}: {e}", meta.id);
                     }
                 }
             }
