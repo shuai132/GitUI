@@ -255,6 +255,8 @@ const messages = {
     },
     changeStats: {
       files: '{count} file(s)',
+      fileSingular: '{count} file',
+      filePlural: '{count} files',
       filesTitle: '{count} changed file(s)',
       additionsTitle: '{count} added line(s)',
       deletionsTitle: '{count} deleted line(s)',

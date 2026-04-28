@@ -255,6 +255,8 @@ const messages = {
     },
     changeStats: {
       files: '{count} 文件',
+      fileSingular: '{count} 文件',
+      filePlural: '{count} 文件',
       filesTitle: '{count} 个变更文件',
       additionsTitle: '{count} 行新增',
       deletionsTitle: '{count} 行删除',

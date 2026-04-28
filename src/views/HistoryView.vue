@@ -10,10 +10,11 @@ import { useDiffStore } from '@/stores/diff'
 import { useStashStore } from '@/stores/stash'
 import { useUiStore } from '@/stores/ui'
 import { useSettingsStore } from '@/stores/settings'
-import { formatAuthor, formatBytes, formatHistoryTime } from '@/utils/format'
+import { formatAuthor, formatHistoryTime } from '@/utils/format'
 import { LANE_W } from '@/utils/graph'
 import CommitGraphRow from '@/components/history/CommitGraphRow.vue'
 import WipRow from '@/components/history/WipRow.vue'
+import ChangeStatsCell from '@/components/history/ChangeStatsCell.vue'
 import HistoryDetailPane from '@/components/history/HistoryDetailPane.vue'
 import HistoryDialogs from '@/components/history/HistoryDialogs.vue'
 import ContextMenu from '@/components/common/ContextMenu.vue'
@@ -21,7 +22,7 @@ import OngoingOpBanner from '@/components/common/OngoingOpBanner.vue'
 import { useMergeRebaseStore } from '@/stores/mergeRebase'
 import { usePanelDock } from '@/composables/usePanelDock'
 import type { PanelId } from '@/stores/ui'
-import type { CommitChangeStats, CommitInfo } from '@/types/git'
+import type { CommitInfo } from '@/types/git'
 
 import { useHistoryPanes } from '@/composables/history/useHistoryPanes'
 import { useCommitContextMenu } from '@/composables/history/useCommitContextMenu'
@@ -207,7 +208,7 @@ function commitAtVirtualIndex(index: number): CommitInfo | undefined {
   return filteredCommits.value[toRealIdx(index)]
 }
 
-function changeStatsForCommit(commit: CommitInfo | undefined): CommitChangeStats | undefined {
+function changeStatsForCommit(commit: CommitInfo | undefined) {
   return commit ? historyStore.commitChangeStats.get(commit.oid) : undefined
 }
 
@@ -217,34 +218,6 @@ function isChangeStatsLoading(commit: CommitInfo | undefined): boolean {
 
 function isChangeStatsFailed(commit: CommitInfo | undefined): boolean {
   return commit ? historyStore.commitChangeStatsFailed.has(commit.oid) : false
-}
-
-function changeFilesText(count: number): string {
-  return t('history.changeStats.files', { count })
-}
-
-function largeChangeBadge(stats: CommitChangeStats | undefined): string {
-  if (!stats || stats.large_blob_count === 0) return ''
-  return `BIG ${formatBytes(stats.largest_blob_bytes)}`
-}
-
-function changeStatsTitle(stats: CommitChangeStats): string {
-  const bits = [
-    t('history.changeStats.filesTitle', { count: stats.files_changed }),
-    t('history.changeStats.additionsTitle', { count: stats.additions }),
-    t('history.changeStats.deletionsTitle', { count: stats.deletions }),
-  ]
-  if (stats.binary_files > 0) {
-    bits.push(t('history.changeStats.binaryTitle', { count: stats.binary_files }))
-  }
-  if (stats.large_blob_count > 0) {
-    bits.push(t('history.changeStats.largeTitle', {
-      count: stats.large_blob_count,
-      size: formatBytes(stats.large_blob_bytes),
-      largest: formatBytes(stats.largest_blob_bytes),
-    }))
-  }
-  return bits.join('\n')
 }
 
 function visibleCommitOidsForStats(): string[] {
@@ -636,9 +609,7 @@ onUnmounted(() => {
                   :desc-col-width="sizes.descColW"
                 />
                 <div class="col-change-stats" :style="{ width: sizes.statsColW + 'px' }">
-                  <span class="change-files">{{ changeFilesText(wipChangeStats.files_changed) }}</span>
-                  <span class="change-add" v-if="wipChangeStats.additions > 0">+{{ wipChangeStats.additions }}</span>
-                  <span class="change-del" v-if="wipChangeStats.deletions > 0">-{{ wipChangeStats.deletions }}</span>
+                  <ChangeStatsCell :wip-stats="wipChangeStats" />
                 </div>
                 <div class="col-hash" :style="{ width: sizes.hashColW + 'px' }">—</div>
                 <div class="col-author" :style="{ width: sizes.authorColW + 'px' }">—</div>
@@ -742,40 +713,11 @@ onUnmounted(() => {
                   class="col-change-stats"
                   :style="{ width: sizes.statsColW + 'px' }"
                 >
-                  <template v-if="changeStatsForCommit(commitAtVirtualIndex(vRow.index))">
-                    <span
-                      class="change-files"
-                      :title="changeStatsTitle(changeStatsForCommit(commitAtVirtualIndex(vRow.index))!)"
-                    >{{ changeFilesText(changeStatsForCommit(commitAtVirtualIndex(vRow.index))!.files_changed) }}</span>
-                    <span
-                      class="change-add"
-                      v-if="changeStatsForCommit(commitAtVirtualIndex(vRow.index))!.additions > 0"
-                    >+{{ changeStatsForCommit(commitAtVirtualIndex(vRow.index))!.additions }}</span>
-                    <span
-                      class="change-del"
-                      v-if="changeStatsForCommit(commitAtVirtualIndex(vRow.index))!.deletions > 0"
-                    >-{{ changeStatsForCommit(commitAtVirtualIndex(vRow.index))!.deletions }}</span>
-                    <span
-                      v-if="changeStatsForCommit(commitAtVirtualIndex(vRow.index))!.binary_files > 0"
-                      class="change-badge change-badge-bin"
-                      :title="t('history.changeStats.binaryTitle', { count: changeStatsForCommit(commitAtVirtualIndex(vRow.index))!.binary_files })"
-                    >BIN</span>
-                    <span
-                      v-if="changeStatsForCommit(commitAtVirtualIndex(vRow.index))!.large_blob_count > 0"
-                      class="change-badge change-badge-big"
-                      :title="changeStatsTitle(changeStatsForCommit(commitAtVirtualIndex(vRow.index))!)"
-                    >{{ largeChangeBadge(changeStatsForCommit(commitAtVirtualIndex(vRow.index))) }}</span>
-                  </template>
-                  <span
-                    v-else-if="isChangeStatsFailed(commitAtVirtualIndex(vRow.index))"
-                    class="change-stats-failed"
-                    :title="t('history.changeStats.failed')"
-                  >!</span>
-                  <span
-                    v-else-if="isChangeStatsLoading(commitAtVirtualIndex(vRow.index))"
-                    class="change-stats-placeholder"
-                  >…</span>
-                  <span v-else class="change-stats-placeholder">…</span>
+                  <ChangeStatsCell
+                    :stats="changeStatsForCommit(commitAtVirtualIndex(vRow.index))"
+                    :loading="isChangeStatsLoading(commitAtVirtualIndex(vRow.index))"
+                    :failed="isChangeStatsFailed(commitAtVirtualIndex(vRow.index))"
+                  />
                 </div>
 
                 <!-- Hash column -->
@@ -1159,7 +1101,6 @@ onUnmounted(() => {
   flex-shrink: 0;
   display: flex;
   align-items: center;
-  gap: 5px;
   min-width: 0;
   padding: 0 6px;
   overflow: hidden;
@@ -1250,74 +1191,24 @@ onUnmounted(() => {
   white-space: nowrap;
 }
 
-.change-files {
-  flex-shrink: 0;
-  color: var(--text-muted);
-}
-
-.change-add {
-  flex-shrink: 0;
-  color: var(--accent-green);
-}
-
-.change-del {
-  flex-shrink: 0;
-  color: var(--accent-red);
-}
-
-.change-badge {
-  flex-shrink: 0;
-  border: 1px solid currentColor;
-  border-radius: 3px;
-  padding: 0 4px;
-  line-height: 14px;
-  font-size: var(--font-xs);
-  font-weight: 700;
-}
-
-.change-badge-bin {
-  color: var(--accent-orange);
-}
-
-.change-badge-big {
-  color: var(--accent-yellow);
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.change-stats-placeholder {
-  color: var(--text-muted);
-  opacity: 0.65;
-}
-
-.change-stats-failed {
-  color: var(--accent-red);
-  font-weight: 700;
-}
-
-.commit-row.selected .change-files,
-.commit-row.selected .change-add,
-.commit-row.selected .change-del,
-.commit-row.selected .change-badge,
-.commit-row.selected .change-stats-placeholder,
-.commit-row.selected .change-stats-failed {
-  color: var(--row-selected-fg);
+.commit-row.selected .col-change-stats {
+  --change-files-color: var(--row-selected-fg);
+  --change-add-color: var(--row-selected-fg);
+  --change-del-color: var(--row-selected-fg);
+  --change-bin-color: var(--row-selected-fg);
+  --change-big-color: var(--row-selected-fg);
+  --change-placeholder-color: var(--row-selected-fg);
+  --change-failed-color: var(--row-selected-fg);
 }
 
 .commit-row.wip-row.selected .col-change-stats {
-  color: var(--text-secondary);
-}
-
-.commit-row.wip-row.selected .change-files {
-  color: var(--text-muted);
-}
-
-.commit-row.wip-row.selected .change-add {
-  color: var(--accent-green);
-}
-
-.commit-row.wip-row.selected .change-del {
-  color: var(--accent-red);
+  --change-files-color: var(--text-muted);
+  --change-add-color: var(--accent-green);
+  --change-del-color: var(--accent-red);
+  --change-bin-color: var(--accent-orange);
+  --change-big-color: var(--accent-yellow);
+  --change-placeholder-color: var(--text-muted);
+  --change-failed-color: var(--accent-red);
 }
 
 /* ── 提交悬停 tooltip（自定义，适配 Catppuccin 色彩） ─────────────── */
