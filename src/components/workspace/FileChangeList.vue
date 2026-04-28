@@ -6,6 +6,7 @@ import type { FileEntry, FileStatusKind } from '@/types/git'
 import { fileStatusColor } from '@/utils/format'
 import { useSettingsStore } from '@/stores/settings'
 import { buildFileTree, flattenTree } from '@/utils/fileTree'
+import { isSameWipFile } from '@/utils/wipSelection'
 
 const { t } = useI18n()
 
@@ -15,6 +16,7 @@ const props = defineProps<{
   emptyText?: string
   showRowActions?: boolean
   selectedPath?: string | null
+  selectedStaged?: boolean | null
   variant?: 'unstaged' | 'staged'
   viewMode?: 'list' | 'tree'
 }>()
@@ -108,6 +110,17 @@ function clearMultiSelect() {
   emit('multiSelectChange', [])
 }
 
+function selectedPathBelongsToThisList(): boolean {
+  if (!props.selectedPath) return false
+  return props.files.some((file) => isSameWipFile(file, props.selectedPath ?? null, props.selectedStaged))
+}
+
+function addSelectedPathToMultiSelect() {
+  const path = props.selectedPath
+  if (!path || !selectedPathBelongsToThisList()) return
+  multiSelectedPaths.value.add(path)
+}
+
 function onRowClick(e: MouseEvent, item: DisplayItem, idx: number) {
   if (item.type === 'dir') {
     if (expandedDirs.value.has(item.path)) {
@@ -122,8 +135,8 @@ function onRowClick(e: MouseEvent, item: DisplayItem, idx: number) {
 
   if (e.ctrlKey || e.metaKey) {
     // 从单选状态切入多选时，先把当前单选项加入多选集
-    if (multiSelectedPaths.value.size === 0 && props.selectedPath) {
-      multiSelectedPaths.value.add(props.selectedPath)
+    if (multiSelectedPaths.value.size === 0 && selectedPathBelongsToThisList()) {
+      addSelectedPathToMultiSelect()
     }
     // Ctrl/Cmd+click：切换单项
     if (multiSelectedPaths.value.has(file.path)) {
@@ -135,8 +148,8 @@ function onRowClick(e: MouseEvent, item: DisplayItem, idx: number) {
     emit('multiSelectChange', [...multiSelectedPaths.value])
   } else if (e.shiftKey && lastClickedIdx.value !== null) {
     // 从单选状态切入区间选时，先把当前单选项加入多选集
-    if (multiSelectedPaths.value.size === 0 && props.selectedPath) {
-      multiSelectedPaths.value.add(props.selectedPath)
+    if (multiSelectedPaths.value.size === 0 && selectedPathBelongsToThisList()) {
+      addSelectedPathToMultiSelect()
     }
     // Shift+click：区间选
     const start = Math.min(lastClickedIdx.value, idx)
@@ -234,7 +247,7 @@ defineExpose({ scrollToIndex, clearMultiSelect, expandAll, collapseAll })
           :key="vRow.index"
           class="file-entry"
           :class="{
-            selected: displayItems[vRow.index].type === 'file' && selectedPath === displayItems[vRow.index].path,
+            selected: displayItems[vRow.index].type === 'file' && isSameWipFile(getFile(displayItems[vRow.index]), selectedPath ?? null, selectedStaged),
             'multi-selected': displayItems[vRow.index].type === 'file' && multiSelectedPaths.has(displayItems[vRow.index].path),
             'is-dir': displayItems[vRow.index].type === 'dir'
           }"

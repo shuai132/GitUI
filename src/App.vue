@@ -26,6 +26,7 @@ import { useGitEvents } from '@/composables/useGitEvents'
 import { useGitCommands } from '@/composables/useGitCommands'
 import { useShortcuts } from '@/composables/useShortcuts'
 import { useSettingsStore } from '@/stores/settings'
+import { findWipFileBySelection } from '@/utils/wipSelection'
 import { listen } from '@tauri-apps/api/event'
 import { check, type Update } from '@tauri-apps/plugin-updater'
 import UpdateDialog from '@/components/common/UpdateDialog.vue'
@@ -242,7 +243,7 @@ onStatusChanged(async (repoId) => {
       ...(s?.unstaged ?? []),
       ...(s?.untracked ?? []),
     ]
-    const wipFile = allFiles.find((f) => f.path === diffStore.currentPath)
+    const wipFile = findWipFileBySelection(allFiles, diffStore.currentPath, diffStore.currentStaged)
     if (wipFile) {
       diffStore.currentStaged = wipFile.staged
       diffStore.refresh()

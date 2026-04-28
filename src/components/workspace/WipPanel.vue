@@ -11,6 +11,7 @@ import { useGitCommands } from '@/composables/useGitCommands'
 import { useWipFileActions } from '@/composables/workspace/useWipFileActions'
 import { useWipMenus } from '@/composables/workspace/useWipMenus'
 import type { FileEntry } from '@/types/git'
+import { findSelectedWipIndex, findWipFileBySelection } from '@/utils/wipSelection'
 import FileChangeList from '@/components/workspace/FileChangeList.vue'
 import WipCommitBox from '@/components/workspace/WipCommitBox.vue'
 import Modal from '@/components/common/Modal.vue'
@@ -229,7 +230,7 @@ onMounted(() => {
     diffStore.loadFileDiff(first.path, first.staged)
   } else if (selectedPath.value) {
     // 切换仓库后恢复：selectedPath 已由 App.vue 恢复，重新加载对应 diff
-    const file = allFiles.value.find(f => f.path === selectedPath.value)
+    const file = findWipFileBySelection(allFiles.value, selectedPath.value, diffStore.currentStaged)
     if (file) diffStore.loadFileDiff(file.path, file.staged)
   }
 })
@@ -274,9 +275,7 @@ function onListKeydown(e: KeyboardEvent) {
   const list = allFiles.value
   if (list.length === 0) return
 
-  const currentIdx = selectedPath.value
-    ? list.findIndex((f) => f.path === selectedPath.value)
-    : -1
+  const currentIdx = findSelectedWipIndex(list, selectedPath.value, diffStore.currentStaged)
 
   let nextIdx: number
   if (e.key === 'ArrowDown') {
@@ -378,6 +377,7 @@ watch(
           :empty-text="t('workspace.wip.empty.unstaged')"
           :show-row-actions="true"
           :selected-path="selectedPath"
+          :selected-staged="diffStore.currentStaged"
           variant="unstaged"
           :view-mode="viewMode"
           @select="onSelectFile"
@@ -415,6 +415,7 @@ watch(
           :empty-text="t('workspace.wip.empty.staged')"
           :show-row-actions="true"
           :selected-path="selectedPath"
+          :selected-staged="diffStore.currentStaged"
           variant="staged"
           :view-mode="viewMode"
           @select="onSelectFile"
