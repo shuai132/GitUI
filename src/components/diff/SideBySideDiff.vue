@@ -461,6 +461,7 @@ defineExpose({ goNextChange, goPrevChange, getScrollAnchor, scrollToLine })
   font-family: var(--code-font-family, 'SF Mono', 'Fira Code', 'Cascadia Code', monospace);
   font-size: var(--code-font-size, 12px);
   line-height: 18px;
+  --diff-row-height: 18px;
 }
 
 /* Diff 正文允许文本选择 */
@@ -489,7 +490,9 @@ defineExpose({ goNextChange, goPrevChange, getScrollAnchor, scrollToLine })
 
 .gutter-row {
   display: flex;
-  min-height: 18px;
+  height: var(--diff-row-height);
+  min-height: var(--diff-row-height);
+  line-height: var(--diff-row-height);
 }
 
 /* 代码区：独立水平滚动 */
@@ -511,9 +514,12 @@ defineExpose({ goNextChange, goPrevChange, getScrollAnchor, scrollToLine })
 
 .sbs-line {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   white-space: pre;
-  min-height: 18px;
+  height: var(--diff-row-height);
+  min-height: var(--diff-row-height);
+  line-height: var(--diff-row-height);
+  overflow: hidden;
 }
 
 .sbs-divider {
@@ -542,6 +548,7 @@ defineExpose({ goNextChange, goPrevChange, getScrollAnchor, scrollToLine })
 .code {
   flex-shrink: 0;
   padding-right: 8px;
+  line-height: inherit;
 }
 
 /* Line type backgrounds */
@@ -577,8 +584,11 @@ defineExpose({ goNextChange, goPrevChange, getScrollAnchor, scrollToLine })
   position: sticky;
   right: 12px;
   margin-left: auto;
-  padding: 2px 8px;
+  box-sizing: border-box;
+  height: 16px;
+  padding: 0 8px;
   font-size: 11px;
+  line-height: 14px;
   background: var(--bg-surface);
   border: 1px solid var(--border);
   border-radius: 4px;
