@@ -28,6 +28,8 @@ const emit = defineEmits<{
   'revert-hunk': [hunkIndex: number]
 }>()
 
+const canRevertHunk = computed(() => props.allowRevert === true && props.groupByHunk === true)
+
 interface AlignedLine {
   lineNo?: number
   content: string
@@ -374,7 +376,7 @@ defineExpose({ goNextChange, goPrevChange, getScrollAnchor, scrollToLine })
                    <span v-else class="code">{{ row.left.content }}</span>
                    
                      <button
-                       v-if="allowRevert && row.left.hunkIndex != null && (row.left.kind === 'header' || row.left.isHunkStart)"
+                       v-if="canRevertHunk && row.left.hunkIndex != null && (row.left.kind === 'header' || row.left.isHunkStart)"
                        class="hunk-revert-btn"
                        @click.stop="emit('revert-hunk', row.left.hunkIndex)"
                      >
@@ -417,7 +419,7 @@ defineExpose({ goNextChange, goPrevChange, getScrollAnchor, scrollToLine })
                    <span v-else-if="row.right.wordHtml" class="code" v-html="row.right.wordHtml" />
                    <span v-else class="code">{{ row.right.content }}</span>
                    <button
-                     v-if="allowRevert && row.right.hunkIndex != null && row.right.isHunkStart && row.left.kind !== 'del'"
+                     v-if="canRevertHunk && row.right.hunkIndex != null && row.right.isHunkStart && row.left.kind !== 'del'"
                      class="hunk-revert-btn"
                      @click.stop="emit('revert-hunk', row.right.hunkIndex)"
                    >

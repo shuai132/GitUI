@@ -28,6 +28,8 @@ const emit = defineEmits<{
   'revert-hunk': [hunkIndex: number]
 }>()
 
+const canRevertHunk = computed(() => props.allowRevert === true && props.groupByHunk)
+
 interface InlineRow {
   kind: 'header' | 'del' | 'add' | 'ctx'
   oldLineNo?: number
@@ -274,13 +276,6 @@ defineExpose({ goNextChange, goPrevChange, getScrollAnchor, scrollToLine })
         >
           <template v-if="row.kind === 'header'">
             <span class="line-header-content">{{ row.content }}</span>
-            <button
-              v-if="allowRevert && row.hunkIndex != null"
-              class="hunk-revert-btn"
-              @click.stop="emit('revert-hunk', row.hunkIndex)"
-            >
-              {{ t('diff.hunk.rollback') }}
-            </button>
           </template>
           <template v-else>
             <span class="ln">{{ row.oldLineNo ?? '' }}</span>
@@ -291,13 +286,6 @@ defineExpose({ goNextChange, goPrevChange, getScrollAnchor, scrollToLine })
             <span v-if="langForRow(row)" class="code" v-html="highlightLine(row.content, langForRow(row))" />
             <span v-else-if="row.wordHtml" class="code" v-html="row.wordHtml" />
             <span v-else class="code">{{ row.content }}</span>
-            <button
-              v-if="allowRevert && row.isHunkStart && row.hunkIndex != null"
-              class="hunk-revert-btn"
-              @click.stop="emit('revert-hunk', row.hunkIndex)"
-            >
-              {{ t('diff.hunk.rollback') }}
-            </button>
           </template>
         </div>
       </div>
@@ -323,7 +311,7 @@ defineExpose({ goNextChange, goPrevChange, getScrollAnchor, scrollToLine })
             >
               <span class="hunk-header-title">{{ row.content }}</span>
               <button
-                v-if="allowRevert && row.hunkIndex != null"
+                v-if="canRevertHunk && row.hunkIndex != null"
                 class="hunk-revert-btn"
                 @click.stop="emit('revert-hunk', row.hunkIndex)"
               >

@@ -122,6 +122,7 @@ const { allowRevert, revertHunk } = useRevertHunk({
   diff: () => props.diff,
   wip: () => props.wip ?? null,
 })
+const showHunkRevert = computed(() => allowRevert.value && uiStore.diffGroupByHunk)
 
 let vueLoadSeq = 0
 watch(
@@ -279,7 +280,7 @@ function normalizeTextDecoderLabel(encoding: string): string {
         :syntax-lang-for-line="syntaxLangForLine"
         :full-file-content="fullFileContent"
         :group-by-hunk="uiStore.diffGroupByHunk"
-        :allow-revert="allowRevert"
+        :allow-revert="showHunkRevert"
         @revert-hunk="revertHunk"
       />
       <InlineDiff
@@ -291,7 +292,7 @@ function normalizeTextDecoderLabel(encoding: string): string {
         :syntax-lang="syntaxLang"
         :syntax-lang-for-line="syntaxLangForLine"
         :full-file-content="fullFileContent"
-        :allow-revert="allowRevert"
+        :allow-revert="showHunkRevert"
         @revert-hunk="revertHunk"
       />
     </div>
