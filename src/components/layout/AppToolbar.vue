@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
-import { listen } from '@tauri-apps/api/event'
+import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { useI18n } from 'vue-i18n'
 import { useUiStore } from '@/stores/ui'
@@ -23,20 +23,48 @@ const showReflogDialog = ref(false)
 const showErrorHistoryDialog = ref(false)
 const showSettingsDialog = ref(false)
 const showAboutDialog = ref(false)
+const isFullscreen = ref(false)
+const isMac = typeof navigator !== 'undefined' && /Mac/i.test(navigator.platform)
 
 // 响应来自全局快捷键的「打开设置」信号
 watch(() => uiStore.openSettingsSignal, () => {
   showSettingsDialog.value = true
 })
 
+let unlistenShowAbout: UnlistenFn | null = null
+let unlistenResized: UnlistenFn | null = null
+
+async function syncFullscreenState() {
+  if (!isMac) return
+  try {
+    isFullscreen.value = await appWindow.isFullscreen()
+  } catch {
+    isFullscreen.value = false
+  }
+}
+
 onMounted(() => {
   // 监听系统菜单栏的"关于"菜单
   listen('show-about', () => {
     showAboutDialog.value = true
+  }).then((unlisten) => {
+    unlistenShowAbout = unlisten
   })
+
+  syncFullscreenState()
+  if (isMac) {
+    appWindow.onResized(() => {
+      syncFullscreenState()
+    }).then((unlisten) => {
+      unlistenResized = unlisten
+    })
+  }
 })
 
-const isMac = typeof navigator !== 'undefined' && /Mac/i.test(navigator.platform)
+onUnmounted(() => {
+  unlistenShowAbout?.()
+  unlistenResized?.()
+})
 
 // ── 顶部工具栏作为窗口拖动区域 ─────────────────────────────────────
 function handleDragStart(e: MouseEvent) {
@@ -55,7 +83,7 @@ async function handleDblClick(e: MouseEvent) {
 <template>
   <div
     class="toolbar"
-    :class="{ 'toolbar--mac': isMac }"
+    :class="{ 'toolbar--mac-windowed': isMac && !isFullscreen }"
     data-tauri-drag-region
     @mousedown="handleDragStart"
     @dblclick="handleDblClick"
@@ -112,8 +140,8 @@ async function handleDblClick(e: MouseEvent) {
   position: relative;
 }
 
-/* macOS traffic lights 让出 78px 空间 */
-.toolbar--mac {
+/* macOS windowed traffic lights need reserved space; native fullscreen hides them. */
+.toolbar--mac-windowed {
   padding-left: 78px;
 }
 
