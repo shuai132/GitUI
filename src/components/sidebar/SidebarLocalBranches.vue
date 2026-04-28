@@ -5,6 +5,7 @@ import { useRouter } from 'vue-router'
 import { useHistoryStore } from '@/stores/history'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useRepoStore } from '@/stores/repos'
+import { useUiStore } from '@/stores/ui'
 import { useSidebarSectionState } from '@/composables/useSidebarSectionState'
 import ContextMenu, { type ContextMenuItem } from '@/components/common/ContextMenu.vue'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
@@ -15,6 +16,7 @@ const router = useRouter()
 const historyStore = useHistoryStore()
 const workspaceStore = useWorkspaceStore()
 const repoStore = useRepoStore()
+const uiStore = useUiStore()
 const sectionState = useSidebarSectionState()
 
 const localBranches = computed(() => {
@@ -58,10 +60,19 @@ const contextMenuItems = computed<ContextMenuItem[]>(() => {
   const b = contextMenu.branch
   if (!b) return []
   const items: ContextMenuItem[] = []
+  const isRealCurrentBranch = b.is_head && b.name !== 'HEAD'
 
   if (!b.is_head) {
     items.push({ label: t('sidebar.branch.menu.switchTo'), action: 'switch' })
     items.push({ label: t('sidebar.branch.menu.switchForce'), action: 'switch-force', danger: true })
+  } else if (isRealCurrentBranch) {
+    items.push({
+      label:
+        (uiStore.historyBranchScope === 'current_first_parent' ? '✓ ' : '   ') +
+        t('sidebar.branch.menu.soloCurrentBranch'),
+      action: 'toggle-solo-current',
+    })
+    items.push({ separator: true })
   }
 
   items.push({ label: t('sidebar.branch.menu.copyName'), action: 'copy-name' })
@@ -154,6 +165,11 @@ async function onContextAction(action: string) {
       case 'copy-name':
         await navigator.clipboard.writeText(b.name)
         break
+      case 'toggle-solo-current':
+        if (b.is_head && b.name !== 'HEAD') {
+          uiStore.toggleHistoryBranchScope()
+        }
+        break
       case 'delete': {
         const hasUpstream = !!b.upstream
         
@@ -215,6 +231,12 @@ async function onContextAction(action: string) {
         <span class="branch-dot" :class="b.is_head ? 'dot-solid' : 'dot-outline'" />
         <span class="branch-label">{{ b.name }}</span>
         <span
+          v-if="b.is_head && b.name !== 'HEAD' && uiStore.historyBranchScope === 'current_first_parent'"
+          class="solo-badge"
+        >
+          SOLO
+        </span>
+        <span
           v-if="(b.ahead ?? 0) > 0 || (b.behind ?? 0) > 0"
           class="ahead-behind"
         >
@@ -263,6 +285,19 @@ async function onContextAction(action: string) {
   padding: 1px 5px;
   border-radius: 7px;
   line-height: 1.4;
+}
+
+.solo-badge {
+  flex-shrink: 0;
+  border: 1px solid color-mix(in srgb, var(--accent-blue) 55%, transparent);
+  border-radius: 4px;
+  padding: 0 5px;
+  font-size: var(--font-xs);
+  font-weight: 700;
+  line-height: 1.4;
+  color: var(--accent-blue);
+  background: color-mix(in srgb, var(--accent-blue) 14%, transparent);
+  letter-spacing: 0;
 }
 
 .ab-ahead {

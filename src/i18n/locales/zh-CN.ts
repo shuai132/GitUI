@@ -177,6 +177,7 @@ const messages = {
         checkoutRemote: '检出...',
         switchTo: '切换到此分支',
         switchForce: '强制切换到此分支 (-f)',
+        soloCurrentBranch: 'Solo 当前分支',
         copyName: '复制分支名字',
         delete: '删除...',
       },

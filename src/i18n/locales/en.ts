@@ -177,6 +177,7 @@ const messages = {
         checkoutRemote: 'Checkout...',
         switchTo: 'Switch to this branch',
         switchForce: 'Force switch to this branch (-f)',
+        soloCurrentBranch: 'Solo current branch',
         copyName: 'Copy branch name',
         delete: 'Delete...',
       },

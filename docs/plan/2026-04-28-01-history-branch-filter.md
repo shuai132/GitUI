@@ -13,6 +13,7 @@
 | 1 | 完成 | 后端 `get_log` 增加分支范围和远程引用参数 |
 | 2 | 完成 | 前端 store、IPC 封装、Actions 菜单和设置页接入 |
 | 3 | 完成 | 分支 chip 过滤、测试和文档更新 |
+| 4 | 完成 | 侧边栏当前分支右键 Solo 入口和 `SOLO` 状态标记 |
 
 ## 子任务清单
 
@@ -21,14 +22,16 @@
 - [x] 前端 `ui` store 持久化 `historyBranchScope`、`showRemoteBranches`
 - [x] Actions 菜单和高级设置页加入对应控制项
 - [x] `useCommitTags` 在隐藏远程分支时过滤远程 branch chip
+- [x] 侧边栏当前本地分支右键菜单加入 Solo 开关，并在开启时显示 `SOLO` 标记
 - [x] 增加 Rust 与前端单元测试
-- [x] 更新 `docs/04-history.md`、`docs/05-commit-graph.md`、`docs/11-ipc.md`、`README.md`
+- [x] 更新 `docs/04-history.md`、`docs/05-commit-graph.md`、`docs/07-branches.md`、`docs/11-ipc.md`、`README.md`
 - [x] 运行类型检查、前后端测试和 Rust 编译检查
 
 ## 关键决策
 
 - 默认仍为 `all + includeRemoteBranches=true`，保持当前全量 DAG。
 - `current_first_parent` 只从 HEAD 起步并启用 first-parent 简化，用于主线浏览，不实现任意分支 solo。
+- 侧边栏只在当前本地分支上提供 Solo 快捷入口；非当前分支、远程分支和 Detached HEAD 虚拟项不提供任意分支 solo。
 - 隐藏远程分支同时影响日志来源和 branch chip；标签、HEAD、本地分支、stash、reflog 开关保持独立。
 - 不在前端对日志做全量过滤，避免绕过分页和增量提交图计算。
 
@@ -36,4 +39,5 @@
 
 1. Rust 测试覆盖远程独有提交过滤和 first-parent 链过滤。
 2. 前端测试覆盖 `useCommitTags` 远程 chip 过滤和 `historyStore.loadLog/loadMore` 参数传递。
-3. 运行 `npx vue-tsc --noEmit`、`npm run test`、`cd src-tauri && cargo check`、`cd src-tauri && cargo test`。
+3. 手工验证侧边栏当前本地分支右键 Solo 开关、`SOLO` 标记和 Detached HEAD 排除逻辑。
+4. 运行 `npx vue-tsc --noEmit`、`npm run test`、`cd src-tauri && cargo check`、`cd src-tauri && cargo test`。
