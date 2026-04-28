@@ -12,6 +12,7 @@ defineProps<{
   isImageView: boolean
   previewKind: PreviewKind
   svgTextMode: boolean
+  hasLeading?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -41,7 +42,8 @@ function withShortcut(label: string, actionId: ShortcutActionId): string {
 </script>
 
 <template>
-  <div class="diff-toolbar">
+  <div class="diff-toolbar" :class="{ 'diff-toolbar--has-leading': hasLeading }">
+    <slot name="leading" />
     <span class="diff-file-path" :title="diff.new_path ?? diff.old_path">
       <span class="diff-file-path-text"><bdi>{{ diff.new_path ?? diff.old_path }}</bdi></span>
     </span>
@@ -230,6 +232,10 @@ function withShortcut(label: string, actionId: ShortcutActionId): string {
   flex-shrink: 0;
   font-size: var(--font-sm);
   min-height: 28px;
+}
+
+.diff-toolbar--has-leading {
+  padding-left: 4px;
 }
 
 .diff-file-path {

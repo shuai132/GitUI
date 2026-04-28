@@ -40,20 +40,23 @@ function onDragHandlePointerDown(panel: PanelId, event: PointerEvent) {
 
 <template>
   <div class="diff-area" :style="panelBorders.diff" data-panel-id="diff">
-    <div
-      class="dock-handle dock-handle-float"
-      :title="$t('history.dock.dragToMove')"
-      @pointerdown="onDragHandlePointerDown('diff', $event)"
-    >
-      <svg width="8" height="14" viewBox="0 0 8 14"><circle cx="2" cy="2" r="1" fill="currentColor"/><circle cx="6" cy="2" r="1" fill="currentColor"/><circle cx="2" cy="7" r="1" fill="currentColor"/><circle cx="6" cy="7" r="1" fill="currentColor"/><circle cx="2" cy="12" r="1" fill="currentColor"/><circle cx="6" cy="12" r="1" fill="currentColor"/></svg>
-    </div>
     <DiffView
       :diff="currentDiff"
       :repo-id="repoId"
       :wip="selectedWip ? { staged: currentStaged, status: currentWipFile?.status } : null"
       :conflict-file-path="currentConflictFilePath"
       @close="emit('close')"
-    />
+    >
+      <template #toolbar-leading>
+        <div
+          class="dock-handle dock-handle-toolbar"
+          :title="$t('history.dock.dragToMove')"
+          @pointerdown="onDragHandlePointerDown('diff', $event)"
+        >
+          <svg width="8" height="14" viewBox="0 0 8 14"><circle cx="2" cy="2" r="1" fill="currentColor"/><circle cx="6" cy="2" r="1" fill="currentColor"/><circle cx="2" cy="7" r="1" fill="currentColor"/><circle cx="6" cy="7" r="1" fill="currentColor"/><circle cx="2" cy="12" r="1" fill="currentColor"/><circle cx="6" cy="12" r="1" fill="currentColor"/></svg>
+        </div>
+      </template>
+    </DiffView>
   </div>
 
   <div class="info-pane" :style="panelBorders.info" data-panel-id="info">
@@ -175,11 +178,11 @@ function onDragHandlePointerDown(panel: PanelId, event: PointerEvent) {
   cursor: grabbing;
 }
 
-.dock-handle-float {
-  position: absolute;
-  top: 4px;
-  left: 4px;
-  z-index: 10;
+.dock-handle svg {
+  display: block;
+}
+
+.dock-handle-toolbar {
   width: 16px;
   height: 20px;
 }

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, nextTick, watch } from 'vue'
+import { ref, computed, nextTick, watch, useSlots } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { FileDiff, FileStatusKind } from '@/types/git'
 import SideBySideDiff from './SideBySideDiff.vue'
@@ -27,6 +27,7 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{ close: [] }>()
+const slots = useSlots()
 
 const { t } = useI18n()
 const uiStore = useUiStore()
@@ -281,10 +282,15 @@ function normalizeTextDecoderLabel(encoding: string): string {
       :diff="diff"
       :is-image-view="isImageView"
       :preview-kind="previewKind"
+      :has-leading="Boolean(slots['toolbar-leading'])"
       @prev-change="onPrevChange"
       @next-change="onNextChange"
       @close="emit('close')"
-    />
+    >
+      <template #leading>
+        <slot name="toolbar-leading" />
+      </template>
+    </DiffToolbar>
 
     <!-- Diff body -->
     <div class="diff-body">

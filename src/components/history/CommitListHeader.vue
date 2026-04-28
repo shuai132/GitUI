@@ -92,7 +92,28 @@ const emit = defineEmits<{
   left: 0;
   bottom: 0;
   height: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  cursor: grab;
+  color: var(--text-muted);
+  opacity: 0.5;
+  transition: opacity 0.15s;
   z-index: 3;
+}
+
+.col-header > .dock-handle:hover {
+  opacity: 1;
+  color: var(--text-secondary);
+}
+
+.col-header > .dock-handle:active {
+  cursor: grabbing;
+}
+
+.col-header > .dock-handle svg {
+  display: block;
 }
 
 .col-graph {
