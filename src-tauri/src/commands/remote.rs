@@ -18,10 +18,20 @@ pub async fn fetch_remote(
 
     if remote_name == "--all" {
         let remotes = GitEngine::list_remotes(&meta.path)?;
+        let mut failures = Vec::new();
         for remote in remotes {
-            let _ = GitEngine::fetch(&meta.path, &remote.name);
+            if let Err(e) = GitEngine::fetch(&meta.path, &remote.name) {
+                failures.push(format!("{}: {}", remote.name, e));
+            }
         }
-        Ok(())
+        if failures.is_empty() {
+            Ok(())
+        } else {
+            Err(GitError::OperationFailed(format!(
+                "Fetch All 部分远程失败：{}",
+                failures.join("; ")
+            )))
+        }
     } else {
         let result = GitEngine::fetch(&meta.path, &remote_name);
         log::debug!("[fetch_remote] result={result:?}");
@@ -42,10 +52,20 @@ pub async fn fetch_tags_from_remote(
 
     if remote_name == "--all" {
         let remotes = GitEngine::list_remotes(&meta.path)?;
+        let mut failures = Vec::new();
         for remote in remotes {
-            let _ = GitEngine::fetch_tags(&meta.path, &remote.name);
+            if let Err(e) = GitEngine::fetch_tags(&meta.path, &remote.name) {
+                failures.push(format!("{}: {}", remote.name, e));
+            }
         }
-        Ok(())
+        if failures.is_empty() {
+            Ok(())
+        } else {
+            Err(GitError::OperationFailed(format!(
+                "Fetch Tags All 部分远程失败：{}",
+                failures.join("; ")
+            )))
+        }
     } else {
         let result = GitEngine::fetch_tags(&meta.path, &remote_name);
         log::debug!("[fetch_tags_from_remote] result={result:?}");
