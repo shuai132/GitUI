@@ -15,7 +15,7 @@
 | P2 | 完成 | 细化 watcher 事件类别，减少不必要的 history / tags / stash / submodules 刷新 |
 | P3 | 完成 | 优化普通 `get_log` 路径，只有显示丢失引用时才构建可达性集合 |
 | P4 | 完成 | 修复 Fetch All / Fetch Tags All 静默吞掉部分 remote 错误 |
-| P5 | 待开始 | 补齐快捷键派发，并清理过期 pending plan 状态 |
+| P5 | 完成 | 补齐快捷键派发，并清理过期 pending plan 状态 |
 
 ## 子任务清单
 
@@ -24,7 +24,7 @@
 - [x] P2：扩展 watcher 事件 payload，按 worktree / index / refs / config 等类别驱动前端刷新；需要更新 `docs/02-repo-management.md` 和 `docs/11-ipc.md`。
 - [x] P3：重构历史日志可达性分析，仅在 `include_unreachable` 需要时执行；需要覆盖普通日志和显示丢失引用两种路径。
 - [x] P4：聚合全部远程 fetch 的成功/失败结果，部分失败时给出包含 remote 名的错误。
-- [ ] P5：让设置页展示的 prev/next commit 等快捷键真正可用；同步修正 `docs/plan/2026-04-19-01-pending-improvements.md` 中已过期状态。
+- [x] P5：让设置页展示的 prev/next commit 等快捷键真正可用；同步修正 `docs/plan/2026-04-19-01-pending-improvements.md` 中已过期状态。
 
 ## 关键决策
 
@@ -36,4 +36,4 @@
 ## 验证方式
 
 - 每个实现提交前运行：`npx vue-tsc --noEmit`、`npm run test`、`cd src-tauri && cargo fmt`、`cd src-tauri && cargo check`、`cd src-tauri && cargo test`。
-- 手动验证：打开大仓库频繁保存工作区文件，确认 WIP/diff 仍刷新，普通保存不再反复刷新 tags/stash/submodules；Fetch All 中故意配置一个失败 remote，确认 UI 能提示失败 remote。
+- 手动验证：打开大仓库频繁保存工作区文件，确认 WIP/diff 仍刷新，普通保存不再反复刷新 tags/stash/submodules；Fetch All 中故意配置一个失败 remote，确认 UI 能提示失败 remote；在非输入焦点下触发上/下提交快捷键，确认选中项与滚动位置同步变化。

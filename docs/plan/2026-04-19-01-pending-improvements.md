@@ -13,67 +13,69 @@
 
 预期结果：所有占位/孤立/报错的地方都有真正可用的实现。
 
+2026-04-29 校准：本计划的主体实现已由后续提交落地；`watcher.rs` 监控错误上报保持为可选项，当前不作为阻塞待办。
+
 ## 进度总览
 
 | 阶段 | 内容 | 状态 |
 |------|------|------|
-| P1 | Dead code 清理 | 待开始 |
-| P2 | onError 事件接口落地 | 待开始 |
-| P3 | Word-level diff 高亮 | 待开始 |
-| P4 | Git 偏好配置 UI | 待开始 |
-| P5 | Pull 完整 merge 支持 | 待开始 |
-| P6 | 快捷键自定义 | 待开始 |
-| P7 | 文档更新 | 待开始 |
+| P1 | Dead code 清理 | 完成 |
+| P2 | onError 事件接口落地 | 完成 |
+| P3 | Word-level diff 高亮 | 完成 |
+| P4 | Git 偏好配置 UI | 完成 |
+| P5 | Pull 完整 merge 支持 | 完成 |
+| P6 | 快捷键自定义 | 完成 |
+| P7 | 文档更新 | 完成 |
 
 ## 子任务清单
 
 ### P1 Dead code 清理
-- [ ] 删除 `src-tauri/src/git/error.rs` 中 `#[allow(dead_code)] Credentials(String)` 变体
-- [ ] 删除 `src-tauri/src/git/rebase.rs` 中 `#[allow(dead_code)] _path_to_string` 函数
-- [ ] 将 `is_reflog_tip` 字段在前端 commit 行 UI 中消费（hover 提示或小角标）
+- [x] 删除 `src-tauri/src/git/error.rs` 中 `#[allow(dead_code)] Credentials(String)` 变体
+- [x] 删除 `src-tauri/src/git/rebase.rs` 中 `#[allow(dead_code)] _path_to_string` 函数
+- [x] 将 `is_reflog_tip` 字段在前端 commit 行 UI 中消费（hover 提示或小角标）
 
 ### P2 onError 事件接口落地
-- [ ] `auto_fetch.rs`：fetch 失败时 emit `repo://error`
-- [ ] `watcher.rs`：监控错误时 emit `repo://error`（可选）
-- [ ] `App.vue`：调用 `onError` handler，将 `msg` 以 toast 形式展示
-- [ ] 前端 `errorMap.ts` 处理 `repo://error` 消息（或直接透传）
+- [x] `auto_fetch.rs`：fetch 失败时 emit `repo://error`
+- [x] `watcher.rs`：监控错误上报保持可选，本轮确认不做用户通知；当前 watcher 错误走日志
+- [x] `App.vue`：调用 `onError` handler，将 `msg` 以 toast 形式展示
+- [x] 前端 `errorMap.ts` 处理 `repo://error` 消息（或直接透传）
 
 ### P3 Word-level diff 高亮
-- [ ] 新建 `src/lib/wordDiff.ts`：实现 Myers/LCS 字符级 diff，输出 `{ type: 'eq'|'del'|'add', text: string }[]`
-- [ ] `SideBySideDiff.vue`：对 del/add 配对行调用 wordDiff，以 `<span class="word-del/add">` 标注差异片段
-- [ ] `InlineDiff.vue`：对连续 del+add 配对行（一删一增）做 wordDiff 内联标注
-- [ ] 添加 CSS 变量 `--diff-word-del-bg` / `--diff-word-add-bg`
-- [ ] 语法高亮开启时 word-level 高亮依然生效（两者叠加或互斥，选互斥保持简单）
+- [x] 新建 `src/lib/wordDiff.ts`：实现 Myers/LCS 字符级 diff，输出 `{ type: 'eq'|'del'|'add', text: string }[]`
+- [x] `SideBySideDiff.vue`：对 del/add 配对行调用 wordDiff，以 `<span class="word-del/add">` 标注差异片段
+- [x] `InlineDiff.vue`：对连续 del+add 配对行（一删一增）做 wordDiff 内联标注
+- [x] 添加 CSS 变量 `--diff-word-del-bg` / `--diff-word-add-bg`
+- [x] 语法高亮开启时 word-level 高亮依然生效（两者叠加或互斥，选互斥保持简单）
 
 ### P4 Git 偏好配置 UI
-- [ ] 新建 `src/stores/gitPrefs.ts`：持久化 `autoFetchInterval`（单位秒，0=禁用）
-- [ ] `src-tauri/src/commands/system.rs`：新增 `set_auto_fetch_interval(seconds: u64)` 命令
-- [ ] `AutoFetchService`：支持运行时更改间隔（`update_interval` 方法，重启内部 timer）
-- [ ] `src/composables/useGitCommands.ts`：添加 `setAutoFetchInterval` 封装
-- [ ] `src/components/settings/AdvancedSection.vue`：替换 gitPrefs 占位行，改为真实的间隔选择器（0/1/5/10/30 分钟下拉）
-- [ ] 设置改变时调用 IPC 通知后端
+- [x] 新建 `src/stores/gitPrefs.ts`：持久化 `autoFetchInterval`（单位秒，0=禁用）
+- [x] `src-tauri/src/commands/system.rs`：新增 `set_auto_fetch_interval(seconds: u64)` 命令
+- [x] `AutoFetchService`：支持运行时更改间隔（`update_interval` 方法，重启内部 timer）
+- [x] `src/composables/useGitCommands.ts`：添加 `setAutoFetchInterval` 封装
+- [x] `src/components/settings/AdvancedSection.vue`：替换 gitPrefs 占位行，改为真实的间隔选择器（0/1/5/10/30 分钟下拉）
+- [x] 设置改变时调用 IPC 通知后端
 
 ### P5 Pull 完整 merge 支持
-- [ ] `src-tauri/src/git/engine.rs`：`mode=="ff"` 且非快进时执行 merge commit 创建
+- [x] `src-tauri/src/git/engine.rs`：`mode=="ff"` 且非快进时执行 merge commit 创建
   - `repo.merge(&[&fetch_commit], None, None)` 触发合并
   - 若有冲突 → 返回 `Err(OperationFailed("merge conflict"))` 让前端提示
   - 若无冲突 → 生成 merge commit（读 signature、parents=[HEAD, FETCH_HEAD]、写 tree）、清理 MERGE_HEAD
-- [ ] `errorMap.ts`：添加 merge conflict 关键字映射
-- [ ] 更新 `docs/08-remote.md`：删除 "Merge required - not yet supported" 的说明
+- [x] `errorMap.ts`：添加 merge conflict 关键字映射
+- [x] 更新 `docs/08-remote.md`：删除 "Merge required - not yet supported" 的说明
 
 ### P6 快捷键自定义
-- [ ] 新建 `src/stores/shortcuts.ts`：定义 ~10 个 action、默认绑定、localStorage 持久化
-- [ ] 新建 `src/composables/useShortcuts.ts`：全局 keydown handler，根据 store 派发 action
-- [ ] `App.vue`：挂载 `useShortcuts`
-- [ ] `src/components/settings/ShortcutsSection.vue`：显示所有绑定，点击可录入新快捷键
-- [ ] `AdvancedSection.vue`：shortcuts 占位行替换为真实 UI（或新增 tab）
-- [ ] 初始 actions：`refresh`、`openSettings`、`toggleTerminal`、`commit`、`fetchAll`、`prevCommit`、`nextCommit`
+- [x] 新建 `src/stores/shortcuts.ts`：定义 ~10 个 action、默认绑定、localStorage 持久化
+- [x] 新建 `src/composables/useShortcuts.ts`：全局 keydown handler，根据 store 派发 action
+- [x] `App.vue`：挂载 `useShortcuts`
+- [x] `src/components/settings/ShortcutsSection.vue`：显示所有绑定，点击可录入新快捷键
+- [x] `AdvancedSection.vue`：shortcuts 占位行替换为真实 UI（或新增 tab）
+- [x] 初始 actions：`refresh`、`openSettings`、`toggleTerminal`、`commit`、`fetchAll`、`prevCommit`、`nextCommit`
 
 ### P7 文档更新
-- [ ] `docs/06-diff-viewer.md`：勾选 word-level 高亮行动项，补充实现说明
-- [ ] `docs/08-remote.md`：更新 Pull 实现说明（支持 merge commit）、删除 "未来改进" 中已实现的项
-- [ ] `docs/11-ipc.md`：新增 `set_auto_fetch_interval` 命令
-- [ ] `src-tauri/src/git/types.rs`：确认 `is_reflog_tip` 字段文档更新
+- [x] `docs/06-diff-viewer.md`：勾选 word-level 高亮行动项，补充实现说明
+- [x] `docs/08-remote.md`：更新 Pull 实现说明（支持 merge commit）、删除 "未来改进" 中已实现的项
+- [x] `docs/11-ipc.md`：新增 `set_auto_fetch_interval` 命令
+- [x] `src-tauri/src/git/types.rs`：确认 `is_reflog_tip` 字段文档更新
 
 ## 关键决策
 

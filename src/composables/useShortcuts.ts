@@ -15,14 +15,16 @@ import { useShortcutsStore, matchesBinding } from '@/stores/shortcuts'
 import { useUiStore } from '@/stores/ui'
 import { useHistoryStore } from '@/stores/history'
 import { useRepoStore } from '@/stores/repos'
-import { useGitCommands } from '@/composables/useGitCommands'
+import { useWorkspaceStore } from '@/stores/workspace'
+import { useGlobalToast } from '@/composables/useGlobalToast'
 
 export function useShortcuts() {
   const shortcutsStore = useShortcutsStore()
   const uiStore = useUiStore()
   const historyStore = useHistoryStore()
   const repoStore = useRepoStore()
-  const git = useGitCommands()
+  const workspaceStore = useWorkspaceStore()
+  const { showError } = useGlobalToast()
 
   function shouldIgnore(): boolean {
     const el = document.activeElement
@@ -40,8 +42,13 @@ export function useShortcuts() {
 
     const b = shortcutsStore.bindings
 
-    if (matchesBinding(e, b.refresh)) {
+    function consume() {
       e.preventDefault()
+      e.stopPropagation()
+    }
+
+    if (matchesBinding(e, b.refresh)) {
+      consume()
       const id = repoStore.activeRepoId
       if (id) {
         historyStore.loadLog()
@@ -51,13 +58,13 @@ export function useShortcuts() {
     }
 
     if (matchesBinding(e, b.openSettings)) {
-      e.preventDefault()
+      consume()
       uiStore.requestOpenSettings()
       return
     }
 
     if (matchesBinding(e, b.search)) {
-      e.preventDefault()
+      consume()
       const activeEl = document.activeElement
       if (activeEl && activeEl.closest('.diff-view')) {
         uiStore.requestOpenDiffSearch()
@@ -68,21 +75,51 @@ export function useShortcuts() {
     }
 
     if (matchesBinding(e, b.toggleTerminal)) {
-      e.preventDefault()
+      consume()
       uiStore.toggleTerminalVisible()
       return
     }
 
     if (matchesBinding(e, b.fetchAll)) {
-      e.preventDefault()
+      consume()
       uiStore.requestFetch('--all')
       return
     }
 
     if (matchesBinding(e, b.toggleDiffLayout)) {
-      e.preventDefault()
+      consume()
       uiStore.toggleHistoryLayout()
       return
+    }
+
+    if (matchesBinding(e, b.prevCommit)) {
+      consume()
+      historyStore.jumpAdjacentCommit(-1)
+      return
+    }
+
+    if (matchesBinding(e, b.nextCommit)) {
+      consume()
+      historyStore.jumpAdjacentCommit(1)
+      return
+    }
+
+    if (matchesBinding(e, b.commit)) {
+      consume()
+      if (e.repeat || !repoStore.activeRepoId || !historyStore.selectedWip) return
+
+      const message = workspaceStore.commitDraft.trim()
+      const stagedCount = workspaceStore.status?.staged.length ?? 0
+      if (!message || stagedCount === 0) return
+
+      try {
+        const oid = await workspaceStore.commit(message)
+        workspaceStore.commitDraft = ''
+        await Promise.all([historyStore.loadLog(), historyStore.loadBranches()])
+        if (oid) historyStore.selectCommit(oid)
+      } catch (err) {
+        showError(String(err))
+      }
     }
   }
 

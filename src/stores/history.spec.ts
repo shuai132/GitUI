@@ -259,4 +259,50 @@ describe('history store log filters', () => {
     expect(historyStore.commitChangeStats.has('a')).toBe(false)
     expect(historyStore.commitChangeStats.has('b')).toBe(true)
   })
+
+  it('sets pending jump oid for adjacent commit navigation', async () => {
+    getLogMock.mockResolvedValueOnce(page(false, ['aaa', 'bbb', 'ccc']))
+    const repoStore = useRepoStore()
+    const historyStore = useHistoryStore()
+
+    repoStore.activeRepoId = 'repo-1'
+    await historyStore.loadLog()
+    historyStore.selectedCommit = { info: commit('bbb'), diffs: [] }
+
+    historyStore.jumpAdjacentCommit(1)
+    expect(historyStore.pendingJumpOid).toBe('ccc')
+
+    historyStore.pendingJumpOid = null
+    historyStore.jumpAdjacentCommit(-1)
+    expect(historyStore.pendingJumpOid).toBe('aaa')
+  })
+
+  it('starts adjacent commit navigation from the first commit when nothing is selected', async () => {
+    getLogMock.mockResolvedValueOnce(page(false, ['aaa', 'bbb', 'ccc']))
+    const repoStore = useRepoStore()
+    const historyStore = useHistoryStore()
+
+    repoStore.activeRepoId = 'repo-1'
+    await historyStore.loadLog()
+
+    historyStore.jumpAdjacentCommit(-1)
+
+    expect(historyStore.pendingJumpOid).toBe('aaa')
+  })
+
+  it('moves from the WIP row to the first commit only when navigating down', async () => {
+    getLogMock.mockResolvedValueOnce(page(false, ['aaa', 'bbb', 'ccc']))
+    const repoStore = useRepoStore()
+    const historyStore = useHistoryStore()
+
+    repoStore.activeRepoId = 'repo-1'
+    await historyStore.loadLog()
+    historyStore.selectedWip = true
+
+    historyStore.jumpAdjacentCommit(-1)
+    expect(historyStore.pendingJumpOid).toBeNull()
+
+    historyStore.jumpAdjacentCommit(1)
+    expect(historyStore.pendingJumpOid).toBe('aaa')
+  })
 })

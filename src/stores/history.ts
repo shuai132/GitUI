@@ -533,6 +533,28 @@ export const useHistoryStore = defineStore('history', () => {
     remoteTagsChecked.value = true
   }
 
+  function jumpAdjacentCommit(delta: -1 | 1) {
+    if (commits.value.length === 0) return
+
+    if (selectedWip.value) {
+      if (delta > 0) pendingJumpOid.value = commits.value[0]?.oid ?? null
+      return
+    }
+
+    const currentOid = selectedCommit.value?.info.oid ?? null
+    const currentIndex = currentOid
+      ? commits.value.findIndex((commit) => commit.oid === currentOid)
+      : -1
+    const nextIndex =
+      currentIndex < 0
+        ? 0
+        : Math.max(0, Math.min(commits.value.length - 1, currentIndex + delta))
+
+    const next = commits.value[nextIndex]
+    if (!next || next.oid === currentOid) return
+    pendingJumpOid.value = next.oid
+  }
+
   function reset() {
     commits.value = []
     branches.value = []
@@ -587,6 +609,7 @@ export const useHistoryStore = defineStore('history', () => {
     loadTags,
     loadRemoteTags,
     markTagPushed,
+    jumpAdjacentCommit,
     selectCommit,
     selectFileDiff,
     createBranch,

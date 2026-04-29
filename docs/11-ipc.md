@@ -53,6 +53,7 @@ GitUI 采用 Tauri v2 的 IPC 机制实现前后端通信，包括双向的请�
 ### 系统集成 (System)
 - `open_terminal` / `open_in_new_window`：外部工具联动。
 - `get_reflog` / `run_gc`：仓库底层维护。
+- `set_auto_fetch_interval`：运行时调整后台自动 fetch 间隔，传入秒数；`0` 表示禁用。
 - `get_build_info`：获取应用版本与元数据。
 
 ## 事件通道 (Events)
