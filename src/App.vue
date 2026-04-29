@@ -227,13 +227,15 @@ function toggleSidebar() {
 }
 
 // Listen for file system changes and refresh status
-onStatusChanged(async (repoId) => {
+onStatusChanged(async ({ repo_id: repoId, kind }) => {
   if (repoId !== repoStore.activeRepoId) return
 
   // 先等 status 刷新完，再决定 diff 怎么处理——
   // 这样可以判断当前预览的文件是否还存在，避免对已消失的文件发起加载
   await workspaceStore.refresh(repoId)
-  submodulesStore.loadSubmodules()
+  if (kind === 'config' || kind === 'other_git') {
+    submodulesStore.loadSubmodules()
+  }
 
   // WIP diff 刷新：currentPath 仍在新 status 里才 refresh，否则 clear
   if (diffStore.currentPath) {
@@ -252,12 +254,15 @@ onStatusChanged(async (repoId) => {
     }
   }
 
-  // 外部 git 操作（命令行 commit/push/fetch/switch/stash 等）也会触发此事件，
-  // 需要同步刷新 history、branches 和 stash
-  historyStore.loadLog()
-  historyStore.loadBranches()
-  historyStore.loadTags()
-  stashStore.refresh()
+  // 普通 worktree/index 变化只影响 WIP；引用或保守归类的 .git 变化才刷新历史域。
+  if (kind === 'refs' || kind === 'other_git') {
+    historyStore.loadLog()
+    historyStore.loadBranches()
+    historyStore.loadTags()
+    stashStore.refresh()
+  } else if (kind === 'config') {
+    historyStore.loadBranches()
+  }
 })
 
 // macOS `open -a GitUI <path>`：热启动时后端推来路径，直接打开仓库

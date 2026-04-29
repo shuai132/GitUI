@@ -1,11 +1,18 @@
 import { onUnmounted } from 'vue'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 
+export type StatusChangeKind = 'worktree' | 'index' | 'refs' | 'config' | 'other_git'
+
+export interface StatusChangedPayload {
+  repo_id: string
+  kind: StatusChangeKind
+}
+
 export function useGitEvents() {
   const unlisteners: UnlistenFn[] = []
 
-  const onStatusChanged = (handler: (repoId: string) => void) => {
-    listen<string>('repo://status-changed', (event) => {
+  const onStatusChanged = (handler: (payload: StatusChangedPayload) => void) => {
+    listen<StatusChangedPayload>('repo://status-changed', (event) => {
       handler(event.payload)
     }).then((unlisten) => {
       unlisteners.push(unlisten)

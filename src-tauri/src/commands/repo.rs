@@ -2,6 +2,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
+use notify_debouncer_mini::DebounceEventResult;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager, State};
 use uuid::Uuid;
@@ -12,6 +13,22 @@ use crate::{
     repo_manager::RepoManager,
     watcher::{IgnoreFilter, WatcherService},
 };
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+enum StatusChangeKind {
+    Worktree,
+    Index,
+    Refs,
+    Config,
+    OtherGit,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct StatusChangedPayload {
+    repo_id: String,
+    kind: StatusChangeKind,
+}
 
 #[tauri::command]
 pub async fn open_repo(
@@ -60,14 +77,19 @@ fn watch_active_repo(
     let ignore_filter = Some(IgnoreFilter::build(watch_dir.clone()));
     let app_clone = app.clone();
     let repo_id_clone = repo_id.to_string();
+    let kind_root = watch_dir.clone();
 
     watcher
         .watch_only(
             repo_id.to_string(),
             watch_dir,
             ignore_filter,
-            move |_result| {
-                let _ = app_clone.emit("repo://status-changed", &repo_id_clone);
+            move |result| {
+                let payload = StatusChangedPayload {
+                    repo_id: repo_id_clone.clone(),
+                    kind: classify_status_change(&kind_root, &result),
+                };
+                let _ = app_clone.emit("repo://status-changed", payload);
             },
         )
         .map_err(|e| GitError::OperationFailed(format!("启动文件监听失败: {e}")))?;
@@ -118,6 +140,61 @@ pub async fn list_repos(repo_manager: State<'_, RepoManager>) -> Result<Vec<Repo
 #[tauri::command]
 pub async fn validate_repo_path(path: String) -> Result<bool, GitError> {
     Ok(Path::new(&path).join(".git").exists() || GitEngine::open(&path).is_ok())
+}
+
+fn classify_status_change(root: &Path, result: &DebounceEventResult) -> StatusChangeKind {
+    let Ok(events) = result else {
+        return StatusChangeKind::OtherGit;
+    };
+
+    events
+        .iter()
+        .map(|event| classify_status_path(root, &event.path))
+        .max_by_key(|kind| status_change_priority(*kind))
+        .unwrap_or(StatusChangeKind::OtherGit)
+}
+
+fn classify_status_path(root: &Path, path: &Path) -> StatusChangeKind {
+    let Ok(rel) = path.strip_prefix(root) else {
+        return StatusChangeKind::OtherGit;
+    };
+    let mut components = rel.components().filter_map(|c| c.as_os_str().to_str());
+    let Some(first) = components.next() else {
+        return StatusChangeKind::OtherGit;
+    };
+
+    if first == ".gitmodules" {
+        return StatusChangeKind::Config;
+    }
+
+    if first != ".git" {
+        return StatusChangeKind::Worktree;
+    }
+
+    let Some(second) = components.next() else {
+        return StatusChangeKind::OtherGit;
+    };
+
+    let git_name = second.strip_suffix(".lock").unwrap_or(second);
+    match git_name {
+        "index" => StatusChangeKind::Index,
+        "config" => StatusChangeKind::Config,
+        "refs" | "logs" | "HEAD" | "FETCH_HEAD" | "ORIG_HEAD" | "MERGE_HEAD" | "MERGE_MSG"
+        | "REBASE_HEAD" | "CHERRY_PICK_HEAD" | "REVERT_HEAD" | "packed-refs" => {
+            StatusChangeKind::Refs
+        }
+        _ => StatusChangeKind::OtherGit,
+    }
+}
+
+fn status_change_priority(kind: StatusChangeKind) -> u8 {
+    match kind {
+        StatusChangeKind::Worktree => 0,
+        StatusChangeKind::Index => 1,
+        StatusChangeKind::Config => 2,
+        StatusChangeKind::Refs => 3,
+        StatusChangeKind::OtherGit => 4,
+    }
 }
 
 // ── Clone / Init ────────────────────────────────────────────────────
@@ -262,5 +339,49 @@ pub async fn init_repo(path: String) -> Result<String, GitError> {
             "init task panicked: {}",
             join_err
         ))),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn classifies_plain_worktree_path() {
+        let root = Path::new("/repo");
+        assert_eq!(
+            classify_status_path(root, Path::new("/repo/src/main.rs")),
+            StatusChangeKind::Worktree
+        );
+    }
+
+    #[test]
+    fn classifies_git_control_paths() {
+        let root = Path::new("/repo");
+        assert_eq!(
+            classify_status_path(root, Path::new("/repo/.git/index.lock")),
+            StatusChangeKind::Index
+        );
+        assert_eq!(
+            classify_status_path(root, Path::new("/repo/.git/refs/heads/main")),
+            StatusChangeKind::Refs
+        );
+        assert_eq!(
+            classify_status_path(root, Path::new("/repo/.git/FETCH_HEAD")),
+            StatusChangeKind::Refs
+        );
+        assert_eq!(
+            classify_status_path(root, Path::new("/repo/.git/config")),
+            StatusChangeKind::Config
+        );
+    }
+
+    #[test]
+    fn classifies_gitmodules_as_config() {
+        let root = Path::new("/repo");
+        assert_eq!(
+            classify_status_path(root, Path::new("/repo/.gitmodules")),
+            StatusChangeKind::Config
+        );
     }
 }
