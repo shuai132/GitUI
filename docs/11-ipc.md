@@ -13,6 +13,7 @@ GitUI 采用 Tauri v2 的 IPC 机制实现前后端通信，包括双向的请�
 
 ### 仓库管理 (Repo)
 - `open_repo` / `close_repo` / `list_repos`：仓库名册的基础维护。
+- `set_active_repo`：同步当前激活仓库到后端，使 watcher 与 auto-fetch 只跟随该仓库。
 - `clone_repo` / `init_repo`：创建新仓库，支持进度事件回调。
 - `validate_repo_path`：路径合法性校验。
 
@@ -58,7 +59,7 @@ GitUI 采用 Tauri v2 的 IPC 机制实现前后端通信，包括双向的请�
 
 | 事件名 | 含义 | 触发时机 |
 |------|------|------|
-| `repo://status-changed` | 仓库状态变更 | 文件监控感知到工作区或 `.git` 变动。 |
+| `repo://status-changed` | 仓库状态变更 | 当前激活仓库的文件监控感知到工作区或 `.git` 变动。 |
 | `repo://operation-progress` | 长耗时任务进度 | Clone、Fetch 等网络或大 IO 操作时推送。 |
 | `repo://error` | 后台异步错误 | 如后台自动 Fetch 失败。 |
 | `terminal://data` / `exit` | 终端流数据 | 内部 PTY 会话的输出或结束通知。 |

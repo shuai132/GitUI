@@ -72,15 +72,11 @@ impl WatcherService {
         }
     }
 
-    /// 开始监听 `watch_root`，对每一批防抖后的事件做 gitignore 过滤，
-    /// 留下至少一条时调用 `callback`。
-    pub fn watch<F>(
-        &self,
-        repo_id: String,
+    fn build_handle<F>(
         watch_root: PathBuf,
         ignore_filter: Option<Arc<IgnoreFilter>>,
         callback: F,
-    ) -> notify::Result<()>
+    ) -> notify::Result<WatchHandle>
     where
         F: Fn(DebounceEventResult) + Send + 'static,
     {
@@ -113,7 +109,22 @@ impl WatcherService {
         debouncer
             .watcher()
             .watch(&watch_root, RecursiveMode::Recursive)?;
+        Ok(debouncer)
+    }
 
+    /// 只保留指定仓库的 watcher。用于激活仓库切换，避免后台监听非激活仓库。
+    pub fn watch_only<F>(
+        &self,
+        repo_id: String,
+        watch_root: PathBuf,
+        ignore_filter: Option<Arc<IgnoreFilter>>,
+        callback: F,
+    ) -> notify::Result<()>
+    where
+        F: Fn(DebounceEventResult) + Send + 'static,
+    {
+        self.unwatch_all();
+        let debouncer = Self::build_handle(watch_root, ignore_filter, callback)?;
         let mut watchers = self.watchers.lock();
         watchers.insert(repo_id, debouncer);
         Ok(())
@@ -122,6 +133,16 @@ impl WatcherService {
     pub fn unwatch(&self, repo_id: &str) {
         let mut watchers = self.watchers.lock();
         watchers.remove(repo_id);
+    }
+
+    pub fn unwatch_all(&self) {
+        let mut watchers = self.watchers.lock();
+        watchers.clear();
+    }
+
+    #[cfg(test)]
+    fn watcher_count(&self) -> usize {
+        self.watchers.lock().len()
     }
 }
 
@@ -228,5 +249,48 @@ mod tests {
         let other = tempfile::tempdir().unwrap();
 
         assert!(!filter.should_ignore(&other.path().join("ignored.txt")));
+    }
+
+    #[test]
+    fn watch_only_replaces_previous_watcher() {
+        let service = WatcherService::new();
+        let first = tempfile::tempdir().unwrap();
+        let second = tempfile::tempdir().unwrap();
+
+        service
+            .watch_only(
+                "repo-1".to_string(),
+                first.path().to_path_buf(),
+                None,
+                |_| {},
+            )
+            .unwrap();
+        assert_eq!(service.watcher_count(), 1);
+
+        service
+            .watch_only(
+                "repo-2".to_string(),
+                second.path().to_path_buf(),
+                None,
+                |_| {},
+            )
+            .unwrap();
+
+        let watchers = service.watchers.lock();
+        assert_eq!(watchers.len(), 1);
+        assert!(watchers.contains_key("repo-2"));
+    }
+
+    #[test]
+    fn unwatch_all_clears_active_watcher() {
+        let service = WatcherService::new();
+        let dir = tempfile::tempdir().unwrap();
+
+        service
+            .watch_only("repo-1".to_string(), dir.path().to_path_buf(), None, |_| {})
+            .unwrap();
+        service.unwatch_all();
+
+        assert_eq!(service.watcher_count(), 0);
     }
 }

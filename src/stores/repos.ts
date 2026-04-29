@@ -120,7 +120,7 @@ export const useRepoStore = defineStore('repos', () => {
         path = path.slice(0, -1)
       }
 
-      // 按 path 去重：相同路径已打开则直接激活，避免后端重复注册 watcher
+      // 按 path 去重：相同路径已打开则直接激活，避免后端重复注册仓库名册
       const existing = repos.value.find((r) => r.path === path)
       if (existing) {
         activeRepoId.value = existing.id

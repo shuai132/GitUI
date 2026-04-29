@@ -152,20 +152,20 @@ onMounted(async () => {
   } catch (e) {
     console.error('[gitPrefs] sync auto-fetch interval failed', e)
   }
-  // 同步初始激活仓库到后端，auto-fetch 只 fetch 该仓库
+  // 同步初始激活仓库到后端，watcher 与 auto-fetch 都只跟随该仓库
   try {
-    await git.setActiveRepoForFetch(repoStore.activeRepoId)
+    await git.setActiveRepo(repoStore.activeRepoId)
   } catch (e) {
-    console.error('[autoFetch] sync active repo failed', e)
+    console.error('[repo] sync active repo failed', e)
   }
 })
 
-// 切换激活仓库时通知后端，auto-fetch 跟着切换
+// 切换激活仓库时通知后端，watcher 与 auto-fetch 跟着切换
 watch(
   () => repoStore.activeRepoId,
   (id) => {
-    git.setActiveRepoForFetch(id).catch((e) => {
-      console.error('[autoFetch] set active repo failed', e)
+    git.setActiveRepo(id).catch((e) => {
+      console.error('[repo] set active repo failed', e)
     })
   },
 )

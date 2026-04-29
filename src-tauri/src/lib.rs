@@ -53,6 +53,7 @@ pub fn run() {
             // Repo
             open_repo,
             close_repo,
+            set_active_repo,
             list_repos,
             validate_repo_path,
             clone_repo,
@@ -159,7 +160,6 @@ pub fn run() {
             get_build_info,
             list_system_fonts,
             set_auto_fetch_interval,
-            set_active_repo_for_fetch,
             // Terminal
             terminal_spawn,
             terminal_write,

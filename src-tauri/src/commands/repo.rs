@@ -3,10 +3,11 @@ use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 use uuid::Uuid;
 
 use crate::{
+    auto_fetch::AutoFetchService,
     git::{engine::GitEngine, error::GitError, types::RepoMeta},
     repo_manager::RepoManager,
     watcher::{IgnoreFilter, WatcherService},
@@ -15,9 +16,7 @@ use crate::{
 #[tauri::command]
 pub async fn open_repo(
     path: String,
-    app: AppHandle,
     repo_manager: State<'_, RepoManager>,
-    watcher: State<'_, WatcherService>,
 ) -> Result<RepoMeta, GitError> {
     // Validate it's a git repo
     let repo = GitEngine::open(&path)?;
@@ -40,20 +39,40 @@ pub async fn open_repo(
 
     repo_manager.add_repo(meta.clone());
 
-    // Set up file watcher for working directory (includes .git/).
+    Ok(meta)
+}
+
+fn watch_active_repo(
+    repo_id: &str,
+    path: &str,
+    app: &AppHandle,
+    watcher: &WatcherService,
+) -> Result<(), GitError> {
+    let repo = GitEngine::open(path)?;
+    let workdir = repo
+        .workdir()
+        .ok_or_else(|| GitError::InvalidPath("Bare repos not supported".to_string()))?;
+
     // 监控整个工作目录否则会漏掉 tracked 文件的外部编辑；
     // 代价是 node_modules / target 等目录也会触发大量事件——
     // 用 IgnoreFilter 按 Git ignore 规则对未跟踪路径做前置过滤。
     let watch_dir = workdir.to_path_buf();
     let ignore_filter = Some(IgnoreFilter::build(watch_dir.clone()));
     let app_clone = app.clone();
-    let repo_id_clone = id.clone();
+    let repo_id_clone = repo_id.to_string();
 
-    let _ = watcher.watch(id.clone(), watch_dir, ignore_filter, move |_result| {
-        let _ = app_clone.emit("repo://status-changed", &repo_id_clone);
-    });
+    watcher
+        .watch_only(
+            repo_id.to_string(),
+            watch_dir,
+            ignore_filter,
+            move |_result| {
+                let _ = app_clone.emit("repo://status-changed", &repo_id_clone);
+            },
+        )
+        .map_err(|e| GitError::OperationFailed(format!("启动文件监听失败: {e}")))?;
 
-    Ok(meta)
+    Ok(())
 }
 
 #[tauri::command]
@@ -64,6 +83,30 @@ pub async fn close_repo(
 ) -> Result<(), GitError> {
     watcher.unwatch(&repo_id);
     repo_manager.remove_repo(&repo_id);
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn set_active_repo(
+    repo_id: Option<String>,
+    app: AppHandle,
+    repo_manager: State<'_, RepoManager>,
+    watcher: State<'_, WatcherService>,
+) -> Result<(), GitError> {
+    match repo_id {
+        Some(id) => {
+            let meta = repo_manager
+                .get_meta(&id)
+                .ok_or_else(|| GitError::RepoNotOpen(id.clone()))?;
+            watch_active_repo(&id, &meta.path, &app, &watcher)?;
+            app.state::<AutoFetchService>().set_active_repo(Some(id));
+        }
+        None => {
+            watcher.unwatch_all();
+            app.state::<AutoFetchService>().set_active_repo(None);
+        }
+    }
+
     Ok(())
 }
 

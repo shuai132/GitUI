@@ -59,6 +59,9 @@ export function useGitCommands() {
   const closeRepo = (repoId: string) =>
     call<void>('close_repo', { repoId })
 
+  const setActiveRepo = (repoId: string | null) =>
+    call<void>('set_active_repo', { repoId })
+
   const listRepos = () =>
     call<RepoMeta[]>('list_repos')
 
@@ -444,9 +447,6 @@ export function useGitCommands() {
   const setAutoFetchInterval = (secs: number) =>
     call<void>('set_auto_fetch_interval', { secs })
 
-  const setActiveRepoForFetch = (repoId: string | null) =>
-    call<void>('set_active_repo_for_fetch', { repoId })
-
   // ---- Terminal (in-app PTY) ----
   const terminalSpawn = (repoId: string, cols: number, rows: number) =>
     call<string>('terminal_spawn', { repoId, cols, rows })
@@ -463,6 +463,7 @@ export function useGitCommands() {
   return {
     openRepo,
     closeRepo,
+    setActiveRepo,
     listRepos,
     validateRepoPath,
     cloneRepo,
@@ -558,7 +559,6 @@ export function useGitCommands() {
     getBuildInfo,
     listSystemFonts,
     setAutoFetchInterval,
-    setActiveRepoForFetch,
     terminalSpawn,
     terminalWrite,
     terminalResize,
