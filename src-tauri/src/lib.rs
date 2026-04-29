@@ -66,6 +66,7 @@ pub fn run() {
             get_repo_state,
             apply_patch,
             apply_patch_to_index,
+            apply_patch_to_workdir_and_index,
             // Merge / Rebase / Conflict
             merge_branch,
             merge_continue,

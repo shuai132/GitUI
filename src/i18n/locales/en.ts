@@ -492,7 +492,7 @@ const messages = {
         openInEditor: 'Open in editor',
         openTerminalHere: 'Open terminal here',
         addToGitignore: 'Add to .gitignore',
-        discardFile: 'Discard changes to this file',
+        discardFile: 'Discard unstaged changes to this file',
         useOurs: 'Use ours (HEAD)',
         useTheirs: 'Use theirs',
         markResolved: 'Mark as resolved',
@@ -521,7 +521,7 @@ const messages = {
       },
     },
     confirmDiscard: {
-      file: 'Discard working-tree changes to "{file}"?',
+      file: 'Discard unstaged changes to "{file}"?',
       selected: 'Discard changes to {count} selected file(s)?',
       allTitle: 'Discard all changes?',
       intro: 'All unstaged changes will be reverted and untracked files deleted:',
@@ -554,6 +554,9 @@ const messages = {
       rollback: 'Rollback hunk',
       stage: 'Stage hunk',
       unstage: 'Unstage hunk',
+      discard: 'Discard hunk',
+      confirmDiscardTitle: 'Discard hunk?',
+      confirmDiscardMessage: 'This will discard this hunk. This cannot be undone.',
     },
     image: {
       oldSide: 'Before',

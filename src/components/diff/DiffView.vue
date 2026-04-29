@@ -7,6 +7,7 @@ import InlineDiff from './InlineDiff.vue'
 import ImageDiff from './ImageDiff.vue'
 import ConflictView from './ConflictView.vue'
 import DiffToolbar from './DiffToolbar.vue'
+import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import { EXT_TO_LANG, type DiffSide, type SyntaxLangResolver } from '@/lib/highlight'
 import { createVueSfcLineLangMap, isVuePath, type VueSfcLineLangMap } from '@/lib/vueSfcHighlight'
 import { detectPreviewKind } from '@/lib/preview'
@@ -127,7 +128,7 @@ const { allowRevert, revertHunk } = useRevertHunk({
   wip: () => props.wip ?? null,
 })
 const showHunkRevert = computed(() => allowRevert.value && uiStore.diffGroupByHunk)
-const { action: wipHunkAction, applyWipHunk } = useWipHunkAction({
+const { action: wipHunkAction, canDiscardHunk, applyWipHunk, discardWipHunk } = useWipHunkAction({
   repoId: () => props.repoId,
   diff: () => props.diff,
   wip: () => props.wip ?? null,
@@ -139,6 +140,14 @@ const hunkActionLabel = computed(() => {
   if (wipHunkAction.value === 'unstage') return t('diff.hunk.unstage')
   return null
 })
+const hunkDiscardLabel = computed(() => {
+  if (!uiStore.diffGroupByHunk || showHunkRevert.value || !canDiscardHunk.value) return null
+  return t('diff.hunk.discard')
+})
+
+const discardHunkConfirmOpen = ref(false)
+const discardHunkLoading = ref(false)
+const pendingDiscardHunkIndex = ref<number | null>(null)
 
 async function onHunkAction(hunkIndex: number) {
   if (showHunkRevert.value) {
@@ -146,6 +155,30 @@ async function onHunkAction(hunkIndex: number) {
     return
   }
   await applyWipHunk(hunkIndex)
+}
+
+function onHunkDiscard(hunkIndex: number) {
+  pendingDiscardHunkIndex.value = hunkIndex
+  discardHunkConfirmOpen.value = true
+}
+
+async function onConfirmDiscardHunk() {
+  const hunkIndex = pendingDiscardHunkIndex.value
+  if (hunkIndex == null) return
+  discardHunkLoading.value = true
+  try {
+    await discardWipHunk(hunkIndex)
+    discardHunkConfirmOpen.value = false
+    pendingDiscardHunkIndex.value = null
+  } finally {
+    discardHunkLoading.value = false
+  }
+}
+
+function onCancelDiscardHunk() {
+  if (discardHunkLoading.value) return
+  discardHunkConfirmOpen.value = false
+  pendingDiscardHunkIndex.value = null
 }
 
 let vueLoadSeq = 0
@@ -310,7 +343,9 @@ function normalizeTextDecoderLabel(encoding: string): string {
         :full-file-content="fullFileContent"
         :group-by-hunk="uiStore.diffGroupByHunk"
         :hunk-action-label="hunkActionLabel"
+        :hunk-discard-label="hunkDiscardLabel"
         @hunk-action="onHunkAction"
+        @hunk-discard="onHunkDiscard"
       />
       <InlineDiff
         v-else
@@ -322,9 +357,23 @@ function normalizeTextDecoderLabel(encoding: string): string {
         :syntax-lang-for-line="syntaxLangForLine"
         :full-file-content="fullFileContent"
         :hunk-action-label="hunkActionLabel"
+        :hunk-discard-label="hunkDiscardLabel"
         @hunk-action="onHunkAction"
+        @hunk-discard="onHunkDiscard"
       />
     </div>
+
+    <ConfirmDialog
+      :visible="discardHunkConfirmOpen"
+      :title="t('diff.hunk.confirmDiscardTitle')"
+      :message="t('diff.hunk.confirmDiscardMessage')"
+      :confirm-label="t('diff.hunk.discard')"
+      :loading-label="t('common.loading')"
+      :loading="discardHunkLoading"
+      :danger="true"
+      @confirm="onConfirmDiscardHunk"
+      @cancel="onCancelDiscardHunk"
+    />
   </div>
 </template>
 

@@ -22,13 +22,17 @@ const props = defineProps<{
   fullFileContent?: FullFileContent | null
   /** 按 hunk 分组时展示的 hunk 操作文案；为空则不展示操作入口。 */
   hunkActionLabel?: string | null
+  /** 按 hunk 分组时展示的 hunk 放弃操作文案；为空则不展示操作入口。 */
+  hunkDiscardLabel?: string | null
 }>()
 
 const emit = defineEmits<{
   'hunk-action': [hunkIndex: number]
+  'hunk-discard': [hunkIndex: number]
 }>()
 
 const canRunHunkAction = computed(() => props.hunkActionLabel != null && props.groupByHunk === true)
+const canDiscardHunk = computed(() => props.hunkDiscardLabel != null && props.groupByHunk === true)
 
 interface AlignedLine {
   lineNo?: number
@@ -375,13 +379,25 @@ defineExpose({ goNextChange, goPrevChange, getScrollAnchor, scrollToLine })
                    <span v-else-if="row.left.wordHtml" class="code" v-html="row.left.wordHtml" />
                    <span v-else class="code">{{ row.left.content }}</span>
                    
-                     <button
-                       v-if="canRunHunkAction && row.left.hunkIndex != null && (row.left.kind === 'header' || row.left.isHunkStart)"
-                       class="hunk-action-btn"
-                       @click.stop="emit('hunk-action', row.left.hunkIndex)"
+                     <span
+                       v-if="row.left.hunkIndex != null && (row.left.kind === 'header' || row.left.isHunkStart) && (canRunHunkAction || canDiscardHunk)"
+                       class="hunk-actions"
                      >
-                       {{ hunkActionLabel }}
-                     </button>
+                       <button
+                         v-if="canRunHunkAction"
+                         class="hunk-action-btn"
+                         @click.stop="emit('hunk-action', row.left.hunkIndex)"
+                       >
+                         {{ hunkActionLabel }}
+                       </button>
+                       <button
+                         v-if="canDiscardHunk"
+                         class="hunk-action-btn hunk-action-btn--danger"
+                         @click.stop="emit('hunk-discard', row.left.hunkIndex)"
+                       >
+                         {{ hunkDiscardLabel }}
+                       </button>
+                     </span>
                  </div>
               </div>
             </div>
@@ -418,13 +434,25 @@ defineExpose({ goNextChange, goPrevChange, getScrollAnchor, scrollToLine })
                    <span v-if="langForLine('new', row.right)" class="code" v-html="highlightLine(row.right.content, langForLine('new', row.right))" />
                    <span v-else-if="row.right.wordHtml" class="code" v-html="row.right.wordHtml" />
                    <span v-else class="code">{{ row.right.content }}</span>
-                   <button
-                     v-if="canRunHunkAction && row.right.hunkIndex != null && row.right.isHunkStart && row.left.kind !== 'del'"
-                     class="hunk-action-btn"
-                     @click.stop="emit('hunk-action', row.right.hunkIndex)"
+                   <span
+                     v-if="row.right.hunkIndex != null && row.right.isHunkStart && row.left.kind !== 'del' && (canRunHunkAction || canDiscardHunk)"
+                     class="hunk-actions"
                    >
-                     {{ hunkActionLabel }}
-                   </button>
+                     <button
+                       v-if="canRunHunkAction"
+                       class="hunk-action-btn"
+                       @click.stop="emit('hunk-action', row.right.hunkIndex)"
+                     >
+                       {{ hunkActionLabel }}
+                     </button>
+                     <button
+                       v-if="canDiscardHunk"
+                       class="hunk-action-btn hunk-action-btn--danger"
+                       @click.stop="emit('hunk-discard', row.right.hunkIndex)"
+                     >
+                       {{ hunkDiscardLabel }}
+                     </button>
+                   </span>
                  </div>
               </div>
             </div>
@@ -580,10 +608,16 @@ defineExpose({ goNextChange, goPrevChange, getScrollAnchor, scrollToLine })
   color: var(--text-secondary);
 }
 
-.hunk-action-btn {
+.hunk-actions {
   position: sticky;
   right: 12px;
   margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.hunk-action-btn {
   box-sizing: border-box;
   height: 16px;
   padding: 0 8px;
@@ -603,5 +637,15 @@ defineExpose({ goNextChange, goPrevChange, getScrollAnchor, scrollToLine })
   background: var(--bg-overlay);
   color: var(--text-primary);
   border-color: var(--text-muted);
+}
+
+.hunk-action-btn--danger {
+  color: var(--accent-red);
+  border-color: color-mix(in srgb, var(--accent-red) 45%, var(--border));
+}
+
+.hunk-action-btn--danger:hover {
+  color: var(--accent-red);
+  border-color: var(--accent-red);
 }
 </style>

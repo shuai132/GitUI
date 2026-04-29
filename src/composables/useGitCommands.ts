@@ -101,6 +101,9 @@ export function useGitCommands() {
   const applyPatchToIndex = (repoId: string, patchText: string) =>
     call<void>('apply_patch_to_index', { repoId, patchText })
 
+  const applyPatchToWorkdirAndIndex = (repoId: string, patchText: string) =>
+    call<void>('apply_patch_to_workdir_and_index', { repoId, patchText })
+
   // ---- Merge / Rebase / Conflict ----
   const mergeBranch = (
     repoId: string,
@@ -472,6 +475,7 @@ export function useGitCommands() {
     getRepoState,
     applyPatch,
     applyPatchToIndex,
+    applyPatchToWorkdirAndIndex,
     mergeBranch,
     mergeContinue,
     mergeAbort,

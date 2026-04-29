@@ -3068,13 +3068,29 @@ impl GitEngine {
         Ok(())
     }
 
-    /// 丢弃单个文件的工作区变更（恢复到 HEAD 版本）
+    /// 丢弃单个文件的未暂存变更（恢复工作区到 index）
     /// 若是 untracked 文件，会被移除。
     pub fn discard_file(path: &str, file_path: &str) -> GitResult<()> {
         let repo = Self::open(path)?;
+        let mut index = repo.index()?;
+        if index.get_path(Path::new(file_path), 0).is_none() {
+            let workdir = repo
+                .workdir()
+                .ok_or_else(|| GitError::OperationFailed("仓库没有工作目录".to_string()))?;
+            let target = workdir.join(file_path);
+            if target.is_dir() {
+                std::fs::remove_dir_all(&target)
+                    .map_err(|e| GitError::OperationFailed(format!("删除未跟踪目录失败：{}", e)))?;
+            } else if target.exists() {
+                std::fs::remove_file(&target)
+                    .map_err(|e| GitError::OperationFailed(format!("删除未跟踪文件失败：{}", e)))?;
+            }
+            return Ok(());
+        }
+
         let mut cb = git2::build::CheckoutBuilder::new();
-        cb.force().remove_untracked(true).path(file_path);
-        repo.checkout_head(Some(&mut cb))?;
+        cb.force().path(file_path);
+        repo.checkout_index(Some(&mut index), Some(&mut cb))?;
         Ok(())
     }
 
@@ -3093,6 +3109,15 @@ impl GitEngine {
         let diff = git2::Diff::from_buffer(patch_text.as_bytes())?;
         let mut opts = git2::ApplyOptions::new();
         repo.apply(&diff, git2::ApplyLocation::Index, Some(&mut opts))?;
+        Ok(())
+    }
+
+    /// 将 patch 同时应用到工作区和 index（用于放弃已暂存 hunk）
+    pub fn apply_patch_to_workdir_and_index(path: &str, patch_text: &str) -> GitResult<()> {
+        let repo = Self::open(path)?;
+        let diff = git2::Diff::from_buffer(patch_text.as_bytes())?;
+        let mut opts = git2::ApplyOptions::new();
+        repo.apply(&diff, git2::ApplyLocation::Both, Some(&mut opts))?;
         Ok(())
     }
 
@@ -3740,6 +3765,81 @@ mod tests {
         let unstaged_content = diff_contents(&unstaged);
         assert!(unstaged_content.contains("LINE2\n"));
         assert!(!unstaged_content.contains("LINE12\n"));
+    }
+
+    #[test]
+    fn test_discard_file_keeps_staged_changes() {
+        let test_repo = TestRepo::new();
+        let path = test_repo.path_str();
+        let base = multiline_base();
+        commit_file(&test_repo, "base", "existing.txt", &base);
+
+        let staged = base.replace("line2\n", "LINE2\n");
+        fs::write(test_repo.dir.path().join("existing.txt"), &staged).unwrap();
+        GitEngine::stage_file(path, "existing.txt").unwrap();
+
+        let unstaged = staged.replace("line12\n", "LINE12\n");
+        fs::write(test_repo.dir.path().join("existing.txt"), unstaged).unwrap();
+
+        GitEngine::discard_file(path, "existing.txt").unwrap();
+
+        let worktree = fs::read_to_string(test_repo.dir.path().join("existing.txt")).unwrap();
+        assert!(worktree.contains("LINE2\n"));
+        assert!(!worktree.contains("LINE12\n"));
+
+        let status = GitEngine::get_status(path).unwrap();
+        assert_eq!(status.staged.len(), 1);
+        assert!(status.unstaged.is_empty());
+    }
+
+    #[test]
+    fn test_discard_file_removes_untracked_file() {
+        let test_repo = TestRepo::new();
+        let path = test_repo.path_str();
+        let target = test_repo.dir.path().join("new.txt");
+        fs::write(&target, "new\n").unwrap();
+
+        GitEngine::discard_file(path, "new.txt").unwrap();
+
+        assert!(!target.exists());
+    }
+
+    #[test]
+    fn test_apply_patch_to_workdir_and_index_discards_staged_hunk() {
+        let test_repo = TestRepo::new();
+        let path = test_repo.path_str();
+        let base = multiline_base();
+        commit_file(&test_repo, "base", "existing.txt", &base);
+
+        let modified = base
+            .replace("line2\n", "LINE2\n")
+            .replace("line12\n", "LINE12\n");
+        fs::write(test_repo.dir.path().join("existing.txt"), modified).unwrap();
+        GitEngine::stage_file(path, "existing.txt").unwrap();
+
+        let patch = concat!(
+            "diff --git a/existing.txt b/existing.txt\n",
+            "--- a/existing.txt\n",
+            "+++ b/existing.txt\n",
+            "@@ -1,5 +1,5 @@\n",
+            " line1\n",
+            "+line2\n",
+            "-LINE2\n",
+            " line3\n",
+            " line4\n",
+            " line5\n",
+        );
+
+        GitEngine::apply_patch_to_workdir_and_index(path, patch).unwrap();
+
+        let staged = GitEngine::get_file_diff(path, "existing.txt", true).unwrap();
+        let staged_content = diff_contents(&staged);
+        assert!(!staged_content.contains("LINE2\n"));
+        assert!(staged_content.contains("LINE12\n"));
+
+        let worktree = fs::read_to_string(test_repo.dir.path().join("existing.txt")).unwrap();
+        assert!(!worktree.contains("LINE2\n"));
+        assert!(worktree.contains("LINE12\n"));
     }
 
     #[test]

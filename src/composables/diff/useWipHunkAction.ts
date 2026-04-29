@@ -15,7 +15,7 @@ type UseWipHunkActionOptions = {
 }
 
 export function useWipHunkAction(options: UseWipHunkActionOptions) {
-  const { applyPatchToIndex, stageFile, unstageFile } = useGitCommands()
+  const { applyPatch, applyPatchToIndex, applyPatchToWorkdirAndIndex, stageFile, unstageFile } = useGitCommands()
   const workspaceStore = useWorkspaceStore()
   const diffStore = useDiffStore()
 
@@ -25,6 +25,13 @@ export function useWipHunkAction(options: UseWipHunkActionOptions) {
     if (!diff || !wip || diff.is_binary || diff.hunks.length === 0) return null
     if (wip.status === 'renamed' || wip.status === 'conflicted') return null
     return wip.staged ? 'unstage' : 'stage'
+  })
+
+  const canDiscardHunk = computed(() => {
+    const diff = toValue(options.diff)
+    const wip = toValue(options.wip)
+    if (!diff || !wip || diff.is_binary || diff.hunks.length === 0) return false
+    return wip.status === 'modified'
   })
 
   async function applyWipHunk(hunkIndex: number) {
@@ -63,6 +70,28 @@ export function useWipHunkAction(options: UseWipHunkActionOptions) {
     }
   }
 
+  async function discardWipHunk(hunkIndex: number) {
+    const repoId = toValue(options.repoId)
+    const diff = toValue(options.diff)
+    const wip = toValue(options.wip)
+    if (!repoId || !diff || !wip || !canDiscardHunk.value) return
+
+    const patchText = buildHunkPatch(diff, hunkIndex, 'reverse')
+    if (!patchText) return
+
+    try {
+      if (wip.staged) {
+        await applyPatchToWorkdirAndIndex(repoId, patchText)
+      } else {
+        await applyPatch(repoId, patchText)
+      }
+      await workspaceStore.refresh(repoId)
+      await refreshCurrentWipDiff()
+    } catch (err) {
+      console.error('Failed to discard WIP hunk:', err)
+    }
+  }
+
   async function refreshCurrentWipDiff() {
     if (!diffStore.currentPath) return
 
@@ -88,7 +117,9 @@ export function useWipHunkAction(options: UseWipHunkActionOptions) {
 
   return {
     action,
+    canDiscardHunk,
     applyWipHunk,
+    discardWipHunk,
   }
 }
 

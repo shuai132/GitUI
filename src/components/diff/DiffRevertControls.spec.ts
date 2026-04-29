@@ -75,6 +75,56 @@ describe('diff hunk rollback controls', () => {
 
     expect(wrapper.find('.hunk-action-btn').text()).toBe('Stage hunk')
   })
+
+  it('shows a separate inline discard hunk control', () => {
+    const wrapper = mount(InlineDiff, {
+      props: {
+        diff: fileDiff(),
+        groupByHunk: true,
+        hunkActionLabel: 'Unstage hunk',
+        hunkDiscardLabel: 'Discard hunk',
+      },
+      global: { plugins: [i18n] },
+    })
+
+    const buttons = wrapper.findAll('.hunk-action-btn')
+    expect(buttons).toHaveLength(2)
+    expect(buttons[0].text()).toBe('Unstage hunk')
+    expect(buttons[1].text()).toBe('Discard hunk')
+  })
+
+  it('emits a separate discard event from inline diff', async () => {
+    const wrapper = mount(InlineDiff, {
+      props: {
+        diff: fileDiff(),
+        groupByHunk: true,
+        hunkDiscardLabel: 'Discard hunk',
+      },
+      global: { plugins: [i18n] },
+    })
+
+    await wrapper.find('.hunk-action-btn--danger').trigger('click')
+
+    expect(wrapper.emitted('hunk-discard')).toEqual([[0]])
+    expect(wrapper.emitted('hunk-action')).toBeUndefined()
+  })
+
+  it('shows a separate side-by-side discard hunk control', () => {
+    const wrapper = mount(SideBySideDiff, {
+      props: {
+        diff: fileDiff(),
+        groupByHunk: true,
+        hunkActionLabel: 'Unstage hunk',
+        hunkDiscardLabel: 'Discard hunk',
+      },
+      global: { plugins: [i18n] },
+    })
+
+    const buttons = wrapper.findAll('.hunk-action-btn')
+    expect(buttons).toHaveLength(2)
+    expect(buttons[0].text()).toBe('Unstage hunk')
+    expect(buttons[1].text()).toBe('Discard hunk')
+  })
 })
 
 function fileDiff(hunks: DiffHunk[] = [changedLineHunk()]): FileDiff {

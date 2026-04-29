@@ -287,7 +287,7 @@ pub async fn consume_startup_repo(
         .take())
 }
 
-/// 丢弃单个文件的工作区变更
+/// 丢弃单个文件的未暂存变更
 #[tauri::command]
 pub async fn discard_file(
     repo_id: String,

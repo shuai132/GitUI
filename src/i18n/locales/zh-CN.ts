@@ -491,7 +491,7 @@ const messages = {
         openInEditor: '在编辑器中打开',
         openTerminalHere: '在终端中打开',
         addToGitignore: '添加到 .gitignore',
-        discardFile: '丢弃此文件的变更',
+        discardFile: '丢弃此文件未暂存的变更',
         useOurs: '使用 ours（HEAD 侧）',
         useTheirs: '使用 theirs',
         markResolved: '标记为已解决',
@@ -520,7 +520,7 @@ const messages = {
       },
     },
     confirmDiscard: {
-      file: '丢弃 "{file}" 的工作区变更？',
+      file: '丢弃 "{file}" 未暂存的变更？',
       selected: '丢弃选中的 {count} 个文件的变更？',
       allTitle: '丢弃所有变更？',
       intro: '将丢弃所有未暂存变更并删除未跟踪文件：',
@@ -553,6 +553,9 @@ const messages = {
       rollback: '回滚区块',
       stage: '暂存区块',
       unstage: '取消暂存区块',
+      discard: '放弃区块',
+      confirmDiscardTitle: '放弃区块？',
+      confirmDiscardMessage: '将丢弃这个区块的变更。此操作不可撤销。',
     },
     image: {
       oldSide: '旧版',

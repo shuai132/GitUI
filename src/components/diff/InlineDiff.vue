@@ -22,13 +22,17 @@ const props = defineProps<{
   fullFileContent?: FullFileContent | null
   /** 按 hunk 分组时展示的 hunk 操作文案；为空则不展示操作入口。 */
   hunkActionLabel?: string | null
+  /** 按 hunk 分组时展示的 hunk 放弃操作文案；为空则不展示操作入口。 */
+  hunkDiscardLabel?: string | null
 }>()
 
 const emit = defineEmits<{
   'hunk-action': [hunkIndex: number]
+  'hunk-discard': [hunkIndex: number]
 }>()
 
 const canRunHunkAction = computed(() => props.hunkActionLabel != null && props.groupByHunk)
+const canDiscardHunk = computed(() => props.hunkDiscardLabel != null && props.groupByHunk)
 
 interface InlineRow {
   kind: 'header' | 'del' | 'add' | 'ctx'
@@ -310,13 +314,22 @@ defineExpose({ goNextChange, goPrevChange, getScrollAnchor, scrollToLine })
               :data-row="rows.indexOf(row)"
             >
               <span class="hunk-header-title">{{ row.content }}</span>
-              <button
-                v-if="canRunHunkAction && row.hunkIndex != null"
-                class="hunk-action-btn"
-                @click.stop="emit('hunk-action', row.hunkIndex)"
-              >
-                {{ hunkActionLabel }}
-              </button>
+              <span v-if="row.hunkIndex != null && (canRunHunkAction || canDiscardHunk)" class="hunk-actions">
+                <button
+                  v-if="canRunHunkAction"
+                  class="hunk-action-btn"
+                  @click.stop="emit('hunk-action', row.hunkIndex)"
+                >
+                  {{ hunkActionLabel }}
+                </button>
+                <button
+                  v-if="canDiscardHunk"
+                  class="hunk-action-btn hunk-action-btn--danger"
+                  @click.stop="emit('hunk-discard', row.hunkIndex)"
+                >
+                  {{ hunkDiscardLabel }}
+                </button>
+              </span>
             </div>
             <div
               v-else
@@ -407,9 +420,16 @@ defineExpose({ goNextChange, goPrevChange, getScrollAnchor, scrollToLine })
   white-space: pre;
 }
 
-.hunk-action-btn {
+.hunk-actions {
   position: sticky;
   right: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.hunk-action-btn {
   padding: 2px 8px;
   font-size: 11px;
   background: var(--bg-surface);
@@ -426,6 +446,16 @@ defineExpose({ goNextChange, goPrevChange, getScrollAnchor, scrollToLine })
   background: var(--bg-overlay);
   color: var(--text-primary);
   border-color: var(--text-muted);
+}
+
+.hunk-action-btn--danger {
+  color: var(--accent-red);
+  border-color: color-mix(in srgb, var(--accent-red) 45%, var(--border));
+}
+
+.hunk-action-btn--danger:hover {
+  color: var(--accent-red);
+  border-color: var(--accent-red);
 }
 
 /* ── 行结构 ───────────────────────────────────────────────────── */
