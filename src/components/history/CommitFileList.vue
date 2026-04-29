@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useVirtualizer } from '@tanstack/vue-virtual'
 import type { FileDiff, FileStatusKind } from '@/types/git'
 import { fileStatusColor } from '@/utils/format'
+import { useSettingsStore } from '@/stores/settings'
 import {
   commitFileStatus,
   useCommitFileItems,
@@ -11,6 +12,7 @@ import {
 } from '@/composables/history/useCommitFileItems'
 
 const { t } = useI18n()
+const settings = useSettingsStore()
 
 const props = withDefaults(defineProps<{
   diffs: FileDiff[]
@@ -34,6 +36,7 @@ const {
   viewMode,
   isAllExpanded,
   displayItems,
+  expandedDirs,
   toggleViewMode,
   toggleExpandCollapseAll,
   toggleDir,
@@ -49,15 +52,55 @@ const statusIconMap: Record<FileStatusKind, { d: string; stroke?: boolean }> = {
 }
 
 const scrollContainer = ref<HTMLElement | null>(null)
-const rowHeight = 24 // 对应 var(--file-list-row-height)
+const rowHeight = computed(() => settings.fileListRowHeight)
 
 const virtualizer = useVirtualizer(
   computed(() => ({
     count: displayItems.value.length,
     getScrollElement: () => scrollContainer.value,
-    estimateSize: () => rowHeight,
+    estimateSize: () => rowHeight.value,
     overscan: 10,
   })),
+)
+
+const selectedDisplayIndex = computed(() => (
+  displayItems.value.findIndex((item) => item.type === 'file' && item.index === props.selectedFileIdx)
+))
+
+const selectedFilePath = computed(() => {
+  const diff = props.diffs[props.selectedFileIdx]
+  return diff?.new_path ?? diff?.old_path ?? ''
+})
+
+function expandSelectedFileAncestors() {
+  if (viewMode.value !== 'tree' || selectedDisplayIndex.value >= 0) return
+
+  const parts = selectedFilePath.value.split('/').filter(Boolean)
+  for (let i = 1; i < parts.length; i += 1) {
+    expandedDirs.value.add(parts.slice(0, i).join('/'))
+  }
+}
+
+async function scrollSelectedFileIntoView() {
+  expandSelectedFileAncestors()
+  await nextTick()
+
+  const idx = selectedDisplayIndex.value
+  if (idx < 0) return
+  virtualizer.value.scrollToIndex(idx, { align: 'auto' })
+}
+
+watch(rowHeight, () => {
+  virtualizer.value.measure()
+  scrollSelectedFileIntoView()
+})
+
+watch(
+  () => [props.selectedFileIdx, props.commitOid, viewMode.value] as const,
+  () => {
+    scrollSelectedFileIntoView()
+  },
+  { flush: 'post' },
 )
 
 function onRowClick(item: CommitFileDisplayItem) {
