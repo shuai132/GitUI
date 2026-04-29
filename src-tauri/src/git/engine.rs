@@ -370,9 +370,10 @@ impl GitEngine {
 
         let repo = Self::open(path)?;
 
-        // ── Step A: 收集所有 ref 可达的 oid 集合（用于判断 unreachable）
+        // ── Step A: 仅在显示丢失引用时收集所有 ref 可达 oid。
+        // 普通日志路径不需要判断 unreachable，跳过这轮 revwalk 以保持首屏轻量。
         let mut reachable: HashSet<git2::Oid> = HashSet::new();
-        {
+        if include_unreachable {
             let mut walk = repo.revwalk()?;
             walk.push_glob("refs/heads/*").ok();
             walk.push_glob("refs/remotes/*").ok();
@@ -491,7 +492,7 @@ impl GitEngine {
             }
             let commit = repo.find_commit(oid)?;
             let is_stash = stash_set.contains(&oid);
-            let is_unreachable = !is_stash && !reachable.contains(&oid);
+            let is_unreachable = include_unreachable && !is_stash && !reachable.contains(&oid);
             let is_reflog_tip =
                 is_unreachable && reflog_oids.contains(&oid) && !strict_ancestors.contains(&oid);
 
