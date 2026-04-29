@@ -250,15 +250,12 @@ impl GitEngine {
             }
         }
 
-        if !unstaged.is_empty() || !untracked.is_empty() {
+        if !unstaged.is_empty() {
             let mut opts = DiffOptions::new();
-            opts.include_untracked(true)
-                .show_untracked_content(true)
-                .recurse_untracked_dirs(true);
+            opts.include_untracked(false);
             if let Ok(index) = repo.index() {
                 if let Ok(diff) = repo.diff_index_to_workdir(Some(&index), Some(&mut opts)) {
                     fill_stats(&mut unstaged, &diff);
-                    fill_stats(&mut untracked, &diff);
                 }
             }
         }
@@ -3929,9 +3926,13 @@ mod tests {
         let status = GitEngine::get_status(path).expect("Failed to get status");
         assert_eq!(status.untracked.len(), 1);
         assert_eq!(status.untracked[0].path, "new_file.txt");
+        assert_eq!(status.untracked[0].additions, 0);
+        assert_eq!(status.untracked[0].deletions, 0);
 
         assert_eq!(status.unstaged.len(), 1);
         assert_eq!(status.unstaged[0].path, "existing.txt");
+        assert_eq!(status.unstaged[0].additions, 1);
+        assert_eq!(status.unstaged[0].deletions, 1);
     }
 
     #[test]
