@@ -100,7 +100,7 @@ describe('ui store history column preferences', () => {
 
     uiStore.setDiffLayoutMode('side-by-side')
     uiStore.setDiffGroupByHunk(false)
-    uiStore.toggleHistoryBranchScope()
+    uiStore.setHistoryBranchScopeForRepo('/repos/a', 'current_first_parent')
     uiStore.toggleShowRemoteBranches()
     uiStore.toggleShowChangeStatsColumn()
     uiStore.toggleShowUnreachable()
@@ -112,7 +112,7 @@ describe('ui store history column preferences', () => {
 
     expect(uiStore.diffLayoutMode).toBe(DEFAULT_ADVANCED_VIEW_PREFS.diffLayoutMode)
     expect(uiStore.diffGroupByHunk).toBe(DEFAULT_ADVANCED_VIEW_PREFS.diffGroupByHunk)
-    expect(uiStore.historyBranchScope).toBe(DEFAULT_ADVANCED_VIEW_PREFS.historyBranchScope)
+    expect(uiStore.getHistoryBranchScope('/repos/a')).toBe('current_first_parent')
     expect(uiStore.showRemoteBranches).toBe(DEFAULT_ADVANCED_VIEW_PREFS.showRemoteBranches)
     expect(uiStore.showChangeStatsColumn).toBe(DEFAULT_ADVANCED_VIEW_PREFS.showChangeStatsColumn)
     expect(uiStore.showUnreachableCommits).toBe(DEFAULT_ADVANCED_VIEW_PREFS.showUnreachableCommits)
@@ -120,6 +120,56 @@ describe('ui store history column preferences', () => {
     expect(uiStore.debugPanelVisible).toBe(DEFAULT_ADVANCED_VIEW_PREFS.debugPanelVisible)
     expect(uiStore.detailFilesFirst).toBe(DEFAULT_ADVANCED_VIEW_PREFS.detailFilesFirst)
     expect(localStorage.getItem('gitui.diff.layoutMode')).toBe(DEFAULT_ADVANCED_VIEW_PREFS.diffLayoutMode)
-    expect(localStorage.getItem('gitui.history.branchScope')).toBe(DEFAULT_ADVANCED_VIEW_PREFS.historyBranchScope)
+    expect(localStorage.getItem('gitui.history.branchScopeByRepoPath')).toBe(
+      JSON.stringify({ '/repos/a': 'current_first_parent' }),
+    )
+  })
+
+  it('persists history branch scope per repo path', () => {
+    const uiStore = useUiStore()
+
+    expect(uiStore.getHistoryBranchScope('/repos/a')).toBe('all')
+    expect(uiStore.getHistoryBranchScope('/repos/b')).toBe('all')
+
+    uiStore.setHistoryBranchScopeForRepo('/repos/a', 'current_first_parent')
+
+    expect(uiStore.getHistoryBranchScope('/repos/a')).toBe('current_first_parent')
+    expect(uiStore.getHistoryBranchScope('/repos/b')).toBe('all')
+    expect(localStorage.getItem('gitui.history.branchScopeByRepoPath')).toBe(
+      JSON.stringify({ '/repos/a': 'current_first_parent' }),
+    )
+
+    uiStore.toggleHistoryBranchScopeForRepo('/repos/a')
+
+    expect(uiStore.getHistoryBranchScope('/repos/a')).toBe('all')
+    expect(localStorage.getItem('gitui.history.branchScopeByRepoPath')).toBeNull()
+  })
+
+  it('falls back to default history branch scope for invalid scoped storage', () => {
+    stubLocalStorage({
+      'gitui.history.branchScopeByRepoPath': JSON.stringify({
+        '/repos/a': 'current_first_parent',
+        '/repos/b': 'invalid',
+        '': 'current_first_parent',
+      }),
+    })
+    setActivePinia(createPinia())
+
+    const uiStore = useUiStore()
+
+    expect(uiStore.getHistoryBranchScope('/repos/a')).toBe('current_first_parent')
+    expect(uiStore.getHistoryBranchScope('/repos/b')).toBe('all')
+    expect(uiStore.getHistoryBranchScope('/repos/c')).toBe('all')
+  })
+
+  it('ignores legacy global history branch scope at runtime', () => {
+    stubLocalStorage({
+      'gitui.history.branchScope': 'current_first_parent',
+    })
+    setActivePinia(createPinia())
+
+    const uiStore = useUiStore()
+
+    expect(uiStore.getHistoryBranchScope('/repos/a')).toBe('all')
   })
 })

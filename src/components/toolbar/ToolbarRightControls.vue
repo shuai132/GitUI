@@ -35,6 +35,10 @@ function withShortcut(label: string, actionId: ShortcutActionId): string {
 
 const hasRepo = computed(() => !!repoStore.activeRepoId)
 const busy = computed(() => repoOpsStore.getBusy(repoStore.activeRepoId))
+const activeRepoPath = computed(() => repoStore.activeRepo()?.path)
+const activeRepoBranchScope = computed(() =>
+  uiStore.getHistoryBranchScope(activeRepoPath.value),
+)
 
 // ── Search ──────────────────────────────────────────────────────────
 const searchInputEl = ref<HTMLInputElement | null>(null)
@@ -97,7 +101,7 @@ const actionsBtnRef = ref<HTMLButtonElement | null>(null)
 const actionsMenuItems = computed<ContextMenuItem[]>(() => [
   {
     label:
-      (uiStore.historyBranchScope === 'current_first_parent' ? '✓ ' : '   ') +
+      (activeRepoBranchScope.value === 'current_first_parent' ? '✓ ' : '   ') +
       t('toolbar.actionsMenu.soloCurrentBranch'),
     action: 'toggle-current-first-parent',
     disabled: !hasRepo.value,
@@ -207,7 +211,7 @@ async function onActionsSelect(action: string) {
       uiStore.toggleShowStashes()
       break
     case 'toggle-current-first-parent':
-      uiStore.toggleHistoryBranchScope()
+      uiStore.toggleHistoryBranchScopeForRepo(activeRepoPath.value)
       break
     case 'toggle-remote-branches':
       uiStore.toggleShowRemoteBranches()

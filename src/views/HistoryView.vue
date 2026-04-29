@@ -43,6 +43,10 @@ const stashStore = useStashStore()
 const uiStore = useUiStore()
 const settingsStore = useSettingsStore()
 const mergeRebaseStore = useMergeRebaseStore()
+const activeRepoPath = computed(() => repoStore.activeRepo()?.path)
+const activeRepoBranchScope = computed(() =>
+  uiStore.getHistoryBranchScope(activeRepoPath.value),
+)
 
 // 历史列表每行高度（响应式，随设置变化）。
 // 行 `div.height` 走 CSS 变量 var(--history-row-height)（滚动热路径 0 开销），
@@ -499,7 +503,8 @@ watch(
   () => [
     uiStore.showUnreachableCommits,
     uiStore.showStashCommits,
-    uiStore.historyBranchScope,
+    activeRepoPath.value,
+    activeRepoBranchScope.value,
     uiStore.showRemoteBranches,
   ],
   () => {
@@ -515,7 +520,8 @@ function revealKey(): string {
     uiStore.historySearchQuery.trim(),
     uiStore.showUnreachableCommits ? '1' : '0',
     uiStore.showStashCommits ? '1' : '0',
-    uiStore.historyBranchScope,
+    activeRepoPath.value ?? '',
+    activeRepoBranchScope.value,
     uiStore.showRemoteBranches ? '1' : '0',
   ].join('|')
 }

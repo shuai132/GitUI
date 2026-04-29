@@ -36,13 +36,6 @@ const viewToggles = computed<ToggleRow[]>(() => [
     toggle: () => uiStore.toggleDiffGroupByHunk(),
   },
   {
-    key: 'soloCurrentBranch',
-    label: t('settings.advanced.soloCurrentBranch'),
-    hint: t('settings.advanced.soloCurrentBranchHint'),
-    get: () => uiStore.historyBranchScope === 'current_first_parent',
-    toggle: () => uiStore.toggleHistoryBranchScope(),
-  },
-  {
     key: 'showRemoteBranches',
     label: t('settings.advanced.showRemoteBranches'),
     hint: t('settings.advanced.showRemoteBranchesHint'),
@@ -89,7 +82,6 @@ const viewToggles = computed<ToggleRow[]>(() => [
 const viewPrefsAreDefault = computed(() =>
   uiStore.diffLayoutMode === DEFAULT_ADVANCED_VIEW_PREFS.diffLayoutMode
   && uiStore.diffGroupByHunk === DEFAULT_ADVANCED_VIEW_PREFS.diffGroupByHunk
-  && uiStore.historyBranchScope === DEFAULT_ADVANCED_VIEW_PREFS.historyBranchScope
   && uiStore.showRemoteBranches === DEFAULT_ADVANCED_VIEW_PREFS.showRemoteBranches
   && uiStore.showChangeStatsColumn === DEFAULT_ADVANCED_VIEW_PREFS.showChangeStatsColumn
   && uiStore.showUnreachableCommits === DEFAULT_ADVANCED_VIEW_PREFS.showUnreachableCommits

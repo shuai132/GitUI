@@ -63,6 +63,11 @@ function stat(oid: string): CommitChangeStats {
   }
 }
 
+function setActiveRepo(repoStore: ReturnType<typeof useRepoStore>, id: string, path: string) {
+  repoStore.repos = [{ id, path, name: path.split('/').pop() || id }]
+  repoStore.activeRepoId = id
+}
+
 function stubLocalStorage() {
   const values = new Map<string, string>()
   const storage: Storage = {
@@ -102,10 +107,10 @@ describe('history store log filters', () => {
     const uiStore = useUiStore()
     const historyStore = useHistoryStore()
 
-    repoStore.activeRepoId = 'repo-1'
+    setActiveRepo(repoStore, 'repo-1', '/repos/a')
     uiStore.showUnreachableCommits = false
     uiStore.showStashCommits = true
-    uiStore.setHistoryBranchScope('current_first_parent')
+    uiStore.setHistoryBranchScopeForRepo('/repos/a', 'current_first_parent')
     uiStore.showRemoteBranches = false
 
     await historyStore.loadLog()
@@ -127,8 +132,8 @@ describe('history store log filters', () => {
     const uiStore = useUiStore()
     const historyStore = useHistoryStore()
 
-    repoStore.activeRepoId = 'repo-1'
-    uiStore.setHistoryBranchScope('all')
+    setActiveRepo(repoStore, 'repo-1', '/repos/a')
+    uiStore.setHistoryBranchScopeForRepo('/repos/a', 'all')
     uiStore.showRemoteBranches = false
 
     await historyStore.loadLog()
@@ -145,12 +150,52 @@ describe('history store log filters', () => {
     )
   })
 
+  it('uses the active repo path to choose branch scope', async () => {
+    getLogMock.mockResolvedValue(page())
+    const repoStore = useRepoStore()
+    const uiStore = useUiStore()
+    const historyStore = useHistoryStore()
+
+    repoStore.repos = [
+      { id: 'repo-1', path: '/repos/a', name: 'a' },
+      { id: 'repo-2', path: '/repos/b', name: 'b' },
+    ]
+    uiStore.setHistoryBranchScopeForRepo('/repos/a', 'current_first_parent')
+
+    repoStore.activeRepoId = 'repo-1'
+    await historyStore.loadLog()
+
+    repoStore.activeRepoId = 'repo-2'
+    await historyStore.loadLog()
+
+    expect(getLogMock).toHaveBeenNthCalledWith(
+      1,
+      'repo-1',
+      0,
+      200,
+      true,
+      true,
+      'current_first_parent',
+      true,
+    )
+    expect(getLogMock).toHaveBeenNthCalledWith(
+      2,
+      'repo-2',
+      0,
+      200,
+      true,
+      true,
+      'all',
+      true,
+    )
+  })
+
   it('does not load more when ensureCommitLoaded finds the target in loaded commits', async () => {
     getLogMock.mockResolvedValueOnce(page(true, ['head']))
     const repoStore = useRepoStore()
     const historyStore = useHistoryStore()
 
-    repoStore.activeRepoId = 'repo-1'
+    setActiveRepo(repoStore, 'repo-1', '/repos/a')
     await historyStore.loadLog()
 
     await expect(historyStore.ensureCommitLoaded('head')).resolves.toBe(true)
@@ -166,7 +211,7 @@ describe('history store log filters', () => {
     const repoStore = useRepoStore()
     const historyStore = useHistoryStore()
 
-    repoStore.activeRepoId = 'repo-1'
+    setActiveRepo(repoStore, 'repo-1', '/repos/a')
     await historyStore.loadLog()
 
     await expect(historyStore.ensureCommitLoaded('head')).resolves.toBe(true)
@@ -182,7 +227,7 @@ describe('history store log filters', () => {
     const repoStore = useRepoStore()
     const historyStore = useHistoryStore()
 
-    repoStore.activeRepoId = 'repo-1'
+    setActiveRepo(repoStore, 'repo-1', '/repos/a')
     await historyStore.loadLog()
 
     await expect(historyStore.ensureCommitLoaded('missing')).resolves.toBe(false)
@@ -198,7 +243,7 @@ describe('history store log filters', () => {
     const repoStore = useRepoStore()
     const historyStore = useHistoryStore()
 
-    repoStore.activeRepoId = 'repo-1'
+    setActiveRepo(repoStore, 'repo-1', '/repos/a')
     await historyStore.loadLog()
 
     await expect(historyStore.ensureCommitLoaded('head', () => false)).resolves.toBe(false)
@@ -212,7 +257,7 @@ describe('history store log filters', () => {
     const repoStore = useRepoStore()
     const historyStore = useHistoryStore()
 
-    repoStore.activeRepoId = 'repo-1'
+    setActiveRepo(repoStore, 'repo-1', '/repos/a')
     await historyStore.ensureCommitChangeStats(['a', 'b', 'a'])
     await historyStore.ensureCommitChangeStats(['a', 'b'])
 
@@ -231,7 +276,7 @@ describe('history store log filters', () => {
     const repoStore = useRepoStore()
     const historyStore = useHistoryStore()
 
-    repoStore.activeRepoId = 'repo-1'
+    setActiveRepo(repoStore, 'repo-1', '/repos/a')
     const first = historyStore.ensureCommitChangeStats(['a'])
     const second = historyStore.ensureCommitChangeStats(['a'])
 
@@ -249,11 +294,11 @@ describe('history store log filters', () => {
     const repoStore = useRepoStore()
     const historyStore = useHistoryStore()
 
-    repoStore.activeRepoId = 'repo-1'
+    setActiveRepo(repoStore, 'repo-1', '/repos/a')
     await historyStore.ensureCommitChangeStats(['a'])
     expect(historyStore.commitChangeStats.has('a')).toBe(true)
 
-    repoStore.activeRepoId = 'repo-2'
+    setActiveRepo(repoStore, 'repo-2', '/repos/b')
     await historyStore.ensureCommitChangeStats(['b'])
 
     expect(historyStore.commitChangeStats.has('a')).toBe(false)
@@ -265,7 +310,7 @@ describe('history store log filters', () => {
     const repoStore = useRepoStore()
     const historyStore = useHistoryStore()
 
-    repoStore.activeRepoId = 'repo-1'
+    setActiveRepo(repoStore, 'repo-1', '/repos/a')
     await historyStore.loadLog()
     historyStore.selectedCommit = { info: commit('bbb'), diffs: [] }
 
@@ -282,7 +327,7 @@ describe('history store log filters', () => {
     const repoStore = useRepoStore()
     const historyStore = useHistoryStore()
 
-    repoStore.activeRepoId = 'repo-1'
+    setActiveRepo(repoStore, 'repo-1', '/repos/a')
     await historyStore.loadLog()
 
     historyStore.jumpAdjacentCommit(-1)
@@ -295,7 +340,7 @@ describe('history store log filters', () => {
     const repoStore = useRepoStore()
     const historyStore = useHistoryStore()
 
-    repoStore.activeRepoId = 'repo-1'
+    setActiveRepo(repoStore, 'repo-1', '/repos/a')
     await historyStore.loadLog()
     historyStore.selectedWip = true
 

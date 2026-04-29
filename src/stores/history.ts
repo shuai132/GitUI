@@ -48,6 +48,12 @@ export const useHistoryStore = defineStore('history', () => {
   const commitChangeStatsRepoId = ref<string | null>(null)
 
   const git = useGitCommands()
+  const uiStore = useUiStore()
+
+  function activeRepoBranchScope() {
+    const repoStore = useRepoStore()
+    return uiStore.getHistoryBranchScope(repoStore.activeRepo()?.path)
+  }
 
   function clearCommitChangeStats() {
     commitChangeStats.value = new Map()
@@ -113,7 +119,6 @@ export const useHistoryStore = defineStore('history', () => {
 
   async function loadLog() {
     const repoStore = useRepoStore()
-    const uiStore = useUiStore()
     if (!repoStore.activeRepoId) return
     ensureCommitChangeStatsRepo(repoStore.activeRepoId)
 
@@ -126,7 +131,7 @@ export const useHistoryStore = defineStore('history', () => {
         PAGE_SIZE,
         uiStore.showUnreachableCommits,
         uiStore.showStashCommits,
-        uiStore.historyBranchScope,
+        activeRepoBranchScope(),
         uiStore.showRemoteBranches,
       )
       // 若 HEAD / 尾部 / 总数 / has_more 都没变，且每个提交的可达/stash/reflog-tip 标志
@@ -171,7 +176,6 @@ export const useHistoryStore = defineStore('history', () => {
 
   async function loadMore() {
     const repoStore = useRepoStore()
-    const uiStore = useUiStore()
     if (!repoStore.activeRepoId || !hasMore.value || loadingMore.value) return
 
     loadingMore.value = true
@@ -182,7 +186,7 @@ export const useHistoryStore = defineStore('history', () => {
         PAGE_SIZE,
         uiStore.showUnreachableCommits,
         uiStore.showStashCommits,
-        uiStore.historyBranchScope,
+        activeRepoBranchScope(),
         uiStore.showRemoteBranches,
       )
       // 只计算新增的这一页，从上次的末尾 lane 状态接续，O(200) 而非 O(N)

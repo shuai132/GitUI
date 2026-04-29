@@ -18,6 +18,10 @@ const workspaceStore = useWorkspaceStore()
 const repoStore = useRepoStore()
 const uiStore = useUiStore()
 const sectionState = useSidebarSectionState()
+const activeRepoPath = computed(() => repoStore.activeRepo()?.path)
+const activeRepoBranchScope = computed(() =>
+  uiStore.getHistoryBranchScope(activeRepoPath.value),
+)
 
 const localBranches = computed(() => {
   const branches = historyStore.branches.filter((b) => !b.is_remote)
@@ -68,7 +72,7 @@ const contextMenuItems = computed<ContextMenuItem[]>(() => {
   } else if (isRealCurrentBranch) {
     items.push({
       label:
-        (uiStore.historyBranchScope === 'current_first_parent' ? '✓ ' : '   ') +
+        (activeRepoBranchScope.value === 'current_first_parent' ? '✓ ' : '   ') +
         t('sidebar.branch.menu.soloCurrentBranch'),
       action: 'toggle-solo-current',
     })
@@ -167,7 +171,7 @@ async function onContextAction(action: string) {
         break
       case 'toggle-solo-current':
         if (b.is_head && b.name !== 'HEAD') {
-          uiStore.toggleHistoryBranchScope()
+          uiStore.toggleHistoryBranchScopeForRepo(activeRepoPath.value)
         }
         break
       case 'delete': {
@@ -231,7 +235,7 @@ async function onContextAction(action: string) {
         <span class="branch-dot" :class="b.is_head ? 'dot-solid' : 'dot-outline'" />
         <span class="branch-label">{{ b.name }}</span>
         <span
-          v-if="b.is_head && b.name !== 'HEAD' && uiStore.historyBranchScope === 'current_first_parent'"
+          v-if="b.is_head && b.name !== 'HEAD' && activeRepoBranchScope === 'current_first_parent'"
           class="solo-badge"
         >
           SOLO
@@ -289,14 +293,14 @@ async function onContextAction(action: string) {
 
 .solo-badge {
   flex-shrink: 0;
-  border: 1px solid color-mix(in srgb, var(--accent-blue) 55%, transparent);
-  border-radius: 4px;
-  padding: 0 5px;
-  font-size: var(--font-xs);
-  font-weight: 700;
-  line-height: 1.4;
-  color: var(--accent-blue);
-  background: color-mix(in srgb, var(--accent-blue) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent-blue) 35%, transparent);
+  border-radius: 3px;
+  padding: 0 3px;
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 1.25;
+  color: color-mix(in srgb, var(--accent-blue) 82%, var(--fg-muted));
+  background: color-mix(in srgb, var(--accent-blue) 8%, transparent);
   letter-spacing: 0;
 }
 

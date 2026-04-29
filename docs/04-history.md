@@ -41,10 +41,10 @@
 系统在前端实现实时的文本过滤，支持匹配标题、作者及 OID。在搜索模式下，系统会动态调整视图（如隐藏提交图）以优化信息密度。
 
 历史日志还支持两个持久化的图过滤偏好：
-- **Solo 当前分支**：`ui` store 的 `historyBranchScope = current_first_parent` 时，`get_log` 只从当前 HEAD 出发并按 first-parent 链构建日志，用于查看更干净的当前主线。
+- **Solo 当前分支**：`ui` store 按仓库 path 保存 `HistoryBranchScope`；active repo 的 scope 为 `current_first_parent` 时，`get_log` 只从当前 HEAD 出发并按 first-parent 链构建日志，用于查看更干净的当前主线。
 - **显示远程分支**：`showRemoteBranches` 控制远程分支是否作为 `get_log` 的日志来源；关闭时提交行也不显示远程分支 chip。
 
-默认值保持 `all + showRemoteBranches=true`，也就是继续展示当前完整 DAG。
+每个仓库的 Solo 默认值都是 `all`，不会从其他仓库继承；关闭仓库不会清理同一路径的 Solo 偏好。远程分支显示仍是全局视图偏好，默认值为 `showRemoteBranches=true`。
 
 `Solo 当前分支` 的语义是 first-parent 主线视图，不是“当前分支可达的所有提交”。被合并进来的 side branch 具体提交会被隐藏，只保留沿 HEAD first-parent 链可见的历史，用于降低合并分支带来的图噪音。
 

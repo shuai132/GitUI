@@ -8,7 +8,7 @@ const KEYS = {
   historyLayout: 'gitui.history.layout',
   showUnreachable: 'gitui.history.showUnreachable',
   showStashes: 'gitui.history.showStashes',
-  historyBranchScope: 'gitui.history.branchScope',
+  historyBranchScopeByRepoPath: 'gitui.history.branchScopeByRepoPath',
   showRemoteBranches: 'gitui.history.showRemoteBranches',
   historySizes: 'gitui.history.sizes',
   historyColumnOrder: 'gitui.history.columnOrder',
@@ -104,7 +104,6 @@ const TERMINAL_DOCK_VALUES = ['bottom', 'right'] as const
 export const DEFAULT_ADVANCED_VIEW_PREFS = {
   diffLayoutMode: 'inline' as DiffLayoutMode,
   diffGroupByHunk: true,
-  historyBranchScope: 'all' as HistoryBranchScope,
   showRemoteBranches: true,
   showChangeStatsColumn: true,
   showUnreachableCommits: true,
@@ -112,6 +111,7 @@ export const DEFAULT_ADVANCED_VIEW_PREFS = {
   debugPanelVisible: false,
   detailFilesFirst: true,
 } as const
+const DEFAULT_HISTORY_BRANCH_SCOPE: HistoryBranchScope = 'all'
 
 const PRESET_LAYOUTS: Record<string, DockLayout> = {
   vertical:   { spanning: 'commits', edge: 'top',  first: 'info', second: 'diff' },
@@ -198,6 +198,30 @@ export function moveHistoryColumn<T extends string>(
   return next
 }
 
+function loadHistoryBranchScopeByRepoPath(): Record<string, HistoryBranchScope> {
+  const raw = localStorage.getItem(KEYS.historyBranchScopeByRepoPath)
+  if (!raw) return {}
+  try {
+    const parsed: unknown = JSON.parse(raw)
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {}
+
+    const result: Record<string, HistoryBranchScope> = {}
+    for (const [repoPath, scope] of Object.entries(parsed)) {
+      if (
+        typeof repoPath === 'string' &&
+        repoPath.length > 0 &&
+        typeof scope === 'string' &&
+        (HISTORY_BRANCH_SCOPE_VALUES as readonly string[]).includes(scope)
+      ) {
+        result[repoPath] = scope as HistoryBranchScope
+      }
+    }
+    return result
+  } catch {
+    return {}
+  }
+}
+
 // ── Store ─────────────────────────────────────────────────────────────
 export const useUiStore = defineStore('ui', () => {
   // 粘性请求：从 Actions 菜单转发 "丢弃所有变更" 给 WipPanel
@@ -245,12 +269,8 @@ export const useUiStore = defineStore('ui', () => {
   const showStashCommits = ref<boolean>(
     loadBool(KEYS.showStashes, DEFAULT_ADVANCED_VIEW_PREFS.showStashCommits),
   )
-  const historyBranchScope = ref<HistoryBranchScope>(
-    loadString<HistoryBranchScope>(
-      KEYS.historyBranchScope,
-      DEFAULT_ADVANCED_VIEW_PREFS.historyBranchScope,
-      HISTORY_BRANCH_SCOPE_VALUES,
-    ),
+  const historyBranchScopeByRepoPath = ref<Record<string, HistoryBranchScope>>(
+    loadHistoryBranchScopeByRepoPath(),
   )
   const showRemoteBranches = ref<boolean>(
     loadBool(KEYS.showRemoteBranches, DEFAULT_ADVANCED_VIEW_PREFS.showRemoteBranches),
@@ -366,14 +386,45 @@ export const useUiStore = defineStore('ui', () => {
     localStorage.setItem(KEYS.showStashes, String(showStashCommits.value))
   }
 
-  function setHistoryBranchScope(scope: HistoryBranchScope) {
-    historyBranchScope.value = scope
-    localStorage.setItem(KEYS.historyBranchScope, scope)
+  function persistHistoryBranchScopeByRepoPath(scopes: Record<string, HistoryBranchScope>) {
+    const entries = Object.entries(scopes).filter(
+      ([, scope]) => scope !== DEFAULT_HISTORY_BRANCH_SCOPE,
+    )
+    if (entries.length === 0) {
+      localStorage.removeItem(KEYS.historyBranchScopeByRepoPath)
+      return
+    }
+    localStorage.setItem(
+      KEYS.historyBranchScopeByRepoPath,
+      JSON.stringify(Object.fromEntries(entries)),
+    )
   }
 
-  function toggleHistoryBranchScope() {
-    setHistoryBranchScope(
-      historyBranchScope.value === 'all' ? 'current_first_parent' : 'all',
+  function getHistoryBranchScope(repoPath: string | null | undefined): HistoryBranchScope {
+    if (!repoPath) return DEFAULT_HISTORY_BRANCH_SCOPE
+    return historyBranchScopeByRepoPath.value[repoPath] ?? DEFAULT_HISTORY_BRANCH_SCOPE
+  }
+
+  function setHistoryBranchScopeForRepo(
+    repoPath: string | null | undefined,
+    scope: HistoryBranchScope,
+  ) {
+    if (!repoPath) return
+    const next = { ...historyBranchScopeByRepoPath.value }
+    if (scope === DEFAULT_HISTORY_BRANCH_SCOPE) {
+      delete next[repoPath]
+    } else {
+      next[repoPath] = scope
+    }
+    historyBranchScopeByRepoPath.value = next
+    persistHistoryBranchScopeByRepoPath(next)
+  }
+
+  function toggleHistoryBranchScopeForRepo(repoPath: string | null | undefined) {
+    const current = getHistoryBranchScope(repoPath)
+    setHistoryBranchScopeForRepo(
+      repoPath,
+      current === 'all' ? 'current_first_parent' : 'all',
     )
   }
 
@@ -459,7 +510,6 @@ export const useUiStore = defineStore('ui', () => {
   function resetAdvancedViewPrefs() {
     diffLayoutMode.value = DEFAULT_ADVANCED_VIEW_PREFS.diffLayoutMode
     diffGroupByHunk.value = DEFAULT_ADVANCED_VIEW_PREFS.diffGroupByHunk
-    historyBranchScope.value = DEFAULT_ADVANCED_VIEW_PREFS.historyBranchScope
     showRemoteBranches.value = DEFAULT_ADVANCED_VIEW_PREFS.showRemoteBranches
     showChangeStatsColumn.value = DEFAULT_ADVANCED_VIEW_PREFS.showChangeStatsColumn
     showUnreachableCommits.value = DEFAULT_ADVANCED_VIEW_PREFS.showUnreachableCommits
@@ -469,7 +519,6 @@ export const useUiStore = defineStore('ui', () => {
 
     localStorage.setItem(KEYS.diffLayoutMode, diffLayoutMode.value)
     localStorage.setItem(KEYS.diffGroupByHunk, String(diffGroupByHunk.value))
-    localStorage.setItem(KEYS.historyBranchScope, historyBranchScope.value)
     localStorage.setItem(KEYS.showRemoteBranches, String(showRemoteBranches.value))
     localStorage.setItem(KEYS.showChangeStatsColumn, String(showChangeStatsColumn.value))
     localStorage.setItem(KEYS.showUnreachable, String(showUnreachableCommits.value))
@@ -523,7 +572,7 @@ export const useUiStore = defineStore('ui', () => {
     historyLayoutMode,
     showUnreachableCommits,
     showStashCommits,
-    historyBranchScope,
+    historyBranchScopeByRepoPath,
     showRemoteBranches,
     historyColumnOrder,
     showChangeStatsColumn,
@@ -548,8 +597,9 @@ export const useUiStore = defineStore('ui', () => {
     toggleHistoryLayout,
     toggleShowUnreachable,
     toggleShowStashes,
-    setHistoryBranchScope,
-    toggleHistoryBranchScope,
+    getHistoryBranchScope,
+    setHistoryBranchScopeForRepo,
+    toggleHistoryBranchScopeForRepo,
     toggleShowRemoteBranches,
     setHistoryColumnOrder,
     moveHistoryColumnTo,
