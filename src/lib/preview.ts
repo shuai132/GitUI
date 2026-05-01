@@ -3,10 +3,10 @@
  *
  * - `raster`：浏览器原生 `<img>` 可渲染的位图
  * - `svg`：矢量图，同时也是文本，支持图片 / 文本双视图
- * - `pdf` / `docx`：文档预览，同时提供抽取文本 diff
+ * - `pdf` / `docx` / `pptx`：文档预览，同时提供抽取文本 diff
  * - `null`：不支持预览，走普通文本 diff
  */
-export type PreviewKind = 'raster' | 'svg' | 'pdf' | 'docx' | null
+export type PreviewKind = 'raster' | 'svg' | 'pdf' | 'docx' | 'pptx' | null
 
 export const MIME_BY_EXT: Record<string, string> = {
   png: 'image/png',
@@ -19,6 +19,7 @@ export const MIME_BY_EXT: Record<string, string> = {
   svg: 'image/svg+xml',
   pdf: 'application/pdf',
   docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
 }
 
 export function detectPreviewKind(path?: string | null): PreviewKind {
@@ -27,6 +28,7 @@ export function detectPreviewKind(path?: string | null): PreviewKind {
   if (ext === 'svg') return 'svg'
   if (ext === 'pdf') return 'pdf'
   if (ext === 'docx') return 'docx'
+  if (ext === 'pptx') return 'pptx'
   if (ext in MIME_BY_EXT) return 'raster'
   return null
 }

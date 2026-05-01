@@ -818,6 +818,7 @@ impl GitEngine {
         let text = match ext.as_str() {
             "pdf" => extract_pdf_text(&bytes)?,
             "docx" => extract_docx_text(&bytes)?,
+            "pptx" => extract_pptx_text(&bytes)?,
             _ => {
                 return Err(GitError::OperationFailed(format!(
                     "unsupported document type: {}",
@@ -969,7 +970,51 @@ fn extract_docx_text(bytes: &[u8]) -> GitResult<String> {
         .read_to_string(&mut document_xml)
         .map_err(|e| GitError::OperationFailed(format!("decode docx document: {}", e)))?;
 
-    let mut reader = Reader::from_str(&document_xml);
+    extract_office_xml_text(&document_xml, "docx")
+}
+
+fn extract_pptx_text(bytes: &[u8]) -> GitResult<String> {
+    let cursor = Cursor::new(bytes);
+    let mut archive = ZipArchive::new(cursor)
+        .map_err(|e| GitError::OperationFailed(format!("read pptx: {}", e)))?;
+    let mut slide_names = Vec::new();
+    for i in 0..archive.len() {
+        let name = archive
+            .by_index(i)
+            .map_err(|e| GitError::OperationFailed(format!("read pptx entry: {}", e)))?
+            .name()
+            .to_owned();
+        if name.starts_with("ppt/slides/slide") && name.ends_with(".xml") {
+            slide_names.push(name);
+        }
+    }
+    slide_names.sort_by_key(|name| office_part_number(name));
+
+    let mut slides = Vec::new();
+    for name in slide_names {
+        let mut slide_xml = String::new();
+        archive
+            .by_name(&name)
+            .map_err(|e| GitError::OperationFailed(format!("read pptx slide: {}", e)))?
+            .read_to_string(&mut slide_xml)
+            .map_err(|e| GitError::OperationFailed(format!("decode pptx slide: {}", e)))?;
+        let text = extract_office_xml_text(&slide_xml, "pptx")?;
+        if !text.is_empty() {
+            slides.push(text);
+        }
+    }
+
+    Ok(slides.join("\n\n"))
+}
+
+fn office_part_number(name: &str) -> u32 {
+    let file_name = name.rsplit('/').next().unwrap_or(name);
+    let digits: String = file_name.chars().filter(|ch| ch.is_ascii_digit()).collect();
+    digits.parse().unwrap_or(u32::MAX)
+}
+
+fn extract_office_xml_text(xml: &str, kind: &str) -> GitResult<String> {
+    let mut reader = Reader::from_str(xml);
     reader.config_mut().trim_text(false);
     let mut buf = Vec::new();
     let mut text = String::new();
@@ -994,18 +1039,18 @@ fn extract_docx_text(bytes: &[u8]) -> GitResult<String> {
             },
             Ok(Event::Text(e)) if in_text => {
                 let decoded = e.decode().map_err(|err| {
-                    GitError::OperationFailed(format!("decode docx text: {}", err))
+                    GitError::OperationFailed(format!("decode {} text: {}", kind, err))
                 })?;
                 text.push_str(&decoded);
             }
             Ok(Event::GeneralRef(e)) if in_text => {
                 if let Some(ch) = e.resolve_char_ref().map_err(|err| {
-                    GitError::OperationFailed(format!("resolve docx text entity: {}", err))
+                    GitError::OperationFailed(format!("resolve {} text entity: {}", kind, err))
                 })? {
                     text.push(ch);
                 } else {
                     let entity = e.decode().map_err(|err| {
-                        GitError::OperationFailed(format!("decode docx text entity: {}", err))
+                        GitError::OperationFailed(format!("decode {} text entity: {}", kind, err))
                     })?;
                     if let Some(value) = quick_xml::escape::resolve_predefined_entity(&entity) {
                         text.push_str(value);
@@ -1020,8 +1065,8 @@ fn extract_docx_text(bytes: &[u8]) -> GitResult<String> {
             Ok(_) => {}
             Err(e) => {
                 return Err(GitError::OperationFailed(format!(
-                    "parse docx document: {}",
-                    e
+                    "parse {} document: {}",
+                    kind, e
                 )))
             }
         }
@@ -1091,13 +1136,43 @@ mod tests {
         assert_eq!(text, "Hello\tWorld\nLine\nTwo & Three");
     }
 
+    #[test]
+    fn pptx_text_extraction_reads_slides_in_number_order() {
+        let slide_10 = r#"
+            <p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                   xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+              <p:cSld><p:spTree><p:sp><p:txBody><a:p><a:r><a:t>Slide 10</a:t></a:r></a:p></p:txBody></p:sp></p:spTree></p:cSld>
+            </p:sld>
+        "#;
+        let slide_2 = r#"
+            <p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                   xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+              <p:cSld><p:spTree><p:sp><p:txBody><a:p><a:r><a:t>Slide 2</a:t></a:r></a:p></p:txBody></p:sp></p:spTree></p:cSld>
+            </p:sld>
+        "#;
+        let bytes = office_zip_bytes(&[
+            ("ppt/slides/slide10.xml", slide_10),
+            ("ppt/slides/slide2.xml", slide_2),
+        ]);
+
+        let text = extract_pptx_text(&bytes).unwrap();
+
+        assert_eq!(text, "Slide 2\n\nSlide 10");
+    }
+
     fn docx_bytes(document_xml: &str) -> Vec<u8> {
+        office_zip_bytes(&[("word/document.xml", document_xml)])
+    }
+
+    fn office_zip_bytes(entries: &[(&str, &str)]) -> Vec<u8> {
         let cursor = Cursor::new(Vec::new());
         let mut writer = ZipWriter::new(cursor);
-        writer
-            .start_file("word/document.xml", SimpleFileOptions::default())
-            .unwrap();
-        writer.write_all(document_xml.as_bytes()).unwrap();
+        for (path, content) in entries {
+            writer
+                .start_file(*path, SimpleFileOptions::default())
+                .unwrap();
+            writer.write_all(content.as_bytes()).unwrap();
+        }
         writer.finish().unwrap().into_inner()
     }
 }

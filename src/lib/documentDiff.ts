@@ -15,6 +15,19 @@ export interface DocumentDiffRow {
   right: DocumentDiffCell
 }
 
+export interface DocumentDiffGroup {
+  header: string
+  rows: DocumentDiffRow[]
+}
+
+export interface DocumentInlineDiffRow {
+  kind: 'ctx' | 'del' | 'add'
+  oldLineNo?: number
+  newLineNo?: number
+  content: string
+  html: string
+}
+
 interface LineOp {
   kind: 'eq' | 'del' | 'add'
   text: string
@@ -23,6 +36,7 @@ interface LineOp {
 }
 
 const MAX_LCS_LINES = 2_000
+const DEFAULT_CONTEXT_LINES = 3
 
 export function buildDocumentDiffRows(oldText: string, newText: string): DocumentDiffRow[] {
   const oldLines = splitFileLines(oldText)
@@ -33,6 +47,75 @@ export function buildDocumentDiffRows(oldText: string, newText: string): Documen
   }
 
   return pairChangeRuns(lineOps(oldLines, newLines))
+}
+
+export function hasDocumentDiffChanges(rows: DocumentDiffRow[]): boolean {
+  return rows.some((row) => isChangeRow(row))
+}
+
+export function buildDocumentDiffGroups(
+  rows: DocumentDiffRow[],
+  contextLines = DEFAULT_CONTEXT_LINES,
+): DocumentDiffGroup[] {
+  const changeIndexes: number[] = []
+  rows.forEach((row, index) => {
+    if (isChangeRow(row)) changeIndexes.push(index)
+  })
+  if (changeIndexes.length === 0) return []
+
+  const ranges: Array<{ start: number; end: number }> = []
+  for (const index of changeIndexes) {
+    const start = Math.max(0, index - contextLines)
+    const end = Math.min(rows.length - 1, index + contextLines)
+    const last = ranges[ranges.length - 1]
+    if (last && start <= last.end + 1) {
+      last.end = Math.max(last.end, end)
+    } else {
+      ranges.push({ start, end })
+    }
+  }
+
+  return ranges.map((range) => {
+    const groupRows = rows.slice(range.start, range.end + 1)
+    return {
+      header: groupHeader(groupRows),
+      rows: groupRows,
+    }
+  })
+}
+
+export function buildDocumentInlineRows(rows: DocumentDiffRow[]): DocumentInlineDiffRow[] {
+  const inlineRows: DocumentInlineDiffRow[] = []
+  for (const row of rows) {
+    if (row.left.kind === 'ctx' && row.right.kind === 'ctx') {
+      inlineRows.push({
+        kind: 'ctx',
+        oldLineNo: row.left.lineNo,
+        newLineNo: row.right.lineNo,
+        content: row.right.content,
+        html: row.right.html,
+      })
+      continue
+    }
+
+    if (row.left.kind === 'del') {
+      inlineRows.push({
+        kind: 'del',
+        oldLineNo: row.left.lineNo,
+        content: row.left.content,
+        html: row.left.html,
+      })
+    }
+    if (row.right.kind === 'add') {
+      inlineRows.push({
+        kind: 'add',
+        newLineNo: row.right.lineNo,
+        content: row.right.content,
+        html: row.right.html,
+      })
+    }
+  }
+  return inlineRows
 }
 
 function lineOps(oldLines: string[], newLines: string[]): LineOp[] {
@@ -158,6 +241,18 @@ function cell(
 
 function emptyCell(): DocumentDiffCell {
   return { kind: 'empty', content: '', html: '' }
+}
+
+function isChangeRow(row: DocumentDiffRow): boolean {
+  return row.left.kind === 'del' || row.right.kind === 'add'
+}
+
+function groupHeader(rows: DocumentDiffRow[]): string {
+  const oldNumbers = rows.flatMap((row) => (row.left.lineNo === undefined ? [] : [row.left.lineNo]))
+  const newNumbers = rows.flatMap((row) => (row.right.lineNo === undefined ? [] : [row.right.lineNo]))
+  const oldStart = oldNumbers[0] ?? 0
+  const newStart = newNumbers[0] ?? 0
+  return `@@ -${oldStart},${oldNumbers.length} +${newStart},${newNumbers.length} @@`
 }
 
 function escapeHtml(value: string): string {

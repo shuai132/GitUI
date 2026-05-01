@@ -3,13 +3,19 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { BlobData, DocumentTextSource, FileDiff, FileStatusKind } from '@/types/git'
 import { useGitCommands } from '@/composables/useGitCommands'
-import { buildDocumentDiffRows } from '@/lib/documentDiff'
+import {
+  buildDocumentDiffGroups,
+  buildDocumentDiffRows,
+  buildDocumentInlineRows,
+  hasDocumentDiffChanges,
+} from '@/lib/documentDiff'
 import { mimeFor } from '@/lib/preview'
+import { useUiStore } from '@/stores/ui'
 
 const props = defineProps<{
   diff: FileDiff
   repoId: string
-  documentKind: 'pdf' | 'docx'
+  documentKind: 'pdf' | 'docx' | 'pptx'
   wip?: { staged: boolean; status?: FileStatusKind } | null
 }>()
 
@@ -29,6 +35,7 @@ interface SideLoadTarget {
 }
 
 const { t } = useI18n()
+const uiStore = useUiStore()
 const { getBlobBytes, readWorktreeFile, extractDocumentText } = useGitCommands()
 
 const oldSide = ref<DocumentSideState>(emptySide())
@@ -36,6 +43,14 @@ const newSide = ref<DocumentSideState>(emptySide())
 let loadSeq = 0
 
 const rows = computed(() => buildDocumentDiffRows(oldSide.value.text, newSide.value.text))
+const hasChanges = computed(() => hasDocumentDiffChanges(rows.value))
+const rowGroups = computed(() => {
+  if (uiStore.diffGroupByHunk) return buildDocumentDiffGroups(rows.value)
+  return rows.value.length === 0 ? [] : [{ header: '', rows: rows.value }]
+})
+const useSideBySideTextDiff = computed(
+  () => uiStore.diffLayoutMode === 'side-by-side' && !uiStore.diffGroupByHunk,
+)
 const hasText = computed(() => oldSide.value.text.length > 0 || newSide.value.text.length > 0)
 const loading = computed(() => oldSide.value.loading || newSide.value.loading)
 const isPdf = computed(() => props.documentKind === 'pdf')
@@ -180,6 +195,7 @@ function base64ToBytes(base64: string): Uint8Array {
   }
   return bytes
 }
+
 </script>
 
 <template>
@@ -193,7 +209,7 @@ function base64ToBytes(base64: string): Uint8Array {
           <div v-else-if="oldSide.error" class="pane-state error">{{ t('diff.document.loadFailed', { detail: oldSide.error }) }}</div>
           <div v-else-if="oldSide.bytesTruncated" class="pane-state">{{ t('diff.document.previewTooLarge') }}</div>
           <iframe v-else-if="isPdf && oldSide.objectUrl" class="pdf-frame" :src="oldSide.objectUrl" />
-          <pre v-else class="docx-text">{{ oldSide.text || t('diff.document.noText') }}</pre>
+          <pre v-else class="office-text">{{ oldSide.text || t('diff.document.noText') }}</pre>
         </div>
       </section>
 
@@ -205,7 +221,7 @@ function base64ToBytes(base64: string): Uint8Array {
           <div v-else-if="newSide.error" class="pane-state error">{{ t('diff.document.loadFailed', { detail: newSide.error }) }}</div>
           <div v-else-if="newSide.bytesTruncated" class="pane-state">{{ t('diff.document.previewTooLarge') }}</div>
           <iframe v-else-if="isPdf && newSide.objectUrl" class="pdf-frame" :src="newSide.objectUrl" />
-          <pre v-else class="docx-text">{{ newSide.text || t('diff.document.noText') }}</pre>
+          <pre v-else class="office-text">{{ newSide.text || t('diff.document.noText') }}</pre>
         </div>
       </section>
     </div>
@@ -219,17 +235,43 @@ function base64ToBytes(base64: string): Uint8Array {
       </div>
       <div v-if="loading" class="text-state">{{ t('diff.empty.loading') }}</div>
       <div v-else-if="!hasText" class="text-state">{{ t('diff.document.noText') }}</div>
-      <div v-else-if="rows.length === 0" class="text-state">{{ t('diff.empty.noChanges') }}</div>
-      <table v-else class="text-table">
+      <div v-else-if="!hasChanges" class="text-state">{{ t('diff.empty.noChanges') }}</div>
+      <table v-else-if="useSideBySideTextDiff" class="text-table text-table--side-by-side">
+        <colgroup>
+          <col class="line-col">
+          <col class="side-content-col">
+          <col class="line-col">
+          <col class="side-content-col">
+        </colgroup>
         <tbody>
-          <tr v-for="(row, idx) in rows" :key="idx">
-            <td class="line-no">{{ row.left.lineNo ?? '' }}</td>
-            <td class="line-cell" :class="row.left.kind" v-html="row.left.html" />
-            <td class="line-no">{{ row.right.lineNo ?? '' }}</td>
-            <td class="line-cell" :class="row.right.kind" v-html="row.right.html" />
-          </tr>
+          <template v-for="(group, groupIndex) in rowGroups" :key="groupIndex">
+            <tr v-if="uiStore.diffGroupByHunk" class="hunk-row">
+              <td colspan="4">{{ group.header }}</td>
+            </tr>
+            <tr v-for="(row, rowIndex) in group.rows" :key="`${groupIndex}-${rowIndex}`">
+              <td class="line-no">{{ row.left.lineNo ?? '' }}</td>
+              <td class="line-cell" :class="row.left.kind" v-html="row.left.html" />
+              <td class="line-no">{{ row.right.lineNo ?? '' }}</td>
+              <td class="line-cell" :class="row.right.kind" v-html="row.right.html" />
+            </tr>
+          </template>
         </tbody>
       </table>
+      <div v-else class="inline-list">
+        <template v-for="(group, groupIndex) in rowGroups" :key="groupIndex">
+          <div v-if="uiStore.diffGroupByHunk" class="inline-hunk-header">{{ group.header }}</div>
+          <div
+            v-for="(row, rowIndex) in buildDocumentInlineRows(group.rows)"
+            :key="`${groupIndex}-${rowIndex}`"
+            class="inline-row"
+            :class="row.kind"
+          >
+            <span class="inline-line-no">{{ row.oldLineNo ?? '' }}</span>
+            <span class="inline-line-no">{{ row.newLineNo ?? '' }}</span>
+            <span class="inline-content" v-html="row.html" />
+          </div>
+        </template>
+      </div>
     </div>
   </div>
 </template>
@@ -287,7 +329,7 @@ function base64ToBytes(base64: string): Uint8Array {
   background: #ffffff;
 }
 
-.docx-text {
+.office-text {
   margin: 0;
   padding: 12px;
   min-height: 100%;
@@ -342,8 +384,24 @@ function base64ToBytes(base64: string): Uint8Array {
   line-height: 18px;
 }
 
-.line-no {
+.line-col {
   width: 52px;
+}
+
+.side-content-col {
+  width: calc((100% - 104px) / 2);
+}
+
+.hunk-row td {
+  padding: 3px 8px;
+  color: var(--accent-blue);
+  background: var(--bg-surface);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
+}
+
+.line-no {
   padding: 0 8px;
   color: var(--text-muted);
   text-align: right;
@@ -353,7 +411,6 @@ function base64ToBytes(base64: string): Uint8Array {
 }
 
 .line-cell {
-  width: calc(50% - 52px);
   padding: 0 8px;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -371,5 +428,52 @@ function base64ToBytes(base64: string): Uint8Array {
 
 .line-cell.empty {
   background: var(--diff-empty-bg);
+}
+
+.inline-list {
+  font-family: var(--code-font-family);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.inline-hunk-header {
+  padding: 3px 8px;
+  color: var(--accent-blue);
+  background: var(--bg-surface);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
+}
+
+.inline-row {
+  display: grid;
+  grid-template-columns: 52px 52px minmax(0, 1fr);
+  min-height: 18px;
+}
+
+.inline-line-no {
+  padding: 0 8px;
+  color: var(--text-muted);
+  text-align: right;
+  user-select: none;
+  background: var(--bg-secondary);
+  border-right: 1px solid var(--border);
+}
+
+.inline-content {
+  min-width: 0;
+  padding: 0 8px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--text-primary);
+  user-select: text;
+}
+
+.inline-row.del .inline-content {
+  background: var(--diff-del-bg);
+}
+
+.inline-row.add .inline-content {
+  background: var(--diff-add-bg);
 }
 </style>

@@ -75,8 +75,10 @@ const isImageView = computed(() => {
   return false
 })
 
-const documentKind = computed<'pdf' | 'docx' | null>(() => {
-  if (previewKind.value === 'pdf' || previewKind.value === 'docx') return previewKind.value
+const documentKind = computed<'pdf' | 'docx' | 'pptx' | null>(() => {
+  if (previewKind.value === 'pdf' || previewKind.value === 'docx' || previewKind.value === 'pptx') {
+    return previewKind.value
+  }
   return null
 })
 

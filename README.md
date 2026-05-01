@@ -30,7 +30,7 @@
 - [x] 远程操作：fetch、push、pull（fast-forward / ff-only / rebase 三模式）、tag 推送
 - [x] SSH 凭据链：ssh-agent → `~/.ssh/id_ed25519` → `~/.ssh/id_rsa`，HTTPS 走系统 credential helper
 - [x] Submodule：init / update / edit URL / deinit，已克隆的可作为新仓库打开
-- [x] Diff 查看器：inline / side-by-side 两种布局，均支持完整文件视图与按 hunk 分组、多语言语法高亮、图片 / SVG 预览、PDF / DOCX 文档预览与抽取文本高亮 diff
+- [x] Diff 查看器：inline / side-by-side 两种布局，均支持完整文件视图与按 hunk 分组、多语言语法高亮、图片 / SVG 预览、PDF / DOCX / PPTX 文档预览与抽取文本高亮 diff
 - [x] 字符编码自适应：commit message 按 git `encoding` header 解码、文件内容按 `.gitattributes` 的 `working-tree-encoding` 或 chardetng 自动检测，混合 UTF-8 / GBK 仓库正常显示
 - [x] Stash：push / pop / apply / delete（含 untracked 文件），用提交信息作 stash message
 - [x] Reflog 查看、git gc 触发入口；右键丢失引用提交可从 HEAD reflog 中剥链移除
