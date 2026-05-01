@@ -688,7 +688,7 @@ const messages = {
     },
     plugins: {
       title: '本地插件',
-      hint: '安装本机目录中的可信插件。插件通过 manifest 声明命令、菜单和权限，启用后可出现在 Actions 菜单中。',
+      hint: '安装本机目录中的可信插件。插件通过 manifest 声明命令、菜单和权限，启用后可出现在 Actions 菜单或提交右键菜单中。',
       installTitle: '选择插件目录',
       install: '安装插件',
       refresh: '刷新',

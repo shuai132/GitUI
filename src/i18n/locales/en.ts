@@ -689,7 +689,7 @@ const messages = {
     },
     plugins: {
       title: 'Local plugins',
-      hint: 'Install trusted plugins from local folders. Plugins declare commands, menus, and permissions in their manifest, then appear in the Actions menu when enabled.',
+      hint: 'Install trusted plugins from local folders. Plugins declare commands, menus, and permissions in their manifest, then appear in the Actions menu or commit context menu when enabled.',
       installTitle: 'Choose plugin folder',
       install: 'Install plugin',
       refresh: 'Refresh',

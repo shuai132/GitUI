@@ -53,6 +53,10 @@
 
 前端通过 `plugins` store 维护插件列表与启用状态。设置页提供安装、刷新、启用、禁用和卸载入口。工具栏 Actions 菜单读取启用插件的 `toolbar.actions` 菜单贡献并执行对应命令。
 
+## 示例插件
+
+示例插件位于 `plugin/examples/commit-status-toast/`。该插件演示提交右键菜单插件：命令挂到 `commit.context`，后端读取当前仓库路径和提交 selection，执行 `git status --short --branch`，并把摘要作为 `PluginCommandResult.message` 返回，由 GitUI 通过 toast 展示。
+
 ## 关键取舍
 
 1. **不直接加载插件到主应用上下文**：避免插件破坏核心 UI、状态和性能边界。

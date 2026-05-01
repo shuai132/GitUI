@@ -6,23 +6,21 @@ GitUI plugin v1 is intentionally small:
 
 - Plugins are local folders installed from GitUI Settings -> Plugins.
 - Each plugin folder must contain `plugin.json`.
-- Enabled plugins can contribute commands to the toolbar Actions menu.
+- Enabled plugins can contribute commands to the toolbar Actions menu and commit context menu.
 - Commands run through an optional local backend process using JSON-RPC over stdin/stdout.
 - Plugins are trusted local code. Install only plugins you understand.
 
-## Demo Plugins
+## Demo Plugin
 
-Install any demo by opening GitUI, going to Settings -> Plugins, clicking "Install plugin", and selecting one of these folders:
+Install the demo by opening GitUI, going to Settings -> Plugins, clicking "Install plugin", and selecting this folder:
 
-- `plugin/examples/hello-repo`
-- `plugin/examples/worktree-status`
-- `plugin/examples/branch-summary`
+- `plugin/examples/commit-status-toast`
 
-After enabling the plugin, open the toolbar Actions menu or right-click a commit and use the Plugins submenu.
+After enabling the plugin, right-click a commit and use the Plugins submenu. `commit-status-toast` is intentionally only registered in the commit right-click menu. It runs `git status --short --branch` in the active repository and shows the result through GitUI's existing toast flow.
 
-If you already installed a demo before editing these files, uninstall that demo in GitUI and install the demo folder again. GitUI copies plugin folders into the app data directory during installation, so installed plugins do not update live from this repository.
+If you already installed the demo before editing these files, uninstall that demo in GitUI and install the demo folder again. GitUI copies plugin folders into the app data directory during installation, so installed plugins do not update live from this repository.
 
-All demos use Node.js with no npm dependencies.
+The demo uses Node.js with no npm dependencies.
 
 ## Manifest
 
@@ -31,10 +29,10 @@ Every plugin has a `plugin.json` file:
 ```json
 {
   "api_version": 1,
-  "id": "com.example.hello-repo",
-  "name": "Hello Repo",
+  "id": "com.gitui.demo.commit-status-toast",
+  "name": "Demo: Commit Status Toast",
   "version": "0.1.0",
-  "description": "Shows the current repository context.",
+  "description": "Runs git status from a commit right-click menu and shows the result as a toast.",
   "backend": {
     "command": "node",
     "args": ["backend.mjs"]
@@ -43,22 +41,22 @@ Every plugin has a `plugin.json` file:
     "git:read",
     {
       "id": "process:run",
-      "reason": "Runs the demo backend."
+      "reason": "Runs git status in the active repository."
     }
   ],
   "contributes": {
     "commands": [
       {
-        "id": "hello.showRepo",
-        "label": "Show current repo",
+        "id": "commitStatus.show",
+        "label": "Run git status",
         "category": "Demo",
-        "description": "Displays the active repo path."
+        "description": "Runs git status --short --branch for the selected commit context."
       }
     ],
     "menus": [
       {
-        "location": "toolbar.actions",
-        "command": "hello.showRepo"
+        "location": "commit.context",
+        "command": "commitStatus.show"
       }
     ]
   }
