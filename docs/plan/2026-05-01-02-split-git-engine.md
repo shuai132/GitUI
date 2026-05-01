@@ -28,11 +28,11 @@ src-tauri/src/git/
 | 1. 准备 | 完成 | 增加第一批模块声明，确认无行为改动 |
 | 2. Diff 拆分 | 完成 | 迁移 diff 与 blob 读取路径 |
 | 3. History 拆分 | 完成 | 迁移日志、统计、file log、blame |
-| 4. Refs 拆分 | 未开始 | 迁移分支、标签、checkout/reset、cherry-pick/revert |
-| 5. Remote 拆分 | 未开始 | 迁移 fetch/pull/push/clone/remotes/init |
+| 4. Refs 拆分 | 完成 | 迁移分支、标签、checkout/reset、cherry-pick/revert |
+| 5. Remote 拆分 | 完成 | 迁移 fetch/pull/push/clone/remotes/init |
 | 6. Submodule 拆分 | 完成 | 迁移子模块全路径 |
-| 7. Stash/Reflog/Patch 拆分 | 进行中 | patch/discard/amend 已迁移，stash/reflog/gc 待迁移 |
-| 8. 收尾验证 | 未开始 | 全量格式化、类型检查、测试和 diff 核对 |
+| 7. Stash/Reflog/Patch 拆分 | 完成 | patch/discard/amend、stash/reflog/gc 均已迁移 |
+| 8. 收尾验证 | 完成 | 全量格式化、类型检查、测试和 diff 核对 |
 
 # 子任务清单
 
@@ -40,13 +40,13 @@ src-tauri/src/git/
 - [x] 阶段 1：把跨模块 helper 做最小可见性调整。
 - [x] 阶段 2：新增 `engine/diff.rs` 并迁移 diff/blob 相关方法。
 - [x] 阶段 3：新增 `engine/history.rs` 并迁移历史和 file history 相关方法。
-- [ ] 阶段 4：新增 `engine/refs.rs` 并迁移引用和提交操作相关方法。
-- [ ] 阶段 5：新增 `engine/remote.rs` 并迁移远程、clone、pull/push/fetch 相关方法。
+- [x] 阶段 4：新增 `engine/refs.rs` 并迁移引用和提交操作相关方法。
+- [x] 阶段 5：新增 `engine/remote.rs` 并迁移远程、clone、pull/push/fetch 相关方法。
 - [x] 阶段 6：新增 `engine/submodule.rs` 并迁移子模块相关方法。
-- [ ] 阶段 7：新增 `engine/stash_reflog.rs`、`engine/patch.rs` 并迁移剩余领域。
-- [ ] 阶段 8：清理 `engine.rs` 未使用 imports 和重复 helper。
-- [ ] 阶段 8：运行完整验证命令。
-- [ ] 阶段 8：核对 staged diff 只包含重构与本 plan。
+- [x] 阶段 7：新增 `engine/stash_reflog.rs`、`engine/patch.rs` 并迁移剩余领域。
+- [x] 阶段 8：清理 `engine.rs` 未使用 imports 和重复 helper。
+- [x] 阶段 8：运行完整验证命令。
+- [x] 阶段 8：核对 staged diff 只包含重构与本 plan。
 
 # 迁移映射
 
