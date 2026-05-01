@@ -589,22 +589,48 @@ impl GitEngine {
             let hunks: Vec<DiffHunk> = pending
                 .hunks
                 .into_iter()
-                .map(|h| DiffHunk {
-                    old_start: h.old_start,
-                    old_lines: h.old_lines,
-                    new_start: h.new_start,
-                    new_lines: h.new_lines,
-                    header: decode_with(enc, &h.header_bytes),
-                    lines: h
+                .map(|h| {
+                    let mut old_line = h.old_start;
+                    let mut new_line = h.new_start;
+                    let lines = h
                         .lines
                         .into_iter()
-                        .map(|l| DiffLine {
-                            origin: l.origin,
-                            content: decode_with(enc, &l.content_bytes),
-                            old_lineno: l.old_lineno,
-                            new_lineno: l.new_lineno,
+                        .map(|l| {
+                            let old_lineno = match l.origin {
+                                '+' => None,
+                                _ => l.old_lineno.or_else(|| line_number(old_line)),
+                            };
+                            let new_lineno = match l.origin {
+                                '-' => None,
+                                _ => l.new_lineno.or_else(|| line_number(new_line)),
+                            };
+
+                            match l.origin {
+                                '+' => new_line = new_line.saturating_add(1),
+                                '-' => old_line = old_line.saturating_add(1),
+                                _ => {
+                                    old_line = old_line.saturating_add(1);
+                                    new_line = new_line.saturating_add(1);
+                                }
+                            }
+
+                            DiffLine {
+                                origin: l.origin,
+                                content: decode_with(enc, &l.content_bytes),
+                                old_lineno,
+                                new_lineno,
+                            }
                         })
-                        .collect(),
+                        .collect();
+
+                    DiffHunk {
+                        old_start: h.old_start,
+                        old_lines: h.old_lines,
+                        new_start: h.new_start,
+                        new_lines: h.new_lines,
+                        header: decode_with(enc, &h.header_bytes),
+                        lines,
+                    }
                 })
                 .collect();
 
@@ -825,5 +851,37 @@ impl GitEngine {
             new_blob_oid: None,
             encoding: "UTF-8".to_owned(),
         }))
+    }
+}
+
+fn line_number(value: u32) -> Option<u32> {
+    if value == 0 {
+        None
+    } else {
+        Some(value)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::git::test_utils::TestRepo;
+    use std::fs;
+
+    #[test]
+    fn unstaged_untracked_file_diff_has_new_line_numbers() {
+        let test_repo = TestRepo::new();
+        fs::write(test_repo.dir.path().join("new.txt"), "one\ntwo\n").unwrap();
+
+        let diff = GitEngine::get_file_diff(test_repo.path_str(), "new.txt", false).unwrap();
+        let line_numbers = diff
+            .hunks
+            .iter()
+            .flat_map(|hunk| hunk.lines.iter())
+            .filter(|line| line.origin == '+')
+            .map(|line| line.new_lineno)
+            .collect::<Vec<_>>();
+
+        assert_eq!(line_numbers, vec![Some(1), Some(2)]);
     }
 }
