@@ -1,11 +1,14 @@
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRepoStore } from '@/stores/repos'
 import { useUiStore } from '@/stores/ui'
 import { useErrorsStore } from '@/stores/errors'
 import { useRepoOpsStore } from '@/stores/repoOps'
 import { useSettingsStore } from '@/stores/settings'
+import { usePluginsStore } from '@/stores/plugins'
+import { useWorkspaceStore } from '@/stores/workspace'
+import { useHistoryStore } from '@/stores/history'
 import { useShortcutsStore, bindingToLabel, type ShortcutActionId } from '@/stores/shortcuts'
 import { useGitCommands } from '@/composables/useGitCommands'
 import { useGlobalToast } from '@/composables/useGlobalToast'
@@ -23,6 +26,9 @@ const uiStore = useUiStore()
 const errorsStore = useErrorsStore()
 const repoOpsStore = useRepoOpsStore()
 const settingsStore = useSettingsStore()
+const pluginsStore = usePluginsStore()
+const workspaceStore = useWorkspaceStore()
+const historyStore = useHistoryStore()
 const shortcutsStore = useShortcutsStore()
 const git = useGitCommands()
 const { t } = useI18n()
@@ -39,6 +45,12 @@ const activeRepoPath = computed(() => repoStore.activeRepo()?.path)
 const activeRepoBranchScope = computed(() =>
   uiStore.getHistoryBranchScope(activeRepoPath.value),
 )
+
+onMounted(() => {
+  if (!pluginsStore.loaded) {
+    pluginsStore.load().catch(() => {})
+  }
+})
 
 // ── Search ──────────────────────────────────────────────────────────
 const searchInputEl = ref<HTMLInputElement | null>(null)
@@ -98,69 +110,91 @@ const actionsMenu = reactive({
 })
 const actionsBtnRef = ref<HTMLButtonElement | null>(null)
 
-const actionsMenuItems = computed<ContextMenuItem[]>(() => [
-  {
-    label:
-      (activeRepoBranchScope.value === 'current_first_parent' ? '✓ ' : '   ') +
-      t('toolbar.actionsMenu.soloCurrentBranch'),
-    action: 'toggle-current-first-parent',
-    disabled: !hasRepo.value,
-  },
-  {
-    label:
-      (uiStore.showRemoteBranches ? '✓ ' : '   ') +
-      t('toolbar.actionsMenu.showRemoteBranches'),
-    action: 'toggle-remote-branches',
-    disabled: !hasRepo.value,
-  },
-  { separator: true },
-  {
-    label:
-      (uiStore.showUnreachableCommits ? '✓ ' : '   ') +
-      t('toolbar.actionsMenu.showUnreachable'),
-    action: 'toggle-unreachable',
-    disabled: !hasRepo.value,
-  },
-  {
-    label: (uiStore.showStashCommits ? '✓ ' : '   ') + t('toolbar.actionsMenu.showStashes'),
-    action: 'toggle-stashes',
-    disabled: !hasRepo.value,
-  },
-  {
-    label: (uiStore.debugPanelVisible ? '✓ ' : '   ') + t('toolbar.actionsMenu.debugLog'),
-    action: 'toggle-debug',
-  },
-  { separator: true },
-  {
-    label: t('toolbar.actionsMenu.reflog'),
-    action: 'reflog',
-    disabled: !hasRepo.value,
-  },
-  {
-    label:
-      errorsStore.entries.length > 0
-        ? t('toolbar.actionsMenu.recentErrorsWithCount', { count: errorsStore.entries.length })
-        : t('toolbar.actionsMenu.recentErrors'),
-    action: 'error-history',
-    disabled: errorsStore.entries.length === 0,
-  },
-  {
-    label: busy.value.gc ? t('toolbar.actionsMenu.gcCleaning') : t('toolbar.actionsMenu.gc'),
-    action: 'gc',
-    disabled: !hasRepo.value || busy.value.gc,
-  },
-  { separator: true },
-  {
-    label: t('toolbar.actionsMenu.discardAll'),
-    action: 'discard-all',
-    disabled: !hasRepo.value,
-  },
-  { separator: true },
-  {
-    label: t('toolbar.actionsMenu.about'),
-    action: 'about',
-  },
-])
+const actionsMenuItems = computed<ContextMenuItem[]>(() => {
+  const items: ContextMenuItem[] = [
+    {
+      label:
+        (activeRepoBranchScope.value === 'current_first_parent' ? '✓ ' : '   ') +
+        t('toolbar.actionsMenu.soloCurrentBranch'),
+      action: 'toggle-current-first-parent',
+      disabled: !hasRepo.value,
+    },
+    {
+      label:
+        (uiStore.showRemoteBranches ? '✓ ' : '   ') +
+        t('toolbar.actionsMenu.showRemoteBranches'),
+      action: 'toggle-remote-branches',
+      disabled: !hasRepo.value,
+    },
+    { separator: true },
+    {
+      label:
+        (uiStore.showUnreachableCommits ? '✓ ' : '   ') +
+        t('toolbar.actionsMenu.showUnreachable'),
+      action: 'toggle-unreachable',
+      disabled: !hasRepo.value,
+    },
+    {
+      label: (uiStore.showStashCommits ? '✓ ' : '   ') + t('toolbar.actionsMenu.showStashes'),
+      action: 'toggle-stashes',
+      disabled: !hasRepo.value,
+    },
+    {
+      label: (uiStore.debugPanelVisible ? '✓ ' : '   ') + t('toolbar.actionsMenu.debugLog'),
+      action: 'toggle-debug',
+    },
+    { separator: true },
+    {
+      label: t('toolbar.actionsMenu.reflog'),
+      action: 'reflog',
+      disabled: !hasRepo.value,
+    },
+    {
+      label:
+        errorsStore.entries.length > 0
+          ? t('toolbar.actionsMenu.recentErrorsWithCount', { count: errorsStore.entries.length })
+          : t('toolbar.actionsMenu.recentErrors'),
+      action: 'error-history',
+      disabled: errorsStore.entries.length === 0,
+    },
+    {
+      label: busy.value.gc ? t('toolbar.actionsMenu.gcCleaning') : t('toolbar.actionsMenu.gc'),
+      action: 'gc',
+      disabled: !hasRepo.value || busy.value.gc,
+    },
+  ]
+
+  if (pluginsStore.toolbarCommands.length > 0) {
+    items.push(
+      { separator: true },
+      {
+        label: t('settings.plugins.actionGroup'),
+        children: pluginsStore.toolbarCommands.map((command) => ({
+          label: command.label,
+          action: `plugin:${command.plugin_id}:${command.command_id}`,
+          disabled: !hasRepo.value || pluginsStore.executing !== null,
+          title: command.description,
+        })),
+      },
+    )
+  }
+
+  items.push(
+    { separator: true },
+    {
+      label: t('toolbar.actionsMenu.discardAll'),
+      action: 'discard-all',
+      disabled: !hasRepo.value,
+    },
+    { separator: true },
+    {
+      label: t('toolbar.actionsMenu.about'),
+      action: 'about',
+    },
+  )
+
+  return items
+})
 
 function onActions() {
   if (actionsMenu.visible) {
@@ -179,6 +213,23 @@ async function onActionsSelect(action: string) {
   actionsMenu.visible = false
   const id = repoStore.activeRepoId
   if (!id) return
+  if (action.startsWith('plugin:')) {
+    const payload = action.slice('plugin:'.length)
+    const separator = payload.indexOf(':')
+    const pluginId = separator >= 0 ? payload.slice(0, separator) : ''
+    const commandId = separator >= 0 ? payload.slice(separator + 1) : ''
+    if (!pluginId || !commandId) return
+    try {
+      const result = await pluginsStore.execute(pluginId, commandId)
+      if (result.message) showToast('success', result.message)
+      if (result.refresh.includes('workspace')) await workspaceStore.refresh()
+      if (result.refresh.includes('history')) await historyStore.loadLog()
+      if (result.refresh.includes('branches')) await historyStore.loadBranches()
+    } catch {
+      // error toast handled globally
+    }
+    return
+  }
   switch (action) {
     case 'reflog':
       emit('show-reflog')

@@ -22,6 +22,11 @@ import type {
   RemoteInfo,
   LogBranchScope,
 } from '@/types/git'
+import type {
+  PluginCommandContext,
+  PluginCommandResult,
+  PluginInfo,
+} from '@/types/plugin'
 import { useErrorsStore } from '@/stores/errors'
 import { useDebugStore } from '@/stores/debug'
 
@@ -447,6 +452,33 @@ export function useGitCommands() {
   const setAutoFetchInterval = (secs: number) =>
     call<void>('set_auto_fetch_interval', { secs })
 
+  // ---- Plugins ----
+  const listPlugins = () =>
+    call<PluginInfo[]>('list_plugins')
+
+  const installPluginFromPath = (path: string) =>
+    call<PluginInfo>('install_plugin_from_path', { path })
+
+  const enablePlugin = (pluginId: string) =>
+    call<void>('enable_plugin', { pluginId })
+
+  const disablePlugin = (pluginId: string) =>
+    call<void>('disable_plugin', { pluginId })
+
+  const uninstallPlugin = (pluginId: string) =>
+    call<void>('uninstall_plugin', { pluginId })
+
+  const executePluginCommand = (
+    pluginId: string,
+    commandId: string,
+    context: PluginCommandContext,
+  ) =>
+    call<PluginCommandResult>('execute_plugin_command', {
+      pluginId,
+      commandId,
+      context,
+    })
+
   // ---- Terminal (in-app PTY) ----
   const terminalSpawn = (repoId: string, cols: number, rows: number) =>
     call<string>('terminal_spawn', { repoId, cols, rows })
@@ -559,6 +591,12 @@ export function useGitCommands() {
     getBuildInfo,
     listSystemFonts,
     setAutoFetchInterval,
+    listPlugins,
+    installPluginFromPath,
+    enablePlugin,
+    disablePlugin,
+    uninstallPlugin,
+    executePluginCommand,
     terminalSpawn,
     terminalWrite,
     terminalResize,

@@ -56,6 +56,12 @@ GitUI 采用 Tauri v2 的 IPC 机制实现前后端通信，包括双向的请�
 - `set_auto_fetch_interval`：运行时调整后台自动 fetch 间隔，传入秒数；`0` 表示禁用。
 - `get_build_info`：获取应用版本与元数据。
 
+### 插件 (Plugins)
+- `list_plugins`：扫描应用数据目录下的本地插件，返回 manifest、启用状态与安装路径。
+- `install_plugin_from_path`：从本地目录安装插件，要求目录内存在 `plugin.json`。
+- `enable_plugin` / `disable_plugin` / `uninstall_plugin`：管理本地插件生命周期。
+- `execute_plugin_command`：执行插件贡献的命令，传入当前仓库上下文与可选选择信息，返回消息与刷新域。
+
 ## 事件通道 (Events)
 
 | 事件名 | 含义 | 触发时机 |

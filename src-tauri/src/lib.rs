@@ -12,8 +12,8 @@ mod watcher;
 use auto_fetch::AutoFetchService;
 use commands::system::StartupRepo;
 use commands::{
-    branch::*, commit::*, diff::*, log::*, merge_rebase::*, remote::*, repo::*, stash::*,
-    status::*, submodule::*, system::*, tag::*, terminal::*,
+    branch::*, commit::*, diff::*, log::*, merge_rebase::*, plugin::*, remote::*, repo::*,
+    stash::*, status::*, submodule::*, system::*, tag::*, terminal::*,
 };
 use repo_manager::RepoManager;
 use tauri::{Manager, WindowEvent};
@@ -160,6 +160,13 @@ pub fn run() {
             get_build_info,
             list_system_fonts,
             set_auto_fetch_interval,
+            // Plugins
+            list_plugins,
+            install_plugin_from_path,
+            enable_plugin,
+            disable_plugin,
+            uninstall_plugin,
+            execute_plugin_command,
             // Terminal
             terminal_spawn,
             terminal_write,

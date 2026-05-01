@@ -3,6 +3,7 @@ pub mod commit;
 pub mod diff;
 pub mod log;
 pub mod merge_rebase;
+pub mod plugin;
 pub mod remote;
 pub mod repo;
 pub mod stash;
