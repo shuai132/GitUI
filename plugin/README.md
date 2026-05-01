@@ -78,6 +78,7 @@ Every plugin has a `plugin.json` file:
 ### Backend
 
 `backend.command` is executed with `backend.args` in the installed plugin folder.
+Use an absolute path when possible. Packaged desktop apps may not inherit the same PATH as a terminal-launched dev process; GitUI will try to resolve command names through the user's shell when a command is not found.
 
 ```json
 {

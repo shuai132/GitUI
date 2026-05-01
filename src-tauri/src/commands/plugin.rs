@@ -1,9 +1,11 @@
 use std::{
     collections::HashMap,
+    env,
+    ffi::{OsStr, OsString},
     fs,
-    io::Write,
+    io::{self, Write},
     path::{Path, PathBuf},
-    process::{Command, Stdio},
+    process::{Child, Command, Stdio},
 };
 
 use serde::{Deserialize, Serialize};
@@ -415,16 +417,13 @@ fn run_backend_command(
         },
     });
 
-    let mut child = Command::new(&backend.command)
-        .args(&backend.args)
-        .current_dir(plugin_dir)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(|e| {
-            GitError::OperationFailed(format!("插件后端启动失败 {}: {e}", backend.command))
-        })?;
+    let mut child = spawn_backend_child(backend, plugin_dir).map_err(|e| {
+        GitError::OperationFailed(format!(
+            "插件后端启动失败 {}: {}",
+            backend.command,
+            format_backend_spawn_error(&e)
+        ))
+    })?;
 
     if let Some(stdin) = child.stdin.as_mut() {
         stdin.write_all(request.to_string().as_bytes())?;
@@ -466,9 +465,98 @@ fn run_backend_command(
     })
 }
 
+fn spawn_backend_child(backend: &PluginBackend, plugin_dir: &Path) -> io::Result<Child> {
+    let first_result = build_backend_command(&backend.command, backend, plugin_dir).spawn();
+
+    match first_result {
+        Ok(child) => Ok(child),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {
+            if let Some(resolved) = resolve_backend_command(&backend.command) {
+                return build_backend_command(resolved, backend, plugin_dir).spawn();
+            }
+            Err(error)
+        }
+        Err(error) => Err(error),
+    }
+}
+
+fn build_backend_command<S>(command: S, backend: &PluginBackend, plugin_dir: &Path) -> Command
+where
+    S: AsRef<OsStr>,
+{
+    let mut child = Command::new(command);
+    child
+        .args(&backend.args)
+        .current_dir(plugin_dir)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    child
+}
+
+fn resolve_backend_command(command: &str) -> Option<PathBuf> {
+    let command_path = Path::new(command);
+    if command_path.is_absolute() || command_path.components().count() > 1 {
+        return None;
+    }
+
+    find_command_in_path(command, env::var_os("PATH"))
+        .or_else(|| resolve_command_with_user_shell(command))
+}
+
+fn find_command_in_path(command: &str, path_env: Option<OsString>) -> Option<PathBuf> {
+    let path_env = path_env?;
+    env::split_paths(&path_env)
+        .map(|dir| dir.join(command))
+        .find(|candidate| candidate.is_file())
+}
+
+#[cfg(unix)]
+fn resolve_command_with_user_shell(command: &str) -> Option<PathBuf> {
+    let shell = env::var_os("SHELL")
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| OsString::from("/bin/zsh"));
+
+    let output = Command::new(shell)
+        .arg("-ic")
+        .arg("command -v -- \"$1\"")
+        .arg("_")
+        .arg(command)
+        .stdin(Stdio::null())
+        .stderr(Stdio::null())
+        .output()
+        .ok()?;
+
+    if !output.status.success() {
+        return None;
+    }
+
+    String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .map(str::trim)
+        .map(PathBuf::from)
+        .find(|candidate| candidate.is_absolute() && candidate.is_file())
+}
+
+#[cfg(not(unix))]
+fn resolve_command_with_user_shell(_command: &str) -> Option<PathBuf> {
+    None
+}
+
+fn format_backend_spawn_error(error: &io::Error) -> String {
+    if error.kind() == io::ErrorKind::NotFound {
+        format!(
+            "{error}. release 应用可能无法读取终端 PATH；请在 plugin.json 使用后端命令绝对路径，或把命令加入系统 PATH"
+        )
+    } else {
+        error.to_string()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::{env, ffi::OsString, fs};
 
     fn base_manifest() -> PluginManifest {
         PluginManifest {
@@ -502,6 +590,25 @@ mod tests {
         let mut manifest = base_manifest();
         manifest.id = "../bad".to_string();
         assert!(validate_manifest(&manifest).is_err());
+    }
+
+    #[test]
+    fn finds_backend_command_in_supplied_path() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let executable = temp_dir.path().join("demo-command");
+        fs::write(&executable, "").unwrap();
+
+        let path_env = env::join_paths([temp_dir.path()]).unwrap();
+
+        assert_eq!(
+            find_command_in_path("demo-command", Some(path_env)),
+            Some(executable)
+        );
+    }
+
+    #[test]
+    fn does_not_find_backend_command_without_path_entries() {
+        assert!(find_command_in_path("demo-command", Some(OsString::new())).is_none());
     }
 
     #[test]
