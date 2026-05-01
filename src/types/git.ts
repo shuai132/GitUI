@@ -31,6 +31,15 @@ export interface WorkspaceStatus {
   repo_state: RepoState
 }
 
+export type DocumentTextSource =
+  | { kind: 'blob'; oid: string; path: string }
+  | { kind: 'worktree'; rel_path: string }
+
+export interface DocumentText {
+  text: string
+  truncated: boolean
+}
+
 export type RepoStateKind =
   | 'clean'
   | 'merge'

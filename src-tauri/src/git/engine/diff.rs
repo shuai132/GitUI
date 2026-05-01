@@ -1,6 +1,11 @@
 use base64::prelude::{Engine as _, BASE64_STANDARD};
 use git2::{AttrCheckFlags, DiffFormat, DiffOptions, Repository};
-use std::path::Path;
+use quick_xml::{events::Event, Reader};
+use std::{
+    io::{Cursor, Read},
+    path::Path,
+};
+use zip::ZipArchive;
 
 use crate::git::{
     encoding::{decode_with, detect_file_encoding},
@@ -9,6 +14,8 @@ use crate::git::{
 };
 
 use super::{build_commit_info, GitEngine, LARGE_BLOB_THRESHOLD_BYTES, MAX_PREVIEW_BYTES};
+
+const MAX_DOCUMENT_TEXT_CHARS: usize = 250_000;
 
 impl GitEngine {
     pub(super) fn add_tree_change_stats(
@@ -789,6 +796,86 @@ impl GitEngine {
         })
     }
 
+    pub fn extract_document_text(
+        path: &str,
+        source: &DocumentTextSource,
+    ) -> GitResult<DocumentText> {
+        let (bytes, display_path, source_truncated) =
+            Self::read_document_source_bytes(path, source)?;
+        if source_truncated {
+            return Ok(DocumentText {
+                text: String::new(),
+                truncated: true,
+            });
+        }
+
+        let ext = Path::new(&display_path)
+            .extension()
+            .and_then(|s| s.to_str())
+            .unwrap_or("")
+            .to_ascii_lowercase();
+
+        let text = match ext.as_str() {
+            "pdf" => extract_pdf_text(&bytes)?,
+            "docx" => extract_docx_text(&bytes)?,
+            _ => {
+                return Err(GitError::OperationFailed(format!(
+                    "unsupported document type: {}",
+                    display_path
+                )))
+            }
+        };
+
+        let (text, truncated) = truncate_document_text(text);
+        Ok(DocumentText {
+            text,
+            truncated: truncated || source_truncated,
+        })
+    }
+
+    fn read_document_source_bytes(
+        path: &str,
+        source: &DocumentTextSource,
+    ) -> GitResult<(Vec<u8>, String, bool)> {
+        match source {
+            DocumentTextSource::Blob {
+                oid,
+                path: display_path,
+            } => {
+                let repo = Self::open(path)?;
+                let oid = git2::Oid::from_str(oid)
+                    .map_err(|e| GitError::OperationFailed(e.message().to_string()))?;
+                let blob = repo.find_blob(oid)?;
+                if blob.size() as u64 > MAX_PREVIEW_BYTES {
+                    return Ok((Vec::new(), display_path.clone(), true));
+                }
+                Ok((blob.content().to_vec(), display_path.clone(), false))
+            }
+            DocumentTextSource::Worktree { rel_path } => {
+                let repo_root = Path::new(path)
+                    .canonicalize()
+                    .map_err(|e| GitError::OperationFailed(format!("canonicalize repo: {}", e)))?;
+                let full = repo_root.join(rel_path);
+                let full_canon = full
+                    .canonicalize()
+                    .map_err(|e| GitError::OperationFailed(format!("file not found: {}", e)))?;
+                if !full_canon.starts_with(&repo_root) {
+                    return Err(GitError::OperationFailed(
+                        "path escapes repository root".to_string(),
+                    ));
+                }
+                let meta = std::fs::metadata(&full_canon)
+                    .map_err(|e| GitError::OperationFailed(format!("stat file: {}", e)))?;
+                if meta.len() > MAX_PREVIEW_BYTES {
+                    return Ok((Vec::new(), rel_path.clone(), true));
+                }
+                let bytes = std::fs::read(&full_canon)
+                    .map_err(|e| GitError::OperationFailed(format!("read file: {}", e)))?;
+                Ok((bytes, rel_path.clone(), false))
+            }
+        }
+    }
+
     pub fn get_file_diff_at_commit(
         path: &str,
         file_path: &str,
@@ -862,11 +949,113 @@ fn line_number(value: u32) -> Option<u32> {
     }
 }
 
+fn extract_pdf_text(bytes: &[u8]) -> GitResult<String> {
+    let document = lopdf::Document::load_mem(bytes)
+        .map_err(|e| GitError::OperationFailed(format!("read pdf: {}", e)))?;
+    let pages: Vec<u32> = document.get_pages().keys().copied().collect();
+    document
+        .extract_text(&pages)
+        .map_err(|e| GitError::OperationFailed(format!("extract pdf text: {}", e)))
+}
+
+fn extract_docx_text(bytes: &[u8]) -> GitResult<String> {
+    let cursor = Cursor::new(bytes);
+    let mut archive = ZipArchive::new(cursor)
+        .map_err(|e| GitError::OperationFailed(format!("read docx: {}", e)))?;
+    let mut document_xml = String::new();
+    archive
+        .by_name("word/document.xml")
+        .map_err(|e| GitError::OperationFailed(format!("read docx document: {}", e)))?
+        .read_to_string(&mut document_xml)
+        .map_err(|e| GitError::OperationFailed(format!("decode docx document: {}", e)))?;
+
+    let mut reader = Reader::from_str(&document_xml);
+    reader.config_mut().trim_text(false);
+    let mut buf = Vec::new();
+    let mut text = String::new();
+    let mut in_text = false;
+
+    loop {
+        match reader.read_event_into(&mut buf) {
+            Ok(Event::Start(e)) => {
+                if xml_local_name(e.name().as_ref()) == b"t" {
+                    in_text = true;
+                }
+            }
+            Ok(Event::End(e)) => match xml_local_name(e.name().as_ref()) {
+                b"t" => in_text = false,
+                b"p" => push_newline_once(&mut text),
+                _ => {}
+            },
+            Ok(Event::Empty(e)) => match xml_local_name(e.name().as_ref()) {
+                b"tab" => text.push('\t'),
+                b"br" | b"cr" => push_newline_once(&mut text),
+                _ => {}
+            },
+            Ok(Event::Text(e)) if in_text => {
+                let decoded = e.decode().map_err(|err| {
+                    GitError::OperationFailed(format!("decode docx text: {}", err))
+                })?;
+                text.push_str(&decoded);
+            }
+            Ok(Event::GeneralRef(e)) if in_text => {
+                if let Some(ch) = e.resolve_char_ref().map_err(|err| {
+                    GitError::OperationFailed(format!("resolve docx text entity: {}", err))
+                })? {
+                    text.push(ch);
+                } else {
+                    let entity = e.decode().map_err(|err| {
+                        GitError::OperationFailed(format!("decode docx text entity: {}", err))
+                    })?;
+                    if let Some(value) = quick_xml::escape::resolve_predefined_entity(&entity) {
+                        text.push_str(value);
+                    } else {
+                        text.push('&');
+                        text.push_str(&entity);
+                        text.push(';');
+                    }
+                }
+            }
+            Ok(Event::Eof) => break,
+            Ok(_) => {}
+            Err(e) => {
+                return Err(GitError::OperationFailed(format!(
+                    "parse docx document: {}",
+                    e
+                )))
+            }
+        }
+        buf.clear();
+    }
+
+    Ok(text.trim_end_matches('\n').to_string())
+}
+
+fn xml_local_name(name: &[u8]) -> &[u8] {
+    name.rsplit(|b| *b == b':').next().unwrap_or(name)
+}
+
+fn push_newline_once(text: &mut String) {
+    if !text.ends_with('\n') {
+        text.push('\n');
+    }
+}
+
+fn truncate_document_text(text: String) -> (String, bool) {
+    if text.chars().count() <= MAX_DOCUMENT_TEXT_CHARS {
+        return (text, false);
+    }
+
+    let truncated: String = text.chars().take(MAX_DOCUMENT_TEXT_CHARS).collect();
+    (truncated, true)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::git::test_utils::TestRepo;
-    use std::fs;
+    use std::{fs, io::Write};
+    use zip::{write::SimpleFileOptions, ZipWriter};
 
     #[test]
     fn unstaged_untracked_file_diff_has_new_line_numbers() {
@@ -883,5 +1072,32 @@ mod tests {
             .collect::<Vec<_>>();
 
         assert_eq!(line_numbers, vec![Some(1), Some(2)]);
+    }
+
+    #[test]
+    fn docx_text_extraction_reads_paragraphs_tabs_and_breaks() {
+        let xml = r#"
+            <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+              <w:body>
+                <w:p><w:r><w:t>Hello</w:t></w:r><w:r><w:tab/></w:r><w:r><w:t>World</w:t></w:r></w:p>
+                <w:p><w:r><w:t>Line</w:t></w:r><w:r><w:br/></w:r><w:r><w:t>Two &amp; Three</w:t></w:r></w:p>
+              </w:body>
+            </w:document>
+        "#;
+        let bytes = docx_bytes(xml);
+
+        let text = extract_docx_text(&bytes).unwrap();
+
+        assert_eq!(text, "Hello\tWorld\nLine\nTwo & Three");
+    }
+
+    fn docx_bytes(document_xml: &str) -> Vec<u8> {
+        let cursor = Cursor::new(Vec::new());
+        let mut writer = ZipWriter::new(cursor);
+        writer
+            .start_file("word/document.xml", SimpleFileOptions::default())
+            .unwrap();
+        writer.write_all(document_xml.as_bytes()).unwrap();
+        writer.finish().unwrap().into_inner()
     }
 }

@@ -566,6 +566,13 @@ const messages = {
       tooLarge: 'File too large ({size}), preview unavailable',
       loadFailed: 'Load failed: {detail}',
     },
+    document: {
+      extractedTextDiff: 'Extracted text diff',
+      noText: 'No extractable text',
+      textTruncated: 'Text truncated',
+      previewTooLarge: 'Document too large, preview unavailable',
+      loadFailed: 'Load failed: {detail}',
+    },
   },
   terminal: {
     close: 'Close Terminal',

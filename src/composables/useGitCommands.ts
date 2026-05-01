@@ -9,6 +9,8 @@ import type {
   FileDiff,
   FileBlame,
   BlobData,
+  DocumentText,
+  DocumentTextSource,
   BranchInfo,
   SubmoduleInfo,
   StashEntry,
@@ -270,6 +272,9 @@ export function useGitCommands() {
 
   const readWorktreeFile = (repoId: string, relPath: string, silent = false) =>
     call<BlobData>('read_worktree_file', { repoId, relPath }, { silent })
+
+  const extractDocumentText = (repoId: string, source: DocumentTextSource, silent = false) =>
+    call<DocumentText>('extract_document_text', { repoId, source }, { silent })
 
   const getFileDiffAtCommit = (repoId: string, filePath: string, oid: string) =>
     call<FileDiff>('get_file_diff_at_commit', { repoId, filePath, oid })
@@ -540,6 +545,7 @@ export function useGitCommands() {
     getFileDiff,
     getBlobBytes,
     readWorktreeFile,
+    extractDocumentText,
     getFileDiffAtCommit,
     getFileBlame,
     listBranches,

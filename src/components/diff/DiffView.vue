@@ -5,6 +5,7 @@ import type { FileDiff, FileStatusKind } from '@/types/git'
 import SideBySideDiff from './SideBySideDiff.vue'
 import InlineDiff from './InlineDiff.vue'
 import ImageDiff from './ImageDiff.vue'
+import DocumentDiff from './DocumentDiff.vue'
 import ConflictView from './ConflictView.vue'
 import DiffToolbar from './DiffToolbar.vue'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
@@ -72,6 +73,11 @@ const isImageView = computed(() => {
   if (previewKind.value === 'raster') return true
   if (previewKind.value === 'svg' && !svgTextMode.value) return true
   return false
+})
+
+const documentKind = computed<'pdf' | 'docx' | null>(() => {
+  if (previewKind.value === 'pdf' || previewKind.value === 'docx') return previewKind.value
+  return null
 })
 
 interface DiffScrollAnchor {
@@ -345,8 +351,15 @@ function fallbackDiffIdentityKey(diff: FileDiff | null): string | null {
 
     <!-- Diff body -->
     <div class="diff-body">
+      <DocumentDiff
+        v-if="documentKind && diff && repoId"
+        :diff="diff"
+        :repo-id="repoId"
+        :document-kind="documentKind"
+        :wip="wip ?? null"
+      />
       <ImageDiff
-        v-if="isImageView && diff && repoId"
+        v-else-if="isImageView && diff && repoId"
         :diff="diff"
         :repo-id="repoId"
         :wip="wip ?? null"

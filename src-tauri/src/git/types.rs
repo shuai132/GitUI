@@ -49,6 +49,19 @@ pub struct WorkspaceStatus {
     pub repo_state: RepoState,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum DocumentTextSource {
+    Blob { oid: String, path: String },
+    Worktree { rel_path: String },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DocumentText {
+    pub text: String,
+    pub truncated: bool,
+}
+
 /// 仓库当前所处的"状态"：clean / merge 中 / rebase 中 / cherry-pick 中 / 等等。
 /// 来源：libgit2 `Repository::state()` + 读取 `.git/` 下的中间文件。
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

@@ -103,6 +103,7 @@ pub fn run() {
             get_file_diff,
             get_blob_bytes,
             read_worktree_file,
+            extract_document_text,
             get_file_diff_at_commit,
             get_file_blame,
             // Branch

@@ -4,7 +4,7 @@ use crate::{
     git::{
         engine::GitEngine,
         error::GitError,
-        types::{BlobData, FileBlame, FileDiff},
+        types::{BlobData, DocumentText, DocumentTextSource, FileBlame, FileDiff},
     },
     repo_manager::RepoManager,
 };
@@ -44,6 +44,18 @@ pub async fn read_worktree_file(
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
     GitEngine::read_worktree_file(&meta.path, &rel_path)
+}
+
+#[tauri::command]
+pub async fn extract_document_text(
+    repo_id: String,
+    source: DocumentTextSource,
+    repo_manager: State<'_, RepoManager>,
+) -> Result<DocumentText, GitError> {
+    let meta = repo_manager
+        .get_meta(&repo_id)
+        .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
+    GitEngine::extract_document_text(&meta.path, &source)
 }
 
 #[tauri::command]

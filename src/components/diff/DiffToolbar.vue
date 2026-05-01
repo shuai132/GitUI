@@ -4,8 +4,7 @@ import type { FileDiff } from '@/types/git'
 import { useUiStore } from '@/stores/ui'
 import { useShortcutsStore, bindingToLabel, type ShortcutActionId } from '@/stores/shortcuts'
 import { useDiffSearch } from '@/composables/diff/useDiffSearch'
-
-type PreviewKind = 'raster' | 'svg' | null
+import type { PreviewKind } from '@/lib/preview'
 
 defineProps<{
   diff: FileDiff

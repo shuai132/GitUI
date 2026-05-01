@@ -565,6 +565,13 @@ const messages = {
       tooLarge: '文件过大（{size}），无法预览',
       loadFailed: '加载失败：{detail}',
     },
+    document: {
+      extractedTextDiff: '提取文本 diff',
+      noText: '没有可提取文本',
+      textTruncated: '文本已截断',
+      previewTooLarge: '文档过大，无法预览',
+      loadFailed: '加载失败：{detail}',
+    },
   },
   terminal: {
     close: '关闭终端',
