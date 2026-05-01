@@ -6,6 +6,7 @@ use std::{
     io::{self, Write},
     path::{Path, PathBuf},
     process::{Child, Command, Stdio},
+    sync::{Mutex, OnceLock},
 };
 
 use serde::{Deserialize, Serialize};
@@ -17,6 +18,7 @@ use crate::git::error::GitError;
 const MANIFEST_FILE: &str = "plugin.json";
 const STATE_FILE: &str = "plugin-state.json";
 const SUPPORTED_API_VERSION: u32 = 1;
+static BACKEND_COMMAND_CACHE: OnceLock<Mutex<HashMap<String, PathBuf>>> = OnceLock::new();
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PluginBackend {
@@ -466,12 +468,23 @@ fn run_backend_command(
 }
 
 fn spawn_backend_child(backend: &PluginBackend, plugin_dir: &Path) -> io::Result<Child> {
+    if let Some(resolved) = cached_backend_command(&backend.command) {
+        match build_backend_command(&resolved, backend, plugin_dir).spawn() {
+            Ok(child) => return Ok(child),
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {
+                forget_backend_command(&backend.command);
+            }
+            Err(error) => return Err(error),
+        }
+    }
+
     let first_result = build_backend_command(&backend.command, backend, plugin_dir).spawn();
 
     match first_result {
         Ok(child) => Ok(child),
         Err(error) if error.kind() == io::ErrorKind::NotFound => {
             if let Some(resolved) = resolve_backend_command(&backend.command) {
+                remember_backend_command(&backend.command, resolved.clone());
                 return build_backend_command(resolved, backend, plugin_dir).spawn();
             }
             Err(error)
@@ -501,6 +514,7 @@ fn resolve_backend_command(command: &str) -> Option<PathBuf> {
     }
 
     find_command_in_path(command, env::var_os("PATH"))
+        .or_else(|| find_command_in_nvm(command))
         .or_else(|| resolve_command_with_user_shell(command))
 }
 
@@ -509,6 +523,43 @@ fn find_command_in_path(command: &str, path_env: Option<OsString>) -> Option<Pat
     env::split_paths(&path_env)
         .map(|dir| dir.join(command))
         .find(|candidate| candidate.is_file())
+}
+
+fn find_command_in_nvm(command: &str) -> Option<PathBuf> {
+    let versions_dir = env::var_os("NVM_DIR")
+        .map(PathBuf::from)
+        .or_else(|| env::var_os("HOME").map(|home| PathBuf::from(home).join(".nvm")))?
+        .join("versions")
+        .join("node");
+
+    find_command_in_nvm_versions_dir(command, &versions_dir)
+}
+
+fn find_command_in_nvm_versions_dir(command: &str, versions_dir: &Path) -> Option<PathBuf> {
+    let mut candidates = Vec::new();
+    for entry in fs::read_dir(versions_dir).ok()? {
+        let entry = entry.ok()?;
+        let Some(version) = parse_nvm_node_version(&entry.file_name().to_string_lossy()) else {
+            continue;
+        };
+        let candidate = entry.path().join("bin").join(command);
+        if candidate.is_file() {
+            candidates.push((version, candidate));
+        }
+    }
+
+    candidates
+        .into_iter()
+        .max_by_key(|(version, _)| *version)
+        .map(|(_, path)| path)
+}
+
+fn parse_nvm_node_version(value: &str) -> Option<(u64, u64, u64)> {
+    let mut parts = value.strip_prefix('v')?.split('.');
+    let major = parts.next()?.parse().ok()?;
+    let minor = parts.next().unwrap_or("0").parse().ok()?;
+    let patch = parts.next().unwrap_or("0").parse().ok()?;
+    Some((major, minor, patch))
 }
 
 #[cfg(unix)]
@@ -550,6 +601,26 @@ fn format_backend_spawn_error(error: &io::Error) -> String {
         )
     } else {
         error.to_string()
+    }
+}
+
+fn backend_command_cache() -> &'static Mutex<HashMap<String, PathBuf>> {
+    BACKEND_COMMAND_CACHE.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+fn cached_backend_command(command: &str) -> Option<PathBuf> {
+    backend_command_cache().lock().ok()?.get(command).cloned()
+}
+
+fn remember_backend_command(command: &str, resolved: PathBuf) {
+    if let Ok(mut cache) = backend_command_cache().lock() {
+        cache.insert(command.to_string(), resolved);
+    }
+}
+
+fn forget_backend_command(command: &str) {
+    if let Ok(mut cache) = backend_command_cache().lock() {
+        cache.remove(command);
     }
 }
 
@@ -609,6 +680,44 @@ mod tests {
     #[test]
     fn does_not_find_backend_command_without_path_entries() {
         assert!(find_command_in_path("demo-command", Some(OsString::new())).is_none());
+    }
+
+    #[test]
+    fn finds_latest_nvm_backend_command() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let old_bin = temp_dir.path().join("v20.1.0").join("bin");
+        let new_bin = temp_dir.path().join("v24.15.0").join("bin");
+        fs::create_dir_all(&old_bin).unwrap();
+        fs::create_dir_all(&new_bin).unwrap();
+        fs::write(old_bin.join("node"), "").unwrap();
+        fs::write(new_bin.join("node"), "").unwrap();
+
+        assert_eq!(
+            find_command_in_nvm_versions_dir("node", temp_dir.path()),
+            Some(new_bin.join("node"))
+        );
+    }
+
+    #[test]
+    fn parses_nvm_node_versions_numerically() {
+        assert_eq!(parse_nvm_node_version("v24.15.0"), Some((24, 15, 0)));
+        assert_eq!(parse_nvm_node_version("v9.99.99"), Some((9, 99, 99)));
+        assert!(parse_nvm_node_version("system").is_none());
+    }
+
+    #[test]
+    fn caches_resolved_backend_command() {
+        let command = "gitui-test-cached-command";
+        let resolved = PathBuf::from("/tmp/gitui-test-cached-command");
+
+        forget_backend_command(command);
+        assert!(cached_backend_command(command).is_none());
+
+        remember_backend_command(command, resolved.clone());
+        assert_eq!(cached_backend_command(command), Some(resolved));
+
+        forget_backend_command(command);
+        assert!(cached_backend_command(command).is_none());
     }
 
     #[test]
