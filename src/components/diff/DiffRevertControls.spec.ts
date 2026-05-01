@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { mount } from '@vue/test-utils'
+import { nextTick } from 'vue'
 import { describe, expect, it } from 'vitest'
 import { i18n } from '@/i18n'
 import type { DiffHunk, FileDiff } from '@/types/git'
@@ -127,10 +128,59 @@ describe('diff hunk rollback controls', () => {
   })
 })
 
-function fileDiff(hunks: DiffHunk[] = [changedLineHunk()]): FileDiff {
+describe('diff scroll reset', () => {
+  it('resets inline scroll when switching diff identity', async () => {
+    const wrapper = mount(InlineDiff, {
+      props: {
+        diff: fileDiff(),
+        groupByHunk: true,
+        scrollResetKey: 'file-a',
+      },
+      global: { plugins: [i18n] },
+    })
+
+    const scroll = wrapper.find<HTMLElement>('.inline-scroll').element
+    scroll.scrollTop = 120
+    scroll.scrollLeft = 30
+
+    await wrapper.setProps({ scrollResetKey: 'file-b', diff: fileDiff('other.txt') })
+    await nextTick()
+
+    expect(scroll.scrollTop).toBe(0)
+    expect(scroll.scrollLeft).toBe(0)
+  })
+
+  it('resets side-by-side scroll when switching diff identity', async () => {
+    const wrapper = mount(SideBySideDiff, {
+      props: {
+        diff: fileDiff(),
+        groupByHunk: true,
+        scrollResetKey: 'file-a',
+      },
+      global: { plugins: [i18n] },
+    })
+
+    const body = wrapper.find<HTMLElement>('.sbs-body').element
+    const panes = wrapper.findAll<HTMLElement>('.pane-scroll')
+    body.scrollTop = 120
+    panes[0].element.scrollLeft = 30
+    panes[1].element.scrollLeft = 30
+
+    await wrapper.setProps({ scrollResetKey: 'file-b', diff: fileDiff('other.txt') })
+    await nextTick()
+
+    expect(body.scrollTop).toBe(0)
+    expect(panes[0].element.scrollLeft).toBe(0)
+    expect(panes[1].element.scrollLeft).toBe(0)
+  })
+})
+
+function fileDiff(pathOrHunks: string | DiffHunk[] = [changedLineHunk()]): FileDiff {
+  const path = typeof pathOrHunks === 'string' ? pathOrHunks : 'file.txt'
+  const hunks = typeof pathOrHunks === 'string' ? [changedLineHunk()] : pathOrHunks
   return {
-    old_path: 'file.txt',
-    new_path: 'file.txt',
+    old_path: path,
+    new_path: path,
     is_binary: false,
     hunks,
     additions: 1,

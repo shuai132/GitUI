@@ -21,6 +21,8 @@ const props = defineProps<{
   diff: FileDiff | null
   loading?: boolean
   repoId?: string
+  /** 当前 diff 的 UI 身份；变化时视为切换到另一个文件/提交上下文。 */
+  diffIdentityKey?: string | null
   /** WIP 场景传入；提交详情传 null 或不传 */
   wip?: { staged: boolean; status?: FileStatusKind } | null
   /** 当前选中文件是冲突文件时的路径。非空则切换到冲突解决视图 */
@@ -85,6 +87,7 @@ const diffRef = ref<{
   scrollToLine: (anchor: DiffScrollAnchor) => void
 } | null>(null)
 const pendingScrollAnchor = ref<DiffScrollAnchor | null>(null)
+const activeDiffIdentityKey = computed(() => props.diffIdentityKey ?? fallbackDiffIdentityKey(props.diff))
 
 function onNextChange() {
   diffRef.value?.goNextChange()
@@ -102,6 +105,11 @@ watch(
     void restorePendingScrollAnchor()
   },
 )
+
+watch(activeDiffIdentityKey, (next, prev) => {
+  if (next === prev) return
+  pendingScrollAnchor.value = null
+})
 
 watch(
   () => fullFileContent.value,
@@ -298,6 +306,16 @@ function normalizeTextDecoderLabel(encoding: string): string {
   if (encoding.toUpperCase() === 'UTF-8 BOM') return 'utf-8'
   return encoding
 }
+
+function fallbackDiffIdentityKey(diff: FileDiff | null): string | null {
+  if (!diff) return null
+  return [
+    props.repoId ?? '',
+    props.wip ? (props.wip.staged ? 'wip:staged' : 'wip:unstaged') : 'commit',
+    diff.old_path ?? '',
+    diff.new_path ?? '',
+  ].join('\u0000')
+}
 </script>
 
 <template>
@@ -342,6 +360,7 @@ function normalizeTextDecoderLabel(encoding: string): string {
         :syntax-lang-for-line="syntaxLangForLine"
         :full-file-content="fullFileContent"
         :group-by-hunk="uiStore.diffGroupByHunk"
+        :scroll-reset-key="activeDiffIdentityKey"
         :hunk-action-label="hunkActionLabel"
         :hunk-discard-label="hunkDiscardLabel"
         @hunk-action="onHunkAction"
@@ -356,6 +375,7 @@ function normalizeTextDecoderLabel(encoding: string): string {
         :syntax-lang="syntaxLang"
         :syntax-lang-for-line="syntaxLangForLine"
         :full-file-content="fullFileContent"
+        :scroll-reset-key="activeDiffIdentityKey"
         :hunk-action-label="hunkActionLabel"
         :hunk-discard-label="hunkDiscardLabel"
         @hunk-action="onHunkAction"

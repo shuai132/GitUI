@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { FileDiff } from '@/types/git'
 import { highlightLine } from '@/lib/highlight'
@@ -20,6 +20,8 @@ const props = defineProps<{
   syntaxLangForLine?: SyntaxLangResolver | null
   /** inline 连续模式使用的完整旧 / 新文件内容；为空时回退到 hunk-only。 */
   fullFileContent?: FullFileContent | null
+  /** 变化时重置当前 diff 滚动位置，用于切换到另一个文件/提交上下文。 */
+  scrollResetKey?: string | null
   /** 按 hunk 分组时展示的 hunk 操作文案；为空则不展示操作入口。 */
   hunkActionLabel?: string | null
   /** 按 hunk 分组时展示的 hunk 放弃操作文案；为空则不展示操作入口。 */
@@ -148,6 +150,16 @@ watch(rows, () => {
   currentChangeIdx.value = -1
 })
 
+watch(
+  () => props.scrollResetKey,
+  async (next, prev) => {
+    if (next === prev) return
+    await nextTick()
+    scrollToTop()
+  },
+  { flush: 'post' },
+)
+
 function langForRow(row: InlineRow): string | null {
   if (props.syntaxLang) return props.syntaxLang
   if (!props.syntaxLangForLine) return null
@@ -204,6 +216,13 @@ function scrollToLine(anchor: DiffScrollAnchor) {
   const targetIndex = findBestRowIndex(anchor)
   if (targetIndex == null) return
   scrollToRowStart(targetIndex)
+}
+
+function scrollToTop() {
+  const root = scrollEl.value
+  if (!root) return
+  root.scrollTop = 0
+  root.scrollLeft = 0
 }
 
 function findBestRowIndex(anchor: DiffScrollAnchor): number | null {

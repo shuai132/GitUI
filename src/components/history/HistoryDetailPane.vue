@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { CSSProperties } from 'vue'
+import { computed, type CSSProperties } from 'vue'
 import type { CommitDetail, FileDiff, FileEntry } from '@/types/git'
 import type { PanelId } from '@/stores/ui'
 import DiffView from '@/components/diff/DiffView.vue'
@@ -12,7 +12,7 @@ interface ChangeStats {
   added: number
 }
 
-defineProps<{
+const props = defineProps<{
   panelBorders: Record<string, CSSProperties>
   repoId?: string
   selectedWip: boolean
@@ -36,6 +36,31 @@ const emit = defineEmits<{
 function onDragHandlePointerDown(panel: PanelId, event: PointerEvent) {
   emit('dragHandlePointerDown', panel, event)
 }
+
+const diffIdentityKey = computed(() => {
+  const diff = props.currentDiff
+  if (props.selectedWip) {
+    const path = props.currentWipFile?.path ?? diff?.new_path ?? diff?.old_path ?? ''
+    if (!path) return null
+    return [
+      'wip',
+      props.repoId ?? '',
+      props.currentStaged ? 'staged' : 'unstaged',
+      path,
+    ].join('\u0000')
+  }
+
+  const oid = props.selectedCommit?.info.oid
+  if (!oid || !diff) return null
+  return [
+    'commit',
+    props.repoId ?? '',
+    oid,
+    String(props.selectedFileIdx),
+    diff.old_path ?? '',
+    diff.new_path ?? '',
+  ].join('\u0000')
+})
 </script>
 
 <template>
@@ -43,6 +68,7 @@ function onDragHandlePointerDown(panel: PanelId, event: PointerEvent) {
     <DiffView
       :diff="currentDiff"
       :repo-id="repoId"
+      :diff-identity-key="diffIdentityKey"
       :wip="selectedWip ? { staged: currentStaged, status: currentWipFile?.status } : null"
       :conflict-file-path="currentConflictFilePath"
       @close="emit('close')"
