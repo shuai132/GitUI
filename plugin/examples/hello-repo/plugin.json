@@ -1,0 +1,44 @@
+{
+  "api_version": 1,
+  "id": "com.gitui.demo.hello-repo",
+  "name": "Demo: Hello Repo",
+  "version": "0.1.0",
+  "description": "Shows the current repository context from a plugin command.",
+  "backend": {
+    "command": "node",
+    "args": ["backend.mjs"]
+  },
+  "permissions": [
+    "git:read",
+    {
+      "id": "process:run",
+      "reason": "Runs the local demo backend."
+    }
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "id": "helloRepo.show",
+        "label": "Show current repo",
+        "category": "Demo",
+        "description": "Displays the active repository path."
+      },
+      {
+        "id": "helloRepo.showCommit",
+        "label": "Show selected commit",
+        "category": "Demo",
+        "description": "Displays the commit passed from the right-click menu."
+      }
+    ],
+    "menus": [
+      {
+        "location": "toolbar.actions",
+        "command": "helloRepo.show"
+      },
+      {
+        "location": "commit.context",
+        "command": "helloRepo.showCommit"
+      }
+    ]
+  }
+}

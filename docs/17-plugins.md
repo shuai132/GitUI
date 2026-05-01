@@ -31,6 +31,7 @@
 
 - `commands`：插件可贡献可执行命令。
 - `menus`：插件可把命令挂到 `toolbar.actions`，显示在工具栏 Actions 菜单。
+- `menus`：插件也可把命令挂到 `commit.context`，显示在提交右键菜单的「插件」子菜单；执行时 `selection` 会包含当前提交信息。
 
 第一版建模但暂不渲染：
 

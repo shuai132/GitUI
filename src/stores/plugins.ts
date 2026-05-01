@@ -10,6 +10,7 @@ import type {
 } from '@/types/plugin'
 
 const TOOLBAR_ACTIONS_LOCATION = 'toolbar.actions'
+const COMMIT_CONTEXT_LOCATION = 'commit.context'
 
 export const usePluginsStore = defineStore('plugins', () => {
   const plugins = ref<PluginInfo[]>([])
@@ -24,11 +25,11 @@ export const usePluginsStore = defineStore('plugins', () => {
     plugins.value.filter((plugin) => plugin.enabled),
   )
 
-  const toolbarCommands = computed<PluginMenuCommand[]>(() => {
+  function menuCommandsForLocation(location: string): PluginMenuCommand[] {
     const result: PluginMenuCommand[] = []
     for (const plugin of enabledPlugins.value) {
       for (const menu of plugin.manifest.contributes.menus) {
-        if (menu.location !== TOOLBAR_ACTIONS_LOCATION) continue
+        if (menu.location !== location) continue
         const command = plugin.manifest.contributes.commands.find(
           (item) => item.id === menu.command,
         )
@@ -44,7 +45,15 @@ export const usePluginsStore = defineStore('plugins', () => {
       }
     }
     return result
-  })
+  }
+
+  const toolbarCommands = computed<PluginMenuCommand[]>(() =>
+    menuCommandsForLocation(TOOLBAR_ACTIONS_LOCATION),
+  )
+
+  const commitContextCommands = computed<PluginMenuCommand[]>(() =>
+    menuCommandsForLocation(COMMIT_CONTEXT_LOCATION),
+  )
 
   async function load() {
     loading.value = true
@@ -114,6 +123,7 @@ export const usePluginsStore = defineStore('plugins', () => {
     loaded,
     enabledPlugins,
     toolbarCommands,
+    commitContextCommands,
     load,
     installFromPath,
     enable,

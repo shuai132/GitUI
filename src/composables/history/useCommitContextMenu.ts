@@ -1,8 +1,11 @@
-import { reactive, ref, computed, type Ref } from 'vue'
+import { reactive, ref, computed, onMounted, type Ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useHistoryStore } from '@/stores/history'
 import { useStashStore } from '@/stores/stash'
 import { useMergeRebaseStore } from '@/stores/mergeRebase'
+import { usePluginsStore } from '@/stores/plugins'
+import { useWorkspaceStore } from '@/stores/workspace'
+import { useGlobalToast } from '@/composables/useGlobalToast'
 import type { ContextMenuItem } from '@/components/common/ContextMenu.vue'
 import type { CommitInfo } from '@/types/git'
 
@@ -17,6 +20,15 @@ export function useCommitContextMenu(
   const historyStore = useHistoryStore()
   const stashStore = useStashStore()
   const mergeRebaseStore = useMergeRebaseStore()
+  const pluginsStore = usePluginsStore()
+  const workspaceStore = useWorkspaceStore()
+  const { showToast } = useGlobalToast()
+
+  onMounted(() => {
+    if (!pluginsStore.loaded) {
+      pluginsStore.load().catch(() => {})
+    }
+  })
 
   // ── Context Menu State ───────────────────────────────────────────────
   const commitMenu = reactive({
@@ -66,6 +78,62 @@ export function useCommitContextMenu(
     return Math.floor(new Date(s).getTime() / 1000)
   }
 
+  function pluginAction(pluginId: string, commandId: string): string {
+    return `plugin:${pluginId}:${commandId}`
+  }
+
+  function parsePluginAction(action: string): { pluginId: string; commandId: string } | null {
+    if (!action.startsWith('plugin:')) return null
+    const payload = action.slice('plugin:'.length)
+    const separator = payload.indexOf(':')
+    if (separator < 0) return null
+    const pluginId = payload.slice(0, separator)
+    const commandId = payload.slice(separator + 1)
+    if (!pluginId || !commandId) return null
+    return { pluginId, commandId }
+  }
+
+  function commitSelection(c: CommitInfo) {
+    return {
+      type: 'commit',
+      oid: c.oid,
+      short_oid: c.short_oid,
+      message: c.message,
+      summary: c.summary,
+      author_name: c.author_name,
+      author_email: c.author_email,
+      author_time: c.author_time,
+      time: c.time,
+      parent_oids: c.parent_oids,
+      is_unreachable: c.is_unreachable,
+      is_stash: c.is_stash,
+      is_reflog_tip: c.is_reflog_tip,
+    }
+  }
+
+  function appendPluginMenu(items: ContextMenuItem[]): ContextMenuItem[] {
+    if (pluginsStore.commitContextCommands.length === 0) return items
+    return [
+      ...items,
+      { separator: true },
+      {
+        label: t('settings.plugins.actionGroup'),
+        children: pluginsStore.commitContextCommands.map((command) => ({
+          label: command.label,
+          action: pluginAction(command.plugin_id, command.command_id),
+          disabled: pluginsStore.executing !== null,
+          title: command.description,
+        })),
+      },
+    ]
+  }
+
+  async function refreshAfterPlugin(refresh: string[]) {
+    if (refresh.includes('workspace')) await workspaceStore.refresh()
+    if (refresh.includes('history')) await historyStore.loadLog()
+    if (refresh.includes('branches')) await historyStore.loadBranches()
+  }
+
   const isEditingHeadCommit = computed(
     () => !!editMessageCommit.value && editMessageCommit.value.oid === headCommitOid.value,
   )
@@ -78,11 +146,11 @@ export function useCommitContextMenu(
     if (c.is_stash) {
       const entry = stashEntryForCommit(c.oid)
       const hasEntry = entry !== null
-      return [
+      return appendPluginMenu([
         { label: t('history.contextMenu.stashApply'), action: 'stash-apply', disabled: !hasEntry },
         { label: t('history.contextMenu.stashPop'), action: 'stash-pop', disabled: !hasEntry },
         { label: t('history.contextMenu.stashDelete'), action: 'stash-delete', disabled: !hasEntry },
-      ]
+      ])
     }
 
     const ongoing = mergeRebaseStore.isOngoing
@@ -142,7 +210,7 @@ export function useCommitContextMenu(
       )
     }
 
-    return items
+    return appendPluginMenu(items)
   })
 
   // ── Actions ──────────────────────────────────────────────────────────
@@ -164,6 +232,18 @@ export function useCommitContextMenu(
     const c = commitMenu.commit
     if (!c) return
     try {
+      const pluginActionParts = parsePluginAction(action)
+      if (pluginActionParts) {
+        const result = await pluginsStore.execute(
+          pluginActionParts.pluginId,
+          pluginActionParts.commandId,
+          { selection: commitSelection(c) },
+        )
+        if (result.message) showToast('success', result.message)
+        await refreshAfterPlugin(result.refresh)
+        return
+      }
+
       switch (action) {
         case 'stash-apply': {
           const entry = stashEntryForCommit(c.oid)

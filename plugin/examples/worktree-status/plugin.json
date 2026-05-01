@@ -1,0 +1,38 @@
+{
+  "api_version": 1,
+  "id": "com.gitui.demo.worktree-status",
+  "name": "Demo: Worktree Status",
+  "version": "0.1.0",
+  "description": "Counts changed files by running git status --short in the active repository.",
+  "backend": {
+    "command": "node",
+    "args": ["backend.mjs"]
+  },
+  "permissions": [
+    "git:read",
+    {
+      "id": "process:run",
+      "reason": "Runs git status in the active repository."
+    }
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "id": "worktreeStatus.count",
+        "label": "Count changed files",
+        "category": "Demo",
+        "description": "Runs git status --short and reports the number of changed files."
+      }
+    ],
+    "menus": [
+      {
+        "location": "toolbar.actions",
+        "command": "worktreeStatus.count"
+      },
+      {
+        "location": "commit.context",
+        "command": "worktreeStatus.count"
+      }
+    ]
+  }
+}
