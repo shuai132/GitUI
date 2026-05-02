@@ -1,10 +1,80 @@
-use std::path::Path;
+use std::path::{Component, Path, PathBuf};
 
 use crate::git::error::{GitError, GitResult};
 
 use super::GitEngine;
 
 impl GitEngine {
+    fn apply_diff(
+        repo: &git2::Repository,
+        diff: &git2::Diff<'_>,
+        location: git2::ApplyLocation,
+        check: bool,
+    ) -> GitResult<()> {
+        let mut opts = git2::ApplyOptions::new();
+        opts.check(check);
+        repo.apply(diff, location, Some(&mut opts))?;
+        Ok(())
+    }
+
+    fn apply_workdir_diff(
+        repo: &git2::Repository,
+        diff: &git2::Diff<'_>,
+        patch_text: &str,
+        check: bool,
+    ) -> GitResult<()> {
+        match Self::apply_diff(repo, diff, git2::ApplyLocation::WorkDir, check) {
+            Ok(()) => Ok(()),
+            Err(_) => Self::apply_workdir_patch_text(repo, patch_text, check),
+        }
+    }
+
+    fn apply_workdir_patch_text(
+        repo: &git2::Repository,
+        patch_text: &str,
+        check: bool,
+    ) -> GitResult<()> {
+        let patches = parse_workdir_patches(patch_text)?;
+        let workdir = repo
+            .workdir()
+            .ok_or_else(|| GitError::OperationFailed("仓库没有工作目录".to_string()))?;
+
+        for patch in patches {
+            let path = safe_workdir_path(workdir, &patch.path)?;
+            let content = std::fs::read_to_string(&path)
+                .map_err(|e| GitError::OperationFailed(format!("读取工作区文件失败：{}", e)))?;
+            let mut lines = split_lines_preserved(&content);
+
+            for hunk in patch.hunks {
+                let source_lines = hunk
+                    .lines
+                    .iter()
+                    .filter(|line| line.origin != '+')
+                    .map(|line| line.content.clone())
+                    .collect::<Vec<_>>();
+                let target_lines = hunk
+                    .lines
+                    .iter()
+                    .filter(|line| line.origin != '-')
+                    .map(|line| line.content.clone())
+                    .collect::<Vec<_>>();
+                let expected = hunk.source_start.saturating_sub(1).min(lines.len());
+                let start =
+                    find_line_sequence(&lines, &source_lines, expected).ok_or_else(|| {
+                        GitError::OperationFailed(format!("{}: hunk did not apply", patch.path))
+                    })?;
+                lines.splice(start..start + source_lines.len(), target_lines);
+            }
+
+            if !check {
+                std::fs::write(&path, lines.concat())
+                    .map_err(|e| GitError::OperationFailed(format!("写入工作区文件失败：{}", e)))?;
+            }
+        }
+
+        Ok(())
+    }
+
     // ── Amend ──────────────────────────────────────────────────────────
 
     /// 保留原 signature 的 name / email / timezone offset，只替换 Unix 秒数。
@@ -168,8 +238,153 @@ impl GitEngine {
     pub fn apply_patch_to_workdir_and_index(path: &str, patch_text: &str) -> GitResult<()> {
         let repo = Self::open(path)?;
         let diff = git2::Diff::from_buffer(patch_text.as_bytes())?;
-        let mut opts = git2::ApplyOptions::new();
-        repo.apply(&diff, git2::ApplyLocation::Both, Some(&mut opts))?;
+        Self::apply_diff(&repo, &diff, git2::ApplyLocation::Index, true)?;
+        Self::apply_workdir_diff(&repo, &diff, patch_text, true)?;
+        Self::apply_diff(&repo, &diff, git2::ApplyLocation::Index, false)?;
+        Self::apply_workdir_diff(&repo, &diff, patch_text, false)?;
         Ok(())
     }
+}
+
+struct ParsedPatch {
+    path: String,
+    hunks: Vec<ParsedHunk>,
+}
+
+struct ParsedHunk {
+    source_start: usize,
+    lines: Vec<ParsedPatchLine>,
+}
+
+struct ParsedPatchLine {
+    origin: char,
+    content: String,
+}
+
+fn parse_workdir_patches(patch_text: &str) -> GitResult<Vec<ParsedPatch>> {
+    let mut patches = Vec::new();
+    let mut current_patch: Option<ParsedPatch> = None;
+    let mut current_hunk: Option<ParsedHunk> = None;
+    let mut old_path: Option<String> = None;
+
+    let finish_hunk =
+        |patch: &mut Option<ParsedPatch>, hunk: &mut Option<ParsedHunk>| -> GitResult<()> {
+            if let Some(hunk) = hunk.take() {
+                let patch = patch.as_mut().ok_or_else(|| {
+                    GitError::OperationFailed("patch hunk missing file header".to_string())
+                })?;
+                patch.hunks.push(hunk);
+            }
+            Ok(())
+        };
+
+    for raw_line in patch_text.split_inclusive('\n') {
+        if let Some(hunk) = current_hunk.as_mut() {
+            if let Some(origin) = raw_line.chars().next() {
+                if matches!(origin, ' ' | '+' | '-') {
+                    hunk.lines.push(ParsedPatchLine {
+                        origin,
+                        content: raw_line[origin.len_utf8()..].to_string(),
+                    });
+                    continue;
+                }
+            }
+        }
+
+        let line = raw_line.trim_end_matches(['\r', '\n']);
+        if line.starts_with("diff --git ") {
+            finish_hunk(&mut current_patch, &mut current_hunk)?;
+            if let Some(patch) = current_patch.take() {
+                patches.push(patch);
+            }
+            current_patch = Some(ParsedPatch {
+                path: String::new(),
+                hunks: Vec::new(),
+            });
+            old_path = None;
+        } else if let Some(path) = line.strip_prefix("--- ") {
+            old_path = parse_patch_path(path);
+        } else if let Some(path) = line.strip_prefix("+++ ") {
+            if let Some(patch) = current_patch.as_mut() {
+                patch.path = parse_patch_path(path)
+                    .or_else(|| old_path.clone())
+                    .ok_or_else(|| {
+                        GitError::OperationFailed("patch file path missing".to_string())
+                    })?;
+            }
+        } else if line.starts_with("@@ ") {
+            finish_hunk(&mut current_patch, &mut current_hunk)?;
+            current_hunk = Some(ParsedHunk {
+                source_start: parse_hunk_source_start(line)?,
+                lines: Vec::new(),
+            });
+        }
+    }
+
+    finish_hunk(&mut current_patch, &mut current_hunk)?;
+    if let Some(patch) = current_patch {
+        patches.push(patch);
+    }
+
+    Ok(patches)
+}
+
+fn parse_patch_path(path: &str) -> Option<String> {
+    let path = path.trim();
+    if path == "/dev/null" {
+        return None;
+    }
+    Some(
+        path.strip_prefix("a/")
+            .or_else(|| path.strip_prefix("b/"))
+            .unwrap_or(path)
+            .to_string(),
+    )
+}
+
+fn parse_hunk_source_start(header: &str) -> GitResult<usize> {
+    let source = header
+        .strip_prefix("@@ -")
+        .and_then(|rest| rest.split_once(' ').map(|(source, _)| source))
+        .ok_or_else(|| GitError::OperationFailed("invalid patch hunk header".to_string()))?;
+    let start = source
+        .split_once(',')
+        .map(|(start, _)| start)
+        .unwrap_or(source);
+    start
+        .parse::<usize>()
+        .map_err(|e| GitError::OperationFailed(format!("invalid patch hunk line: {}", e)))
+}
+
+fn safe_workdir_path(workdir: &Path, rel_path: &str) -> GitResult<PathBuf> {
+    let rel = Path::new(rel_path);
+    if rel.is_absolute()
+        || rel
+            .components()
+            .any(|component| !matches!(component, Component::Normal(_)))
+    {
+        return Err(GitError::OperationFailed(
+            "path escapes repository root".to_string(),
+        ));
+    }
+    Ok(workdir.join(rel))
+}
+
+fn split_lines_preserved(content: &str) -> Vec<String> {
+    content
+        .split_inclusive('\n')
+        .map(ToOwned::to_owned)
+        .collect()
+}
+
+fn find_line_sequence(lines: &[String], needle: &[String], expected: usize) -> Option<usize> {
+    if needle.is_empty() {
+        return Some(expected.min(lines.len()));
+    }
+    if needle.len() > lines.len() {
+        return None;
+    }
+    (0..=lines.len() - needle.len())
+        .filter(|start| lines[*start..*start + needle.len()] == *needle)
+        .min_by_key(|start| start.abs_diff(expected))
 }

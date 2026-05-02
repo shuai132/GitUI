@@ -47,6 +47,18 @@ describe('hunkPatch', () => {
       '--- a/file.txt\n+++ b/file.txt\n',
     )
   })
+
+  it('uses the forward source start when earlier hunks shifted the new side', () => {
+    expect(buildHunkPatch(fileDiff([shiftedHunk()]), 0, 'forward')).toContain(
+      '@@ -13,7 +13,7 @@\n',
+    )
+  })
+
+  it('uses the reverse source start when earlier hunks shifted the old side', () => {
+    expect(buildHunkPatch(fileDiff([shiftedHunk()]), 0, 'reverse')).toContain(
+      '@@ -14,7 +14,7 @@\n',
+    )
+  })
 })
 
 function fileDiff(
@@ -91,6 +103,26 @@ function newFileHunk(): DiffHunk {
     lines: [
       { origin: '+', content: 'one\n', new_lineno: 1 },
       { origin: '+', content: 'two\n', new_lineno: 2 },
+    ],
+  }
+}
+
+function shiftedHunk(): DiffHunk {
+  return {
+    old_start: 13,
+    old_lines: 7,
+    new_start: 14,
+    new_lines: 7,
+    header: '@@ -13,7 +14,7 @@',
+    lines: [
+      { origin: ' ', content: 'line13\n', old_lineno: 13, new_lineno: 14 },
+      { origin: ' ', content: 'line14\n', old_lineno: 14, new_lineno: 15 },
+      { origin: ' ', content: 'line15\n', old_lineno: 15, new_lineno: 16 },
+      { origin: '-', content: 'line16\n', old_lineno: 16 },
+      { origin: '+', content: 'LINE16\n', new_lineno: 17 },
+      { origin: ' ', content: 'line17\n', old_lineno: 17, new_lineno: 18 },
+      { origin: ' ', content: 'line18\n', old_lineno: 18, new_lineno: 19 },
+      { origin: ' ', content: 'line19\n', old_lineno: 19, new_lineno: 20 },
     ],
   }
 }

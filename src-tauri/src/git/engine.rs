@@ -386,6 +386,215 @@ mod tests {
     }
 
     #[test]
+    fn test_apply_patch_discards_later_unstaged_hunk_after_prior_insertion() {
+        let test_repo = TestRepo::new();
+        let path = test_repo.path_str();
+        let base = (1..=24)
+            .map(|i| format!("line{i}\n"))
+            .collect::<Vec<_>>()
+            .join("");
+        commit_file(&test_repo, "base", "existing.txt", &base);
+
+        let modified = base
+            .replace("line4\n", "line4\ninserted\n")
+            .replace("line16\n", "LINE16\n");
+        fs::write(test_repo.dir.path().join("existing.txt"), modified).unwrap();
+
+        let patch = concat!(
+            "diff --git a/existing.txt b/existing.txt\n",
+            "--- a/existing.txt\n",
+            "+++ b/existing.txt\n",
+            "@@ -14,7 +14,7 @@\n",
+            " line13\n",
+            " line14\n",
+            " line15\n",
+            "-LINE16\n",
+            "+line16\n",
+            " line17\n",
+            " line18\n",
+            " line19\n",
+        );
+
+        GitEngine::apply_patch(path, patch).unwrap();
+
+        let worktree = fs::read_to_string(test_repo.dir.path().join("existing.txt")).unwrap();
+        assert!(worktree.contains("inserted\n"));
+        assert!(worktree.contains("line16\n"));
+        assert!(!worktree.contains("LINE16\n"));
+    }
+
+    #[test]
+    fn test_apply_patch_to_index_stages_later_hunk_after_prior_insertion() {
+        let test_repo = TestRepo::new();
+        let path = test_repo.path_str();
+        let base = (1..=24)
+            .map(|i| format!("line{i}\n"))
+            .collect::<Vec<_>>()
+            .join("");
+        commit_file(&test_repo, "base", "existing.txt", &base);
+
+        let modified = base
+            .replace("line4\n", "line4\ninserted\n")
+            .replace("line16\n", "LINE16\n");
+        fs::write(test_repo.dir.path().join("existing.txt"), modified).unwrap();
+
+        let patch = concat!(
+            "diff --git a/existing.txt b/existing.txt\n",
+            "--- a/existing.txt\n",
+            "+++ b/existing.txt\n",
+            "@@ -13,7 +13,7 @@\n",
+            " line13\n",
+            " line14\n",
+            " line15\n",
+            "-line16\n",
+            "+LINE16\n",
+            " line17\n",
+            " line18\n",
+            " line19\n",
+        );
+
+        GitEngine::apply_patch_to_index(path, patch).unwrap();
+
+        let staged = GitEngine::get_file_diff(path, "existing.txt", true).unwrap();
+        let staged_content = diff_contents(&staged);
+        assert!(staged_content.contains("LINE16\n"));
+        assert!(!staged_content.contains("inserted\n"));
+    }
+
+    #[test]
+    fn test_apply_patch_to_index_unstages_later_hunk_after_prior_insertion() {
+        let test_repo = TestRepo::new();
+        let path = test_repo.path_str();
+        let base = (1..=24)
+            .map(|i| format!("line{i}\n"))
+            .collect::<Vec<_>>()
+            .join("");
+        commit_file(&test_repo, "base", "existing.txt", &base);
+
+        let modified = base
+            .replace("line4\n", "line4\ninserted\n")
+            .replace("line16\n", "LINE16\n");
+        fs::write(test_repo.dir.path().join("existing.txt"), modified).unwrap();
+        GitEngine::stage_file(path, "existing.txt").unwrap();
+
+        let patch = concat!(
+            "diff --git a/existing.txt b/existing.txt\n",
+            "--- a/existing.txt\n",
+            "+++ b/existing.txt\n",
+            "@@ -14,7 +14,7 @@\n",
+            " line13\n",
+            " line14\n",
+            " line15\n",
+            "-LINE16\n",
+            "+line16\n",
+            " line17\n",
+            " line18\n",
+            " line19\n",
+        );
+
+        GitEngine::apply_patch_to_index(path, patch).unwrap();
+
+        let staged = GitEngine::get_file_diff(path, "existing.txt", true).unwrap();
+        let staged_content = diff_contents(&staged);
+        assert!(staged_content.contains("inserted\n"));
+        assert!(!staged_content.contains("LINE16\n"));
+
+        let unstaged = GitEngine::get_file_diff(path, "existing.txt", false).unwrap();
+        let unstaged_content = diff_contents(&unstaged);
+        assert!(unstaged_content.contains("LINE16\n"));
+    }
+
+    #[test]
+    fn test_apply_patch_to_workdir_and_index_discards_later_hunk_after_prior_insertion() {
+        let test_repo = TestRepo::new();
+        let path = test_repo.path_str();
+        let base = (1..=24)
+            .map(|i| format!("line{i}\n"))
+            .collect::<Vec<_>>()
+            .join("");
+        commit_file(&test_repo, "base", "existing.txt", &base);
+
+        let modified = base
+            .replace("line4\n", "line4\ninserted\n")
+            .replace("line16\n", "LINE16\n");
+        fs::write(test_repo.dir.path().join("existing.txt"), modified).unwrap();
+        GitEngine::stage_file(path, "existing.txt").unwrap();
+
+        let patch = concat!(
+            "diff --git a/existing.txt b/existing.txt\n",
+            "--- a/existing.txt\n",
+            "+++ b/existing.txt\n",
+            "@@ -14,7 +14,7 @@\n",
+            " line13\n",
+            " line14\n",
+            " line15\n",
+            "-LINE16\n",
+            "+line16\n",
+            " line17\n",
+            " line18\n",
+            " line19\n",
+        );
+
+        GitEngine::apply_patch_to_workdir_and_index(path, patch).unwrap();
+
+        let staged = GitEngine::get_file_diff(path, "existing.txt", true).unwrap();
+        let staged_content = diff_contents(&staged);
+        assert!(staged_content.contains("inserted\n"));
+        assert!(!staged_content.contains("LINE16\n"));
+
+        let worktree = fs::read_to_string(test_repo.dir.path().join("existing.txt")).unwrap();
+        assert!(worktree.contains("inserted\n"));
+        assert!(worktree.contains("line16\n"));
+        assert!(!worktree.contains("LINE16\n"));
+    }
+
+    #[test]
+    fn test_apply_patch_to_workdir_and_index_preserves_other_unstaged_hunks() {
+        let test_repo = TestRepo::new();
+        let path = test_repo.path_str();
+        let base = (1..=24)
+            .map(|i| format!("line{i}\n"))
+            .collect::<Vec<_>>()
+            .join("");
+        commit_file(&test_repo, "base", "existing.txt", &base);
+
+        let staged = base.replace("line16\n", "LINE16\n");
+        fs::write(test_repo.dir.path().join("existing.txt"), &staged).unwrap();
+        GitEngine::stage_file(path, "existing.txt").unwrap();
+
+        let unstaged = staged
+            .replace("line4\n", "line4\ninserted\n")
+            .replace("line22\n", "LINE22\n");
+        fs::write(test_repo.dir.path().join("existing.txt"), unstaged).unwrap();
+
+        let patch = concat!(
+            "diff --git a/existing.txt b/existing.txt\n",
+            "--- a/existing.txt\n",
+            "+++ b/existing.txt\n",
+            "@@ -13,7 +13,7 @@\n",
+            " line13\n",
+            " line14\n",
+            " line15\n",
+            "-LINE16\n",
+            "+line16\n",
+            " line17\n",
+            " line18\n",
+            " line19\n",
+        );
+
+        GitEngine::apply_patch_to_workdir_and_index(path, patch).unwrap();
+
+        let staged = GitEngine::get_file_diff(path, "existing.txt", true).unwrap();
+        assert!(staged.hunks.is_empty());
+
+        let worktree = fs::read_to_string(test_repo.dir.path().join("existing.txt")).unwrap();
+        assert!(worktree.contains("inserted\n"));
+        assert!(worktree.contains("LINE22\n"));
+        assert!(worktree.contains("line16\n"));
+        assert!(!worktree.contains("LINE16\n"));
+    }
+
+    #[test]
     fn test_stash_diff_includes_untracked_and_staged_new_files() {
         let mut test_repo = TestRepo::new();
         let path = test_repo.path_str().to_string(); // clone to avoid lifetime issues if we mutably borrow repo

@@ -31,7 +31,7 @@ export function buildHunkPatch(
   lines.push(`diff --git a/${fromPath} b/${toPath}\n`)
   lines.push(`--- ${fromNull ? '/dev/null' : `a/${fromPath}`}\n`)
   lines.push(`+++ ${toNull ? '/dev/null' : `b/${toPath}`}\n`)
-  lines.push(buildHunkHeader(hunk, direction))
+  lines.push(buildHunkHeader(hunk, direction, fromNull || toNull))
 
   for (const line of hunk.lines) {
     lines.push(`${lineOrigin(line, direction)}${lineContent(line)}`)
@@ -56,13 +56,21 @@ function isNullNewSide(diff: FileDiff, hunk: DiffHunk): boolean {
   )
 }
 
-function buildHunkHeader(hunk: DiffHunk, direction: HunkPatchDirection): string {
+function buildHunkHeader(
+  hunk: DiffHunk,
+  direction: HunkPatchDirection,
+  preserveTargetStart: boolean,
+): string {
   const match = hunk.header.match(/^@@[^@]+@@(.*)$/)
   const ctx = match ? match[1] : ''
   const oldStart = direction === 'forward' ? hunk.old_start : hunk.new_start
   const oldLines = direction === 'forward' ? hunk.old_lines : hunk.new_lines
-  const newStart = direction === 'forward' ? hunk.new_start : hunk.old_start
+  const targetStart = direction === 'forward' ? hunk.new_start : hunk.old_start
   const newLines = direction === 'forward' ? hunk.new_lines : hunk.old_lines
+  // libgit2 applies these standalone hunks against the mutable source side.
+  // If earlier unapplied hunks shifted the target side, using the target
+  // start line here makes libgit2 look in the wrong place.
+  const newStart = preserveTargetStart ? targetStart : oldStart
   return `@@ -${oldStart},${oldLines} +${newStart},${newLines} @@${ctx}\n`
 }
 
