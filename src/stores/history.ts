@@ -49,10 +49,20 @@ export const useHistoryStore = defineStore('history', () => {
 
   const git = useGitCommands()
   const uiStore = useUiStore()
+  let logRequestSeq = 0
+  let branchesRequestSeq = 0
+  let tagsRequestSeq = 0
+  let remoteTagsRequestSeq = 0
+  let remoteTagsLoadingRepoId: string | null = null
+  let commitDetailRequestSeq = 0
 
   function activeRepoBranchScope() {
     const repoStore = useRepoStore()
     return uiStore.getHistoryBranchScope(repoStore.activeRepo()?.path)
+  }
+
+  function isActiveRepo(repoId: string): boolean {
+    return useRepoStore().activeRepoId === repoId
   }
 
   function clearCommitChangeStats() {
@@ -105,28 +115,35 @@ export const useHistoryStore = defineStore('history', () => {
       markStatsLoading(batch)
       try {
         const stats = await git.getCommitChangeStats(repoId, batch)
+        if (!isActiveRepo(repoId) || commitChangeStatsRepoId.value !== repoId) return
         const next = new Map(commitChangeStats.value)
         for (const item of stats) next.set(item.oid, item)
         commitChangeStats.value = next
       } catch (e: unknown) {
-        error.value = String(e)
-        markStatsFailed(batch)
+        if (isActiveRepo(repoId) && commitChangeStatsRepoId.value === repoId) {
+          error.value = String(e)
+          markStatsFailed(batch)
+        }
       } finally {
-        unmarkStatsLoading(batch)
+        if (commitChangeStatsRepoId.value === repoId) {
+          unmarkStatsLoading(batch)
+        }
       }
     }
   }
 
   async function loadLog() {
     const repoStore = useRepoStore()
-    if (!repoStore.activeRepoId) return
-    ensureCommitChangeStatsRepo(repoStore.activeRepoId)
+    const repoId = repoStore.activeRepoId
+    if (!repoId) return
+    const requestSeq = ++logRequestSeq
+    ensureCommitChangeStatsRepo(repoId)
 
     loading.value = true
     error.value = null
     try {
       const page = await git.getLog(
-        repoStore.activeRepoId,
+        repoId,
         0,
         PAGE_SIZE,
         uiStore.showUnreachableCommits,
@@ -134,6 +151,7 @@ export const useHistoryStore = defineStore('history', () => {
         activeRepoBranchScope(),
         uiStore.showRemoteBranches,
       )
+      if (requestSeq !== logRequestSeq || !isActiveRepo(repoId)) return
       // 若 HEAD / 尾部 / 总数 / has_more 都没变，且每个提交的可达/stash/reflog-tip 标志
       // 也没变，认为提交序列的结构与渲染相关信息都未改动，跳过赋值避免响应式重渲染
       // （watcher 在纯 worktree 变更时大量出现此情况）。reset --hard 等操作会翻转
@@ -168,27 +186,39 @@ export const useHistoryStore = defineStore('history', () => {
         graphLaneState.value = finalState
       }
     } catch (e: unknown) {
-      error.value = String(e)
+      if (requestSeq === logRequestSeq && isActiveRepo(repoId)) {
+        error.value = String(e)
+      }
     } finally {
-      loading.value = false
+      if (requestSeq === logRequestSeq) loading.value = false
     }
   }
 
   async function loadMore() {
     const repoStore = useRepoStore()
-    if (!repoStore.activeRepoId || !hasMore.value || loadingMore.value) return
+    const repoId = repoStore.activeRepoId
+    if (!repoId || !hasMore.value || loadingMore.value) return
 
+    const requestSeq = logRequestSeq
+    const offset = commits.value.length
     loadingMore.value = true
     try {
       const page = await git.getLog(
-        repoStore.activeRepoId,
-        commits.value.length,
+        repoId,
+        offset,
         PAGE_SIZE,
         uiStore.showUnreachableCommits,
         uiStore.showStashCommits,
         activeRepoBranchScope(),
         uiStore.showRemoteBranches,
       )
+      if (
+        requestSeq !== logRequestSeq ||
+        !isActiveRepo(repoId) ||
+        commits.value.length !== offset
+      ) {
+        return
+      }
       // 只计算新增的这一页，从上次的末尾 lane 状态接续，O(200) 而非 O(N)
       const { rows: newRows, finalState } = computeGraphLayout(
         page.commits,
@@ -221,13 +251,16 @@ export const useHistoryStore = defineStore('history', () => {
 
   async function loadBranches() {
     const repoStore = useRepoStore()
-    if (!repoStore.activeRepoId) return
+    const repoId = repoStore.activeRepoId
+    if (!repoId) return
+    const requestSeq = ++branchesRequestSeq
 
     try {
       const [next, nextRemotes] = await Promise.all([
-        git.listBranches(repoStore.activeRepoId),
-        git.listRemotes(repoStore.activeRepoId).catch(() => [] as RemoteInfo[])
+        git.listBranches(repoId),
+        git.listRemotes(repoId).catch(() => [] as RemoteInfo[]),
       ])
+      if (requestSeq !== branchesRequestSeq || !isActiveRepo(repoId)) return
       // 分支列表结构未变（数量、名称、指向的 oid、ahead/behind 都一样）时跳过
       const prev = branches.value
       const unchanged =
@@ -247,16 +280,21 @@ export const useHistoryStore = defineStore('history', () => {
         nextRemotes.every((r, i) => r.name === prevRemotes[i].name && r.url === prevRemotes[i].url)
       if (!remotesUnchanged) remotes.value = nextRemotes
     } catch (e: unknown) {
-      error.value = String(e)
+      if (requestSeq === branchesRequestSeq && isActiveRepo(repoId)) {
+        error.value = String(e)
+      }
     }
   }
 
   async function loadTags() {
     const repoStore = useRepoStore()
-    if (!repoStore.activeRepoId) return
+    const repoId = repoStore.activeRepoId
+    if (!repoId) return
+    const requestSeq = ++tagsRequestSeq
 
     try {
-      const next = await git.listTags(repoStore.activeRepoId)
+      const next = await git.listTags(repoId)
+      if (requestSeq !== tagsRequestSeq || !isActiveRepo(repoId)) return
       const prev = tags.value
       const unchanged =
         next.length === prev.length &&
@@ -265,50 +303,66 @@ export const useHistoryStore = defineStore('history', () => {
         )
       if (!unchanged) tags.value = next
     } catch (e: unknown) {
-      error.value = String(e)
+      if (requestSeq === tagsRequestSeq && isActiveRepo(repoId)) {
+        error.value = String(e)
+      }
     }
   }
 
   const loadingDetail = ref(false)
 
+  function isCurrentCommitDetailRequest(repoId: string, oid: string, requestSeq: number) {
+    if (requestSeq !== commitDetailRequestSeq || !isActiveRepo(repoId) || selectedWip.value) {
+      return false
+    }
+    const selectedOid = selectedCommit.value?.info.oid
+    return !selectedOid || selectedOid === oid
+  }
+
   async function selectCommit(oid: string) {
     const repoStore = useRepoStore()
-    if (!repoStore.activeRepoId) return
+    const repoId = repoStore.activeRepoId
+    if (!repoId) return
+    const requestSeq = ++commitDetailRequestSeq
 
     // ── 第一步：瞬间响应 ──
     // 立即更新 selectedCommit 和 showDetail，让 UI 瞬间弹出并选中行。
-    const existing = commits.value.find(c => c.oid === oid)
+    selectedWip.value = false
+    const existing = commits.value.find((c) => c.oid === oid)
     if (existing) {
       selectedCommit.value = { info: existing, diffs: [] }
-      showDetail.value = true
+    } else {
+      selectedCommit.value = null
     }
-    
+    showDetail.value = true
+
     selectedFileDiffIndex.value = 0
     loadingDetail.value = true
 
     // ── 第二步：将重负载推迟到下一帧 ──
     // 这样浏览器能先完成第一步的渲染（面板弹出、列表高亮），避免 IPC 序列化和后续逻辑阻塞主线程。
-    const currentRepoId = repoStore.activeRepoId
     setTimeout(async () => {
-      // 校验用户是否已经切到了别的提交
-      if (!selectedCommit.value || selectedCommit.value.info.oid !== oid) return
+      // 校验用户是否已经切到了别的仓库、提交或 WIP。
+      if (!isCurrentCommitDetailRequest(repoId, oid, requestSeq)) return
 
       try {
         // 快速加载文件列表 (includeStats=false)
-        const summary = await git.getCommitSummary(currentRepoId, oid, false)
-        
-        if (selectedCommit.value?.info.oid === oid) {
+        const summary = await git.getCommitSummary(repoId, oid, false)
+
+        if (isCurrentCommitDetailRequest(repoId, oid, requestSeq)) {
           selectedCommit.value = summary
           loadingDetail.value = false
-          
+
           // 默认加载第一个文件的详情
           if (summary.diffs.length > 0) {
             loadFileDiff(0)
           }
 
           // 后台补全统计数字
-          git.getCommitSummary(currentRepoId, oid, true).then((fullSummary) => {
-            if (selectedCommit.value?.info.oid === oid) {
+          git
+            .getCommitSummary(repoId, oid, true)
+            .then((fullSummary) => {
+              if (!isCurrentCommitDetailRequest(repoId, oid, requestSeq)) return
               fullSummary.diffs.forEach((fd, i) => {
                 const target = selectedCommit.value?.diffs[i]
                 if (target && (target.new_path === fd.new_path || target.old_path === fd.old_path)) {
@@ -316,20 +370,24 @@ export const useHistoryStore = defineStore('history', () => {
                   target.deletions = fd.deletions
                 }
               })
-            }
-          }).catch(e => console.error('Failed to load stats:', e))
+            })
+            .catch((e) => console.error('Failed to load stats:', e))
         }
       } catch (e: unknown) {
-        error.value = String(e)
-        loadingDetail.value = false
+        if (isCurrentCommitDetailRequest(repoId, oid, requestSeq)) {
+          error.value = String(e)
+          loadingDetail.value = false
+        }
       }
     }, 0)
   }
 
   async function loadFileDiff(idx: number) {
     const repoStore = useRepoStore()
+    const repoId = repoStore.activeRepoId
     const commit = selectedCommit.value
-    if (!repoStore.activeRepoId || !commit) return
+    if (!repoId || !commit) return
+    const oid = commit.info.oid
 
     const diff = commit.diffs[idx]
     // 已经加载过，或者是二进制文件（无 hunk），则跳过
@@ -338,7 +396,8 @@ export const useHistoryStore = defineStore('history', () => {
     try {
       const path = diff.new_path || diff.old_path
       if (!path) return
-      const fullDiff = await git.getFileDiffAtCommit(repoStore.activeRepoId, path, commit.info.oid)
+      const fullDiff = await git.getFileDiffAtCommit(repoId, path, oid)
+      if (!isActiveRepo(repoId) || selectedCommit.value?.info.oid !== oid) return
       commit.diffs[idx] = fullDiff
     } catch (e: unknown) {
       console.error('Failed to load file diff:', e)
@@ -482,12 +541,15 @@ export const useHistoryStore = defineStore('history', () => {
   /// 保持 false，让前端显示"未知"态而不是误判成"仅本地"。
   async function loadRemoteTags(force = false) {
     const repoStore = useRepoStore()
-    if (!repoStore.activeRepoId) return
-    if (remoteTagsLoading.value && !force) return
+    const repoId = repoStore.activeRepoId
+    if (!repoId) return
+    if (remoteTagsLoading.value && remoteTagsLoadingRepoId === repoId && !force) return
+    const requestSeq = ++remoteTagsRequestSeq
     remoteTagsLoading.value = true
+    remoteTagsLoadingRepoId = repoId
     try {
-      const repoId = repoStore.activeRepoId
       const remotes = await git.listRemotes(repoId).catch(() => [] as RemoteInfo[])
+      if (requestSeq !== remoteTagsRequestSeq || !isActiveRepo(repoId)) return
       if (remotes.length === 0) {
         // 无 remote：认为已检查，所有 tag 都是"仅本地"
         remoteTagsChecked.value = true
@@ -502,6 +564,7 @@ export const useHistoryStore = defineStore('history', () => {
           ),
         ),
       )
+      if (requestSeq !== remoteTagsRequestSeq || !isActiveRepo(repoId)) return
       const mergedNames = new Set<string>()
       const mergedTags: TagInfo[] = []
       let anySuccess = false
@@ -522,7 +585,10 @@ export const useHistoryStore = defineStore('history', () => {
         remoteTagsChecked.value = true
       }
     } finally {
-      remoteTagsLoading.value = false
+      if (requestSeq === remoteTagsRequestSeq) {
+        remoteTagsLoading.value = false
+        remoteTagsLoadingRepoId = null
+      }
     }
   }
 
@@ -560,6 +626,12 @@ export const useHistoryStore = defineStore('history', () => {
   }
 
   function reset() {
+    logRequestSeq++
+    branchesRequestSeq++
+    tagsRequestSeq++
+    remoteTagsRequestSeq++
+    commitDetailRequestSeq++
+    remoteTagsLoadingRepoId = null
     commits.value = []
     branches.value = []
     remotes.value = []
@@ -575,6 +647,10 @@ export const useHistoryStore = defineStore('history', () => {
     graphLaneState.value = null
     selectedFileDiffIndex.value = 0
     hasMore.value = false
+    loading.value = false
+    loadingMore.value = false
+    loadingDetail.value = false
+    error.value = null
     pendingJumpOid.value = null
     pendingRevealOid.value = null
     commitChangeStatsRepoId.value = null

@@ -329,6 +329,7 @@ watch(
         submodulesStore.loadSubmodules(),
         stashStore.refresh(),
       ])
+      if (repoStore.activeRepoId !== id) return
       // 远端 tag 同步状态独立于以上数据源，走网络，失败静默
       historyStore.loadRemoteTags().catch(() => {})
       // 恢复新仓库上次的视图状态
@@ -349,6 +350,9 @@ watch(
         historyStore.pendingRevealOid = currentHeadOid()
       }
     } else {
+      historyStore.reset()
+      workspaceStore.reset()
+      diffStore.clear()
       submodulesStore.reset()
       stashStore.reset()
     }

@@ -16,6 +16,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   const commitDraft = ref('')
 
   const git = useGitCommands()
+  let refreshSeq = 0
 
   // 切仓库时清空草稿，避免上一个仓库的提交信息泄漏到下一个仓库
   watch(
@@ -30,13 +31,15 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     const id = repoId ?? repoStore.activeRepoId
     if (!id) return
 
+    const requestSeq = ++refreshSeq
     loading.value = true
     error.value = null
     try {
       const result = await git.getStatus(id)
       // 丢弃过期响应：await 期间用户可能已切换到其他仓库，
-      // 此时 id 与当前活跃仓库不符，写入会污染新仓库的 status
-      if (id !== repoStore.activeRepoId) return
+      // 此时 id 与当前活跃仓库不符，写入会污染新仓库的 status。
+      // 同一仓库的多次刷新也只允许最后一次写入，避免旧快照覆盖新快照。
+      if (requestSeq !== refreshSeq || id !== repoStore.activeRepoId) return
       status.value = result
       // 把后端顺带返回的 repo_state 同步到 mergeRebase store，供横幅/对话框消费
       useMergeRebaseStore().setRepoState(result.repo_state)
@@ -52,9 +55,11 @@ export const useWorkspaceStore = defineStore('workspace', () => {
         }
       }
     } catch (e: unknown) {
-      error.value = String(e)
+      if (requestSeq === refreshSeq && id === repoStore.activeRepoId) {
+        error.value = String(e)
+      }
     } finally {
-      loading.value = false
+      if (requestSeq === refreshSeq) loading.value = false
     }
   }
 
@@ -129,9 +134,12 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   }
 
   function reset(cachedStatus: WorkspaceStatus | null = null) {
+    refreshSeq++
     status.value = cachedStatus
     selectedFile.value = null
     wipSelectedPath.value = null
+    loading.value = false
+    error.value = null
   }
 
   return {

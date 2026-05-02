@@ -10,22 +10,29 @@ export const useSubmodulesStore = defineStore('submodules', () => {
   const error = ref<string | null>(null)
 
   const git = useGitCommands()
+  let loadSeq = 0
 
   async function loadSubmodules() {
     const repoStore = useRepoStore()
-    if (!repoStore.activeRepoId) {
+    const repoId = repoStore.activeRepoId
+    if (!repoId) {
       submodules.value = []
       return
     }
+    const requestSeq = ++loadSeq
     loading.value = true
     error.value = null
     try {
-      submodules.value = await git.listSubmodules(repoStore.activeRepoId)
+      const next = await git.listSubmodules(repoId)
+      if (requestSeq !== loadSeq || repoStore.activeRepoId !== repoId) return
+      submodules.value = next
     } catch (e: unknown) {
-      error.value = String(e)
-      submodules.value = []
+      if (requestSeq === loadSeq && repoStore.activeRepoId === repoId) {
+        error.value = String(e)
+        submodules.value = []
+      }
     } finally {
-      loading.value = false
+      if (requestSeq === loadSeq) loading.value = false
     }
   }
 
@@ -64,7 +71,9 @@ export const useSubmodulesStore = defineStore('submodules', () => {
   }
 
   function reset() {
+    loadSeq++
     submodules.value = []
+    loading.value = false
     error.value = null
   }
 

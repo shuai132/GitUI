@@ -12,21 +12,28 @@ export const useStashStore = defineStore('stash', () => {
   const error = ref<string | null>(null)
 
   const git = useGitCommands()
+  let refreshSeq = 0
 
   async function refresh() {
     const repoStore = useRepoStore()
-    if (!repoStore.activeRepoId) {
+    const repoId = repoStore.activeRepoId
+    if (!repoId) {
       entries.value = []
       return
     }
+    const requestSeq = ++refreshSeq
     loading.value = true
     error.value = null
     try {
-      entries.value = await git.stashList(repoStore.activeRepoId)
+      const next = await git.stashList(repoId)
+      if (requestSeq !== refreshSeq || repoStore.activeRepoId !== repoId) return
+      entries.value = next
     } catch (e) {
-      error.value = String(e)
+      if (requestSeq === refreshSeq && repoStore.activeRepoId === repoId) {
+        error.value = String(e)
+      }
     } finally {
-      loading.value = false
+      if (requestSeq === refreshSeq) loading.value = false
     }
   }
 
@@ -70,7 +77,9 @@ export const useStashStore = defineStore('stash', () => {
   }
 
   function reset() {
+    refreshSeq++
     entries.value = []
+    loading.value = false
     error.value = null
   }
 

@@ -3,11 +3,26 @@ import { createPinia, setActivePinia } from 'pinia'
 import { useHistoryStore } from './history'
 import { useRepoStore } from './repos'
 import { useUiStore } from './ui'
-import type { CommitChangeStats, LogPage } from '@/types/git'
+import type { BranchInfo, CommitChangeStats, LogPage, RemoteInfo, TagInfo } from '@/types/git'
 
-const { getLogMock, getCommitChangeStatsMock } = vi.hoisted(() => ({
+const {
+  getLogMock,
+  getCommitChangeStatsMock,
+  listBranchesMock,
+  listRemotesMock,
+  listTagsMock,
+  getCommitSummaryMock,
+  getFileDiffAtCommitMock,
+  listRemoteTagsMock,
+} = vi.hoisted(() => ({
   getLogMock: vi.fn(),
   getCommitChangeStatsMock: vi.fn(),
+  listBranchesMock: vi.fn(),
+  listRemotesMock: vi.fn(),
+  listTagsMock: vi.fn(),
+  getCommitSummaryMock: vi.fn(),
+  getFileDiffAtCommitMock: vi.fn(),
+  listRemoteTagsMock: vi.fn(),
 }))
 
 vi.mock('@tauri-apps/plugin-store', () => ({
@@ -22,8 +37,24 @@ vi.mock('@/composables/useGitCommands', () => ({
   useGitCommands: () => ({
     getLog: getLogMock,
     getCommitChangeStats: getCommitChangeStatsMock,
+    listBranches: listBranchesMock,
+    listRemotes: listRemotesMock,
+    listTags: listTagsMock,
+    getCommitSummary: getCommitSummaryMock,
+    getFileDiffAtCommit: getFileDiffAtCommitMock,
+    listRemoteTags: listRemoteTagsMock,
   }),
 }))
+
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res
+    reject = rej
+  })
+  return { promise, resolve, reject }
+}
 
 function commit(oid: string) {
   return {
@@ -63,6 +94,23 @@ function stat(oid: string): CommitChangeStats {
   }
 }
 
+function branch(name: string): BranchInfo {
+  return {
+    name,
+    is_remote: false,
+    is_head: false,
+    commit_oid: `${name}-oid`,
+  }
+}
+
+function tag(name: string): TagInfo {
+  return {
+    name,
+    commit_oid: `${name}-oid`,
+    is_annotated: false,
+  }
+}
+
 function setActiveRepo(repoStore: ReturnType<typeof useRepoStore>, id: string, path: string) {
   repoStore.repos = [{ id, path, name: path.split('/').pop() || id }]
   repoStore.activeRepoId = id
@@ -98,6 +146,12 @@ describe('history store log filters', () => {
     stubLocalStorage()
     getLogMock.mockReset()
     getCommitChangeStatsMock.mockReset()
+    listBranchesMock.mockReset()
+    listRemotesMock.mockReset()
+    listTagsMock.mockReset()
+    getCommitSummaryMock.mockReset()
+    getFileDiffAtCommitMock.mockReset()
+    listRemoteTagsMock.mockReset()
     setActivePinia(createPinia())
   })
 
@@ -188,6 +242,123 @@ describe('history store log filters', () => {
       'all',
       true,
     )
+  })
+
+  it('ignores a log response after the active repo changes', async () => {
+    const pending = deferred<LogPage>()
+    getLogMock.mockReturnValueOnce(pending.promise)
+    const repoStore = useRepoStore()
+    const historyStore = useHistoryStore()
+
+    setActiveRepo(repoStore, 'repo-1', '/repos/a')
+    const load = historyStore.loadLog()
+
+    setActiveRepo(repoStore, 'repo-2', '/repos/b')
+    pending.resolve(page(false, ['old']))
+    await load
+
+    expect(historyStore.commits).toEqual([])
+    expect(historyStore.loading).toBe(false)
+  })
+
+  it('lets the latest log request win when requests finish out of order', async () => {
+    const older = deferred<LogPage>()
+    const newer = deferred<LogPage>()
+    getLogMock
+      .mockReturnValueOnce(older.promise)
+      .mockReturnValueOnce(newer.promise)
+    const repoStore = useRepoStore()
+    const historyStore = useHistoryStore()
+
+    setActiveRepo(repoStore, 'repo-1', '/repos/a')
+    const firstLoad = historyStore.loadLog()
+    const secondLoad = historyStore.loadLog()
+
+    newer.resolve(page(false, ['new']))
+    await secondLoad
+    expect(historyStore.commits.map((c) => c.oid)).toEqual(['new'])
+
+    older.resolve(page(false, ['old']))
+    await firstLoad
+    expect(historyStore.commits.map((c) => c.oid)).toEqual(['new'])
+  })
+
+  it('does not append a stale loadMore page after a full log reload', async () => {
+    getLogMock.mockResolvedValueOnce(page(true, ['base']))
+    const staleMore = deferred<LogPage>()
+    const reload = deferred<LogPage>()
+    getLogMock
+      .mockReturnValueOnce(staleMore.promise)
+      .mockReturnValueOnce(reload.promise)
+    const repoStore = useRepoStore()
+    const historyStore = useHistoryStore()
+
+    setActiveRepo(repoStore, 'repo-1', '/repos/a')
+    await historyStore.loadLog()
+
+    const loadMore = historyStore.loadMore()
+    const reloadLog = historyStore.loadLog()
+
+    reload.resolve(page(false, ['fresh']))
+    await reloadLog
+    staleMore.resolve(page(false, ['stale']))
+    await loadMore
+
+    expect(historyStore.commits.map((c) => c.oid)).toEqual(['fresh'])
+    expect(historyStore.loadingMore).toBe(false)
+  })
+
+  it('ignores change stats that finish after switching repos', async () => {
+    const pending = deferred<CommitChangeStats[]>()
+    getCommitChangeStatsMock.mockReturnValueOnce(pending.promise)
+    const repoStore = useRepoStore()
+    const historyStore = useHistoryStore()
+
+    setActiveRepo(repoStore, 'repo-1', '/repos/a')
+    const load = historyStore.ensureCommitChangeStats(['a'])
+
+    setActiveRepo(repoStore, 'repo-2', '/repos/b')
+    pending.resolve([stat('a')])
+    await load
+
+    expect(historyStore.commitChangeStats.has('a')).toBe(false)
+    expect(historyStore.commitChangeStatsLoading.has('a')).toBe(false)
+  })
+
+  it('ignores branch and remote responses after the active repo changes', async () => {
+    const pendingBranches = deferred<BranchInfo[]>()
+    const pendingRemotes = deferred<RemoteInfo[]>()
+    listBranchesMock.mockReturnValueOnce(pendingBranches.promise)
+    listRemotesMock.mockReturnValueOnce(pendingRemotes.promise)
+    const repoStore = useRepoStore()
+    const historyStore = useHistoryStore()
+
+    setActiveRepo(repoStore, 'repo-1', '/repos/a')
+    const load = historyStore.loadBranches()
+
+    setActiveRepo(repoStore, 'repo-2', '/repos/b')
+    pendingBranches.resolve([branch('main')])
+    pendingRemotes.resolve([{ name: 'origin', url: 'https://example.com/repo.git' }])
+    await load
+
+    expect(historyStore.branches).toEqual([])
+    expect(historyStore.remotes).toEqual([])
+  })
+
+  it('ignores tag responses after the active repo changes', async () => {
+    const pending = deferred<TagInfo[]>()
+    listTagsMock.mockReturnValueOnce(pending.promise)
+    const repoStore = useRepoStore()
+    const historyStore = useHistoryStore()
+
+    setActiveRepo(repoStore, 'repo-1', '/repos/a')
+    const load = historyStore.loadTags()
+
+    setActiveRepo(repoStore, 'repo-2', '/repos/b')
+    pending.resolve([tag('v1.0.0')])
+    await load
+
+    expect(historyStore.tags).toEqual([])
   })
 
   it('does not load more when ensureCommitLoaded finds the target in loaded commits', async () => {

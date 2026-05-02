@@ -13,12 +13,14 @@ export const useDiffStore = defineStore('diff', () => {
   const error = ref<string | null>(null)
 
   const git = useGitCommands()
+  let loadSeq = 0
 
   async function loadFileDiff(filePath: string, staged: boolean) {
     const repoStore = useRepoStore()
     const repoId = repoStore.activeRepoId
     if (!repoId) return
 
+    const requestSeq = ++loadSeq
     loading.value = true
     error.value = null
     currentPath.value = filePath
@@ -26,14 +28,17 @@ export const useDiffStore = defineStore('diff', () => {
     try {
       const result = await git.getFileDiff(repoId, filePath, staged)
       // 丢弃过期响应：await 期间用户可能已切换到其他仓库，
-      // 此时 repoId 与当前活跃仓库不符，写入会污染新仓库的 diff
-      if (repoId !== repoStore.activeRepoId) return
+      // 此时 repoId 与当前活跃仓库不符，写入会污染新仓库的 diff。
+      // 同一仓库内快速切换文件时，也只允许最后一次请求写入。
+      if (requestSeq !== loadSeq || repoId !== repoStore.activeRepoId) return
       currentDiff.value = result
     } catch (e: unknown) {
-      error.value = String(e)
-      currentDiff.value = null
+      if (requestSeq === loadSeq && repoId === repoStore.activeRepoId) {
+        error.value = String(e)
+        currentDiff.value = null
+      }
     } finally {
-      loading.value = false
+      if (requestSeq === loadSeq) loading.value = false
     }
   }
 
@@ -48,9 +53,11 @@ export const useDiffStore = defineStore('diff', () => {
   }
 
   function clear() {
+    loadSeq++
     currentDiff.value = null
     currentPath.value = null
     currentStaged.value = false
+    loading.value = false
     error.value = null
   }
 
