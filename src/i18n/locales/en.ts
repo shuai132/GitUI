@@ -784,8 +784,8 @@ const messages = {
   merge: {
     dialog: {
       title: 'Merge branch',
-      source: 'Source',
-      target: 'Target',
+      source: 'Merge source',
+      target: 'Current branch',
       strategy: 'Strategy',
       message: 'Message',
       messagePlaceholder: 'Merge commit message (non-ff)',
@@ -834,13 +834,26 @@ const messages = {
   },
   drag: {
     dialog: {
-      title: 'Combine commits',
-      source: 'Source',
-      target: 'Target',
+      title: 'Dragged commit action',
+      currentBranch: 'Current branch',
+      draggedCommit: 'Dragged commit',
+      droppedCommit: 'Dropped commit',
+      detachedHead: 'HEAD (detached)',
+      unknownSource: 'selected commit',
       onBranches: 'on branches: {list}',
-      question: 'What do you want to do?',
-      merge: 'Merge source into current branch',
-      rebase: 'Rebase current branch onto target',
+      question: 'These actions apply to the current branch.',
+      merge: 'Merge {source} into {branch}',
+      rebase: 'Rebase {branch} onto dropped commit',
+      mergeUnavailable: 'Merge unavailable: {reason}',
+      rebaseUnavailable: 'Rebase unavailable: {reason}',
+      disabled: {
+        ongoing: 'another repository operation is in progress',
+        detached: 'HEAD is not on a local branch',
+        no_source_branch: 'the dragged commit is not the tip of any branch',
+        no_target_commit: 'the dropped commit is missing',
+        source_is_current_branch: 'the dragged commit is the current branch tip',
+        target_is_head: 'the dropped commit is already HEAD',
+      },
     },
   },
   ongoing: {

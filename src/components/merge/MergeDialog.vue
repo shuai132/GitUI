@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import Modal from '@/components/common/Modal.vue'
 import { useMergeRebaseStore } from '@/stores/mergeRebase'
 import { useHistoryStore } from '@/stores/history'
+import { mergeSourceNames } from '@/utils/mergeSources'
 import type { MergeStrategy } from '@/types/git'
 
 const { t } = useI18n()
@@ -33,15 +34,9 @@ const targetBranch = computed(
     historyStore.branches.find((b) => b.is_head && !b.is_remote)?.name ?? 'HEAD',
 )
 
-const sourceOptions = computed(() => {
-  const set = new Set<string>()
-  for (const name of props.candidateSources) set.add(name)
-  // 候选不限于 props；本地所有分支都可作为源（除当前 HEAD）
-  for (const b of historyStore.branches) {
-    if (!b.is_remote && !b.is_head) set.add(b.name)
-  }
-  return Array.from(set)
-})
+const sourceOptions = computed(() =>
+  mergeSourceNames(historyStore.branches, props.candidateSources),
+)
 
 watch(
   () => props.visible,

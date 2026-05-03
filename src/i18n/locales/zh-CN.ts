@@ -783,8 +783,8 @@ const messages = {
   merge: {
     dialog: {
       title: '合并分支',
-      source: '源',
-      target: '目标',
+      source: '合入来源',
+      target: '当前分支',
       strategy: '策略',
       message: 'Message',
       messagePlaceholder: 'Merge commit 信息（非 ff 时）',
@@ -833,13 +833,26 @@ const messages = {
   },
   drag: {
     dialog: {
-      title: '合并提交',
-      source: '源',
-      target: '目标',
+      title: '拖拽提交操作',
+      currentBranch: '当前分支',
+      draggedCommit: '拖拽提交',
+      droppedCommit: '放置提交',
+      detachedHead: 'HEAD（游离）',
+      unknownSource: '所选提交',
       onBranches: '所在分支：{list}',
-      question: '你想要做什么？',
-      merge: '将源合并到当前分支',
-      rebase: '将当前分支变基到目标',
+      question: '以下操作都会作用于当前分支。',
+      merge: '将 {source} 合入 {branch}',
+      rebase: '将 {branch} 变基到放置提交',
+      mergeUnavailable: '无法合并：{reason}',
+      rebaseUnavailable: '无法变基：{reason}',
+      disabled: {
+        ongoing: '仓库已有进行中的操作',
+        detached: '当前不在本地分支上',
+        no_source_branch: '拖拽提交不是任何分支的顶端',
+        no_target_commit: '缺少放置提交',
+        source_is_current_branch: '拖拽提交是当前分支顶端',
+        target_is_head: '放置提交就是当前 HEAD',
+      },
     },
   },
   ongoing: {

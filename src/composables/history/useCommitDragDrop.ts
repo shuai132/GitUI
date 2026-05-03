@@ -1,5 +1,6 @@
 import { ref, type Ref } from 'vue'
 import { useHistoryStore } from '@/stores/history'
+import { mergeSourceNamesAtCommit } from '@/utils/mergeSources'
 import type { CommitInfo } from '@/types/git'
 
 export function useCommitDragDrop(
@@ -58,11 +59,8 @@ export function useCommitDragDrop(
       showDragDialog.value = false
       return
     }
-    const candidates = historyStore.branches
-      .filter(b => !b.is_remote && b.commit_oid === sourceOid && !b.is_head)
-      .map(b => b.name)
     showDragDialog.value = false
-    openMergeDialog(candidates)
+    openMergeDialog(mergeSourceNamesAtCommit(historyStore.branches, sourceOid))
   }
 
   function onDragDialogRebase() {

@@ -6,6 +6,7 @@ import { useMergeRebaseStore } from '@/stores/mergeRebase'
 import { usePluginsStore } from '@/stores/plugins'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useGlobalToast } from '@/composables/useGlobalToast'
+import { mergeSourceNamesAtCommit } from '@/utils/mergeSources'
 import type { ContextMenuItem } from '@/components/common/ContextMenu.vue'
 import type { CommitInfo } from '@/types/git'
 
@@ -154,9 +155,7 @@ export function useCommitContextMenu(
     }
 
     const ongoing = mergeRebaseStore.isOngoing
-    const pointedBranches = historyStore.branches
-      .filter(b => !b.is_remote && b.commit_oid === c.oid)
-      .map(b => b.name)
+    const pointedBranches = mergeSourceNamesAtCommit(historyStore.branches, c.oid)
     const canMerge = !ongoing && pointedBranches.length > 0 && c.oid !== headCommitOid.value
     const canRebase = !ongoing && c.oid !== headCommitOid.value
     const isHead = c.oid === headCommitOid.value
@@ -313,10 +312,7 @@ export function useCommitContextMenu(
           break
         }
         case 'merge-into': {
-          const candidates = historyStore.branches
-            .filter(b => !b.is_remote && b.commit_oid === c.oid && !b.is_head)
-            .map(b => b.name)
-          openMergeDialog(candidates)
+          openMergeDialog(mergeSourceNamesAtCommit(historyStore.branches, c.oid))
           break
         }
         case 'rebase-onto':
