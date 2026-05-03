@@ -673,7 +673,7 @@ mod tests {
         let path = test_repo.path_str();
 
         // Add untracked file
-        fs::write(test_repo.dir.path().join("new_file.txt"), "hello gitui").unwrap();
+        fs::write(test_repo.dir.path().join("new_file.txt"), "hello\ngitui\n").unwrap();
 
         // Add modified file
         fs::write(test_repo.dir.path().join("existing.txt"), "hello modified").unwrap();
@@ -681,7 +681,7 @@ mod tests {
         let status = GitEngine::get_status(path).expect("Failed to get status");
         assert_eq!(status.untracked.len(), 1);
         assert_eq!(status.untracked[0].path, "new_file.txt");
-        assert_eq!(status.untracked[0].additions, 0);
+        assert_eq!(status.untracked[0].additions, 2);
         assert_eq!(status.untracked[0].deletions, 0);
 
         assert_eq!(status.unstaged.len(), 1);

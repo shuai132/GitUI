@@ -186,6 +186,18 @@ impl GitEngine {
             }
         }
 
+        if !untracked.is_empty() {
+            let mut opts = DiffOptions::new();
+            opts.include_untracked(true)
+                .show_untracked_content(true)
+                .recurse_untracked_dirs(true);
+            if let Ok(index) = repo.index() {
+                if let Ok(diff) = repo.diff_index_to_workdir(Some(&index), Some(&mut opts)) {
+                    fill_stats(&mut untracked, &diff);
+                }
+            }
+        }
+
         let repo_state = Self::build_repo_state(&repo);
 
         Ok(WorkspaceStatus {
