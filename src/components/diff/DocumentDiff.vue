@@ -38,9 +38,18 @@ const { t } = useI18n()
 const uiStore = useUiStore()
 const { getBlobBytes, readWorktreeFile, extractDocumentText } = useGitCommands()
 
+const DOCUMENT_PREVIEW_SPLIT_KEY = 'gitui.diff.documentPreviewPct'
+const DOCUMENT_PREVIEW_DEFAULT_PCT = 45
+const DOCUMENT_PREVIEW_MIN_PCT = 15
+const DOCUMENT_PREVIEW_MAX_PCT = 85
+
+const documentDiffRef = ref<HTMLElement | null>(null)
 const oldSide = ref<DocumentSideState>(emptySide())
 const newSide = ref<DocumentSideState>(emptySide())
+const previewPct = ref(loadDocumentPreviewPct())
+const isDocumentSplitResizing = ref(false)
 let loadSeq = 0
+let stopDocumentSplitResize: (() => void) | null = null
 
 const rows = computed(() => buildDocumentDiffRows(oldSide.value.text, newSide.value.text))
 const hasChanges = computed(() => hasDocumentDiffChanges(rows.value))
@@ -73,6 +82,7 @@ watch(
 onBeforeUnmount(() => {
   revokeSide(oldSide.value)
   revokeSide(newSide.value)
+  stopDocumentSplitResize?.()
 })
 
 async function loadDocument() {
@@ -194,11 +204,67 @@ function base64ToBytes(base64: string): Uint8Array {
   return bytes
 }
 
+function loadDocumentPreviewPct(): number {
+  const raw = localStorage.getItem(DOCUMENT_PREVIEW_SPLIT_KEY)
+  if (raw === null) return DOCUMENT_PREVIEW_DEFAULT_PCT
+
+  const saved = Number(raw)
+  return Number.isFinite(saved)
+    ? clampDocumentPreviewPct(saved)
+    : DOCUMENT_PREVIEW_DEFAULT_PCT
+}
+
+function clampDocumentPreviewPct(value: number): number {
+  return Math.max(DOCUMENT_PREVIEW_MIN_PCT, Math.min(DOCUMENT_PREVIEW_MAX_PCT, value))
+}
+
+function startDocumentSplitResize(e: PointerEvent) {
+  e.preventDefault()
+  stopDocumentSplitResize?.()
+
+  const container = documentDiffRef.value
+  if (!container) return
+
+  const startY = e.clientY
+  const startH = container.getBoundingClientRect().height
+  const startPct = previewPct.value
+  if (startH <= 0) return
+
+  const onMove = (ev: PointerEvent) => {
+    ev.preventDefault()
+    const delta = ev.clientY - startY
+    previewPct.value = clampDocumentPreviewPct(startPct + (delta / startH) * 100)
+  }
+  const stopResize = () => {
+    window.removeEventListener('pointermove', onMove)
+    window.removeEventListener('pointerup', stopResize)
+    window.removeEventListener('pointercancel', stopResize)
+    window.removeEventListener('blur', stopResize)
+    document.body.style.cursor = ''
+    document.body.style.userSelect = ''
+    localStorage.setItem(DOCUMENT_PREVIEW_SPLIT_KEY, String(previewPct.value))
+    isDocumentSplitResizing.value = false
+    stopDocumentSplitResize = null
+  }
+
+  if (e.currentTarget instanceof HTMLElement && typeof e.currentTarget.setPointerCapture === 'function') {
+    e.currentTarget.setPointerCapture(e.pointerId)
+  }
+  isDocumentSplitResizing.value = true
+  stopDocumentSplitResize = stopResize
+  window.addEventListener('pointermove', onMove)
+  window.addEventListener('pointerup', stopResize)
+  window.addEventListener('pointercancel', stopResize)
+  window.addEventListener('blur', stopResize)
+  document.body.style.cursor = 'row-resize'
+  document.body.style.userSelect = 'none'
+}
+
 </script>
 
 <template>
-  <div class="document-diff">
-    <div class="document-preview-grid">
+  <div ref="documentDiffRef" class="document-diff">
+    <div class="document-preview-grid" :style="{ flex: `${previewPct} 0 0%` }">
       <section class="document-pane">
         <div class="pane-header">{{ t('diff.image.oldSide') }}</div>
         <div class="pane-body">
@@ -224,7 +290,17 @@ function base64ToBytes(base64: string): Uint8Array {
       </section>
     </div>
 
-    <div class="document-text-diff">
+    <div class="document-split-resize" @pointerdown="startDocumentSplitResize" />
+
+    <div
+      v-if="isDocumentSplitResizing"
+      class="document-split-overlay"
+      @pointermove.prevent
+      @pointerup.prevent="stopDocumentSplitResize?.()"
+      @pointercancel.prevent="stopDocumentSplitResize?.()"
+    />
+
+    <div class="document-text-diff" :style="{ flex: `${100 - previewPct} 0 0%` }">
       <div class="text-diff-header">
         <span>{{ t('diff.document.extractedTextDiff') }}</span>
         <span v-if="oldSide.textTruncated || newSide.textTruncated" class="truncated">
@@ -276,8 +352,9 @@ function base64ToBytes(base64: string): Uint8Array {
 
 <style scoped>
 .document-diff {
-  display: grid;
-  grid-template-rows: minmax(180px, 45%) minmax(0, 1fr);
+  display: flex;
+  flex-direction: column;
+  position: relative;
   height: 100%;
   min-height: 0;
   background: var(--bg-primary);
@@ -286,8 +363,34 @@ function base64ToBytes(base64: string): Uint8Array {
 .document-preview-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  flex-shrink: 0;
   min-height: 0;
+  overflow: hidden;
+}
+
+.document-split-resize {
+  height: 4px;
+  flex-shrink: 0;
+  cursor: row-resize;
+  background: transparent;
+  border-top: 1px solid var(--border);
   border-bottom: 1px solid var(--border);
+  position: relative;
+  z-index: 2;
+  transition: background 0.15s;
+}
+
+.document-split-resize:hover,
+.document-split-resize:active {
+  background: rgba(138, 173, 244, 0.3);
+}
+
+.document-split-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  cursor: row-resize;
+  background: transparent;
 }
 
 .document-pane {
