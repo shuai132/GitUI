@@ -48,9 +48,7 @@ const rowGroups = computed(() => {
   if (uiStore.diffGroupByHunk) return buildDocumentDiffGroups(rows.value)
   return rows.value.length === 0 ? [] : [{ header: '', rows: rows.value }]
 })
-const useSideBySideTextDiff = computed(
-  () => uiStore.diffLayoutMode === 'side-by-side' && !uiStore.diffGroupByHunk,
-)
+const useSideBySideTextDiff = computed(() => uiStore.diffLayoutMode === 'side-by-side')
 const hasText = computed(() => oldSide.value.text.length > 0 || newSide.value.text.length > 0)
 const loading = computed(() => oldSide.value.loading || newSide.value.loading)
 const isPdf = computed(() => props.documentKind === 'pdf')
