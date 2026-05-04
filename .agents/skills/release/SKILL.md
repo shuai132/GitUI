@@ -69,9 +69,17 @@ git tag vX.Y.Z
 - 步骤 2 产生了提交：`git push origin HEAD` 和 `git push origin vX.Y.Z` 分开跑。
 - 否则：只 `git push origin vX.Y.Z`。
 
-### 5. 回报
+### 5. 立即生成发布日志
 
-告诉用户：是否改过版本号文件、tag 名、指向的 commit（短 hash + 首行 message）、已推送的远程。
+tag 推送成功后，立即按 `release-notes` skill 为本次 `vX.Y.Z` 生成 Release notes。
+
+- 不要等用户再次要求。
+- 只生成可复制到 GitHub Release 的 Markdown 文本，不创建 GitHub Release。
+- 生成失败时，不影响已经完成的 tag / push；把失败原因和 release 推送结果一起回报。
+
+### 6. 回报
+
+告诉用户：是否改过版本号文件、tag 名、指向的 commit（短 hash + 首行 message）、已推送的远程，并附上本次生成的 Release notes。
 
 ## 注意事项
 
@@ -79,3 +87,4 @@ git tag vX.Y.Z
 - **不用 `git push --tags`**：只推本次这一个 tag。
 - **失败不回滚**：push 失败保留本地 tag / commit，告诉用户让用户决定，不要擅自 `git reset` 或 `git tag -d`。
 - **推送不用再确认**：skill 的语义就是推到 GitHub；只有前置/一致性检查异常才停下来确认。
+- **发布后衔接发布日志**：tag 推送成功后必须立刻执行 `release-notes` skill，目标版本就是刚推送的 `vX.Y.Z`。
