@@ -21,6 +21,9 @@ pub struct FrontendLogger;
 
 impl Log for FrontendLogger {
     fn enabled(&self, metadata: &Metadata) -> bool {
+        if metadata.target() == "lopdf::document" && metadata.level() >= Level::Debug {
+            return false;
+        }
         metadata.level() <= Level::Debug
     }
 
