@@ -289,6 +289,8 @@ const messages = {
       copyAbsolutePath: 'Copy absolute path',
       revealInFinder: 'Reveal in Finder',
       openInEditor: 'Open in editor',
+      openSubmodule: 'Open submodule',
+      openSubmoduleDisabled: 'Submodule working directory is unavailable',
       checkoutFileVersion: 'Checkout this file version',
     },
     wipRow: {

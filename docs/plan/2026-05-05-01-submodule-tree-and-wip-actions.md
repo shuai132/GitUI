@@ -16,7 +16,8 @@
 | 1. 确认数据来源 | 完成 | 复用 `list_submodules` 和现有仓库名册，不新增 IPC。 |
 | 2. 仓库列表树形展示 | 完成 | 在前端按 submodule workdir 绝对路径建立 parent-child 关系。 |
 | 3. WIP submodule 特殊项 | 完成 | 使用当前仓库 direct submodule path 标记列表项与菜单动作。 |
-| 4. 文档与验证 | 完成 | 文档已更新，类型检查和测试均已通过。 |
+| 4. 文档与验证 | 完成 | 首轮文档已更新，类型检查和测试均已通过。 |
+| 5. 历史详情右键入口 | 完成 | 提交详情变更文件菜单已支持打开 direct submodule。 |
 
 ## 子任务清单
 
@@ -26,6 +27,8 @@
 - [x] 扩展 WIP 右键菜单，submodule 项可打开为仓库。
 - [x] 更新 `docs/02-repo-management.md`、`docs/03-workspace.md`、`docs/09-submodules.md` 和 README 用户可见清单。
 - [x] 运行 `npx vue-tsc --noEmit`、`npm run test`、`cd src-tauri && cargo check`、`cd src-tauri && cargo test`。
+- [x] 扩展历史详情变更文件右键菜单，submodule diff 可打开对应 submodule 仓库。
+- [x] 重新运行受影响检查。
 
 ## 关键决策
 - **不新增 IPC**：子模块关系由现有 `list_submodules` 提供，打开子模块复用 `submodule_workdir` + `openRepo`，避免扩大后端契约。

@@ -289,6 +289,8 @@ const messages = {
       copyAbsolutePath: '复制绝对路径',
       revealInFinder: '在 Finder 中显示',
       openInEditor: '在编辑器中打开',
+      openSubmodule: '打开 Submodule',
+      openSubmoduleDisabled: 'Submodule 工作区不可用',
       checkoutFileVersion: '签出此文件版本',
     },
     wipRow: {

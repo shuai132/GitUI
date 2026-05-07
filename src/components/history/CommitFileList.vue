@@ -19,9 +19,11 @@ const props = withDefaults(defineProps<{
   selectedFileIdx: number
   loading?: boolean
   commitOid?: string
+  submodulePaths?: string[]
 }>(), {
   loading: false,
   commitOid: undefined,
+  submodulePaths: () => [],
 })
 
 const emit = defineEmits<{
@@ -71,6 +73,21 @@ const selectedFilePath = computed(() => {
   const diff = props.diffs[props.selectedFileIdx]
   return diff?.new_path ?? diff?.old_path ?? ''
 })
+
+const submodulePathSet = computed(() => new Set(props.submodulePaths))
+
+function isSubmodulePath(path: string): boolean {
+  return submodulePathSet.value.has(path)
+}
+
+function isSubmoduleFile(item: CommitFileDisplayItem): boolean {
+  return item.type === 'file' && isSubmodulePath(item.path)
+}
+
+function fileTitle(item: CommitFileDisplayItem): string {
+  if (!isSubmoduleFile(item)) return item.path
+  return `${item.path}\n${t('workspace.fileList.submoduleTitle')}`
+}
 
 function expandSelectedFileAncestors() {
   if (viewMode.value !== 'tree' || selectedDisplayIndex.value >= 0) return
@@ -194,7 +211,8 @@ function getDirItem(item: CommitFileDisplayItem) {
           class="file-tab"
           :class="{
             active: isActiveFile(displayItems[vRow.index]),
-            'is-dir': displayItems[vRow.index].type === 'dir'
+            'is-dir': displayItems[vRow.index].type === 'dir',
+            'is-submodule': isSubmoduleFile(displayItems[vRow.index])
           }"
           :style="{
             position: 'absolute',
@@ -204,7 +222,7 @@ function getDirItem(item: CommitFileDisplayItem) {
             height: rowHeight + 'px',
             transform: `translateY(${vRow.start}px)`
           }"
-          :title="displayItems[vRow.index].path"
+          :title="fileTitle(displayItems[vRow.index])"
           @click="onRowClick(displayItems[vRow.index])"
           @contextmenu="onRowContext($event, displayItems[vRow.index])"
         >
@@ -234,6 +252,23 @@ function getDirItem(item: CommitFileDisplayItem) {
 
           <template v-else>
             <svg
+              v-if="isSubmoduleFile(displayItems[vRow.index])"
+              class="submodule-icon"
+              width="13"
+              height="13"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+              <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+              <line x1="12" y1="22.08" x2="12" y2="12"/>
+            </svg>
+            <svg
+              v-else
               class="status-icon"
               :style="{ color: fileStatusColor(commitFileStatus(getFileItem(displayItems[vRow.index])!.file)) }"
               width="13"
@@ -342,8 +377,13 @@ function getDirItem(item: CommitFileDisplayItem) {
 }
 
 .file-tab .status-icon,
-.file-tab .folder-icon {
+.file-tab .folder-icon,
+.file-tab .submodule-icon {
   flex-shrink: 0;
+}
+
+.submodule-icon {
+  color: var(--accent-blue);
 }
 
 .folder-icon {
@@ -368,6 +408,10 @@ function getDirItem(item: CommitFileDisplayItem) {
 .file-tab.is-dir {
   font-weight: 500;
   color: var(--text-primary);
+}
+
+.file-tab.is-submodule .file-name {
+  font-weight: 500;
 }
 
 .file-name {

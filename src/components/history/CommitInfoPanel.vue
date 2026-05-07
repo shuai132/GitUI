@@ -7,11 +7,13 @@ import { GRAPH_COLORS } from '@/utils/graph'
 import { useUiStore } from '@/stores/ui'
 import { useRepoStore } from '@/stores/repos'
 import { useWorkspaceStore } from '@/stores/workspace'
+import { useSubmodulesStore } from '@/stores/submodules'
 import { useGitCommands } from '@/composables/useGitCommands'
 import { useHistoryStore } from '@/stores/history'
 import { useCommitFileMenu } from '@/composables/history/useCommitFileMenu'
 import ContextMenu from '@/components/common/ContextMenu.vue'
 import CommitFileList from '@/components/history/CommitFileList.vue'
+import type { SubmoduleInfo } from '@/types/git'
 
 const { t } = useI18n()
 const historyStore = useHistoryStore()
@@ -29,6 +31,7 @@ const emit = defineEmits<{
 
 const repoStore = useRepoStore()
 const workspaceStore = useWorkspaceStore()
+const submodulesStore = useSubmodulesStore()
 const git = useGitCommands()
 const sizes = uiStore.historyPaneSizes
 
@@ -96,6 +99,17 @@ const bodyText = computed(() => {
 // ── 文件右键菜单 ─────────────────────────────────────────────────
 const commitDiffs = computed(() => props.commit?.diffs ?? [])
 const commitOid = computed(() => props.commit?.info.oid)
+const submodulePaths = computed(() => submodulesStore.submodules.map((submodule) => submodule.path))
+
+async function openSubmoduleFromHistory(submodule: SubmoduleInfo) {
+  try {
+    const absPath = await submodulesStore.workdir(submodule.name)
+    await repoStore.openRepo(absPath)
+  } catch (err) {
+    console.error(err)
+    alert(t('sidebar.submodule.openFailed', { detail: String(err) }))
+  }
+}
 
 const {
   fileMenu,
@@ -107,8 +121,10 @@ const {
   git,
   repoStore,
   workspaceStore,
+  submodules: computed(() => submodulesStore.submodules),
   diffs: commitDiffs,
   commitOid,
+  openSubmodule: openSubmoduleFromHistory,
   showFileHistory: (payload) => emit('showFileHistory', payload),
 })
 </script>
@@ -168,6 +184,7 @@ const {
       :diffs="commit.diffs"
       :commit-oid="commit.info.oid"
       :selected-file-idx="selectedFileIdx"
+      :submodule-paths="submodulePaths"
       :loading="historyStore.loadingDetail"
       @select-file="emit('selectFile', $event)"
       @file-context-menu="openFileMenu"
