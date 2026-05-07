@@ -1,19 +1,66 @@
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRepoStore } from '@/stores/repos'
+import { useSubmodulesStore } from '@/stores/submodules'
 import { useUiStore } from '@/stores/ui'
 import { resolveExternalTerminalApp, useSettingsStore } from '@/stores/settings'
 import { useGitCommands } from '@/composables/useGitCommands'
 import { revealItemInDir } from '@tauri-apps/plugin-opener'
 import ContextMenu, { type ContextMenuItem } from '@/components/common/ContextMenu.vue'
 import type { RepoMeta } from '@/types/git'
+import { buildRepoTreeRows, type SubmodulesByRepoId } from '@/utils/repoTree'
 
 const { t } = useI18n()
 const repoStore = useRepoStore()
+const submodulesStore = useSubmodulesStore()
 const uiStore = useUiStore()
 const settingsStore = useSettingsStore()
 const git = useGitCommands()
+
+const submodulesByRepoId = ref<SubmodulesByRepoId>({})
+let submoduleRelationSeq = 0
+
+const repoRows = computed(() => buildRepoTreeRows(repoStore.repos, submodulesByRepoId.value))
+
+async function reloadRepoSubmoduleRelations() {
+  const requestSeq = ++submoduleRelationSeq
+  const repos = [...repoStore.repos]
+  if (repos.length === 0) {
+    submodulesByRepoId.value = {}
+    return
+  }
+
+  const entries = await Promise.all(
+    repos.map(async (repo) => {
+      try {
+        return [repo.id, await git.listSubmodules(repo.id)] as const
+      } catch (e) {
+        console.error(`[repo-tree] failed to list submodules for ${repo.path}:`, e)
+        return [repo.id, []] as const
+      }
+    }),
+  )
+  if (requestSeq !== submoduleRelationSeq) return
+  submodulesByRepoId.value = Object.fromEntries(entries)
+}
+
+watch(
+  () => repoStore.repos.map((repo) => `${repo.id}:${repo.path}`).join('\0'),
+  () => {
+    void reloadRepoSubmoduleRelations()
+  },
+  { immediate: true },
+)
+
+watch(
+  () => submodulesStore.submodules
+    .map((submodule) => `${submodule.name}:${submodule.path}:${submodule.state}`)
+    .join('\0'),
+  () => {
+    void reloadRepoSubmoduleRelations()
+  },
+)
 
 async function removeRepo(repoId: string) {
   try {
@@ -56,7 +103,8 @@ function startReposResize(e: PointerEvent) {
 
 // ── 所有仓库列表：基于 pointer events 的拖动排序 ────────────────────
 interface RepoDragState {
-  fromIndex: number
+  fromRowIndex: number
+  repoId: string
   startY: number
   isDragging: boolean
 }
@@ -71,7 +119,7 @@ const dropIndicatorTop = computed<number | null>(() => {
   const state = dragState.value
   if (!state || !state.isDragging) return null
   if (dragOverIndex.value === null) return null
-  const from = state.fromIndex
+  const from = state.fromRowIndex
   const over = dragOverIndex.value
   if (over === from) return null
   if (over === from - 1 && !dragInsertBefore.value) return null
@@ -108,10 +156,11 @@ function updateDragOverFromPointer(clientY: number) {
   }
 }
 
-function onRepoPointerDown(e: PointerEvent, index: number) {
+function onRepoPointerDown(e: PointerEvent, rowIndex: number, repoId: string) {
   if (e.button !== 0) return
   dragState.value = {
-    fromIndex: index,
+    fromRowIndex: rowIndex,
+    repoId,
     startY: e.clientY,
     isDragging: false,
   }
@@ -144,13 +193,20 @@ async function onPointerUp(_e: PointerEvent) {
   suppressClickUntil = Date.now() + 300
   if (over === null) return
 
-  const from = state.fromIndex
-  let target = before ? over : over + 1
-  if (from < target) target -= 1
+  const rows = repoRows.value
+  const overRow = rows[over]
+  if (!overRow) return
+
+  const fromIndex = repoStore.repos.findIndex((repo) => repo.id === state.repoId)
+  const overIndex = repoStore.repos.findIndex((repo) => repo.id === overRow.repo.id)
+  if (fromIndex < 0 || overIndex < 0) return
+
+  let target = before ? overIndex : overIndex + 1
+  if (fromIndex < target) target -= 1
   if (target < 0) target = 0
   if (target >= repoStore.repos.length) target = repoStore.repos.length - 1
-  if (target === from) return
-  await repoStore.reorderRepos(from, target)
+  if (target === fromIndex) return
+  await repoStore.reorderRepos(fromIndex, target)
 }
 
 function onRepoClick(e: MouseEvent, repoId: string) {
@@ -225,26 +281,52 @@ async function onRepoMenuAction(action: string) {
         :style="{ top: dropIndicatorTop + 'px' }"
       />
       <div
-        v-for="(repo, idx) in repoStore.repos"
-        :key="repo.id"
+        v-for="(row, idx) in repoRows"
+        :key="row.repo.id"
         class="repo-item"
         :class="{
-          'repo-item--active': repo.id === repoStore.activeRepoId,
-          'repo-item--dragging': dragState?.isDragging && dragState?.fromIndex === idx,
+          'repo-item--active': row.repo.id === repoStore.activeRepoId,
+          'repo-item--dragging': dragState?.isDragging && dragState?.repoId === row.repo.id,
+          'repo-item--submodule': row.depth > 0,
         }"
-        :title="repo.path"
-        @pointerdown="onRepoPointerDown($event, idx)"
-        @click="onRepoClick($event, repo.id)"
-        @contextmenu="openRepoMenu($event, repo)"
+        :style="{ paddingLeft: (12 + row.depth * 14) + 'px' }"
+        :title="row.repo.path"
+        @pointerdown="onRepoPointerDown($event, idx, row.repo.id)"
+        @click="onRepoClick($event, row.repo.id)"
+        @contextmenu="openRepoMenu($event, row.repo)"
       >
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <svg
+          v-if="row.depth === 0"
+          class="repo-item-icon"
+          width="11"
+          height="11"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+        >
           <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
         </svg>
-        <span class="repo-item-name">{{ repo.name }}</span>
+        <svg
+          v-else
+          class="repo-item-icon repo-item-icon--submodule"
+          width="11"
+          height="11"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+          <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+        </svg>
+        <span class="repo-item-name">{{ row.repo.name }}</span>
         <button
           class="repo-item-remove"
           :title="t('sidebar.repo.removeRepo')"
-          @click.stop="removeRepo(repo.id)"
+          @click.stop="removeRepo(row.repo.id)"
         >
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
             <line x1="18" y1="6" x2="6" y2="18"/>
@@ -333,6 +415,18 @@ async function onRepoMenuAction(action: string) {
   color: var(--text-primary);
   background: var(--bg-overlay);
   font-weight: 500;
+}
+
+.repo-item--submodule {
+  color: var(--text-muted);
+}
+
+.repo-item-icon {
+  flex-shrink: 0;
+}
+
+.repo-item-icon--submodule {
+  color: var(--accent-blue);
 }
 
 .repo-item-name {

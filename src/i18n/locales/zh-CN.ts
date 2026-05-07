@@ -490,6 +490,8 @@ const messages = {
         revealInFinder: '在 Finder 中显示',
         openInEditor: '在编辑器中打开',
         openTerminalHere: '在终端中打开',
+        openSubmodule: '打开 Submodule',
+        openSubmoduleDisabled: 'Submodule 工作区不可用',
         addToGitignore: '添加到 .gitignore',
         discardFile: '丢弃此文件未暂存的变更',
         useOurs: '使用 ours（HEAD 侧）',
@@ -512,6 +514,7 @@ const messages = {
     },
     fileList: {
       emptyDefault: '无变更',
+      submoduleTitle: 'Submodule',
       rowAction: {
         stage: '暂存',
         unstage: '取消暂存',

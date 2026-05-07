@@ -7,10 +7,11 @@ import { useDiffStore } from '@/stores/diff'
 import { useUiStore } from '@/stores/ui'
 import { useRepoStore } from '@/stores/repos'
 import { useSettingsStore } from '@/stores/settings'
+import { useSubmodulesStore } from '@/stores/submodules'
 import { useGitCommands } from '@/composables/useGitCommands'
 import { useWipFileActions } from '@/composables/workspace/useWipFileActions'
 import { useWipMenus } from '@/composables/workspace/useWipMenus'
-import type { FileEntry } from '@/types/git'
+import type { FileEntry, SubmoduleInfo } from '@/types/git'
 import { findSelectedWipIndex, findWipFileBySelection } from '@/utils/wipSelection'
 import FileChangeList from '@/components/workspace/FileChangeList.vue'
 import WipCommitBox from '@/components/workspace/WipCommitBox.vue'
@@ -34,6 +35,7 @@ const diffStore = useDiffStore()
 const uiStore = useUiStore()
 const repoStore = useRepoStore()
 const settingsStore = useSettingsStore()
+const submodulesStore = useSubmodulesStore()
 const git = useGitCommands()
 const mergeRebaseStore = useMergeRebaseStore()
 
@@ -70,6 +72,7 @@ const unstagedAll = computed<FileEntry[]>(() => {
 })
 
 const stagedAll = computed<FileEntry[]>(() => workspaceStore.status?.staged ?? [])
+const submodulePaths = computed(() => submodulesStore.submodules.map((submodule) => submodule.path))
 
 // ── 文件选择 & diff 加载 ──────────────────────────────────────────
 const selectedPath = storeToRefs(workspaceStore).wipSelectedPath
@@ -117,6 +120,16 @@ function onUnstagedMultiSelect(paths: string[]) {
 
 function onStagedMultiSelect(paths: string[]) {
   stagedMultiPaths.value = paths
+}
+
+async function openSubmoduleFromWip(submodule: SubmoduleInfo) {
+  try {
+    const absPath = await submodulesStore.workdir(submodule.name)
+    await repoStore.openRepo(absPath)
+  } catch (err) {
+    console.error(err)
+    alert(t('sidebar.submodule.openFailed', { detail: String(err) }))
+  }
 }
 
 const {
@@ -169,6 +182,7 @@ const {
   repoStore,
   settingsStore,
   workspaceStore,
+  submodules: computed(() => submodulesStore.submodules),
   selectedPath,
   unstagedMultiPaths,
   stagedMultiPaths,
@@ -177,6 +191,7 @@ const {
   batchUnstage,
   batchDiscard,
   confirmDiscardFile: (filePath) => confirm(t('workspace.confirmDiscard.file', { file: filePath })),
+  openSubmodule: openSubmoduleFromWip,
   showFileHistory: (payload) => emit('showFileHistory', payload),
 })
 
@@ -380,6 +395,7 @@ watch(
           :selected-staged="diffStore.currentStaged"
           variant="unstaged"
           :view-mode="viewMode"
+          :submodule-paths="submodulePaths"
           @select="onSelectFile"
           @toggle="onToggleFile"
           @context-menu="onFileContext"
@@ -418,6 +434,7 @@ watch(
           :selected-staged="diffStore.currentStaged"
           variant="staged"
           :view-mode="viewMode"
+          :submodule-paths="submodulePaths"
           @select="onSelectFile"
           @toggle="onToggleFile"
           @context-menu="onFileContext"

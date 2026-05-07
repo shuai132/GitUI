@@ -491,6 +491,8 @@ const messages = {
         revealInFinder: 'Reveal in Finder',
         openInEditor: 'Open in editor',
         openTerminalHere: 'Open terminal here',
+        openSubmodule: 'Open submodule',
+        openSubmoduleDisabled: 'Submodule working directory is unavailable',
         addToGitignore: 'Add to .gitignore',
         discardFile: 'Discard unstaged changes to this file',
         useOurs: 'Use ours (HEAD)',
@@ -513,6 +515,7 @@ const messages = {
     },
     fileList: {
       emptyDefault: 'No changes',
+      submoduleTitle: 'Submodule',
       rowAction: {
         stage: 'Stage',
         unstage: 'Unstage',

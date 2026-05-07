@@ -1,4 +1,4 @@
-import { computed, reactive, type Ref } from 'vue'
+import { computed, reactive, type ComputedRef, type Ref } from 'vue'
 import type { ComposerTranslation } from 'vue-i18n'
 import type { ContextMenuItem } from '@/components/common/ContextMenu.vue'
 import type { ContextMenuPayload } from '@/components/workspace/FileChangeList.vue'
@@ -7,7 +7,7 @@ import type { useMergeRebaseStore } from '@/stores/mergeRebase'
 import type { useRepoStore } from '@/stores/repos'
 import { resolveExternalTerminalApp, type useSettingsStore } from '@/stores/settings'
 import type { useWorkspaceStore } from '@/stores/workspace'
-import type { FileEntry } from '@/types/git'
+import type { FileEntry, SubmoduleInfo } from '@/types/git'
 
 type GitCommands = ReturnType<typeof useGitCommands>
 type MergeRebaseStore = ReturnType<typeof useMergeRebaseStore>
@@ -22,6 +22,7 @@ type WipMenuOptions = {
   repoStore: RepoStore
   settingsStore: SettingsStore
   workspaceStore: WorkspaceStore
+  submodules: ComputedRef<SubmoduleInfo[]>
   selectedPath: Ref<string | null>
   unstagedMultiPaths: Ref<string[]>
   stagedMultiPaths: Ref<string[]>
@@ -30,6 +31,7 @@ type WipMenuOptions = {
   batchUnstage: () => Promise<void>
   batchDiscard: () => Promise<void>
   confirmDiscardFile: (filePath: string) => boolean
+  openSubmodule: (submodule: SubmoduleInfo) => Promise<void>
   showFileHistory: (payload: { filePath: string; mode: 'history' | 'blame' }) => void
 }
 
@@ -41,6 +43,7 @@ export function useWipMenus(options: WipMenuOptions) {
     repoStore,
     settingsStore,
     workspaceStore,
+    submodules,
     selectedPath,
     unstagedMultiPaths,
     stagedMultiPaths,
@@ -49,6 +52,7 @@ export function useWipMenus(options: WipMenuOptions) {
     batchUnstage,
     batchDiscard,
     confirmDiscardFile,
+    openSubmodule,
     showFileHistory,
   } = options
 
@@ -83,6 +87,28 @@ export function useWipMenus(options: WipMenuOptions) {
     isDir: false,
   })
 
+  function submoduleForPath(path: string): SubmoduleInfo | undefined {
+    return submodules.value.find((submodule) => submodule.path === path)
+  }
+
+  function canOpenSubmodule(submodule: SubmoduleInfo | undefined): submodule is SubmoduleInfo {
+    return !!submodule &&
+      submodule.state !== 'uninitialized' &&
+      submodule.state !== 'not_cloned' &&
+      submodule.state !== 'not_found'
+  }
+
+  function openSubmoduleMenuItem(submodule: SubmoduleInfo | undefined): ContextMenuItem | null {
+    if (!submodule) return null
+    const disabled = !canOpenSubmodule(submodule)
+    return {
+      label: t('workspace.wip.menu.openSubmodule'),
+      action: 'open-submodule',
+      disabled,
+      title: disabled ? t('workspace.wip.menu.openSubmoduleDisabled') : undefined,
+    }
+  }
+
   const fileMenuItems = computed<ContextMenuItem[]>(() => {
     if (fileMenu.isDir) {
       return [
@@ -100,8 +126,14 @@ export function useWipMenus(options: WipMenuOptions) {
 
     const f = fileMenu.file
     if (!f) return []
+    const submodule = submoduleForPath(f.path)
+    const submoduleItem = openSubmoduleMenuItem(submodule)
     if (f.status === 'conflicted') {
-      return [
+      const items: ContextMenuItem[] = []
+      if (submoduleItem) {
+        items.push(submoduleItem, { separator: true })
+      }
+      items.push(
         { label: t('workspace.wip.menu.useOurs'), action: 'use-ours' },
         { label: t('workspace.wip.menu.useTheirs'), action: 'use-theirs' },
         { separator: true },
@@ -109,13 +141,19 @@ export function useWipMenus(options: WipMenuOptions) {
         { separator: true },
         { label: t('workspace.wip.menu.copyRelativePath'), action: 'copy-relative' },
         { label: t('workspace.wip.menu.openInEditor'), action: 'open-editor' },
-      ]
+      )
+      return items
     }
-    return [
+    const items: ContextMenuItem[] = [
       {
         label: f.staged ? t('workspace.wip.menu.unstage') : t('workspace.wip.menu.stage'),
         action: 'toggle',
       },
+    ]
+    if (submoduleItem) {
+      items.push(submoduleItem)
+    }
+    items.push(
       { separator: true },
       { label: t('workspace.wip.menu.copyName'), action: 'copy-name' },
       { label: t('workspace.wip.menu.copyRelativePath'), action: 'copy-relative' },
@@ -140,7 +178,8 @@ export function useWipMenus(options: WipMenuOptions) {
       { separator: true },
       { label: t('fileHistory.menu.history'), action: 'file-history', disabled: f.status === 'untracked' },
       { label: t('fileHistory.menu.blame'), action: 'file-blame', disabled: f.status === 'untracked' || f.status === 'deleted' },
-    ]
+    )
+    return items
   })
 
   function openFileContextMenu(e: MouseEvent, payload: ContextMenuPayload) {
@@ -199,6 +238,11 @@ export function useWipMenus(options: WipMenuOptions) {
         await mergeRebaseStore.resolveConflict(targetPath, content)
       } else if (action === 'toggle') {
         await toggleFile(isDir ? targetPath : f!, isDir)
+      } else if (action === 'open-submodule') {
+        const submodule = submoduleForPath(targetPath)
+        if (canOpenSubmodule(submodule)) {
+          await openSubmodule(submodule)
+        }
       } else if (action === 'copy-name') {
         await navigator.clipboard.writeText(targetPath.split('/').pop() ?? targetPath)
       } else if (action === 'copy-relative') {

@@ -19,6 +19,7 @@ const props = defineProps<{
   selectedStaged?: boolean | null
   variant?: 'unstaged' | 'staged'
   viewMode?: 'list' | 'tree'
+  submodulePaths?: string[]
 }>()
 
 export type ContextMenuPayload = {
@@ -83,6 +84,17 @@ const displayItems = computed<DisplayItem[]>(() => {
   }
   return props.files.map(f => ({ type: 'file', path: f.path, file: f, depth: 0 }))
 })
+
+const submodulePathSet = computed(() => new Set(props.submodulePaths ?? []))
+
+function isSubmodulePath(path: string): boolean {
+  return submodulePathSet.value.has(path)
+}
+
+function fileTitle(file: FileEntry): string {
+  if (!isSubmodulePath(file.path)) return file.path
+  return `${file.path}\n${t('workspace.fileList.submoduleTitle')}`
+}
 
 // ── 多选状态 ──────────────────────────────────────────────────────
 const multiSelectedPaths = ref(new Set<string>())
@@ -249,7 +261,8 @@ defineExpose({ scrollToIndex, clearMultiSelect, expandAll, collapseAll })
           :class="{
             selected: displayItems[vRow.index].type === 'file' && isSameWipFile(getFile(displayItems[vRow.index]), selectedPath ?? null, selectedStaged),
             'multi-selected': displayItems[vRow.index].type === 'file' && multiSelectedPaths.has(displayItems[vRow.index].path),
-            'is-dir': displayItems[vRow.index].type === 'dir'
+            'is-dir': displayItems[vRow.index].type === 'dir',
+            'is-submodule': displayItems[vRow.index].type === 'file' && isSubmodulePath(displayItems[vRow.index].path),
           }"
           :style="{
             position: 'absolute',
@@ -295,6 +308,23 @@ defineExpose({ scrollToIndex, clearMultiSelect, expandAll, collapseAll })
           <!-- File Item -->
           <template v-else>
             <svg
+              v-if="isSubmodulePath(getFile(displayItems[vRow.index]).path)"
+              class="submodule-icon"
+              width="13"
+              height="13"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+              <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+              <line x1="12" y1="22.08" x2="12" y2="12"/>
+            </svg>
+            <svg
+              v-else
               class="status-icon"
               :style="{ color: fileStatusColor(getFile(displayItems[vRow.index]).status) }"
               width="13"
@@ -308,7 +338,7 @@ defineExpose({ scrollToIndex, clearMultiSelect, expandAll, collapseAll })
             >
               <path :d="statusIconMap[getFile(displayItems[vRow.index]).status]?.d ?? statusIconMap.untracked.d" />
             </svg>
-            <span class="file-path" :title="displayItems[vRow.index].path">
+            <span class="file-path" :title="fileTitle(getFile(displayItems[vRow.index]))">
               <span class="path-text"><bdi>{{ viewMode === 'tree' ? (displayItems[vRow.index].path.split('/').pop() || displayItems[vRow.index].path) : displayItems[vRow.index].path }}</bdi></span>
             </span>
             <span
@@ -396,6 +426,10 @@ defineExpose({ scrollToIndex, clearMultiSelect, expandAll, collapseAll })
   color: var(--text-primary);
 }
 
+.file-entry.is-submodule .file-path {
+  font-weight: 500;
+}
+
 .file-entry.selected {
   background: var(--row-selected-bg);
   color: var(--row-selected-fg);
@@ -443,9 +477,13 @@ defineExpose({ scrollToIndex, clearMultiSelect, expandAll, collapseAll })
   border-color: var(--accent-blue);
 }
 
-.status-icon, .folder-icon {
+.status-icon, .folder-icon, .submodule-icon {
   flex-shrink: 0;
   color: var(--text-secondary);
+}
+
+.submodule-icon {
+  color: var(--accent-blue);
 }
 
 .folder-icon {
