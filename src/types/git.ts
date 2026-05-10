@@ -162,6 +162,10 @@ export interface FileDiff {
   old_blob_oid?: string
   /** 新侧 blob oid；删除或 WIP 未暂存修改侧为空 */
   new_blob_oid?: string
+  /** 旧侧文件 mode；submodule gitlink 为 160000 */
+  old_file_mode?: number
+  /** 新侧文件 mode；submodule gitlink 为 160000 */
+  new_file_mode?: number
   /** 检测到的文件编码名，如 "UTF-8" / "GBK" / "Shift_JIS" */
   encoding: string
 }

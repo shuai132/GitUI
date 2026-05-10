@@ -270,6 +270,12 @@ pub struct FileDiff {
     /// 新侧 blob oid；删除场景或工作区未暂存的修改侧为 None
     #[serde(default)]
     pub new_blob_oid: Option<String>,
+    /// 旧侧文件 mode；submodule gitlink 为 160000
+    #[serde(default)]
+    pub old_file_mode: Option<u32>,
+    /// 新侧文件 mode；submodule gitlink 为 160000
+    #[serde(default)]
+    pub new_file_mode: Option<u32>,
     /// 检测到的文件编码名（如 "UTF-8" / "GBK" / "Shift_JIS"），
     /// 由 detect_file_encoding 按优先级链（gitattributes → BOM → UTF-8 试解 → chardetng）推断
     #[serde(default = "default_encoding")]

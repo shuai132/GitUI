@@ -137,7 +137,7 @@ fn read_rebase_state(
 mod tests {
     use super::*;
     use crate::git::test_utils::TestRepo;
-    use git2::{Oid, StashFlags};
+    use git2::{IndexEntry, IndexTime, Oid, StashFlags};
     use std::fs;
 
     fn checkout_branch(repo: &git2::Repository, name: &str) {
@@ -170,6 +170,35 @@ mod tests {
         let repo = &test_repo.repo;
         let mut index = repo.index().unwrap();
         index.add_path(std::path::Path::new(file_name)).unwrap();
+        index.write().unwrap();
+        let tree_oid = index.write_tree().unwrap();
+        let tree = repo.find_tree(tree_oid).unwrap();
+        let sig = repo.signature().unwrap();
+        let parent = repo.head().unwrap().peel_to_commit().unwrap();
+        repo.commit(Some("HEAD"), &sig, &sig, message, &tree, &[&parent])
+            .unwrap()
+    }
+
+    fn commit_gitlink(test_repo: &TestRepo, message: &str, path: &str) -> Oid {
+        let repo = &test_repo.repo;
+        let target_oid = repo.head().unwrap().target().unwrap();
+        let mut index = repo.index().unwrap();
+        index
+            .add(&IndexEntry {
+                ctime: IndexTime::new(0, 0),
+                mtime: IndexTime::new(0, 0),
+                dev: 0,
+                ino: 0,
+                mode: 0o160000,
+                uid: 0,
+                gid: 0,
+                file_size: 0,
+                id: target_oid,
+                flags: 0,
+                flags_extended: 0,
+                path: path.as_bytes().to_vec(),
+            })
+            .unwrap();
         index.write().unwrap();
         let tree_oid = index.write_tree().unwrap();
         let tree = repo.find_tree(tree_oid).unwrap();
@@ -665,6 +694,23 @@ mod tests {
                 diff.additions
             );
         }
+    }
+
+    #[test]
+    fn test_commit_detail_includes_gitlink_file_mode() {
+        let test_repo = TestRepo::new();
+        let path = test_repo.path_str();
+        let oid = commit_gitlink(&test_repo, "add submodule gitlink", "libs/child");
+
+        let detail = GitEngine::get_commit_detail(path, &oid.to_string()).unwrap();
+        let diff = detail
+            .diffs
+            .iter()
+            .find(|d| d.new_path.as_deref() == Some("libs/child"))
+            .expect("gitlink diff should be present");
+
+        assert_eq!(diff.old_file_mode, None);
+        assert_eq!(diff.new_file_mode, Some(0o160000));
     }
 
     #[test]

@@ -13,9 +13,9 @@
 | 阶段 | 状态 | 说明 |
 | ---- | ---- | ---- |
 | 1. 共享工具与测试 | 完成 | 抽取前端 submodule 判断逻辑，补 Vitest。 |
-| 2. Init / Update 菜单动作 | 进行中 | 历史详情和工作区菜单都复用同一动作判断。 |
-| 3. 历史 gitlink mode 识别 | 待开始 | 扩展 `FileDiff` IPC 数据并同步文档。 |
-| 4. 验证与分步提交 | 进行中 | 每个阶段独立提交，提交前运行要求的检查。 |
+| 2. Init / Update 菜单动作 | 完成 | 历史详情和工作区菜单都复用同一动作判断。 |
+| 3. 历史 gitlink mode 识别 | 完成 | 扩展 `FileDiff` IPC 数据并同步文档。 |
+| 4. 验证与分步提交 | 完成 | 每个阶段独立提交，提交前运行要求的检查。 |
 
 ## 子任务清单
 
@@ -23,10 +23,10 @@
 - [x] 补 `src/utils/submodules.spec.ts` 覆盖状态与路径匹配。
 - [x] 工作区和历史菜单改为使用共享工具。
 - [x] 在未 init / 未 clone / not found 时提供 init / update 菜单动作，并刷新 submodule / workspace 状态。
-- [ ] Rust `FileDiff` 增加文件 mode 信息，前端类型同步。
-- [ ] 后端 diff 构建处填充 mode，前端用 gitlink mode 标记历史 submodule 项。
-- [ ] 更新 `docs/04-history.md`、`docs/09-submodules.md`、`docs/11-ipc.md` 和 README。
-- [ ] 分阶段运行 `npx vue-tsc --noEmit`、`npm run test`、`cd src-tauri && cargo fmt`、`cd src-tauri && cargo check`、`cd src-tauri && cargo test`。
+- [x] Rust `FileDiff` 增加文件 mode 信息，前端类型同步。
+- [x] 后端 diff 构建处填充 mode，前端用 gitlink mode 标记历史 submodule 项。
+- [x] 更新 `docs/04-history.md`、`docs/09-submodules.md`、`docs/11-ipc.md` 和 README。
+- [x] 分阶段运行 `npx vue-tsc --noEmit`、`npm run test`、`cd src-tauri && cargo fmt`、`cd src-tauri && cargo check`、`cd src-tauri && cargo test`。
 
 ## 关键决策
 - **不新增 IPC command**：init / update / open 继续复用现有 submodule 命令，避免扩大命令面。

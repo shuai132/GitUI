@@ -221,6 +221,8 @@ impl GitEngine {
             deletions: 0,
             old_blob_oid: None,
             new_blob_oid: None,
+            old_file_mode: None,
+            new_file_mode: None,
             encoding: "UTF-8".to_owned(),
         }))
     }
@@ -351,6 +353,8 @@ impl GitEngine {
             deletions,
             old_blob_oid,
             new_blob_oid: None,
+            old_file_mode: conflict.our.as_ref().map(|e| e.mode),
+            new_file_mode: None,
             encoding: encoding_name,
         }))
     }
@@ -387,6 +391,8 @@ impl GitEngine {
             is_binary: bool,
             old_blob_oid: Option<String>,
             new_blob_oid: Option<String>,
+            old_file_mode: Option<u32>,
+            new_file_mode: Option<u32>,
             hunks: Vec<PendingHunk>,
             current_hunk: Option<PendingHunk>,
             additions: usize,
@@ -418,6 +424,8 @@ impl GitEngine {
                     let is_binary = delta.old_file().is_binary() || delta.new_file().is_binary();
                     let old_id = delta.old_file().id();
                     let new_id = delta.new_file().id();
+                    let old_file_mode = diff_file_mode(&delta.old_file());
+                    let new_file_mode = diff_file_mode(&delta.new_file());
                     let old_blob_oid = if old_id.is_zero() {
                         None
                     } else {
@@ -437,8 +445,10 @@ impl GitEngine {
                             let mut merged = files.pop().unwrap();
                             if new_id.is_zero() {
                                 merged.old_blob_oid = Some(old_id.to_string());
+                                merged.old_file_mode = old_file_mode;
                             } else if old_id.is_zero() {
                                 merged.new_blob_oid = Some(new_id.to_string());
+                                merged.new_file_mode = new_file_mode;
                             }
                             merged.is_binary = merged.is_binary || is_binary;
                             current = Some(merged);
@@ -452,6 +462,8 @@ impl GitEngine {
                         is_binary,
                         old_blob_oid,
                         new_blob_oid,
+                        old_file_mode,
+                        new_file_mode,
                         hunks: Vec::new(),
                         current_hunk: None,
                         additions: 0,
@@ -650,6 +662,8 @@ impl GitEngine {
                 deletions: pending.deletions,
                 old_blob_oid: pending.old_blob_oid,
                 new_blob_oid: pending.new_blob_oid,
+                old_file_mode: pending.old_file_mode,
+                new_file_mode: pending.new_file_mode,
                 encoding: encoding_name,
             });
         }
@@ -668,6 +682,8 @@ impl GitEngine {
         let mut file_cb = |delta: git2::DiffDelta<'_>, _: f32| {
             let old_id = delta.old_file().id();
             let new_id = delta.new_file().id();
+            let old_file_mode = diff_file_mode(&delta.old_file());
+            let new_file_mode = diff_file_mode(&delta.new_file());
             let old_path = delta
                 .old_file()
                 .path()
@@ -683,8 +699,10 @@ impl GitEngine {
                 {
                     if new_id.is_zero() {
                         last.old_blob_oid = Some(old_id.to_string());
+                        last.old_file_mode = old_file_mode;
                     } else if old_id.is_zero() {
                         last.new_blob_oid = Some(new_id.to_string());
+                        last.new_file_mode = new_file_mode;
                     }
                     last.is_binary = last.is_binary
                         || delta.old_file().is_binary()
@@ -710,6 +728,8 @@ impl GitEngine {
                 } else {
                     Some(new_id.to_string())
                 },
+                old_file_mode,
+                new_file_mode,
                 encoding: "UTF-8".to_string(),
             });
             true
@@ -937,9 +957,15 @@ impl GitEngine {
             deletions: 0,
             old_blob_oid: None,
             new_blob_oid: None,
+            old_file_mode: None,
+            new_file_mode: None,
             encoding: "UTF-8".to_owned(),
         }))
     }
+}
+
+fn diff_file_mode(file: &git2::DiffFile<'_>) -> Option<u32> {
+    file.exists().then(|| u32::from(file.mode()))
 }
 
 fn line_number(value: u32) -> Option<u32> {

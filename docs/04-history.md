@@ -58,7 +58,7 @@
 ### 元数据查看 (CommitInfo)
 展示详尽的提交信息，支持长内容的横向滚动与文本的自由选中复制。文件变更列表支持按路径搜索并能关联到 Diff 查看器。
 
-提交详情的变更文件右键菜单支持复制路径、在文件系统 / 编辑器中打开、签出该文件历史版本，以及进入 File History / Blame。若变更路径对应当前仓库的 direct submodule，菜单会提供打开该 submodule 仓库的动作；未初始化或工作区不存在时，菜单改为提供 init / update 动作。
+提交详情的变更文件右键菜单支持复制路径、在文件系统 / 编辑器中打开、签出该文件历史版本，以及进入 File History / Blame。若变更路径对应当前仓库的 direct submodule，菜单会提供打开该 submodule 仓库的动作；未初始化或工作区不存在时，菜单改为提供 init / update 动作。历史 diff 会保留文件 mode，用于把当前工作区已不存在的旧 submodule gitlink 仍标记为 submodule 项；这类旧项只做识别，不提供当前工作区动作。
 
 ### 差异对比
 集成三模态 Diff 查看器，详情见 `docs/06-diff-viewer.md`。

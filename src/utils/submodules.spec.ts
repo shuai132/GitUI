@@ -6,6 +6,8 @@ import {
   canOpenSubmodule,
   findSubmoduleByPath,
   findSubmoduleForDiff,
+  gitlinkPathsForDiff,
+  isGitlinkDiff,
   isGitlinkFileMode,
   isSubmodulePath,
   submoduleSetupAction,
@@ -70,5 +72,22 @@ describe('submodule utils', () => {
     expect(isGitlinkFileMode(GITLINK_FILE_MODE)).toBe(true)
     expect(isGitlinkFileMode(0o100644)).toBe(false)
     expect(isGitlinkFileMode(undefined)).toBe(false)
+  })
+
+  it('extracts paths from gitlink diffs', () => {
+    expect(isGitlinkDiff({ old_file_mode: undefined, new_file_mode: GITLINK_FILE_MODE })).toBe(true)
+    expect(isGitlinkDiff({ old_file_mode: 0o100644, new_file_mode: 0o100644 })).toBe(false)
+    expect(gitlinkPathsForDiff({
+      old_path: 'libs/old',
+      new_path: 'libs/new',
+      old_file_mode: GITLINK_FILE_MODE,
+      new_file_mode: GITLINK_FILE_MODE,
+    })).toEqual(['libs/old', 'libs/new'])
+    expect(gitlinkPathsForDiff({
+      old_path: 'regular.txt',
+      new_path: 'regular.txt',
+      old_file_mode: 0o100644,
+      new_file_mode: 0o100644,
+    })).toEqual([])
   })
 })

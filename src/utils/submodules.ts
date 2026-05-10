@@ -48,3 +48,18 @@ export function submoduleSetupAction(
 export function isGitlinkFileMode(mode: number | null | undefined): boolean {
   return mode === GITLINK_FILE_MODE
 }
+
+export function isGitlinkDiff(
+  diff: Pick<FileDiff, 'old_file_mode' | 'new_file_mode'>,
+): boolean {
+  return isGitlinkFileMode(diff.old_file_mode) || isGitlinkFileMode(diff.new_file_mode)
+}
+
+export function gitlinkPathsForDiff(
+  diff: Pick<FileDiff, 'old_path' | 'new_path' | 'old_file_mode' | 'new_file_mode'>,
+): string[] {
+  const paths: string[] = []
+  if (isGitlinkFileMode(diff.old_file_mode) && diff.old_path) paths.push(diff.old_path)
+  if (isGitlinkFileMode(diff.new_file_mode) && diff.new_path) paths.push(diff.new_path)
+  return paths
+}

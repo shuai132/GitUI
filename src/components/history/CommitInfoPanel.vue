@@ -14,6 +14,7 @@ import { useCommitFileMenu } from '@/composables/history/useCommitFileMenu'
 import ContextMenu from '@/components/common/ContextMenu.vue'
 import CommitFileList from '@/components/history/CommitFileList.vue'
 import type { SubmoduleInfo } from '@/types/git'
+import { gitlinkPathsForDiff } from '@/utils/submodules'
 
 const { t } = useI18n()
 const historyStore = useHistoryStore()
@@ -99,7 +100,15 @@ const bodyText = computed(() => {
 // ── 文件右键菜单 ─────────────────────────────────────────────────
 const commitDiffs = computed(() => props.commit?.diffs ?? [])
 const commitOid = computed(() => props.commit?.info.oid)
-const submodulePaths = computed(() => submodulesStore.submodules.map((submodule) => submodule.path))
+const submodulePaths = computed(() => {
+  const paths = new Set(submodulesStore.submodules.map((submodule) => submodule.path))
+  for (const diff of commitDiffs.value) {
+    for (const path of gitlinkPathsForDiff(diff)) {
+      paths.add(path)
+    }
+  }
+  return [...paths]
+})
 
 async function openSubmoduleFromHistory(submodule: SubmoduleInfo) {
   try {
