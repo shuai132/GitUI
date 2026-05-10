@@ -7,6 +7,7 @@ import { fileStatusColor } from '@/utils/format'
 import { useSettingsStore } from '@/stores/settings'
 import { buildFileTree, flattenTree } from '@/utils/fileTree'
 import { isSameWipFile } from '@/utils/wipSelection'
+import { buildSubmodulePathSet, isSubmodulePath } from '@/utils/submodules'
 
 const { t } = useI18n()
 
@@ -85,14 +86,14 @@ const displayItems = computed<DisplayItem[]>(() => {
   return props.files.map(f => ({ type: 'file', path: f.path, file: f, depth: 0 }))
 })
 
-const submodulePathSet = computed(() => new Set(props.submodulePaths ?? []))
+const submodulePathSet = computed(() => buildSubmodulePathSet(props.submodulePaths))
 
-function isSubmodulePath(path: string): boolean {
-  return submodulePathSet.value.has(path)
+function isDisplayedSubmodulePath(path: string): boolean {
+  return isSubmodulePath(submodulePathSet.value, path)
 }
 
 function fileTitle(file: FileEntry): string {
-  if (!isSubmodulePath(file.path)) return file.path
+  if (!isDisplayedSubmodulePath(file.path)) return file.path
   return `${file.path}\n${t('workspace.fileList.submoduleTitle')}`
 }
 
@@ -262,7 +263,7 @@ defineExpose({ scrollToIndex, clearMultiSelect, expandAll, collapseAll })
             selected: displayItems[vRow.index].type === 'file' && isSameWipFile(getFile(displayItems[vRow.index]), selectedPath ?? null, selectedStaged),
             'multi-selected': displayItems[vRow.index].type === 'file' && multiSelectedPaths.has(displayItems[vRow.index].path),
             'is-dir': displayItems[vRow.index].type === 'dir',
-            'is-submodule': displayItems[vRow.index].type === 'file' && isSubmodulePath(displayItems[vRow.index].path),
+            'is-submodule': displayItems[vRow.index].type === 'file' && isDisplayedSubmodulePath(displayItems[vRow.index].path),
           }"
           :style="{
             position: 'absolute',
@@ -308,7 +309,7 @@ defineExpose({ scrollToIndex, clearMultiSelect, expandAll, collapseAll })
           <!-- File Item -->
           <template v-else>
             <svg
-              v-if="isSubmodulePath(getFile(displayItems[vRow.index]).path)"
+              v-if="isDisplayedSubmodulePath(getFile(displayItems[vRow.index]).path)"
               class="submodule-icon"
               width="13"
               height="13"

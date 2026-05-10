@@ -8,6 +8,7 @@ import type { useRepoStore } from '@/stores/repos'
 import { resolveExternalTerminalApp, type useSettingsStore } from '@/stores/settings'
 import type { useWorkspaceStore } from '@/stores/workspace'
 import type { FileEntry, SubmoduleInfo } from '@/types/git'
+import { canOpenSubmodule, findSubmoduleByPath } from '@/utils/submodules'
 
 type GitCommands = ReturnType<typeof useGitCommands>
 type MergeRebaseStore = ReturnType<typeof useMergeRebaseStore>
@@ -87,17 +88,6 @@ export function useWipMenus(options: WipMenuOptions) {
     isDir: false,
   })
 
-  function submoduleForPath(path: string): SubmoduleInfo | undefined {
-    return submodules.value.find((submodule) => submodule.path === path)
-  }
-
-  function canOpenSubmodule(submodule: SubmoduleInfo | undefined): submodule is SubmoduleInfo {
-    return !!submodule &&
-      submodule.state !== 'uninitialized' &&
-      submodule.state !== 'not_cloned' &&
-      submodule.state !== 'not_found'
-  }
-
   function openSubmoduleMenuItem(submodule: SubmoduleInfo | undefined): ContextMenuItem | null {
     if (!submodule) return null
     const disabled = !canOpenSubmodule(submodule)
@@ -126,7 +116,7 @@ export function useWipMenus(options: WipMenuOptions) {
 
     const f = fileMenu.file
     if (!f) return []
-    const submodule = submoduleForPath(f.path)
+    const submodule = findSubmoduleByPath(submodules.value, f.path)
     const submoduleItem = openSubmoduleMenuItem(submodule)
     if (f.status === 'conflicted') {
       const items: ContextMenuItem[] = []
@@ -239,7 +229,7 @@ export function useWipMenus(options: WipMenuOptions) {
       } else if (action === 'toggle') {
         await toggleFile(isDir ? targetPath : f!, isDir)
       } else if (action === 'open-submodule') {
-        const submodule = submoduleForPath(targetPath)
+        const submodule = findSubmoduleByPath(submodules.value, targetPath)
         if (canOpenSubmodule(submodule)) {
           await openSubmodule(submodule)
         }

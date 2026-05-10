@@ -5,6 +5,7 @@ import type { useGitCommands } from '@/composables/useGitCommands'
 import type { useRepoStore } from '@/stores/repos'
 import type { useWorkspaceStore } from '@/stores/workspace'
 import type { FileDiff, SubmoduleInfo } from '@/types/git'
+import { canOpenSubmodule, findSubmoduleForDiff } from '@/utils/submodules'
 
 type GitCommands = ReturnType<typeof useGitCommands>
 type RepoStore = ReturnType<typeof useRepoStore>
@@ -46,25 +47,12 @@ export function useCommitFileMenu(options: CommitFileMenuOptions) {
     diffIdx: -1,
   })
 
-  function submoduleForDiff(diff: FileDiff): SubmoduleInfo | undefined {
-    return submodules.value.find((submodule) =>
-      submodule.path === diff.new_path || submodule.path === diff.old_path
-    )
-  }
-
-  function canOpenSubmodule(submodule: SubmoduleInfo | undefined): submodule is SubmoduleInfo {
-    return !!submodule &&
-      submodule.state !== 'uninitialized' &&
-      submodule.state !== 'not_cloned' &&
-      submodule.state !== 'not_found'
-  }
-
   const fileMenuItems = computed<ContextMenuItem[]>(() => {
     const diff = diffs.value[fileMenu.diffIdx]
     if (!diff) return []
 
     const isDeleted = !diff.new_blob_oid && !!diff.old_blob_oid
-    const submodule = submoduleForDiff(diff)
+    const submodule = findSubmoduleForDiff(submodules.value, diff)
     const items: ContextMenuItem[] = [
       { label: t('history.fileMenu.copyName'), action: 'copy-name' },
       { label: t('history.fileMenu.copyRelativePath'), action: 'copy-relative' },
@@ -121,7 +109,7 @@ export function useCommitFileMenu(options: CommitFileMenuOptions) {
       } else if (action === 'open-editor') {
         await git.openFileInEditor(absPath)
       } else if (action === 'open-submodule') {
-        const submodule = submoduleForDiff(diff)
+        const submodule = findSubmoduleForDiff(submodules.value, diff)
         if (canOpenSubmodule(submodule)) {
           await openSubmodule(submodule)
         }

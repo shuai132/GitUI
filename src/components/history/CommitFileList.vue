@@ -10,6 +10,7 @@ import {
   useCommitFileItems,
   type CommitFileDisplayItem,
 } from '@/composables/history/useCommitFileItems'
+import { buildSubmodulePathSet, isSubmodulePath } from '@/utils/submodules'
 
 const { t } = useI18n()
 const settings = useSettingsStore()
@@ -74,14 +75,10 @@ const selectedFilePath = computed(() => {
   return diff?.new_path ?? diff?.old_path ?? ''
 })
 
-const submodulePathSet = computed(() => new Set(props.submodulePaths))
-
-function isSubmodulePath(path: string): boolean {
-  return submodulePathSet.value.has(path)
-}
+const submodulePathSet = computed(() => buildSubmodulePathSet(props.submodulePaths))
 
 function isSubmoduleFile(item: CommitFileDisplayItem): boolean {
-  return item.type === 'file' && isSubmodulePath(item.path)
+  return item.type === 'file' && isSubmodulePath(submodulePathSet.value, item.path)
 }
 
 function fileTitle(item: CommitFileDisplayItem): string {
