@@ -6,6 +6,7 @@ import SideBySideDiff from './SideBySideDiff.vue'
 import InlineDiff from './InlineDiff.vue'
 import ImageDiff from './ImageDiff.vue'
 import DocumentDiff from './DocumentDiff.vue'
+import MarkdownDiff from './MarkdownDiff.vue'
 import ConflictView from './ConflictView.vue'
 import DiffToolbar from './DiffToolbar.vue'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
@@ -17,6 +18,7 @@ import { useRevertHunk } from '@/composables/diff/useRevertHunk'
 import { useWipHunkAction } from '@/composables/diff/useWipHunkAction'
 import { useGitCommands } from '@/composables/useGitCommands'
 import type { FullFileContent } from '@/lib/fullFileDiff'
+import { loadDiffFullText, loadDiffSideText } from '@/lib/diffText'
 
 const props = defineProps<{
   diff: FileDiff | null
@@ -251,6 +253,7 @@ watch(
       props.diff.is_binary ||
       props.diff.hunks.length === 0 ||
       isImageView.value ||
+      previewKind.value === 'markdown' ||
       uiStore.diffGroupByHunk
     ) {
       return
@@ -264,55 +267,23 @@ watch(
 )
 
 async function loadFullFileContent(diff: FileDiff): Promise<FullFileContent | null> {
-  const [oldText, newText] = await Promise.all([
-    loadSideText('old', diff),
-    loadSideText('new', diff),
-  ])
-  if (oldText == null || newText == null) return null
-  return { oldText, newText }
+  return loadDiffFullText({
+    repoId: props.repoId!,
+    diff,
+    wip: props.wip ?? null,
+    getBlobBytes,
+    readWorktreeFile,
+  })
 }
 
 async function loadSideText(side: DiffSide, diff: FileDiff): Promise<string | null> {
-  try {
-    if (side === 'old') {
-      if (!diff.old_blob_oid) return ''
-      const blob = await getBlobBytes(props.repoId!, diff.old_blob_oid, true)
-      return blob.truncated ? null : decodeBase64Text(blob.bytes_base64, diff.encoding)
-    }
-
-    if (props.wip && !props.wip.staged && diff.new_path && diffHasNewSide(diff)) {
-      const blob = await readWorktreeFile(props.repoId!, diff.new_path, true)
-      return blob.truncated ? null : decodeBase64Text(blob.bytes_base64, diff.encoding)
-    }
-    if (!diff.new_blob_oid) return ''
-    const blob = await getBlobBytes(props.repoId!, diff.new_blob_oid, true)
-    return blob.truncated ? null : decodeBase64Text(blob.bytes_base64, diff.encoding)
-  } catch {
-    return null
-  }
-}
-
-function diffHasNewSide(diff: FileDiff): boolean {
-  if (diff.new_blob_oid) return true
-  return diff.hunks.some((hunk) => hunk.new_lines > 0)
-}
-
-function decodeBase64Text(base64: string, encoding: string): string {
-  const binary = atob(base64)
-  const bytes = new Uint8Array(binary.length)
-  for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.charCodeAt(i)
-  }
-  try {
-    return new TextDecoder(normalizeTextDecoderLabel(encoding)).decode(bytes)
-  } catch {
-    return new TextDecoder().decode(bytes)
-  }
-}
-
-function normalizeTextDecoderLabel(encoding: string): string {
-  if (encoding.toUpperCase() === 'UTF-8 BOM') return 'utf-8'
-  return encoding
+  return loadDiffSideText({
+    repoId: props.repoId!,
+    diff,
+    wip: props.wip ?? null,
+    getBlobBytes,
+    readWorktreeFile,
+  }, side)
 }
 
 function fallbackDiffIdentityKey(diff: FileDiff | null): string | null {
@@ -365,6 +336,20 @@ function fallbackDiffIdentityKey(diff: FileDiff | null): string | null {
         :diff="diff"
         :repo-id="repoId"
         :wip="wip ?? null"
+      />
+      <MarkdownDiff
+        v-else-if="previewKind === 'markdown' && diff && repoId"
+        ref="diffRef"
+        :diff="diff"
+        :repo-id="repoId"
+        :wip="wip ?? null"
+        :syntax-lang="syntaxLang"
+        :syntax-lang-for-line="syntaxLangForLine"
+        :scroll-reset-key="activeDiffIdentityKey"
+        :hunk-action-label="hunkActionLabel"
+        :hunk-discard-label="hunkDiscardLabel"
+        @hunk-action="onHunkAction"
+        @hunk-discard="onHunkDiscard"
       />
       <SideBySideDiff
         v-else-if="uiStore.diffLayoutMode === 'side-by-side'"

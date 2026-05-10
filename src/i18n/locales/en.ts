@@ -582,6 +582,9 @@ const messages = {
       previewTooLarge: 'Document too large, preview unavailable',
       loadFailed: 'Load failed: {detail}',
     },
+    markdown: {
+      previewUnavailable: 'Markdown preview unavailable',
+    },
   },
   terminal: {
     close: 'Close Terminal',

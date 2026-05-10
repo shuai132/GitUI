@@ -581,6 +581,9 @@ const messages = {
       previewTooLarge: '文档过大，无法预览',
       loadFailed: '加载失败：{detail}',
     },
+    markdown: {
+      previewUnavailable: 'Markdown 预览不可用',
+    },
   },
   terminal: {
     close: '关闭终端',
