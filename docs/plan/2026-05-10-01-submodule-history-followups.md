@@ -12,8 +12,8 @@
 
 | 阶段 | 状态 | 说明 |
 | ---- | ---- | ---- |
-| 1. 共享工具与测试 | 进行中 | 抽取前端 submodule 判断逻辑，补 Vitest。 |
-| 2. Init / Update 菜单动作 | 待开始 | 历史详情和工作区菜单都复用同一动作判断。 |
+| 1. 共享工具与测试 | 完成 | 抽取前端 submodule 判断逻辑，补 Vitest。 |
+| 2. Init / Update 菜单动作 | 进行中 | 历史详情和工作区菜单都复用同一动作判断。 |
 | 3. 历史 gitlink mode 识别 | 待开始 | 扩展 `FileDiff` IPC 数据并同步文档。 |
 | 4. 验证与分步提交 | 进行中 | 每个阶段独立提交，提交前运行要求的检查。 |
 
@@ -22,7 +22,7 @@
 - [x] 新增 `src/utils/submodules.ts`，集中 `findSubmoduleByPath`、`canOpenSubmodule`、菜单动作判断和 gitlink mode 判断。
 - [x] 补 `src/utils/submodules.spec.ts` 覆盖状态与路径匹配。
 - [x] 工作区和历史菜单改为使用共享工具。
-- [ ] 在未 init / 未 clone / not found 时提供 init / update 菜单动作，并刷新 submodule / workspace 状态。
+- [x] 在未 init / 未 clone / not found 时提供 init / update 菜单动作，并刷新 submodule / workspace 状态。
 - [ ] Rust `FileDiff` 增加文件 mode 信息，前端类型同步。
 - [ ] 后端 diff 构建处填充 mode，前端用 gitlink mode 标记历史 submodule 项。
 - [ ] 更新 `docs/04-history.md`、`docs/09-submodules.md`、`docs/11-ipc.md` 和 README。

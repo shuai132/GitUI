@@ -132,6 +132,30 @@ async function openSubmoduleFromWip(submodule: SubmoduleInfo) {
   }
 }
 
+async function initSubmoduleFromWip(submodule: SubmoduleInfo) {
+  try {
+    await submodulesStore.init(submodule.name)
+    if (repoStore.activeRepoId) {
+      await workspaceStore.refresh(repoStore.activeRepoId)
+    }
+  } catch (err) {
+    console.error(err)
+    alert(t('common.operationFailed', { detail: String(err) }))
+  }
+}
+
+async function updateSubmoduleFromWip(submodule: SubmoduleInfo) {
+  try {
+    await submodulesStore.update(submodule.name)
+    if (repoStore.activeRepoId) {
+      await workspaceStore.refresh(repoStore.activeRepoId)
+    }
+  } catch (err) {
+    console.error(err)
+    alert(t('common.operationFailed', { detail: String(err) }))
+  }
+}
+
 const {
   toggleFile,
   stageAll,
@@ -192,6 +216,8 @@ const {
   batchDiscard,
   confirmDiscardFile: (filePath) => confirm(t('workspace.confirmDiscard.file', { file: filePath })),
   openSubmodule: openSubmoduleFromWip,
+  initSubmodule: initSubmoduleFromWip,
+  updateSubmodule: updateSubmoduleFromWip,
   showFileHistory: (payload) => emit('showFileHistory', payload),
 })
 

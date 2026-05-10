@@ -8,6 +8,7 @@ import {
   findSubmoduleForDiff,
   isGitlinkFileMode,
   isSubmodulePath,
+  submoduleSetupAction,
 } from '@/utils/submodules'
 
 function submodule(path: string, state: SubmoduleState): SubmoduleInfo {
@@ -54,6 +55,15 @@ describe('submodule utils', () => {
     expect(canOpenSubmodule(submodule('pending-clone', 'not_cloned'))).toBe(false)
     expect(canOpenSubmodule(submodule('missing', 'not_found'))).toBe(false)
     expect(canOpenSubmodule(undefined)).toBe(false)
+  })
+
+  it('maps unavailable workdirs to setup actions', () => {
+    expect(submoduleSetupAction(submodule('pending-init', 'uninitialized'))).toBe('init-submodule')
+    expect(submoduleSetupAction(submodule('pending-clone', 'not_cloned'))).toBe('update-submodule')
+    expect(submoduleSetupAction(submodule('missing', 'not_found'))).toBe('update-submodule')
+    expect(submoduleSetupAction(submodule('ready', 'up_to_date'))).toBeNull()
+    expect(submoduleSetupAction(submodule('dirty', 'modified'))).toBeNull()
+    expect(submoduleSetupAction(undefined)).toBeNull()
   })
 
   it('identifies gitlink file modes', () => {

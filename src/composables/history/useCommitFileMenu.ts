@@ -5,7 +5,7 @@ import type { useGitCommands } from '@/composables/useGitCommands'
 import type { useRepoStore } from '@/stores/repos'
 import type { useWorkspaceStore } from '@/stores/workspace'
 import type { FileDiff, SubmoduleInfo } from '@/types/git'
-import { canOpenSubmodule, findSubmoduleForDiff } from '@/utils/submodules'
+import { canOpenSubmodule, findSubmoduleForDiff, submoduleSetupAction } from '@/utils/submodules'
 
 type GitCommands = ReturnType<typeof useGitCommands>
 type RepoStore = ReturnType<typeof useRepoStore>
@@ -20,6 +20,8 @@ type CommitFileMenuOptions = {
   diffs: Ref<FileDiff[]>
   commitOid: Ref<string | undefined>
   openSubmodule: (submodule: SubmoduleInfo) => Promise<void>
+  initSubmodule: (submodule: SubmoduleInfo) => Promise<void>
+  updateSubmodule: (submodule: SubmoduleInfo) => Promise<void>
   showFileHistory: (payload: { filePath: string; mode: 'history' | 'blame' }) => void
 }
 
@@ -37,6 +39,8 @@ export function useCommitFileMenu(options: CommitFileMenuOptions) {
     diffs,
     commitOid,
     openSubmodule,
+    initSubmodule,
+    updateSubmodule,
     showFileHistory,
   } = options
 
@@ -62,13 +66,29 @@ export function useCommitFileMenu(options: CommitFileMenuOptions) {
       { label: t('history.fileMenu.openInEditor'), action: 'open-editor', disabled: isDeleted },
     ]
     if (submodule) {
-      const disabled = !canOpenSubmodule(submodule)
-      items.push({
-        label: t('history.fileMenu.openSubmodule'),
-        action: 'open-submodule',
-        disabled,
-        title: disabled ? t('history.fileMenu.openSubmoduleDisabled') : undefined,
-      })
+      if (canOpenSubmodule(submodule)) {
+        items.push({
+          label: t('history.fileMenu.openSubmodule'),
+          action: 'open-submodule',
+        })
+      } else {
+        const setupAction = submoduleSetupAction(submodule)
+        if (setupAction) {
+          items.push({
+            label: setupAction === 'init-submodule'
+              ? t('history.fileMenu.initSubmodule')
+              : t('history.fileMenu.updateSubmodule'),
+            action: setupAction,
+          })
+        } else {
+          items.push({
+            label: t('history.fileMenu.openSubmodule'),
+            action: 'open-submodule',
+            disabled: true,
+            title: t('history.fileMenu.openSubmoduleDisabled'),
+          })
+        }
+      }
     }
     items.push(
       { separator: true },
@@ -112,6 +132,16 @@ export function useCommitFileMenu(options: CommitFileMenuOptions) {
         const submodule = findSubmoduleForDiff(submodules.value, diff)
         if (canOpenSubmodule(submodule)) {
           await openSubmodule(submodule)
+        }
+      } else if (action === 'init-submodule') {
+        const submodule = findSubmoduleForDiff(submodules.value, diff)
+        if (submodule && submoduleSetupAction(submodule) === 'init-submodule') {
+          await initSubmodule(submodule)
+        }
+      } else if (action === 'update-submodule') {
+        const submodule = findSubmoduleForDiff(submodules.value, diff)
+        if (submodule && submoduleSetupAction(submodule) === 'update-submodule') {
+          await updateSubmodule(submodule)
         }
       } else if (action === 'checkout-file') {
         const repoId = repoStore.activeRepoId

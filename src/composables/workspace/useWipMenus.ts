@@ -8,7 +8,7 @@ import type { useRepoStore } from '@/stores/repos'
 import { resolveExternalTerminalApp, type useSettingsStore } from '@/stores/settings'
 import type { useWorkspaceStore } from '@/stores/workspace'
 import type { FileEntry, SubmoduleInfo } from '@/types/git'
-import { canOpenSubmodule, findSubmoduleByPath } from '@/utils/submodules'
+import { canOpenSubmodule, findSubmoduleByPath, submoduleSetupAction } from '@/utils/submodules'
 
 type GitCommands = ReturnType<typeof useGitCommands>
 type MergeRebaseStore = ReturnType<typeof useMergeRebaseStore>
@@ -33,6 +33,8 @@ type WipMenuOptions = {
   batchDiscard: () => Promise<void>
   confirmDiscardFile: (filePath: string) => boolean
   openSubmodule: (submodule: SubmoduleInfo) => Promise<void>
+  initSubmodule: (submodule: SubmoduleInfo) => Promise<void>
+  updateSubmodule: (submodule: SubmoduleInfo) => Promise<void>
   showFileHistory: (payload: { filePath: string; mode: 'history' | 'blame' }) => void
 }
 
@@ -54,6 +56,8 @@ export function useWipMenus(options: WipMenuOptions) {
     batchDiscard,
     confirmDiscardFile,
     openSubmodule,
+    initSubmodule,
+    updateSubmodule,
     showFileHistory,
   } = options
 
@@ -90,12 +94,26 @@ export function useWipMenus(options: WipMenuOptions) {
 
   function openSubmoduleMenuItem(submodule: SubmoduleInfo | undefined): ContextMenuItem | null {
     if (!submodule) return null
-    const disabled = !canOpenSubmodule(submodule)
+    if (canOpenSubmodule(submodule)) {
+      return {
+        label: t('workspace.wip.menu.openSubmodule'),
+        action: 'open-submodule',
+      }
+    }
+    const setupAction = submoduleSetupAction(submodule)
+    if (setupAction) {
+      return {
+        label: setupAction === 'init-submodule'
+          ? t('workspace.wip.menu.initSubmodule')
+          : t('workspace.wip.menu.updateSubmodule'),
+        action: setupAction,
+      }
+    }
     return {
       label: t('workspace.wip.menu.openSubmodule'),
       action: 'open-submodule',
-      disabled,
-      title: disabled ? t('workspace.wip.menu.openSubmoduleDisabled') : undefined,
+      disabled: true,
+      title: t('workspace.wip.menu.openSubmoduleDisabled'),
     }
   }
 
@@ -232,6 +250,16 @@ export function useWipMenus(options: WipMenuOptions) {
         const submodule = findSubmoduleByPath(submodules.value, targetPath)
         if (canOpenSubmodule(submodule)) {
           await openSubmodule(submodule)
+        }
+      } else if (action === 'init-submodule') {
+        const submodule = findSubmoduleByPath(submodules.value, targetPath)
+        if (submodule && submoduleSetupAction(submodule) === 'init-submodule') {
+          await initSubmodule(submodule)
+        }
+      } else if (action === 'update-submodule') {
+        const submodule = findSubmoduleByPath(submodules.value, targetPath)
+        if (submodule && submoduleSetupAction(submodule) === 'update-submodule') {
+          await updateSubmodule(submodule)
         }
       } else if (action === 'copy-name') {
         await navigator.clipboard.writeText(targetPath.split('/').pop() ?? targetPath)

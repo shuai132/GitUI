@@ -111,6 +111,30 @@ async function openSubmoduleFromHistory(submodule: SubmoduleInfo) {
   }
 }
 
+async function initSubmoduleFromHistory(submodule: SubmoduleInfo) {
+  try {
+    await submodulesStore.init(submodule.name)
+    if (repoStore.activeRepoId) {
+      await workspaceStore.refresh(repoStore.activeRepoId)
+    }
+  } catch (err) {
+    console.error(err)
+    alert(t('common.operationFailed', { detail: String(err) }))
+  }
+}
+
+async function updateSubmoduleFromHistory(submodule: SubmoduleInfo) {
+  try {
+    await submodulesStore.update(submodule.name)
+    if (repoStore.activeRepoId) {
+      await workspaceStore.refresh(repoStore.activeRepoId)
+    }
+  } catch (err) {
+    console.error(err)
+    alert(t('common.operationFailed', { detail: String(err) }))
+  }
+}
+
 const {
   fileMenu,
   fileMenuItems,
@@ -125,6 +149,8 @@ const {
   diffs: commitDiffs,
   commitOid,
   openSubmodule: openSubmoduleFromHistory,
+  initSubmodule: initSubmoduleFromHistory,
+  updateSubmodule: updateSubmoduleFromHistory,
   showFileHistory: (payload) => emit('showFileHistory', payload),
 })
 </script>

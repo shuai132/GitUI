@@ -1,6 +1,7 @@
 import type { FileDiff, SubmoduleInfo } from '@/types/git'
 
 export const GITLINK_FILE_MODE = 0o160000
+export type SubmoduleSetupAction = 'init-submodule' | 'update-submodule'
 
 export function buildSubmodulePathSet(paths: readonly string[] | undefined): Set<string> {
   return new Set(paths ?? [])
@@ -31,6 +32,17 @@ export function canOpenSubmodule(submodule: SubmoduleInfo | undefined): submodul
     submodule.state !== 'uninitialized' &&
     submodule.state !== 'not_cloned' &&
     submodule.state !== 'not_found'
+}
+
+export function submoduleSetupAction(
+  submodule: SubmoduleInfo | undefined,
+): SubmoduleSetupAction | null {
+  if (!submodule) return null
+  if (submodule.state === 'uninitialized') return 'init-submodule'
+  if (submodule.state === 'not_cloned' || submodule.state === 'not_found') {
+    return 'update-submodule'
+  }
+  return null
 }
 
 export function isGitlinkFileMode(mode: number | null | undefined): boolean {
