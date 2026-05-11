@@ -765,6 +765,8 @@ const messages = {
       updateAvailable: '发现新版本',
       releaseNotes: '发行说明',
       noReleaseNotes: '暂无发行说明',
+      releaseNotesFallback: '应用内暂时无法加载发行说明，请前往 GitHub Releases 查看最新发布详情。',
+      openReleases: '打开 GitHub Releases',
       downloading: '正在下载...',
       updateDownloaded: '下载完成，重启以应用更新',
       updateError: '更新失败',

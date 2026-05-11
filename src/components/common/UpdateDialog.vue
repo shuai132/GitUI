@@ -18,7 +18,7 @@ marked.use({
 
 const props = defineProps<{
   visible: boolean
-  update: Pick<Update, 'version' | 'body' | 'downloadAndInstall'> | null
+  update: Pick<Update, 'version' | 'downloadAndInstall'> | null
 }>()
 
 const emit = defineEmits<{
@@ -35,6 +35,7 @@ const error = ref<string | null>(null)
 // Release notes from GitHub API
 const releaseNotesHtml = ref<string | null>(null)
 const notesLoading = ref(false)
+const RELEASES_URL = 'https://github.com/shuai132/GitUI/releases'
 
 function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err)
@@ -54,7 +55,7 @@ async function fetchReleaseNotes(version: string) {
       releaseNotesHtml.value = body ? (await marked.parse(body)) : null
     }
   } catch {
-    // network failed — will fallback to update.body below
+    // network failed; the dialog falls back to the GitHub Releases page link.
   } finally {
     notesLoading.value = false
   }
@@ -113,6 +114,11 @@ function handleRestart() {
   void relaunch()
 }
 
+async function openReleases() {
+  const { openUrl } = await import('@tauri-apps/plugin-opener')
+  await openUrl(RELEASES_URL)
+}
+
 function handleClose() {
   if (isDownloading.value) return
   emit('close')
@@ -135,9 +141,15 @@ function handleClose() {
             class="release-notes-body release-notes-md"
             v-html="releaseNotesHtml"
           />
-          <!-- Fallback: plain text from latest.json -->
-          <div v-else class="release-notes-body">
-            {{ update.body || t('settings.about.noReleaseNotes') }}
+          <div v-else class="release-notes-body release-notes-fallback">
+            <span>{{ t('settings.about.releaseNotesFallback') }}</span>
+            <a
+              class="release-notes-link"
+              :href="RELEASES_URL"
+              target="_blank"
+              rel="noopener"
+              @click.prevent="openReleases"
+            >{{ t('settings.about.openReleases') }}</a>
           </div>
         </div>
       </div>
@@ -256,6 +268,22 @@ function handleClose() {
 /* Markdown rendered styles */
 .release-notes-md {
   white-space: normal;
+}
+
+.release-notes-fallback {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.release-notes-link {
+  color: var(--accent-blue);
+  text-decoration: none;
+  width: fit-content;
+}
+
+.release-notes-link:hover {
+  text-decoration: underline;
 }
 
 .release-notes-md :deep(h1),

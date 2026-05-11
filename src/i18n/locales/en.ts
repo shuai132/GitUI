@@ -766,6 +766,8 @@ const messages = {
       updateAvailable: 'New Version Available',
       releaseNotes: 'Release Notes',
       noReleaseNotes: 'No release notes available',
+      releaseNotesFallback: 'Release notes could not be loaded in the app. Open GitHub Releases to view the latest release details.',
+      openReleases: 'Open GitHub Releases',
       downloading: 'Downloading...',
       updateDownloaded: 'Update downloaded, restart to apply',
       updateError: 'Update failed',
