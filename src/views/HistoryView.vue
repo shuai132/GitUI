@@ -1121,12 +1121,12 @@ onUnmounted(() => {
 
 /* 当前 HEAD 行：只是定位提示，不等同于选中行 */
 .commit-row.commit-head:not(.selected):not(.drag-target) {
-  background: rgba(138, 173, 244, 0.16);
+  background: rgba(138, 173, 244, 0.28);
   box-shadow: inset 2px 0 0 rgba(138, 173, 244, 0.9);
 }
 
 .commit-row.commit-head:not(.selected):not(.drag-target):hover {
-  background: rgba(138, 173, 244, 0.22);
+  background: rgba(138, 173, 244, 0.36);
 }
 
 /* 拖拽视觉反馈：目标行浅绿高亮 + 绿色 outline，源行变淡 */
