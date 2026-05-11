@@ -11,6 +11,7 @@ import {
   type CommitFileDisplayItem,
 } from '@/composables/history/useCommitFileItems'
 import { buildSubmodulePathSet, isSubmodulePath } from '@/utils/submodules'
+import { scrollElementByWheel } from '@/utils/wheelScroll'
 
 const { t } = useI18n()
 const settings = useSettingsStore()
@@ -148,6 +149,10 @@ function getFileItem(item: CommitFileDisplayItem) {
 function getDirItem(item: CommitFileDisplayItem) {
   return item.type === 'dir' ? item : null
 }
+
+function onFileTabsWheel(e: WheelEvent) {
+  scrollElementByWheel(e, scrollContainer.value, { lineSize: rowHeight.value })
+}
 </script>
 
 <template>
@@ -192,7 +197,7 @@ function getDirItem(item: CommitFileDisplayItem) {
       </div>
     </div>
 
-    <div class="file-tabs" ref="scrollContainer">
+    <div class="file-tabs" ref="scrollContainer" @wheel="onFileTabsWheel">
       <div v-if="loading && !diffs.length" class="file-list-loading">
         <span class="loading-spinner" />
         {{ t('history.loading') }}

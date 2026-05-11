@@ -12,6 +12,7 @@ import { useUiStore } from '@/stores/ui'
 import { useSettingsStore } from '@/stores/settings'
 import { formatAuthor, formatHistoryTime } from '@/utils/format'
 import { CIRCLE_R, LANE_W, laneX } from '@/utils/graph'
+import { scrollElementByWheel } from '@/utils/wheelScroll'
 import CommitGraphRow from '@/components/history/CommitGraphRow.vue'
 import WipRow from '@/components/history/WipRow.vue'
 import ChangeStatsCell from '@/components/history/ChangeStatsCell.vue'
@@ -211,31 +212,10 @@ const {
 // 冒泡到可滚动父容器，导致垂直滚动失效（macOS WebKit 无此问题）。
 // 解决方案：在 scroll container 和列头上统一用 JS 主动接管滚动。
 function onListBodyWheel(e: WheelEvent) {
-  const el = scrollContainer.value
-  if (!el) return
-
-  // 换算 deltaMode → 像素
-  // deltaMode 0: pixel（触控板）；1: line（物理鼠标，Windows 默认 deltaY=3）；2: page
-  let dy = e.deltaY
-  let dx = e.deltaX
-  if (e.deltaMode === 1) {
-    dy *= rowH.value
-    dx *= rowH.value
-  } else if (e.deltaMode === 2) {
-    dy *= el.clientHeight
-    dx *= el.clientWidth
-  }
-
-  if (Math.abs(dy) >= Math.abs(dx)) {
-    // 纵向滚动：JS 主动写 scrollTop，保证 Windows 下 draggable 行不阻断滚动
-    el.scrollTop += dy
-  } else {
-    // 横向滚动：用于列头区域触发 body 水平滚动
-    const before = el.scrollLeft
-    el.scrollLeft += dx
-    if (el.scrollLeft === before) return // 没消费横向，不 preventDefault
-  }
-  e.preventDefault()
+  scrollElementByWheel(e, scrollContainer.value, {
+    lineSize: rowH.value,
+    allowHorizontal: true,
+  })
 }
 
 const {

@@ -8,6 +8,7 @@ import { useSettingsStore } from '@/stores/settings'
 import { buildFileTree, flattenTree } from '@/utils/fileTree'
 import { isSameWipFile } from '@/utils/wipSelection'
 import { buildSubmodulePathSet, isSubmodulePath } from '@/utils/submodules'
+import { scrollElementByWheel } from '@/utils/wheelScroll'
 
 const { t } = useI18n()
 
@@ -234,6 +235,10 @@ function scrollToIndex(idx: number) {
   virtualizer.value.scrollToIndex(idx, { align: 'auto' })
 }
 
+function onEntriesWheel(e: WheelEvent) {
+  scrollElementByWheel(e, scrollEl.value, { lineSize: rowHeight.value })
+}
+
 defineExpose({ scrollToIndex, clearMultiSelect, expandAll, collapseAll })
 </script>
 
@@ -244,7 +249,7 @@ defineExpose({ scrollToIndex, clearMultiSelect, expandAll, collapseAll })
       <span class="section-count">{{ files.length }}</span>
       <slot name="header-actions" />
     </div>
-    <div ref="scrollEl" class="file-entries">
+    <div ref="scrollEl" class="file-entries" @wheel="onEntriesWheel">
       <div
         v-if="files.length === 0"
         class="empty-hint"

@@ -1,7 +1,9 @@
 <script setup lang="ts">
+import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRepoStore } from '@/stores/repos'
 import { useRepoCreation } from '@/composables/useRepoCreation'
+import { scrollElementByWheel } from '@/utils/wheelScroll'
 import SidebarLocalBranches from '../sidebar/SidebarLocalBranches.vue'
 import SidebarTags from '../sidebar/SidebarTags.vue'
 import SidebarStash from '../sidebar/SidebarStash.vue'
@@ -12,9 +14,14 @@ import SidebarAllRepos from '../sidebar/SidebarAllRepos.vue'
 const { t } = useI18n()
 const repoStore = useRepoStore()
 const repoCreation = useRepoCreation()
+const sidebarScrollRef = ref<HTMLElement | null>(null)
 
 function showAddRepoMenu(e: MouseEvent) {
   repoCreation.showMenuAt(e.currentTarget as HTMLElement)
+}
+
+function onSidebarWheel(e: WheelEvent) {
+  scrollElementByWheel(e, sidebarScrollRef.value, { lineSize: 22 })
 }
 </script>
 
@@ -33,7 +40,7 @@ function showAddRepoMenu(e: MouseEvent) {
       >+</button>
     </div>
 
-    <div class="sidebar-scroll">
+    <div class="sidebar-scroll" ref="sidebarScrollRef" @wheel="onSidebarWheel">
       <SidebarLocalBranches />
       <SidebarTags />
       <SidebarStash />

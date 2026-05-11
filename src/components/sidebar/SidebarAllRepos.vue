@@ -6,6 +6,7 @@ import { useSubmodulesStore } from '@/stores/submodules'
 import { useUiStore } from '@/stores/ui'
 import { resolveExternalTerminalApp, useSettingsStore } from '@/stores/settings'
 import { useGitCommands } from '@/composables/useGitCommands'
+import { scrollElementByWheel } from '@/utils/wheelScroll'
 import { revealItemInDir } from '@tauri-apps/plugin-opener'
 import ContextMenu, { type ContextMenuItem } from '@/components/common/ContextMenu.vue'
 import type { RepoMeta } from '@/types/git'
@@ -218,6 +219,10 @@ function onRepoClick(e: MouseEvent, repoId: string) {
   repoStore.setActive(repoId)
 }
 
+function onReposListWheel(e: WheelEvent) {
+  scrollElementByWheel(e, reposListRef.value, { lineSize: 22 })
+}
+
 // ── 所有仓库右键菜单 ────────────────────────────────────────────────
 const repoMenu = reactive({
   visible: false,
@@ -274,7 +279,7 @@ async function onRepoMenuAction(action: string) {
   >
     <div class="repos-resize" @pointerdown="startReposResize" />
     <div class="section-title">{{ t('sidebar.repo.allRepos') }}</div>
-    <div class="repos-list" ref="reposListRef">
+    <div class="repos-list" ref="reposListRef" @wheel="onReposListWheel">
       <div
         v-if="dropIndicatorTop !== null"
         class="drop-indicator"
