@@ -1,5 +1,6 @@
 import { ref, watch } from 'vue'
 import { useUiStore } from '@/stores/ui'
+import { useBlurOnOutsidePointerDown } from '@/composables/useBlurOnOutsidePointerDown'
 
 type FindCapableWindow = Window & {
   find?: (
@@ -15,6 +16,7 @@ type FindCapableWindow = Window & {
 
 export function useDiffSearch() {
   const uiStore = useUiStore()
+  const searchBoxEl = ref<HTMLElement | null>(null)
   const searchInputEl = ref<HTMLInputElement | null>(null)
   const searchExpanded = ref(false)
   let lastSelection: Range | null = null
@@ -79,7 +81,14 @@ export function useDiffSearch() {
     lastSelection = null
   })
 
+  useBlurOnOutsidePointerDown(searchBoxEl, () => {
+    if (!uiStore.diffSearchQuery) {
+      searchExpanded.value = false
+    }
+  })
+
   return {
+    searchBoxEl,
     searchInputEl,
     searchExpanded,
     expandSearch,

@@ -25,6 +25,7 @@ const { t } = useI18n()
 const uiStore = useUiStore()
 const shortcutsStore = useShortcutsStore()
 const {
+  searchBoxEl,
   searchInputEl,
   searchExpanded,
   expandSearch,
@@ -61,6 +62,7 @@ function withShortcut(label: string, actionId: ShortcutActionId): string {
 
     <div
       v-if="!isImageView"
+      ref="searchBoxEl"
       class="search-box"
       :class="{ 'search-box--expanded': searchExpanded || uiStore.diffSearchQuery }"
     >

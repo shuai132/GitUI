@@ -13,6 +13,7 @@ import { useHistoryStore } from '@/stores/history'
 import { useShortcutsStore, bindingToLabel, type ShortcutActionId } from '@/stores/shortcuts'
 import { useGitCommands } from '@/composables/useGitCommands'
 import { useGlobalToast } from '@/composables/useGlobalToast'
+import { useBlurOnOutsidePointerDown } from '@/composables/useBlurOnOutsidePointerDown'
 import ContextMenu, { type ContextMenuItem } from '@/components/common/ContextMenu.vue'
 
 const emit = defineEmits<{
@@ -55,6 +56,7 @@ onMounted(() => {
 })
 
 // ── Search ──────────────────────────────────────────────────────────
+const searchBoxEl = ref<HTMLElement | null>(null)
 const searchInputEl = ref<HTMLInputElement | null>(null)
 const searchExpanded = ref(false)
 
@@ -84,6 +86,12 @@ function clearSearch() {
   searchExpanded.value = false
   searchInputEl.value?.blur()
 }
+
+useBlurOnOutsidePointerDown(searchBoxEl, () => {
+  if (!uiStore.historySearchQuery) {
+    searchExpanded.value = false
+  }
+})
 
 // ── Theme ───────────────────────────────────────────────────────────
 const resolvedTheme = computed<'light' | 'dark'>(() => {
@@ -282,6 +290,7 @@ async function onActionsSelect(action: string) {
   <div class="toolbar-right">
     <div
       v-if="hasRepo"
+      ref="searchBoxEl"
       class="search-box"
       :class="{ 'search-box--expanded': searchExpanded || uiStore.historySearchQuery }"
     >
