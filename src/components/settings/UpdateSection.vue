@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, onBeforeUnmount, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useSettingsStore } from '@/stores/settings'
 import type { UpdateStrategy } from '@/stores/settings'
@@ -7,6 +7,12 @@ import { useGitCommands } from '@/composables/useGitCommands'
 import { check, type Update } from '@tauri-apps/plugin-updater'
 import { message } from '@tauri-apps/plugin-dialog'
 import { formatTime } from '@/utils/format'
+import {
+  LAST_UPDATE_CHECK_EVENT,
+  isNetworkUpdateCheckError,
+  readLastUpdateCheckTime,
+  recordLastUpdateCheckTime,
+} from '@/utils/updateCheck'
 import UpdateDialog from '@/components/common/UpdateDialog.vue'
 
 const { t } = useI18n()
@@ -20,12 +26,14 @@ const lastCheckTime = ref<number | null>(null)
 const availableUpdate = ref<Update | null>(null)
 const showUpdateDialog = ref(false)
 
-const LAST_CHECK_KEY = 'gitui.last_update_check'
-
 const updateStrategyOptions = [
   { value: 'auto', labelKey: 'settings.advanced.updateStrategyAuto' },
   { value: 'manual', labelKey: 'settings.advanced.updateStrategyManual' },
 ] satisfies { value: UpdateStrategy; labelKey: string }[]
+
+function refreshLastCheckTime() {
+  lastCheckTime.value = readLastUpdateCheckTime()
+}
 
 onMounted(async () => {
   try {
@@ -34,10 +42,12 @@ onMounted(async () => {
     gitHash.value = info.git_hash
   } catch {}
 
-  const saved = localStorage.getItem(LAST_CHECK_KEY)
-  if (saved) {
-    lastCheckTime.value = parseInt(saved, 10)
-  }
+  refreshLastCheckTime()
+  window.addEventListener(LAST_UPDATE_CHECK_EVENT, refreshLastCheckTime)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener(LAST_UPDATE_CHECK_EVENT, refreshLastCheckTime)
 })
 
 const lastCheckLabel = computed(() => {
@@ -50,8 +60,7 @@ async function checkForUpdates() {
   isChecking.value = true
   try {
     const update = await check()
-    lastCheckTime.value = Math.floor(Date.now() / 1000)
-    localStorage.setItem(LAST_CHECK_KEY, lastCheckTime.value.toString())
+    lastCheckTime.value = recordLastUpdateCheckTime()
 
     if (update) {
       availableUpdate.value = update
@@ -60,6 +69,9 @@ async function checkForUpdates() {
       await message(t('settings.about.noUpdateFound'), { title: t('settings.about.checkUpdate'), kind: 'info' })
     }
   } catch (err: unknown) {
+    if (!isNetworkUpdateCheckError(err)) {
+      lastCheckTime.value = recordLastUpdateCheckTime()
+    }
     const detail = err instanceof Error ? err.message : String(err)
     await message(`${t('settings.about.updateError')}：${detail}`, { title: '错误', kind: 'error' })
   } finally {

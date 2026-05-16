@@ -28,6 +28,7 @@ import { useGitCommands } from '@/composables/useGitCommands'
 import { useShortcuts } from '@/composables/useShortcuts'
 import { useSettingsStore } from '@/stores/settings'
 import { findWipFileBySelection } from '@/utils/wipSelection'
+import { isNetworkUpdateCheckError, recordLastUpdateCheckTime } from '@/utils/updateCheck'
 import { listen } from '@tauri-apps/api/event'
 import { check, type Update } from '@tauri-apps/plugin-updater'
 import UpdateDialog from '@/components/common/UpdateDialog.vue'
@@ -69,6 +70,7 @@ async function runAutoUpdateCheck() {
   
   try {
     const update = await check()
+    recordLastUpdateCheckTime()
     if (update) {
       // 检查是否是被跳过的版本
       if (settingsStore.skippedVersion === update.version) {
@@ -78,6 +80,9 @@ async function runAutoUpdateCheck() {
       showUpdateDialog.value = true
     }
   } catch (e) {
+    if (!isNetworkUpdateCheckError(e)) {
+      recordLastUpdateCheckTime()
+    }
     console.error('[updater] auto check failed', e)
   }
 }
