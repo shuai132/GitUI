@@ -2,7 +2,6 @@
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRepoStore } from '@/stores/repos'
-import { useRepoCreation } from '@/composables/useRepoCreation'
 import { scrollElementByWheel } from '@/utils/wheelScroll'
 import SidebarLocalBranches from '../sidebar/SidebarLocalBranches.vue'
 import SidebarTags from '../sidebar/SidebarTags.vue'
@@ -13,12 +12,7 @@ import SidebarAllRepos from '../sidebar/SidebarAllRepos.vue'
 
 const { t } = useI18n()
 const repoStore = useRepoStore()
-const repoCreation = useRepoCreation()
 const sidebarScrollRef = ref<HTMLElement | null>(null)
-
-function showAddRepoMenu(e: MouseEvent) {
-  repoCreation.showMenuAt(e.currentTarget as HTMLElement)
-}
 
 function onSidebarWheel(e: WheelEvent) {
   scrollElementByWheel(e, sidebarScrollRef.value, { lineSize: 22 })
@@ -32,12 +26,6 @@ function onSidebarWheel(e: WheelEvent) {
       <div class="repo-name" :title="repoStore.activeRepo()?.path">
         {{ repoStore.activeRepo()?.name ?? t('sidebar.repo.noRepo') }}
       </div>
-      <button
-        class="btn-add"
-        :title="t('repo.menu.title')"
-        data-menu-anchor
-        @click="showAddRepoMenu($event)"
-      >+</button>
     </div>
 
     <div class="sidebar-scroll" ref="sidebarScrollRef" @wheel="onSidebarWheel">
@@ -64,9 +52,6 @@ function onSidebarWheel(e: WheelEvent) {
 }
 
 .repo-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
   padding: 10px 12px 8px;
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
@@ -79,22 +64,6 @@ function onSidebarWheel(e: WheelEvent) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.btn-add {
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: var(--text-muted);
-  font-size: var(--font-xl);
-  line-height: 1;
-  padding: 0 4px;
-  border-radius: 3px;
-  transition: color 0.15s;
-}
-
-.btn-add:hover {
-  color: var(--text-primary);
 }
 
 .sidebar-scroll {

@@ -6,6 +6,7 @@ import { useSubmodulesStore } from '@/stores/submodules'
 import { useUiStore } from '@/stores/ui'
 import { resolveExternalTerminalApp, useSettingsStore } from '@/stores/settings'
 import { useGitCommands } from '@/composables/useGitCommands'
+import { useRepoCreation } from '@/composables/useRepoCreation'
 import { scrollElementByWheel } from '@/utils/wheelScroll'
 import { revealItemInDir } from '@tauri-apps/plugin-opener'
 import ContextMenu, { type ContextMenuItem } from '@/components/common/ContextMenu.vue'
@@ -18,6 +19,7 @@ const submodulesStore = useSubmodulesStore()
 const uiStore = useUiStore()
 const settingsStore = useSettingsStore()
 const git = useGitCommands()
+const repoCreation = useRepoCreation()
 
 const submodulesByRepoId = ref<SubmodulesByRepoId>({})
 let submoduleRelationSeq = 0
@@ -69,6 +71,10 @@ async function removeRepo(repoId: string) {
   } catch (e) {
     console.error(e)
   }
+}
+
+function showAddRepoMenu(e: MouseEvent) {
+  repoCreation.showMenuAt(e.currentTarget as HTMLElement)
 }
 
 // ── 所有仓库列表：可拖动高度 ─────────────────────────────────────────
@@ -278,7 +284,15 @@ async function onRepoMenuAction(action: string) {
     :style="{ height: uiStore.reposHeight + 'px' }"
   >
     <div class="repos-resize" @pointerdown="startReposResize" />
-    <div class="section-title">{{ t('sidebar.repo.allRepos') }}</div>
+    <div class="section-title repos-title">
+      <span class="section-label">{{ t('sidebar.repo.allRepos') }}</span>
+      <button
+        class="section-add-btn repos-add-btn"
+        :title="t('repo.menu.title')"
+        data-menu-anchor
+        @click.stop="showAddRepoMenu($event)"
+      >+</button>
+    </div>
     <div class="repos-list" ref="reposListRef" @wheel="onReposListWheel">
       <div
         v-if="dropIndicatorTop !== null"
@@ -373,6 +387,14 @@ async function onRepoMenuAction(action: string) {
   height: 6px;
   cursor: row-resize;
   z-index: 10;
+}
+
+.repos-title {
+  gap: 6px;
+}
+
+.repos-footer:hover .repos-add-btn {
+  display: inline-block;
 }
 
 .repos-list {
