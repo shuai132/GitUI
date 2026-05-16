@@ -667,7 +667,7 @@ onUnmounted(() => {
                         :cy="wipCircleY"
                         :r="selectedWip ? CIRCLE_R + 1 : CIRCLE_R"
                         fill="none"
-                        stroke="var(--text-muted)"
+                        :stroke="selectedWip ? 'var(--row-selected-fg)' : 'var(--text-muted)'"
                         :stroke-width="selectedWip ? 2 : 1.5"
                         stroke-dasharray="2 2"
                       />
@@ -1166,10 +1166,19 @@ onUnmounted(() => {
   background: rgba(139, 213, 202, 0.05);
 }
 
-/* 选中时用 Catppuccin Teal（半透明底），与普通 commit 的实心蓝区分，
-   暗示"这是进行中的工作副本"而非已落盘的提交 */
 .commit-row.wip-row.selected {
-  background: rgba(139, 213, 202, 0.2);
+  background: var(--row-selected-bg);
+}
+
+.commit-row.wip-row.selected :deep(.wip-label),
+.commit-row.wip-row.selected :deep(.wip-hint) {
+  color: var(--row-selected-fg);
+}
+
+.commit-row.wip-row.selected :deep(.wip-badge) {
+  color: var(--row-selected-fg);
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.38);
 }
 
 /* Merge / Rebase 进行中的 WIP 行：让 banner 撑满整行 */
@@ -1307,16 +1316,6 @@ onUnmounted(() => {
   --change-big-color: var(--row-selected-fg);
   --change-placeholder-color: var(--row-selected-fg);
   --change-failed-color: var(--row-selected-fg);
-}
-
-.commit-row.wip-row.selected .col-change-stats {
-  --change-files-color: var(--text-muted);
-  --change-add-color: var(--accent-green);
-  --change-del-color: var(--accent-red);
-  --change-bin-color: var(--accent-orange);
-  --change-big-color: var(--accent-yellow);
-  --change-placeholder-color: var(--text-muted);
-  --change-failed-color: var(--accent-red);
 }
 
 /* ── 提交悬停 tooltip（自定义，适配 Catppuccin 色彩） ─────────────── */
