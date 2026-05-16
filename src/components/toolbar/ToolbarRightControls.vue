@@ -5,6 +5,7 @@ import { useRepoStore } from '@/stores/repos'
 import { useUiStore } from '@/stores/ui'
 import { useErrorsStore } from '@/stores/errors'
 import { useRepoOpsStore } from '@/stores/repoOps'
+import { useTerminalStore } from '@/stores/terminal'
 import { useSettingsStore } from '@/stores/settings'
 import { usePluginsStore } from '@/stores/plugins'
 import { useWorkspaceStore } from '@/stores/workspace'
@@ -25,6 +26,7 @@ const repoStore = useRepoStore()
 const uiStore = useUiStore()
 const errorsStore = useErrorsStore()
 const repoOpsStore = useRepoOpsStore()
+const terminalStore = useTerminalStore()
 const settingsStore = useSettingsStore()
 const pluginsStore = usePluginsStore()
 const workspaceStore = useWorkspaceStore()
@@ -99,7 +101,9 @@ function toggleTheme() {
 
 // ── Terminal Toggle ─────────────────────────────────────────────────
 function onToggleInAppTerminal() {
-  uiStore.toggleTerminalVisible()
+  terminalStore.toggleActiveRepoVisible().catch((err: unknown) => {
+    showToast('error', String(err))
+  })
 }
 
 // ── Actions ─────────────────────────────────────────────────────────
@@ -338,8 +342,8 @@ async function onActionsSelect(action: string) {
     <button
       v-if="hasRepo"
       class="btn-icon-only"
-      :class="{ 'btn-icon-only--active': uiStore.terminalVisible }"
-      :title="withShortcut(uiStore.terminalVisible ? t('toolbar.title.terminalToggleHide') : t('toolbar.title.terminalToggleShow'), 'toggleTerminal')"
+      :class="{ 'btn-icon-only--active': terminalStore.activeRepoVisible }"
+      :title="withShortcut(terminalStore.activeRepoVisible ? t('toolbar.title.terminalToggleHide') : t('toolbar.title.terminalToggleShow'), 'toggleTerminal')"
       @click="onToggleInAppTerminal"
     >
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">

@@ -15,6 +15,7 @@ import { useShortcutsStore, matchesBinding } from '@/stores/shortcuts'
 import { useUiStore } from '@/stores/ui'
 import { useHistoryStore } from '@/stores/history'
 import { useRepoStore } from '@/stores/repos'
+import { useTerminalStore } from '@/stores/terminal'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useGlobalToast } from '@/composables/useGlobalToast'
 
@@ -23,6 +24,7 @@ export function useShortcuts() {
   const uiStore = useUiStore()
   const historyStore = useHistoryStore()
   const repoStore = useRepoStore()
+  const terminalStore = useTerminalStore()
   const workspaceStore = useWorkspaceStore()
   const { showError } = useGlobalToast()
 
@@ -76,7 +78,9 @@ export function useShortcuts() {
 
     if (matchesBinding(e, b.toggleTerminal)) {
       consume()
-      uiStore.toggleTerminalVisible()
+      terminalStore.toggleActiveRepoVisible().catch((err: unknown) => {
+        showError(String(err))
+      })
       return
     }
 

@@ -14,7 +14,7 @@ const repoStore = useRepoStore()
 const terminalStore = useTerminalStore()
 const git = useGitCommands()
 
-const hostEls = new Map<string, HTMLDivElement>() // key: tabId
+const hostEls = new Map<string, HTMLDivElement>() // key: repoId:tabId
 let activeResizeObs: ResizeObserver | null = null
 let resizeDebounce: number | null = null
 let themeObs: MutationObserver | null = null
@@ -23,6 +23,15 @@ let disposed = false
 const currentRepoId = computed(() => repoStore.activeRepoId)
 const currentTabs = computed(() => currentRepoId.value ? terminalStore.getTabsForRepo(currentRepoId.value) : [])
 const activeTab = computed(() => currentRepoId.value ? terminalStore.getActiveTab(currentRepoId.value) : undefined)
+const mountedTabs = computed(() =>
+  Array.from(terminalStore.repoTabs.entries()).flatMap(([repoId, tabs]) =>
+    tabs.map((tab) => ({
+      repoId,
+      tab,
+      key: terminalKey(repoId, tab.id),
+    })),
+  ),
+)
 
 const ctxMenu = reactive({ visible: false, x: 0, y: 0 })
 const ctxMenuItems = computed<ContextMenuItem[]>(() => [
@@ -69,38 +78,56 @@ function applyTheme() {
   }
 }
 
-function setHostEl(tabId: string, el: HTMLDivElement | null) {
+function terminalKey(repoId: string, tabId: string): string {
+  return `${repoId}:${tabId}`
+}
+
+function setHostEl(repoId: string, tabId: string, el: HTMLDivElement | null) {
+  const key = terminalKey(repoId, tabId)
   if (el) {
-    hostEls.set(tabId, el)
-    if (tabId === activeTab.value?.id && uiStore.terminalVisible) {
-      nextTick(() => mountTerminal(tabId))
+    hostEls.set(key, el)
+    if (repoId === currentRepoId.value && tabId === activeTab.value?.id && terminalStore.activeRepoVisible) {
+      nextTick(() => mountTerminal(repoId, tabId))
     }
   } else {
-    hostEls.delete(tabId)
+    hostEls.delete(key)
   }
 }
 
-function mountTerminal(tabId: string) {
-  const el = hostEls.get(tabId)
-  const tab = currentTabs.value.find(t => t.id === tabId)
+function mountTerminal(repoId: string, tabId: string) {
+  const el = hostEls.get(terminalKey(repoId, tabId))
+  const tab = terminalStore.getTabsForRepo(repoId).find(t => t.id === tabId)
   if (!el || !tab) return
-  if (tab.term.element === el) return
 
   // Prevent xterm.js from falling into an infinite ResizeObserver/Refresh loop 
   // by never opening it inside a hidden (display: none) container.
   if (el.clientWidth === 0 || el.clientHeight === 0) return
 
   tab.term.options.theme = readTheme()
-  tab.term.open(el)
+  if (tab.term.element) {
+    if (tab.term.element.parentElement !== el) el.appendChild(tab.term.element)
+  } else {
+    tab.term.open(el)
+  }
   nextTick(() => { if (!disposed) try { tab.fit.fit() } catch {} })
+}
+
+function mountActiveTerminal() {
+  const repoId = currentRepoId.value
+  const tab = activeTab.value
+  if (!repoId || !tab) return
+  mountTerminal(repoId, tab.id)
+  setupResizeObserver(repoId, tab.id)
+  scheduleResize()
 }
 
 function scheduleResize() {
   if (resizeDebounce !== null) window.clearTimeout(resizeDebounce)
   resizeDebounce = window.setTimeout(() => {
     const tab = activeTab.value
-    if (!tab || disposed || !uiStore.terminalVisible) return
-    const el = hostEls.get(tab.id)
+    const repoId = currentRepoId.value
+    if (!tab || !repoId || disposed || !terminalStore.activeRepoVisible) return
+    const el = hostEls.get(terminalKey(repoId, tab.id))
     if (!el || el.clientWidth === 0 || el.clientHeight === 0) return
     try {
       tab.fit.fit()
@@ -111,9 +138,9 @@ function scheduleResize() {
   }, 100)
 }
 
-function setupResizeObserver(tabId: string) {
+function setupResizeObserver(repoId: string, tabId: string) {
   if (activeResizeObs) { activeResizeObs.disconnect(); activeResizeObs = null }
-  const el = hostEls.get(tabId)
+  const el = hostEls.get(terminalKey(repoId, tabId))
   if (!el || disposed) return
   activeResizeObs = new ResizeObserver(() => scheduleResize())
   activeResizeObs.observe(el)
@@ -125,15 +152,11 @@ onMounted(async () => {
   themeObs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
 
   const id = currentRepoId.value
-  if (id && uiStore.terminalVisible) {
+  if (id && terminalStore.activeRepoVisible) {
     if (terminalStore.getTabsForRepo(id).length === 0) await terminalStore.createTerminal(id)
     const tab = terminalStore.getActiveTab(id)
     if (tab) { 
-      nextTick(() => {
-        mountTerminal(tab.id)
-        setupResizeObserver(tab.id)
-        scheduleResize()
-      })
+      nextTick(() => mountActiveTerminal())
     }
   }
 })
@@ -146,39 +169,35 @@ onBeforeUnmount(() => {
 })
 
 watch(() => repoStore.activeRepoId, async (id) => {
-  if (disposed || !id || !uiStore.terminalVisible) return
+  if (disposed || !id || !terminalStore.activeRepoVisible) return
   if (terminalStore.getTabsForRepo(id).length === 0) await terminalStore.createTerminal(id)
   const tab = terminalStore.getActiveTab(id)
   if (tab) { 
-    nextTick(() => {
-      mountTerminal(tab.id)
-      setupResizeObserver(tab.id)
-      scheduleResize()
-    })
+    nextTick(() => mountActiveTerminal())
   }
 })
 
-watch(() => activeTab.value?.id, (id) => {
-  if (id) {
+watch(() => {
+  const repoId = currentRepoId.value
+  const tabId = activeTab.value?.id
+  return repoId && tabId ? terminalKey(repoId, tabId) : null
+}, (key) => {
+  if (key) {
     nextTick(() => {
-      mountTerminal(id)
-      setupResizeObserver(id)
-      scheduleResize()
+      mountActiveTerminal()
       activeTab.value?.term.focus()
     })
   }
 })
 
-watch(() => uiStore.terminalVisible, async (v) => {
+watch(() => terminalStore.activeRepoVisible, async (v) => {
   const id = currentRepoId.value
   if (v && id) {
     if (terminalStore.getTabsForRepo(id).length === 0) await terminalStore.createTerminal(id)
     const tab = terminalStore.getActiveTab(id)
     if (tab) { 
       nextTick(() => {
-        mountTerminal(tab.id)
-        setupResizeObserver(tab.id)
-        scheduleResize()
+        mountActiveTerminal()
         tab.term.focus()
       })
     }
@@ -191,7 +210,7 @@ async function onAddTab() { if (currentRepoId.value) await terminalStore.createT
 function onCloseTab(tabId: string) { if (currentRepoId.value) terminalStore.closeTab(currentRepoId.value, tabId) }
 function onSelectTab(tabId: string) { if (currentRepoId.value) terminalStore.setActiveTab(currentRepoId.value, tabId) }
 function onToggleDock() { uiStore.toggleTerminalDock() }
-function onClosePanel() { uiStore.setTerminalVisible(false) }
+function onClosePanel() { terminalStore.setActiveRepoVisible(false) }
 
 function startResize(e: PointerEvent) {
   e.preventDefault()
@@ -271,8 +290,9 @@ async function onCtxSelect(action: string) {
     </div>
     <div class="terminal-content">
       <!-- 使用 v-show 保持所有实例，确保切换顺畅且不丢失状态 -->
-      <div v-for="tab in currentTabs" :key="tab.id" class="terminal-host"
-        v-show="tab.id === activeTab?.id" :ref="el => setHostEl(tab.id, el as HTMLDivElement)"
+      <div v-for="item in mountedTabs" :key="item.key" class="terminal-host"
+        v-show="item.repoId === currentRepoId && item.tab.id === activeTab?.id"
+        :ref="el => setHostEl(item.repoId, item.tab.id, el as HTMLDivElement)"
         @contextmenu="onContextMenu" />
     </div>
     <ContextMenu :visible="ctxMenu.visible" :x="ctxMenu.x" :y="ctxMenu.y" :items="ctxMenuItems"

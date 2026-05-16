@@ -1,11 +1,10 @@
 import { defineStore } from 'pinia'
-import { ref, watch } from 'vue'
+import { computed, ref } from 'vue'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 import { useGitCommands } from '@/composables/useGitCommands'
 import { useRepoStore } from '@/stores/repos'
-import { useUiStore } from '@/stores/ui'
 
 export interface TerminalTab {
   id: string
@@ -20,13 +19,18 @@ export const useTerminalStore = defineStore('terminal', () => {
   // Keyed by repoId
   const repoTabs = ref<Map<string, TerminalTab[]>>(new Map())
   const activeTabId = ref<Map<string, string>>(new Map())
+  const visibleRepoIds = ref<Set<string>>(new Set())
   
   const git = useGitCommands()
   const repoStore = useRepoStore()
-  const uiStore = useUiStore()
 
   let unlistenData: UnlistenFn | null = null
   let unlistenExit: UnlistenFn | null = null
+
+  const activeRepoVisible = computed(() => {
+    const repoId = repoStore.activeRepoId
+    return !!repoId && visibleRepoIds.value.has(repoId)
+  })
 
   // base64 decode utility
   function b64decodeToBytes(s: string): Uint8Array {
@@ -47,6 +51,30 @@ export const useTerminalStore = defineStore('terminal', () => {
     const tabs = getTabsForRepo(repoId)
     const activeId = activeTabId.value.get(repoId)
     return tabs.find(t => t.id === activeId) || tabs[0]
+  }
+
+  function isRepoVisible(repoId: string): boolean {
+    return visibleRepoIds.value.has(repoId)
+  }
+
+  function setRepoVisible(repoId: string, visible: boolean) {
+    const next = new Set(visibleRepoIds.value)
+    if (visible) next.add(repoId)
+    else next.delete(repoId)
+    visibleRepoIds.value = next
+  }
+
+  async function setActiveRepoVisible(visible: boolean) {
+    const repoId = repoStore.activeRepoId
+    if (!repoId) return
+    setRepoVisible(repoId, visible)
+    if (visible && getTabsForRepo(repoId).length === 0) {
+      await createTerminal(repoId)
+    }
+  }
+
+  async function toggleActiveRepoVisible() {
+    await setActiveRepoVisible(!activeRepoVisible.value)
   }
 
   async function createTerminal(repoId: string, title?: string): Promise<TerminalTab> {
@@ -87,8 +115,8 @@ export const useTerminalStore = defineStore('terminal', () => {
     tabs.push(tab)
     activeTabId.value.set(repoId, id)
     
-    // If the terminal panel is visible, spawn a session
-    if (uiStore.terminalVisible) {
+    // Spawn only for repos whose in-app terminal is explicitly open.
+    if (isRepoVisible(repoId)) {
       await spawnSession(repoId, tab)
     }
 
@@ -130,8 +158,8 @@ export const useTerminalStore = defineStore('terminal', () => {
       }
     }
 
-    if (tabs.length === 0 && repoId === repoStore.activeRepoId) {
-       uiStore.setTerminalVisible(false)
+    if (tabs.length === 0) {
+      setRepoVisible(repoId, false)
     }
   }
 
@@ -186,13 +214,20 @@ export const useTerminalStore = defineStore('terminal', () => {
     }
     repoTabs.value.clear()
     activeTabId.value.clear()
+    visibleRepoIds.value.clear()
   }
 
   return {
     repoTabs,
     activeTabId,
+    visibleRepoIds,
+    activeRepoVisible,
     getTabsForRepo,
     getActiveTab,
+    isRepoVisible,
+    setRepoVisible,
+    setActiveRepoVisible,
+    toggleActiveRepoVisible,
     createTerminal,
     closeTab,
     setActiveTab,
