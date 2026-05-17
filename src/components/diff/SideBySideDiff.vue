@@ -9,7 +9,7 @@ import { buildFullSideBySideRows, type FullFileContent } from '@/lib/fullFileDif
 
 const { t } = useI18n()
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   diff: FileDiff | null
   loading?: boolean
   /** true 时保持按 hunk 块展示；false 时优先显示完整文件。 */
@@ -22,15 +22,21 @@ const props = defineProps<{
   fullFileContent?: FullFileContent | null
   /** 变化时重置当前 diff 滚动位置，用于切换到另一个文件/提交上下文。 */
   scrollResetKey?: string | null
+  /** 父级统一维护的当前变更块索引。-1 表示尚未定位。 */
+  currentChangeIdx?: number
   /** 按 hunk 分组时展示的 hunk 操作文案；为空则不展示操作入口。 */
   hunkActionLabel?: string | null
   /** 按 hunk 分组时展示的 hunk 放弃操作文案；为空则不展示操作入口。 */
   hunkDiscardLabel?: string | null
-}>()
+}>(), {
+  currentChangeIdx: -1,
+})
 
 const emit = defineEmits<{
   'hunk-action': [hunkIndex: number]
   'hunk-discard': [hunkIndex: number]
+  'update-current-change': [index: number]
+  'change-count': [count: number]
 }>()
 
 const canRunHunkAction = computed(() => props.hunkActionLabel != null && props.groupByHunk === true)
@@ -231,9 +237,8 @@ const changeStarts = computed<number[]>(() => {
   return starts
 })
 
-const currentChangeIdx = ref(-1)
 const currentChangeRange = computed<{ start: number; end: number } | null>(() => {
-  const start = changeStarts.value[currentChangeIdx.value]
+  const start = changeStarts.value[props.currentChangeIdx]
   if (start == null) return null
 
   const rows = alignedRows.value
@@ -244,10 +249,10 @@ const currentChangeRange = computed<{ start: number; end: number } | null>(() =>
   return { start, end }
 })
 
-// 当 diff 变化时重置指针
-watch(alignedRows, () => {
-  currentChangeIdx.value = -1
-})
+watch(changeStarts, (starts) => {
+  emit('change-count', starts.length)
+  if (props.currentChangeIdx >= starts.length) emit('update-current-change', -1)
+}, { immediate: true })
 
 watch(
   () => props.scrollResetKey,
@@ -374,18 +379,20 @@ function rowDistance(row: AlignedRow, anchor: DiffScrollAnchor): number {
 function goNextChange() {
   const starts = changeStarts.value
   if (starts.length === 0) return
-  currentChangeIdx.value = (currentChangeIdx.value + 1) % starts.length
-  scrollToRow(starts[currentChangeIdx.value])
+  const nextIndex = (props.currentChangeIdx + 1) % starts.length
+  emit('update-current-change', nextIndex)
+  scrollToRow(starts[nextIndex])
 }
 
 function goPrevChange() {
   const starts = changeStarts.value
   if (starts.length === 0) return
-  currentChangeIdx.value =
-    currentChangeIdx.value <= 0
+  const nextIndex =
+    props.currentChangeIdx <= 0
       ? starts.length - 1
-      : currentChangeIdx.value - 1
-  scrollToRow(starts[currentChangeIdx.value])
+      : props.currentChangeIdx - 1
+  emit('update-current-change', nextIndex)
+  scrollToRow(starts[nextIndex])
 }
 
 function hasChangeTargets(): boolean {

@@ -4,6 +4,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { nextTick } from 'vue'
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { i18n } from '@/i18n'
+import { useUiStore } from '@/stores/ui'
 import type { DiffHunk, FileDiff } from '@/types/git'
 import DiffView from './DiffView.vue'
 import InlineDiff from './InlineDiff.vue'
@@ -54,7 +55,6 @@ describe('diff keyboard navigation', () => {
       global: {
         plugins: [pinia, i18n],
         stubs: {
-          DiffToolbar: { template: '<div class="diff-toolbar-stub" />' },
           ConfirmDialog: true,
         },
       },
@@ -63,6 +63,7 @@ describe('diff keyboard navigation', () => {
     await wrapper.find('.code').trigger('click')
     const diffView = wrapper.find<HTMLElement>('.diff-view').element
     expect(document.activeElement).toBe(diffView)
+    expect(wrapper.find('.change-count').text()).toBe('0/2')
 
     const downEvent = new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true })
     diffView.dispatchEvent(downEvent)
@@ -71,11 +72,13 @@ describe('diff keyboard navigation', () => {
     expect(downEvent.defaultPrevented).toBe(true)
     expect(parentKeydown).not.toHaveBeenCalled()
     expect(wrapper.findAll('.inline-line.change-current')).toHaveLength(2)
+    expect(wrapper.find('.change-count').text()).toBe('1/2')
 
     const secondDownEvent = new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true })
     diffView.dispatchEvent(secondDownEvent)
     await nextTick()
     expect(wrapper.findAll('.inline-line.change-current').map((line) => line.text()).join('\n')).toContain('three')
+    expect(wrapper.find('.change-count').text()).toBe('2/2')
 
     const upEvent = new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true, cancelable: true })
     diffView.dispatchEvent(upEvent)
@@ -83,6 +86,7 @@ describe('diff keyboard navigation', () => {
     expect(upEvent.defaultPrevented).toBe(true)
     expect(parentKeydown).not.toHaveBeenCalled()
     expect(wrapper.findAll('.inline-line.change-current').map((line) => line.text()).join('\n')).toContain('two')
+    expect(wrapper.find('.change-count').text()).toBe('1/2')
 
     const modifiedEvent = new KeyboardEvent('keydown', {
       key: 'ArrowDown',
@@ -115,7 +119,6 @@ describe('diff keyboard navigation', () => {
       global: {
         plugins: [pinia, i18n],
         stubs: {
-          DiffToolbar: { template: '<div class="diff-toolbar-stub" />' },
           ConfirmDialog: true,
         },
       },
@@ -135,21 +138,59 @@ describe('diff keyboard navigation', () => {
     host.remove()
   })
 
+  it('keeps the current change highlighted when switching diff layout', async () => {
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    const uiStore = useUiStore()
+    uiStore.setDiffLayoutMode('inline')
+
+    const wrapper = mount(DiffView, {
+      props: {
+        diff: fileDiff(),
+      },
+      global: {
+        plugins: [pinia, i18n],
+        stubs: {
+          ConfirmDialog: true,
+        },
+      },
+    })
+
+    ;(wrapper.findComponent(InlineDiff).vm as unknown as ChangeNavigator).goNextChange()
+    await nextTick()
+    ;(wrapper.findComponent(InlineDiff).vm as unknown as ChangeNavigator).goNextChange()
+    await nextTick()
+
+    expect(wrapper.find('.change-count').text()).toBe('2/2')
+    expect(wrapper.findAll('.inline-line.change-current').map((line) => line.text()).join('\n')).toContain('three')
+
+    uiStore.setDiffLayoutMode('side-by-side')
+    await nextTick()
+
+    expect(wrapper.find('.change-count').text()).toBe('2/2')
+    expect(wrapper.findAll('.sbs-line.change-current').map((line) => line.text()).join('\n')).toContain('three')
+  })
+
   it('marks inline current change rows and clears the mark when diff changes', async () => {
     const wrapper = mount(InlineDiff, {
       props: {
         diff: fileDiff(),
         groupByHunk: true,
+        currentChangeIdx: -1,
       },
       global: { plugins: [i18n] },
     })
 
     ;(wrapper.vm as unknown as ChangeNavigator).goNextChange()
     await nextTick()
+    expect(wrapper.emitted('update-current-change')).toEqual([[0]])
+
+    await wrapper.setProps({ currentChangeIdx: 0 })
+    await nextTick()
 
     expect(wrapper.findAll('.inline-line.change-current')).toHaveLength(2)
 
-    await wrapper.setProps({ diff: fileDiff('other.txt') })
+    await wrapper.setProps({ currentChangeIdx: -1 })
     await nextTick()
 
     expect(wrapper.find('.inline-line.change-current').exists()).toBe(false)
@@ -160,17 +201,22 @@ describe('diff keyboard navigation', () => {
       props: {
         diff: fileDiff(),
         groupByHunk: true,
+        currentChangeIdx: -1,
       },
       global: { plugins: [i18n] },
     })
 
     ;(wrapper.vm as unknown as ChangeNavigator).goNextChange()
     await nextTick()
+    expect(wrapper.emitted('update-current-change')).toEqual([[0]])
+
+    await wrapper.setProps({ currentChangeIdx: 0 })
+    await nextTick()
 
     expect(wrapper.findAll('.sbs-line.change-current')).toHaveLength(2)
     expect(wrapper.findAll('.gutter-row.change-current')).toHaveLength(2)
 
-    await wrapper.setProps({ diff: fileDiff('other.txt') })
+    await wrapper.setProps({ currentChangeIdx: -1 })
     await nextTick()
 
     expect(wrapper.find('.sbs-line.change-current').exists()).toBe(false)

@@ -97,6 +97,8 @@ const diffRef = ref<{
 } | null>(null)
 const diffViewEl = ref<HTMLElement | null>(null)
 const pendingScrollAnchor = ref<DiffScrollAnchor | null>(null)
+const currentChangeIdx = ref(-1)
+const changeCount = ref(0)
 const activeDiffIdentityKey = computed(() => props.diffIdentityKey ?? fallbackDiffIdentityKey(props.diff))
 
 function onNextChange() {
@@ -104,6 +106,26 @@ function onNextChange() {
 }
 function onPrevChange() {
   diffRef.value?.goPrevChange()
+}
+
+function onCurrentChangeUpdate(index: number) {
+  currentChangeIdx.value = normalizeChangeIndex(index, changeCount.value)
+}
+
+function onChangeCountUpdate(count: number) {
+  changeCount.value = Math.max(0, count)
+  currentChangeIdx.value = normalizeChangeIndex(currentChangeIdx.value, changeCount.value)
+}
+
+function resetCurrentChange() {
+  currentChangeIdx.value = -1
+  changeCount.value = 0
+}
+
+function normalizeChangeIndex(index: number, count: number): number {
+  if (count <= 0) return -1
+  if (index < 0) return -1
+  return index < count ? index : -1
 }
 
 function onDiffBodyClick(event: MouseEvent) {
@@ -151,7 +173,16 @@ watch(
 watch(activeDiffIdentityKey, (next, prev) => {
   if (next === prev) return
   pendingScrollAnchor.value = null
+  resetCurrentChange()
 })
+
+watch(
+  () => props.diff,
+  (next, prev) => {
+    if (next === prev) return
+    resetCurrentChange()
+  },
+)
 
 watch(
   () => fullFileContent.value,
@@ -381,6 +412,8 @@ function fallbackDiffIdentityKey(diff: FileDiff | null): string | null {
       :diff="diff"
       :is-image-view="isImageView"
       :preview-kind="previewKind"
+      :current-change-idx="currentChangeIdx"
+      :change-count="changeCount"
       :has-leading="Boolean(slots['toolbar-leading'])"
       @prev-change="onPrevChange"
       @next-change="onNextChange"
@@ -416,8 +449,11 @@ function fallbackDiffIdentityKey(diff: FileDiff | null): string | null {
         :full-file-content="fullFileContent"
         :group-by-hunk="uiStore.diffGroupByHunk"
         :scroll-reset-key="activeDiffIdentityKey"
+        :current-change-idx="currentChangeIdx"
         :hunk-action-label="hunkActionLabel"
         :hunk-discard-label="hunkDiscardLabel"
+        @update-current-change="onCurrentChangeUpdate"
+        @change-count="onChangeCountUpdate"
         @hunk-action="onHunkAction"
         @hunk-discard="onHunkDiscard"
       />
@@ -431,8 +467,11 @@ function fallbackDiffIdentityKey(diff: FileDiff | null): string | null {
         :syntax-lang-for-line="syntaxLangForLine"
         :full-file-content="fullFileContent"
         :scroll-reset-key="activeDiffIdentityKey"
+        :current-change-idx="currentChangeIdx"
         :hunk-action-label="hunkActionLabel"
         :hunk-discard-label="hunkDiscardLabel"
+        @update-current-change="onCurrentChangeUpdate"
+        @change-count="onChangeCountUpdate"
         @hunk-action="onHunkAction"
         @hunk-discard="onHunkDiscard"
       />

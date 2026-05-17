@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { FileDiff } from '@/types/git'
 import { useUiStore } from '@/stores/ui'
@@ -6,11 +7,13 @@ import { useShortcutsStore, bindingToLabel, type ShortcutActionId } from '@/stor
 import { useDiffSearch } from '@/composables/diff/useDiffSearch'
 import type { PreviewKind } from '@/lib/preview'
 
-defineProps<{
+const props = defineProps<{
   diff: FileDiff
   isImageView: boolean
   previewKind: PreviewKind
   svgTextMode: boolean
+  currentChangeIdx: number
+  changeCount: number
   hasLeading?: boolean
 }>()
 
@@ -39,6 +42,11 @@ function withShortcut(label: string, actionId: ShortcutActionId): string {
   const b = shortcutsStore.bindings[actionId]
   return b ? `${label} (${bindingToLabel(b)})` : label
 }
+
+const currentChangeLabel = computed(() => {
+  if (props.changeCount <= 0 || props.currentChangeIdx < 0) return `0/${props.changeCount}`
+  return `${props.currentChangeIdx + 1}/${props.changeCount}`
+})
 </script>
 
 <template>
@@ -112,24 +120,29 @@ function withShortcut(label: string, actionId: ShortcutActionId): string {
     <div class="toolbar-divider" v-if="!isImageView" />
 
     <template v-if="!isImageView">
-      <button
-        class="btn-icon"
-        :title="t('diff.toolbar.prevChange')"
-        @click="emit('prevChange')"
-      >
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <polyline points="18 15 12 9 6 15" />
-        </svg>
-      </button>
-      <button
-        class="btn-icon"
-        :title="t('diff.toolbar.nextChange')"
-        @click="emit('nextChange')"
-      >
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <polyline points="6 9 12 15 18 9" />
-        </svg>
-      </button>
+      <div class="change-nav">
+        <div class="change-nav-buttons">
+          <button
+            class="change-nav-btn"
+            :title="t('diff.toolbar.prevChange')"
+            @click="emit('prevChange')"
+          >
+            <svg width="12" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <polyline points="18 15 12 9 6 15" />
+            </svg>
+          </button>
+          <button
+            class="change-nav-btn"
+            :title="t('diff.toolbar.nextChange')"
+            @click="emit('nextChange')"
+          >
+            <svg width="12" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </button>
+        </div>
+        <span class="change-count" :title="currentChangeLabel">{{ currentChangeLabel }}</span>
+      </div>
 
       <div class="toolbar-divider" />
 
@@ -292,6 +305,51 @@ function withShortcut(label: string, actionId: ShortcutActionId): string {
   height: 16px;
   background: var(--border);
   margin: 0 4px;
+}
+
+.change-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.change-nav-buttons {
+  display: inline-flex;
+  flex-direction: column;
+  width: 24px;
+  height: 22px;
+  overflow: hidden;
+  border-radius: 4px;
+}
+
+.change-nav-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 11px;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0;
+  transition: background 0.1s, color 0.1s;
+}
+
+.change-nav-btn:hover {
+  background: var(--bg-overlay);
+  color: var(--text-primary);
+}
+
+.change-count {
+  min-width: 34px;
+  color: var(--text-muted);
+  font-family: var(--code-font-family, 'SF Mono', monospace);
+  font-size: 10px;
+  line-height: 12px;
+  text-align: right;
+  user-select: none;
 }
 
 .btn-icon {
