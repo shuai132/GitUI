@@ -740,7 +740,7 @@ const messages = {
       showRemoteBranches: 'Show remote branches',
       showRemoteBranchesHint: 'When off, remote branches are excluded from history sources and commit chips',
       showChangeStatsColumn: 'Show changes column',
-      showChangeStatsColumnHint: 'Show file count and added/deleted line stats in the history list',
+      showChangeStatsColumnHint: 'Off by default; when enabled, file and line stats are loaded on demand',
       showUnreachable: 'Show dangling refs',
       showUnreachableHint: 'Draw commits unreachable via HEAD reflog on the history graph',
       showStashes: 'Show stashes',

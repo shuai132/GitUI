@@ -67,15 +67,15 @@ describe('ui store history column preferences', () => {
     ])
   })
 
-  it('keeps changes column visible by default and persists toggles', () => {
+  it('keeps changes column hidden by default and persists toggles', () => {
     const uiStore = useUiStore()
 
-    expect(uiStore.showChangeStatsColumn).toBe(true)
+    expect(uiStore.showChangeStatsColumn).toBe(false)
 
     uiStore.toggleShowChangeStatsColumn()
 
-    expect(uiStore.showChangeStatsColumn).toBe(false)
-    expect(localStorage.getItem('gitui.history.showChangeStatsColumn')).toBe('false')
+    expect(uiStore.showChangeStatsColumn).toBe(true)
+    expect(localStorage.getItem('gitui.history.showChangeStatsColumn')).toBe('true')
   })
 
   it('persists reordered history columns', () => {

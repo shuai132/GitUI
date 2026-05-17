@@ -106,7 +106,7 @@ export const DEFAULT_ADVANCED_VIEW_PREFS = {
   diffLayoutMode: 'inline' as DiffLayoutMode,
   diffGroupByHunk: true,
   showRemoteBranches: true,
-  showChangeStatsColumn: true,
+  showChangeStatsColumn: false,
   showUnreachableCommits: true,
   showStashCommits: true,
   debugPanelVisible: false,

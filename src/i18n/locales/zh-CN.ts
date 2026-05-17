@@ -739,7 +739,7 @@ const messages = {
       showRemoteBranches: '显示远程分支',
       showRemoteBranchesHint: '关闭后远程分支不作为历史来源，提交行也不显示远程分支标签',
       showChangeStatsColumn: '显示变更列',
-      showChangeStatsColumnHint: '在历史列表中显示文件数和增删行统计',
+      showChangeStatsColumnHint: '默认关闭；开启后在历史列表中按需统计文件数和增删行',
       showUnreachable: '显示悬垂引用',
       showUnreachableHint: '在历史图中绘制 HEAD reflog 中不可达的提交',
       showStashes: '显示贮藏',
