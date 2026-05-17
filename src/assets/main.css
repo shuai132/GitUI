@@ -248,4 +248,13 @@
     border-radius: 2px;
     padding: 0 1px;
   }
+  mark.word-placeholder {
+    display: inline-block;
+    width: 3px;
+    min-width: 3px;
+    height: 1.15em;
+    padding: 0;
+    margin: 0 1px;
+    vertical-align: -0.15em;
+  }
 }

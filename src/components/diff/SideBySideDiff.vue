@@ -4,7 +4,7 @@ import { useI18n } from 'vue-i18n'
 import type { FileDiff, DiffLine } from '@/types/git'
 import { highlightLine } from '@/lib/highlight'
 import type { DiffSide, SyntaxLangResolver } from '@/lib/highlight'
-import { diffChars, tokensToHtml } from '@/lib/wordDiff'
+import { diffLinePairHtml } from '@/lib/diffLineHtml'
 import { buildFullSideBySideRows, type FullFileContent } from '@/lib/fullFileDiff'
 
 const { t } = useI18n()
@@ -40,7 +40,7 @@ interface AlignedLine {
   lineNo?: number
   content: string
   kind: 'del' | 'add' | 'ctx' | 'empty' | 'header'
-  /** 开启 word-diff 时替代 content 的 HTML（已转义 + <mark> 标注）；null = 用 content */
+  /** 配对 del/add 行的 HTML（语法高亮 + <mark> 变化标注）；null = 用 content */
   wordHtml?: string
   hunkIndex?: number
   isHunkStart?: boolean
@@ -84,13 +84,17 @@ const alignedRows = computed((): AlignedRow[] => {
         const dlContent = (dl && dl.content) ? dl.content.replace(/\n$/, '') : ''
         const alContent = (al && al.content) ? al.content.replace(/\n$/, '') : ''
 
-        // Word-diff：仅当左右都有内容时配对计算（语法高亮关闭时生效，避免与 v-html 冲突）
         let leftWordHtml: string | undefined
         let rightWordHtml: string | undefined
-        if (dl && al && !props.syntaxLang && !props.syntaxLangForLine) {
-          const { leftTokens, rightTokens } = diffChars(dlContent, alContent)
-          leftWordHtml = tokensToHtml(leftTokens)
-          rightWordHtml = tokensToHtml(rightTokens)
+        if (dl && al) {
+          const { leftHtml, rightHtml } = diffLinePairHtml(
+            dlContent,
+            alContent,
+            langForDiffLine('old', dl.old_lineno),
+            langForDiffLine('new', al.new_lineno),
+          )
+          leftWordHtml = leftHtml
+          rightWordHtml = rightHtml
         }
 
         rows.push({
@@ -128,23 +132,32 @@ const alignedRows = computed((): AlignedRow[] => {
 })
 
 function addSideBySideWordDiff(sourceRows: AlignedRow[]): AlignedRow[] {
-  if (props.syntaxLang || props.syntaxLangForLine) return sourceRows
-
   return sourceRows.map((row) => {
     if (row.left.kind !== 'del' || row.right.kind !== 'add') return row
 
-    const { leftTokens, rightTokens } = diffChars(row.left.content, row.right.content)
+    const { leftHtml, rightHtml } = diffLinePairHtml(
+      row.left.content,
+      row.right.content,
+      langForDiffLine('old', row.left.lineNo),
+      langForDiffLine('new', row.right.lineNo),
+    )
     return {
       left: {
         ...row.left,
-        wordHtml: tokensToHtml(leftTokens),
+        wordHtml: leftHtml,
       },
       right: {
         ...row.right,
-        wordHtml: tokensToHtml(rightTokens),
+        wordHtml: rightHtml,
       },
     }
   })
+}
+
+function langForDiffLine(side: DiffSide, lineNo: number | null | undefined): string | null {
+  if (props.syntaxLang) return props.syntaxLang
+  if (!props.syntaxLangForLine) return null
+  return props.syntaxLangForLine(side, lineNo)
 }
 
 // ── 滚动架构 ────────────────────────────────────────────────────────
@@ -236,9 +249,7 @@ watch(
 )
 
 function langForLine(side: DiffSide, line: AlignedLine): string | null {
-  if (props.syntaxLang) return props.syntaxLang
-  if (!props.syntaxLangForLine) return null
-  return props.syntaxLangForLine(side, line.lineNo)
+  return langForDiffLine(side, line.lineNo)
 }
 
 function scrollToRow(rowIndex: number) {
@@ -396,8 +407,8 @@ defineExpose({ goNextChange, goPrevChange, getScrollAnchor, scrollToLine })
                    :class="'line-' + row.left.kind"
                    :data-row="i"
                  >
-                   <span v-if="langForLine('old', row.left)" class="code" v-html="highlightLine(row.left.content, langForLine('old', row.left))" />
-                   <span v-else-if="row.left.wordHtml" class="code" v-html="row.left.wordHtml" />
+                   <span v-if="row.left.wordHtml" class="code" v-html="row.left.wordHtml" />
+                   <span v-else-if="langForLine('old', row.left)" class="code" v-html="highlightLine(row.left.content, langForLine('old', row.left))" />
                    <span v-else class="code">{{ row.left.content }}</span>
                    
                      <span
@@ -452,8 +463,8 @@ defineExpose({ goNextChange, goPrevChange, getScrollAnchor, scrollToLine })
                    class="sbs-line"
                    :class="'line-' + row.right.kind"
                  >
-                   <span v-if="langForLine('new', row.right)" class="code" v-html="highlightLine(row.right.content, langForLine('new', row.right))" />
-                   <span v-else-if="row.right.wordHtml" class="code" v-html="row.right.wordHtml" />
+                   <span v-if="row.right.wordHtml" class="code" v-html="row.right.wordHtml" />
+                   <span v-else-if="langForLine('new', row.right)" class="code" v-html="highlightLine(row.right.content, langForLine('new', row.right))" />
                    <span v-else class="code">{{ row.right.content }}</span>
                    <span
                      v-if="row.right.hunkIndex != null && row.right.isHunkStart && row.left.kind !== 'del' && (canRunHunkAction || canDiscardHunk)"
