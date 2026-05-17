@@ -620,38 +620,43 @@ defineExpose({ goNextChange, goPrevChange, hasChangeTargets, getScrollAnchor, sc
 
 .gutter-row.change-current,
 .sbs-line.change-current {
-  box-shadow:
-    inset 3px 0 0 var(--accent-blue),
-    inset 1px 0 0 color-mix(in srgb, var(--accent-blue) 58%, transparent),
-    inset -1px 0 0 color-mix(in srgb, var(--accent-blue) 42%, transparent);
   position: relative;
   z-index: 1;
 }
 
-.gutter-row.change-current-start,
-.sbs-line.change-current-start {
-  box-shadow:
-    inset 3px 0 0 var(--accent-blue),
-    inset 1px 0 0 color-mix(in srgb, var(--accent-blue) 58%, transparent),
-    inset -1px 0 0 color-mix(in srgb, var(--accent-blue) 42%, transparent),
-    inset 0 1px 0 color-mix(in srgb, var(--accent-blue) 64%, transparent);
+.gutter-row.change-current {
+  box-shadow: inset 3px 0 0 var(--accent-blue);
 }
 
-.gutter-row.change-current-end,
+.sbs-line.change-current-start {
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--accent-blue) 64%, transparent);
+}
+
 .sbs-line.change-current-end {
+  box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--accent-blue) 64%, transparent);
+}
+
+.sbs-line.change-current-start.change-current-end {
   box-shadow:
-    inset 3px 0 0 var(--accent-blue),
-    inset 1px 0 0 color-mix(in srgb, var(--accent-blue) 58%, transparent),
-    inset -1px 0 0 color-mix(in srgb, var(--accent-blue) 42%, transparent),
+    inset 0 1px 0 color-mix(in srgb, var(--accent-blue) 64%, transparent),
     inset 0 -1px 0 color-mix(in srgb, var(--accent-blue) 64%, transparent);
 }
 
-.gutter-row.change-current-start.change-current-end,
-.sbs-line.change-current-start.change-current-end {
+.gutter-row.change-current-start {
   box-shadow:
     inset 3px 0 0 var(--accent-blue),
-    inset 1px 0 0 color-mix(in srgb, var(--accent-blue) 58%, transparent),
-    inset -1px 0 0 color-mix(in srgb, var(--accent-blue) 42%, transparent),
+    inset 0 1px 0 color-mix(in srgb, var(--accent-blue) 64%, transparent);
+}
+
+.gutter-row.change-current-end {
+  box-shadow:
+    inset 3px 0 0 var(--accent-blue),
+    inset 0 -1px 0 color-mix(in srgb, var(--accent-blue) 64%, transparent);
+}
+
+.gutter-row.change-current-start.change-current-end {
+  box-shadow:
+    inset 3px 0 0 var(--accent-blue),
     inset 0 1px 0 color-mix(in srgb, var(--accent-blue) 64%, transparent),
     inset 0 -1px 0 color-mix(in srgb, var(--accent-blue) 64%, transparent);
 }

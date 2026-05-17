@@ -534,10 +534,7 @@ defineExpose({ goNextChange, goPrevChange, hasChangeTargets, getScrollAnchor, sc
 }
 
 .inline-line.change-current {
-  box-shadow:
-    inset 3px 0 0 var(--accent-blue),
-    inset 1px 0 0 color-mix(in srgb, var(--accent-blue) 58%, transparent),
-    inset -1px 0 0 color-mix(in srgb, var(--accent-blue) 42%, transparent);
+  box-shadow: inset 3px 0 0 var(--accent-blue);
   position: relative;
   z-index: 1;
 }
@@ -545,24 +542,18 @@ defineExpose({ goNextChange, goPrevChange, hasChangeTargets, getScrollAnchor, sc
 .inline-line.change-current-start {
   box-shadow:
     inset 3px 0 0 var(--accent-blue),
-    inset 1px 0 0 color-mix(in srgb, var(--accent-blue) 58%, transparent),
-    inset -1px 0 0 color-mix(in srgb, var(--accent-blue) 42%, transparent),
     inset 0 1px 0 color-mix(in srgb, var(--accent-blue) 64%, transparent);
 }
 
 .inline-line.change-current-end {
   box-shadow:
     inset 3px 0 0 var(--accent-blue),
-    inset 1px 0 0 color-mix(in srgb, var(--accent-blue) 58%, transparent),
-    inset -1px 0 0 color-mix(in srgb, var(--accent-blue) 42%, transparent),
     inset 0 -1px 0 color-mix(in srgb, var(--accent-blue) 64%, transparent);
 }
 
 .inline-line.change-current-start.change-current-end {
   box-shadow:
     inset 3px 0 0 var(--accent-blue),
-    inset 1px 0 0 color-mix(in srgb, var(--accent-blue) 58%, transparent),
-    inset -1px 0 0 color-mix(in srgb, var(--accent-blue) 42%, transparent),
     inset 0 1px 0 color-mix(in srgb, var(--accent-blue) 64%, transparent),
     inset 0 -1px 0 color-mix(in srgb, var(--accent-blue) 64%, transparent);
 }
