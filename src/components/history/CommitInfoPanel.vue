@@ -15,6 +15,7 @@ import ContextMenu from '@/components/common/ContextMenu.vue'
 import CommitFileList from '@/components/history/CommitFileList.vue'
 import type { SubmoduleInfo } from '@/types/git'
 import { gitlinkPathsForDiff } from '@/utils/submodules'
+import type { FileOrderPlacement } from '@/utils/fileOrderPrefs'
 
 const { t } = useI18n()
 const historyStore = useHistoryStore()
@@ -100,6 +101,8 @@ const bodyText = computed(() => {
 // ── 文件右键菜单 ─────────────────────────────────────────────────
 const commitDiffs = computed(() => props.commit?.diffs ?? [])
 const commitOid = computed(() => props.commit?.info.oid)
+const activeRepoPath = computed(() => repoStore.activeRepo()?.path)
+const fileOrderBucket = computed(() => uiStore.getChangedFileOrder(activeRepoPath.value))
 const submodulePaths = computed(() => {
   const paths = new Set(submodulesStore.submodules.map((submodule) => submodule.path))
   for (const diff of commitDiffs.value) {
@@ -118,6 +121,10 @@ async function openSubmoduleFromHistory(submodule: SubmoduleInfo) {
     console.error(err)
     alert(t('sidebar.submodule.openFailed', { detail: String(err) }))
   }
+}
+
+function moveFileOrder(paths: readonly string[], placement: FileOrderPlacement) {
+  uiStore.moveChangedFilesForRepo(activeRepoPath.value, paths, placement)
 }
 
 async function initSubmoduleFromHistory(submodule: SubmoduleInfo) {
@@ -160,6 +167,7 @@ const {
   openSubmodule: openSubmoduleFromHistory,
   initSubmodule: initSubmoduleFromHistory,
   updateSubmodule: updateSubmoduleFromHistory,
+  moveFileOrder,
   showFileHistory: (payload) => emit('showFileHistory', payload),
 })
 </script>
@@ -220,6 +228,7 @@ const {
       :commit-oid="commit.info.oid"
       :selected-file-idx="selectedFileIdx"
       :submodule-paths="submodulePaths"
+      :file-order-bucket="fileOrderBucket"
       :loading="historyStore.loadingDetail"
       @select-file="emit('selectFile', $event)"
       @file-context-menu="openFileMenu"

@@ -1,6 +1,11 @@
 import { computed, ref, watch, type Ref } from 'vue'
 import type { FileDiff, FileStatusKind } from '@/types/git'
 import { buildFileTree, flattenTree } from '@/utils/fileTree'
+import {
+  EMPTY_FILE_ORDER_BUCKET,
+  orderedFileIndices,
+  type FileOrderBucket,
+} from '@/utils/fileOrderPrefs'
 
 const HISTORY_VIEW_MODE_KEY = 'history-view-mode'
 
@@ -29,10 +34,15 @@ export function commitFileStatus(diff: FileDiff): FileStatusKind {
 export function useCommitFileItems(
   diffs: Ref<FileDiff[]>,
   commitOid: Ref<string | undefined>,
+  fileOrderBucket: Ref<FileOrderBucket> = ref(EMPTY_FILE_ORDER_BUCKET),
 ) {
   const viewMode = ref<CommitFileViewMode>(readInitialViewMode())
   const isAllExpanded = ref(false)
   const expandedDirs = ref(new Set<string>())
+
+  const orderedIndices = computed(() =>
+    orderedFileIndices(diffs.value, fileOrderBucket.value, diffPath),
+  )
 
   function buildTree() {
     return buildFileTree(diffs.value, diffPath)
@@ -77,10 +87,10 @@ export function useCommitFileItems(
 
   const displayItems = computed<CommitFileDisplayItem[]>(() => {
     if (viewMode.value !== 'tree') {
-      return diffs.value.map((diff, index) => ({
+      return orderedIndices.value.map((index) => ({
         type: 'file',
-        path: diffPath(diff),
-        file: diff,
+        path: diffPath(diffs.value[index]),
+        file: diffs.value[index],
         depth: 0,
         index,
       }))

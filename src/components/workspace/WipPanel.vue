@@ -12,6 +12,7 @@ import { useGitCommands } from '@/composables/useGitCommands'
 import { useWipFileActions } from '@/composables/workspace/useWipFileActions'
 import { useWipMenus } from '@/composables/workspace/useWipMenus'
 import type { FileEntry, SubmoduleInfo } from '@/types/git'
+import { sortByFileOrder, type FileOrderPlacement } from '@/utils/fileOrderPrefs'
 import { findSelectedWipIndex, findWipFileBySelection } from '@/utils/wipSelection'
 import FileChangeList from '@/components/workspace/FileChangeList.vue'
 import WipCommitBox from '@/components/workspace/WipCommitBox.vue'
@@ -38,6 +39,7 @@ const settingsStore = useSettingsStore()
 const submodulesStore = useSubmodulesStore()
 const git = useGitCommands()
 const mergeRebaseStore = useMergeRebaseStore()
+const activeRepoPath = computed(() => repoStore.activeRepo()?.path)
 
 const emit = defineEmits<{
   showFileHistory: [payload: { filePath: string; mode: 'history' | 'blame' }]
@@ -65,13 +67,24 @@ const isUnborn = computed(() => {
 })
 
 // ── 合并 unstaged + untracked 列表到一个"未暂存"区 ──────────────────
-const unstagedAll = computed<FileEntry[]>(() => {
+const rawUnstagedAll = computed<FileEntry[]>(() => {
   const s = workspaceStore.status
   if (!s) return []
   return [...s.unstaged, ...s.untracked]
 })
 
-const stagedAll = computed<FileEntry[]>(() => workspaceStore.status?.staged ?? [])
+const rawStagedAll = computed<FileEntry[]>(() => workspaceStore.status?.staged ?? [])
+const fileOrderBucket = computed(() => uiStore.getChangedFileOrder(activeRepoPath.value))
+const unstagedAll = computed<FileEntry[]>(() =>
+  viewMode.value === 'list'
+    ? sortByFileOrder(rawUnstagedAll.value, fileOrderBucket.value, (file) => file.path)
+    : rawUnstagedAll.value,
+)
+const stagedAll = computed<FileEntry[]>(() =>
+  viewMode.value === 'list'
+    ? sortByFileOrder(rawStagedAll.value, fileOrderBucket.value, (file) => file.path)
+    : rawStagedAll.value,
+)
 const submodulePaths = computed(() => submodulesStore.submodules.map((submodule) => submodule.path))
 
 // ── 文件选择 & diff 加载 ──────────────────────────────────────────
@@ -187,6 +200,16 @@ async function batchDiscard() {
   await discardSelected()
 }
 
+function orderedBatchPaths(source: 'unstaged' | 'staged'): string[] {
+  const selected = new Set(source === 'unstaged' ? unstagedMultiPaths.value : stagedMultiPaths.value)
+  const files = source === 'unstaged' ? unstagedAll.value : stagedAll.value
+  return files.filter((file) => selected.has(file.path)).map((file) => file.path)
+}
+
+function moveFileOrder(paths: readonly string[], placement: FileOrderPlacement) {
+  uiStore.moveChangedFilesForRepo(activeRepoPath.value, paths, placement)
+}
+
 async function onUnstageAll() {
   await unstageAll()
 }
@@ -207,6 +230,7 @@ const {
   settingsStore,
   workspaceStore,
   submodules: computed(() => submodulesStore.submodules),
+  viewMode,
   selectedPath,
   unstagedMultiPaths,
   stagedMultiPaths,
@@ -214,6 +238,8 @@ const {
   batchStage,
   batchUnstage,
   batchDiscard,
+  orderedBatchPaths,
+  moveFileOrder,
   confirmDiscardFile: (filePath) => confirm(t('workspace.confirmDiscard.file', { file: filePath })),
   openSubmodule: openSubmoduleFromWip,
   initSubmodule: initSubmoduleFromWip,

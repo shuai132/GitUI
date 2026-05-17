@@ -12,6 +12,7 @@ import { useGitCommands } from '@/composables/useGitCommands'
 import { useRepoStore } from './repos'
 import { useUiStore } from './ui'
 import { computeGraphLayout, type GraphRow, type LaneState } from '@/utils/graph'
+import { orderedFileIndices } from '@/utils/fileOrderPrefs'
 
 const PAGE_SIZE = 200
 const CHANGE_STATS_BATCH_SIZE = 40
@@ -59,6 +60,16 @@ export const useHistoryStore = defineStore('history', () => {
   function activeRepoBranchScope() {
     const repoStore = useRepoStore()
     return uiStore.getHistoryBranchScope(repoStore.activeRepo()?.path)
+  }
+
+  function commitDiffPath(diff: CommitDetail['diffs'][number]): string {
+    return diff.new_path ?? diff.old_path ?? ''
+  }
+
+  function firstOrderedFileDiffIndex(diffs: CommitDetail['diffs']): number {
+    const repoStore = useRepoStore()
+    const bucket = uiStore.getChangedFileOrder(repoStore.activeRepo()?.path)
+    return orderedFileIndices(diffs, bucket, commitDiffPath)[0] ?? 0
   }
 
   function isActiveRepo(repoId: string): boolean {
@@ -353,9 +364,9 @@ export const useHistoryStore = defineStore('history', () => {
           selectedCommit.value = summary
           loadingDetail.value = false
 
-          // 默认加载第一个文件的详情
+          // 默认加载视觉顺序里的第一个文件；仓库级排序偏好可能把原始第一个文件移到末尾。
           if (summary.diffs.length > 0) {
-            loadFileDiff(0)
+            selectFirstOrderedFileDiff()
           }
 
           // 后台补全统计数字
@@ -407,6 +418,13 @@ export const useHistoryStore = defineStore('history', () => {
   function selectFileDiff(idx: number) {
     selectedFileDiffIndex.value = idx
     loadFileDiff(idx)
+  }
+
+  function selectFirstOrderedFileDiff() {
+    const commit = selectedCommit.value
+    if (!commit || commit.diffs.length === 0) return
+    const firstFileIdx = firstOrderedFileDiffIndex(commit.diffs)
+    selectFileDiff(firstFileIdx)
   }
 
   async function createBranch(name: string, fromOid?: string) {
@@ -692,6 +710,7 @@ export const useHistoryStore = defineStore('history', () => {
     jumpAdjacentCommit,
     selectCommit,
     selectFileDiff,
+    selectFirstOrderedFileDiff,
     createBranch,
     switchBranch,
     deleteBranch,

@@ -10,6 +10,7 @@ import {
   useCommitFileItems,
   type CommitFileDisplayItem,
 } from '@/composables/history/useCommitFileItems'
+import { EMPTY_FILE_ORDER_BUCKET, type FileOrderBucket } from '@/utils/fileOrderPrefs'
 import { buildSubmodulePathSet, isSubmodulePath } from '@/utils/submodules'
 import { scrollElementByWheel } from '@/utils/wheelScroll'
 
@@ -22,19 +23,22 @@ const props = withDefaults(defineProps<{
   loading?: boolean
   commitOid?: string
   submodulePaths?: string[]
+  fileOrderBucket?: FileOrderBucket
 }>(), {
   loading: false,
   commitOid: undefined,
   submodulePaths: () => [],
+  fileOrderBucket: () => EMPTY_FILE_ORDER_BUCKET,
 })
 
 const emit = defineEmits<{
   selectFile: [idx: number]
-  fileContextMenu: [event: MouseEvent, idx: number]
+  fileContextMenu: [event: MouseEvent, idx: number, canOrder: boolean]
 }>()
 
 const diffsRef = computed(() => props.diffs)
 const commitOidRef = computed(() => props.commitOid)
+const fileOrderBucketRef = computed(() => props.fileOrderBucket)
 
 const {
   viewMode,
@@ -44,7 +48,7 @@ const {
   toggleViewMode,
   toggleExpandCollapseAll,
   toggleDir,
-} = useCommitFileItems(diffsRef, commitOidRef)
+} = useCommitFileItems(diffsRef, commitOidRef, fileOrderBucketRef)
 
 const statusIconMap: Record<FileStatusKind, { d: string; stroke?: boolean }> = {
   modified: { d: 'M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z' },
@@ -128,7 +132,7 @@ function onRowClick(item: CommitFileDisplayItem) {
 
 function onRowContext(event: MouseEvent, item: CommitFileDisplayItem) {
   if (item.type === 'file') {
-    emit('fileContextMenu', event, item.index)
+    emit('fileContextMenu', event, item.index, viewMode.value === 'list')
   }
 }
 

@@ -204,6 +204,37 @@ describe('ui store history column preferences', () => {
     expect(uiStore.getDefaultRemote('/repos/b')).toBeNull()
   })
 
+  it('persists changed file order per repo path', () => {
+    const uiStore = useUiStore()
+
+    uiStore.moveChangedFilesForRepo('/repos/a', ['lock.json'], 'back')
+    uiStore.moveChangedFilesForRepo('/repos/b', ['generated.bin'], 'front')
+
+    expect(uiStore.getChangedFileOrder('/repos/a')).toEqual({
+      front: [],
+      back: ['lock.json'],
+    })
+    expect(uiStore.getChangedFileOrder('/repos/b')).toEqual({
+      front: ['generated.bin'],
+      back: [],
+    })
+    expect(localStorage.getItem('gitui.changedFiles.orderByRepoPath')).toBe(
+      JSON.stringify({
+        '/repos/a': { front: [], back: ['lock.json'] },
+        '/repos/b': { front: ['generated.bin'], back: [] },
+      }),
+    )
+
+    uiStore.moveChangedFilesForRepo('/repos/a', ['lock.json'], 'default')
+
+    expect(uiStore.getChangedFileOrder('/repos/a')).toEqual({ front: [], back: [] })
+    expect(localStorage.getItem('gitui.changedFiles.orderByRepoPath')).toBe(
+      JSON.stringify({
+        '/repos/b': { front: ['generated.bin'], back: [] },
+      }),
+    )
+  })
+
   it('ignores legacy global history branch scope at runtime', () => {
     stubLocalStorage({
       'gitui.history.branchScope': 'current_first_parent',

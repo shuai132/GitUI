@@ -13,6 +13,7 @@ import { useSettingsStore } from '@/stores/settings'
 import { formatAuthor, formatHistoryTime } from '@/utils/format'
 import { CIRCLE_R, LANE_W, laneX } from '@/utils/graph'
 import { scrollElementByWheel } from '@/utils/wheelScroll'
+import { orderedFileIndices } from '@/utils/fileOrderPrefs'
 import CommitGraphRow from '@/components/history/CommitGraphRow.vue'
 import WipRow from '@/components/history/WipRow.vue'
 import ChangeStatsCell from '@/components/history/ChangeStatsCell.vue'
@@ -48,6 +49,7 @@ const activeRepoPath = computed(() => repoStore.activeRepo()?.path)
 const activeRepoBranchScope = computed(() =>
   uiStore.getHistoryBranchScope(activeRepoPath.value),
 )
+const activeFileOrderBucket = computed(() => uiStore.getChangedFileOrder(activeRepoPath.value))
 
 // 历史列表每行高度（响应式，随设置变化）。
 // 行 `div.height` 走 CSS 变量 var(--history-row-height)（滚动热路径 0 开销），
@@ -333,6 +335,14 @@ const {
   workspaceStore,
 })
 
+const orderedCommitFileIndices = computed(() =>
+  orderedFileIndices(
+    historyStore.selectedCommit?.diffs ?? [],
+    activeFileOrderBucket.value,
+    (diff) => diff.new_path ?? diff.old_path ?? '',
+  ),
+)
+
 // ── Panel dock（拖拽停靠）────────────────────────────────────────────
 const {
   isDragging,
@@ -353,6 +363,7 @@ const { onKeyDown } = useHistoryKeyboard({
   virtualRowCount,
   selectedVirtualIndex,
   virtualizer,
+  orderedFileIndices: orderedCommitFileIndices,
   selectRow,
   onSelectFile,
 })

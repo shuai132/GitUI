@@ -8,6 +8,7 @@ import type { useRepoStore } from '@/stores/repos'
 import { resolveExternalTerminalApp, type useSettingsStore } from '@/stores/settings'
 import type { useWorkspaceStore } from '@/stores/workspace'
 import type { FileEntry, SubmoduleInfo } from '@/types/git'
+import type { FileOrderPlacement } from '@/utils/fileOrderPrefs'
 import { canOpenSubmodule, findSubmoduleByPath, submoduleSetupAction } from '@/utils/submodules'
 
 type GitCommands = ReturnType<typeof useGitCommands>
@@ -24,6 +25,7 @@ type WipMenuOptions = {
   settingsStore: SettingsStore
   workspaceStore: WorkspaceStore
   submodules: ComputedRef<SubmoduleInfo[]>
+  viewMode: Ref<'list' | 'tree'>
   selectedPath: Ref<string | null>
   unstagedMultiPaths: Ref<string[]>
   stagedMultiPaths: Ref<string[]>
@@ -31,6 +33,8 @@ type WipMenuOptions = {
   batchStage: () => Promise<void>
   batchUnstage: () => Promise<void>
   batchDiscard: () => Promise<void>
+  orderedBatchPaths: (source: 'unstaged' | 'staged') => string[]
+  moveFileOrder: (paths: readonly string[], placement: FileOrderPlacement) => void
   confirmDiscardFile: (filePath: string) => boolean
   openSubmodule: (submodule: SubmoduleInfo) => Promise<void>
   initSubmodule: (submodule: SubmoduleInfo) => Promise<void>
@@ -47,6 +51,7 @@ export function useWipMenus(options: WipMenuOptions) {
     settingsStore,
     workspaceStore,
     submodules,
+    viewMode,
     selectedPath,
     unstagedMultiPaths,
     stagedMultiPaths,
@@ -54,6 +59,8 @@ export function useWipMenus(options: WipMenuOptions) {
     batchStage,
     batchUnstage,
     batchDiscard,
+    orderedBatchPaths,
+    moveFileOrder,
     confirmDiscardFile,
     openSubmodule,
     initSubmodule,
@@ -69,17 +76,27 @@ export function useWipMenus(options: WipMenuOptions) {
   })
 
   const batchMenuItems = computed<ContextMenuItem[]>(() => {
+    const orderItems = viewMode.value === 'list'
+      ? [
+          { separator: true },
+          { label: t('workspace.wip.menu.moveSelectedToFront', { count: batchMenu.source === 'unstaged' ? unstagedMultiPaths.value.length : stagedMultiPaths.value.length }), action: 'batch-move-front' },
+          { label: t('workspace.wip.menu.moveSelectedToBack', { count: batchMenu.source === 'unstaged' ? unstagedMultiPaths.value.length : stagedMultiPaths.value.length }), action: 'batch-move-back' },
+          { label: t('workspace.wip.menu.restoreSelectedOrder', { count: batchMenu.source === 'unstaged' ? unstagedMultiPaths.value.length : stagedMultiPaths.value.length }), action: 'batch-restore-order' },
+        ] satisfies ContextMenuItem[]
+      : []
     if (batchMenu.source === 'unstaged') {
       const n = unstagedMultiPaths.value.length
       return [
         { label: t('workspace.wip.menu.stageSelected', { count: n }), action: 'batch-stage' },
         { separator: true },
         { label: t('workspace.wip.menu.discardSelected', { count: n }), action: 'batch-discard', danger: true },
+        ...orderItems,
       ]
     }
     const n = stagedMultiPaths.value.length
     return [
       { label: t('workspace.wip.menu.unstageSelected', { count: n }), action: 'batch-unstage' },
+      ...orderItems,
     ]
   })
 
@@ -117,6 +134,16 @@ export function useWipMenus(options: WipMenuOptions) {
     }
   }
 
+  function orderMenuItems(): ContextMenuItem[] {
+    if (viewMode.value !== 'list') return []
+    return [
+      { separator: true },
+      { label: t('workspace.wip.menu.moveToFront'), action: 'move-front' },
+      { label: t('workspace.wip.menu.moveToBack'), action: 'move-back' },
+      { label: t('workspace.wip.menu.restoreOrder'), action: 'restore-order' },
+    ]
+  }
+
   const fileMenuItems = computed<ContextMenuItem[]>(() => {
     if (fileMenu.isDir) {
       return [
@@ -149,6 +176,7 @@ export function useWipMenus(options: WipMenuOptions) {
         { separator: true },
         { label: t('workspace.wip.menu.copyRelativePath'), action: 'copy-relative' },
         { label: t('workspace.wip.menu.openInEditor'), action: 'open-editor' },
+        ...orderMenuItems(),
       )
       return items
     }
@@ -186,6 +214,7 @@ export function useWipMenus(options: WipMenuOptions) {
       { separator: true },
       { label: t('fileHistory.menu.history'), action: 'file-history', disabled: f.status === 'untracked' },
       { label: t('fileHistory.menu.blame'), action: 'file-blame', disabled: f.status === 'untracked' || f.status === 'deleted' },
+      ...orderMenuItems(),
     )
     return items
   })
@@ -216,6 +245,9 @@ export function useWipMenus(options: WipMenuOptions) {
     if (action === 'batch-stage') await batchStage()
     else if (action === 'batch-unstage') await batchUnstage()
     else if (action === 'batch-discard') await batchDiscard()
+    else if (action === 'batch-move-front') moveFileOrder(orderedBatchPaths(batchMenu.source), 'front')
+    else if (action === 'batch-move-back') moveFileOrder(orderedBatchPaths(batchMenu.source), 'back')
+    else if (action === 'batch-restore-order') moveFileOrder(orderedBatchPaths(batchMenu.source), 'default')
   }
 
   async function handleFileMenuAction(action: string) {
@@ -246,6 +278,12 @@ export function useWipMenus(options: WipMenuOptions) {
         await mergeRebaseStore.resolveConflict(targetPath, content)
       } else if (action === 'toggle') {
         await toggleFile(isDir ? targetPath : f!, isDir)
+      } else if (action === 'move-front') {
+        moveFileOrder([targetPath], 'front')
+      } else if (action === 'move-back') {
+        moveFileOrder([targetPath], 'back')
+      } else if (action === 'restore-order') {
+        moveFileOrder([targetPath], 'default')
       } else if (action === 'open-submodule') {
         const submodule = findSubmoduleByPath(submodules.value, targetPath)
         if (canOpenSubmodule(submodule)) {

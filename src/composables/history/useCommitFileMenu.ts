@@ -5,6 +5,7 @@ import type { useGitCommands } from '@/composables/useGitCommands'
 import type { useRepoStore } from '@/stores/repos'
 import type { useWorkspaceStore } from '@/stores/workspace'
 import type { FileDiff, SubmoduleInfo } from '@/types/git'
+import type { FileOrderPlacement } from '@/utils/fileOrderPrefs'
 import { canOpenSubmodule, findSubmoduleForDiff, submoduleSetupAction } from '@/utils/submodules'
 
 type GitCommands = ReturnType<typeof useGitCommands>
@@ -22,6 +23,7 @@ type CommitFileMenuOptions = {
   openSubmodule: (submodule: SubmoduleInfo) => Promise<void>
   initSubmodule: (submodule: SubmoduleInfo) => Promise<void>
   updateSubmodule: (submodule: SubmoduleInfo) => Promise<void>
+  moveFileOrder: (paths: readonly string[], placement: FileOrderPlacement) => void
   showFileHistory: (payload: { filePath: string; mode: 'history' | 'blame' }) => void
 }
 
@@ -41,6 +43,7 @@ export function useCommitFileMenu(options: CommitFileMenuOptions) {
     openSubmodule,
     initSubmodule,
     updateSubmodule,
+    moveFileOrder,
     showFileHistory,
   } = options
 
@@ -49,6 +52,7 @@ export function useCommitFileMenu(options: CommitFileMenuOptions) {
     x: 0,
     y: 0,
     diffIdx: -1,
+    canOrder: true,
   })
 
   const fileMenuItems = computed<ContextMenuItem[]>(() => {
@@ -97,12 +101,21 @@ export function useCommitFileMenu(options: CommitFileMenuOptions) {
       { label: t('fileHistory.menu.history'), action: 'file-history' },
       { label: t('fileHistory.menu.blame'), action: 'file-blame', disabled: isDeleted },
     )
+    if (fileMenu.canOrder) {
+      items.push(
+        { separator: true },
+        { label: t('history.fileMenu.moveToFront'), action: 'move-front' },
+        { label: t('history.fileMenu.moveToBack'), action: 'move-back' },
+        { label: t('history.fileMenu.restoreOrder'), action: 'restore-order' },
+      )
+    }
     return items
   })
 
-  function openFileMenu(event: MouseEvent, diffIdx: number) {
+  function openFileMenu(event: MouseEvent, diffIdx: number, canOrder = true) {
     event.preventDefault()
     fileMenu.diffIdx = diffIdx
+    fileMenu.canOrder = canOrder
     fileMenu.x = event.clientX
     fileMenu.y = event.clientY
     fileMenu.visible = true
@@ -120,6 +133,12 @@ export function useCommitFileMenu(options: CommitFileMenuOptions) {
     try {
       if (action === 'copy-name') {
         await navigator.clipboard.writeText(filePath.split('/').pop() ?? filePath)
+      } else if (action === 'move-front') {
+        moveFileOrder([filePath], 'front')
+      } else if (action === 'move-back') {
+        moveFileOrder([filePath], 'back')
+      } else if (action === 'restore-order') {
+        moveFileOrder([filePath], 'default')
       } else if (action === 'copy-relative') {
         await navigator.clipboard.writeText(filePath)
       } else if (action === 'copy-absolute') {

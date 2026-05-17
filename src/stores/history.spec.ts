@@ -3,7 +3,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { useHistoryStore } from './history'
 import { useRepoStore } from './repos'
 import { useUiStore } from './ui'
-import type { BranchInfo, CommitChangeStats, LogPage, RemoteInfo, TagInfo } from '@/types/git'
+import type { BranchInfo, CommitChangeStats, FileDiff, LogPage, RemoteInfo, TagInfo } from '@/types/git'
 
 const {
   getLogMock,
@@ -91,6 +91,27 @@ function stat(oid: string): CommitChangeStats {
     large_blob_count: 0,
     large_blob_bytes: 0,
     largest_blob_bytes: 12,
+  }
+}
+
+function fileDiff(path: string): FileDiff {
+  return {
+    old_path: path,
+    new_path: path,
+    is_binary: false,
+    hunks: [{
+      old_start: 1,
+      old_lines: 1,
+      new_start: 1,
+      new_lines: 1,
+      header: '@@ -1 +1 @@',
+      lines: [],
+    }],
+    additions: 1,
+    deletions: 0,
+    old_blob_oid: 'old',
+    new_blob_oid: 'new',
+    encoding: 'UTF-8',
   }
 }
 
@@ -491,6 +512,27 @@ describe('history store log filters', () => {
     historyStore.pendingJumpOid = null
     historyStore.jumpAdjacentCommit(-1)
     expect(historyStore.pendingJumpOid).toBe('aaa')
+  })
+
+  it('selects the first visually ordered file diff', () => {
+    const repoStore = useRepoStore()
+    const uiStore = useUiStore()
+    const historyStore = useHistoryStore()
+
+    setActiveRepo(repoStore, 'repo-1', '/repos/a')
+    historyStore.selectedCommit = {
+      info: commit('aaa'),
+      diffs: [
+        fileDiff('large-generated.html'),
+        fileDiff('src/App.vue'),
+        fileDiff('src/CanvasPanel.vue'),
+      ],
+    }
+    uiStore.moveChangedFilesForRepo('/repos/a', ['large-generated.html'], 'back')
+
+    historyStore.selectFirstOrderedFileDiff()
+
+    expect(historyStore.selectedFileDiffIndex).toBe(1)
   })
 
   it('starts adjacent commit navigation from the first commit when nothing is selected', async () => {

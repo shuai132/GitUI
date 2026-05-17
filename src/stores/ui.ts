@@ -1,5 +1,12 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
+import {
+  moveFileOrderPaths,
+  normalizeFileOrderPrefsByRepoPath,
+  type FileOrderBucket,
+  type FileOrderPlacement,
+  type FileOrderPrefsByRepoPath,
+} from '@/utils/fileOrderPrefs'
 
 // ── localStorage keys（集中管理） ───────────────────────────────────
 const KEYS = {
@@ -13,6 +20,7 @@ const KEYS = {
   historySizes: 'gitui.history.sizes',
   historyColumnOrder: 'gitui.history.columnOrder',
   defaultRemoteByRepoPath: 'gitui.remote.defaultByRepoPath',
+  changedFileOrderByRepoPath: 'gitui.changedFiles.orderByRepoPath',
   showChangeStatsColumn: 'gitui.history.showChangeStatsColumn',
   diffViewMode: 'gitui.diff.viewMode',
   diffLayoutMode: 'gitui.diff.layoutMode',
@@ -247,6 +255,16 @@ function loadDefaultRemoteByRepoPath(): Record<string, string> {
   }
 }
 
+function loadChangedFileOrderByRepoPath(): FileOrderPrefsByRepoPath {
+  const raw = localStorage.getItem(KEYS.changedFileOrderByRepoPath)
+  if (!raw) return {}
+  try {
+    return normalizeFileOrderPrefsByRepoPath(JSON.parse(raw))
+  } catch {
+    return {}
+  }
+}
+
 // ── Store ─────────────────────────────────────────────────────────────
 export const useUiStore = defineStore('ui', () => {
   // 粘性请求：从 Actions 菜单转发 "丢弃所有变更" 给 WipPanel
@@ -299,6 +317,9 @@ export const useUiStore = defineStore('ui', () => {
   )
   const defaultRemoteByRepoPath = ref<Record<string, string>>(
     loadDefaultRemoteByRepoPath(),
+  )
+  const changedFileOrderByRepoPath = ref<FileOrderPrefsByRepoPath>(
+    loadChangedFileOrderByRepoPath(),
   )
   const showRemoteBranches = ref<boolean>(
     loadBool(KEYS.showRemoteBranches, DEFAULT_ADVANCED_VIEW_PREFS.showRemoteBranches),
@@ -487,6 +508,39 @@ export const useUiStore = defineStore('ui', () => {
     persistDefaultRemoteByRepoPath(next)
   }
 
+  function persistChangedFileOrderByRepoPath(prefs: FileOrderPrefsByRepoPath) {
+    const normalized = normalizeFileOrderPrefsByRepoPath(prefs)
+    if (Object.keys(normalized).length === 0) {
+      localStorage.removeItem(KEYS.changedFileOrderByRepoPath)
+      return
+    }
+    localStorage.setItem(KEYS.changedFileOrderByRepoPath, JSON.stringify(normalized))
+  }
+
+  function getChangedFileOrder(repoPath: string | null | undefined): FileOrderBucket {
+    if (!repoPath) return { front: [], back: [] }
+    const bucket = changedFileOrderByRepoPath.value[repoPath]
+    return bucket ? { front: [...bucket.front], back: [...bucket.back] } : { front: [], back: [] }
+  }
+
+  function moveChangedFilesForRepo(
+    repoPath: string | null | undefined,
+    filePaths: readonly string[],
+    placement: FileOrderPlacement,
+  ) {
+    if (!repoPath) return
+    const current = getChangedFileOrder(repoPath)
+    const nextBucket = moveFileOrderPaths(current, filePaths, placement)
+    const nextPrefs = { ...changedFileOrderByRepoPath.value }
+    if (nextBucket.front.length === 0 && nextBucket.back.length === 0) {
+      delete nextPrefs[repoPath]
+    } else {
+      nextPrefs[repoPath] = nextBucket
+    }
+    changedFileOrderByRepoPath.value = nextPrefs
+    persistChangedFileOrderByRepoPath(nextPrefs)
+  }
+
   function toggleShowRemoteBranches() {
     showRemoteBranches.value = !showRemoteBranches.value
     localStorage.setItem(KEYS.showRemoteBranches, String(showRemoteBranches.value))
@@ -633,6 +687,7 @@ export const useUiStore = defineStore('ui', () => {
     showStashCommits,
     historyBranchScopeByRepoPath,
     defaultRemoteByRepoPath,
+    changedFileOrderByRepoPath,
     showRemoteBranches,
     historyColumnOrder,
     showChangeStatsColumn,
@@ -663,6 +718,8 @@ export const useUiStore = defineStore('ui', () => {
     getDefaultRemote,
     setDefaultRemoteForRepo,
     clearDefaultRemoteForRepo,
+    getChangedFileOrder,
+    moveChangedFilesForRepo,
     toggleShowRemoteBranches,
     setHistoryColumnOrder,
     moveHistoryColumnTo,

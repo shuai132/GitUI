@@ -16,6 +16,7 @@ interface UseHistoryKeyboardOptions {
   virtualRowCount: ComputedRef<number>
   selectedVirtualIndex: ComputedRef<number>
   virtualizer: HistoryVirtualizerRef
+  orderedFileIndices?: ComputedRef<number[]>
   selectRow: (virtualIdx: number) => void
   onSelectFile: (idx: number) => void
 }
@@ -27,6 +28,7 @@ export function useHistoryKeyboard({
   virtualRowCount,
   selectedVirtualIndex,
   virtualizer,
+  orderedFileIndices,
   selectRow,
   onSelectFile,
 }: UseHistoryKeyboardOptions) {
@@ -43,8 +45,14 @@ export function useHistoryKeyboard({
   function moveFileSelection(delta: number) {
     const diffs = historyStore.selectedCommit?.diffs
     if (!diffs || diffs.length === 0) return
+    const order = orderedFileIndices?.value.length === diffs.length
+      ? orderedFileIndices.value
+      : diffs.map((_, index) => index)
     const cur = historyStore.selectedFileDiffIndex
-    const next = Math.max(0, Math.min(diffs.length - 1, cur + delta))
+    const visualIdx = order.indexOf(cur)
+    const currentVisualIdx = visualIdx >= 0 ? visualIdx : 0
+    const nextVisualIdx = Math.max(0, Math.min(order.length - 1, currentVisualIdx + delta))
+    const next = order[nextVisualIdx]
     if (next !== cur) onSelectFile(next)
   }
 

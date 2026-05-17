@@ -67,7 +67,11 @@ export function useHistorySelection({
 
     selectedWip.value = false
     if (commit.oid === selectedOid.value) {
-      showDetail.value = !showDetail.value
+      const nextShowDetail = !showDetail.value
+      showDetail.value = nextShowDetail
+      if (nextShowDetail) {
+        historyStore.selectFirstOrderedFileDiff()
+      }
     } else {
       historyStore.selectCommit(commit.oid)
       showDetail.value = true
