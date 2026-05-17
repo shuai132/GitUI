@@ -5,7 +5,7 @@
 //! OpenSSH + ssh-agent + `~/.ssh/config`（即命令行 git 已经能跑的那套配置）绕开问题。
 //! HTTPS 仍走 libgit2 + 系统 credential helper，不变。
 
-use std::process::Command;
+use std::process::{Command, Stdio};
 
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
@@ -15,6 +15,11 @@ use std::os::windows::process::CommandExt;
 /// 加此标志可阻止。macOS/Linux 编译时此常量不存在，由 cfg 隔离。
 #[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x08000000;
+
+#[cfg(windows)]
+const GITUI_SSH_PROXY_ENV: &str = "GITUI_SSH_PROXY";
+#[cfg(windows)]
+const GITUI_SSH_PROXY_VALUE: &str = "1";
 
 use crate::git::{
     engine::GitEngine,
@@ -65,14 +70,114 @@ pub fn get_remote_url(path: &str, remote_name: &str) -> GitResult<String> {
         .ok_or_else(|| GitError::OperationFailed(format!("remote '{remote_name}' has no URL")))
 }
 
+/// 如果当前进程是被 Git 作为 Windows SSH proxy 启动，则转发到真实 `ssh.exe`。
+///
+/// 返回 `Some(exit_code)` 表示已经完成 proxy 工作，调用方应直接退出而不是启动 Tauri UI。
+pub fn run_windows_ssh_proxy_if_requested() -> Option<i32> {
+    run_windows_ssh_proxy_if_requested_inner()
+}
+
+#[cfg(windows)]
+fn run_windows_ssh_proxy_if_requested_inner() -> Option<i32> {
+    match std::env::var(GITUI_SSH_PROXY_ENV) {
+        Ok(value) if value == GITUI_SSH_PROXY_VALUE => {}
+        _ => return None,
+    }
+
+    let mut cmd = Command::new("ssh");
+    cmd.args(std::env::args_os().skip(1))
+        .stdin(Stdio::inherit())
+        .stdout(Stdio::inherit())
+        .stderr(Stdio::inherit());
+    configure_hidden_process(&mut cmd);
+
+    let code = match cmd.status() {
+        Ok(status) => status.code().unwrap_or(1),
+        Err(e) => {
+            eprintln!("GitUI SSH proxy failed to spawn ssh.exe: {e}");
+            127
+        }
+    };
+    Some(code)
+}
+
+#[cfg(not(windows))]
+fn run_windows_ssh_proxy_if_requested_inner() -> Option<i32> {
+    None
+}
+
+/// 创建 GitUI 后台 shellout 使用的 `git` 命令。
+pub fn new_git_command(repo_path: Option<&str>) -> Command {
+    let mut cmd = Command::new("git");
+    configure_hidden_process(&mut cmd);
+    configure_windows_ssh_proxy(&mut cmd, repo_path);
+    cmd
+}
+
+#[cfg(windows)]
+fn configure_hidden_process(cmd: &mut Command) {
+    cmd.creation_flags(CREATE_NO_WINDOW);
+}
+
+#[cfg(not(windows))]
+fn configure_hidden_process(_cmd: &mut Command) {}
+
+#[cfg(windows)]
+fn configure_windows_ssh_proxy(cmd: &mut Command, repo_path: Option<&str>) {
+    if std::env::var_os("GIT_SSH").is_some() || std::env::var_os("GIT_SSH_COMMAND").is_some() {
+        return;
+    }
+    if has_explicit_ssh_command(repo_path) {
+        return;
+    }
+
+    match std::env::current_exe() {
+        Ok(exe) => {
+            cmd.env("GIT_SSH", exe)
+                .env("GIT_SSH_VARIANT", "ssh")
+                .env(GITUI_SSH_PROXY_ENV, GITUI_SSH_PROXY_VALUE);
+        }
+        Err(e) => {
+            log::warn!("[shellout] failed to resolve current executable for SSH proxy: {e}");
+        }
+    }
+}
+
+#[cfg(not(windows))]
+fn configure_windows_ssh_proxy(_cmd: &mut Command, _repo_path: Option<&str>) {}
+
+#[cfg(windows)]
+fn has_explicit_ssh_command(repo_path: Option<&str>) -> bool {
+    let command = repo_path
+        .and_then(|path| {
+            git2::Repository::open(path)
+                .ok()
+                .and_then(|repo| repo.config().ok())
+                .and_then(|config| config.get_string("core.sshCommand").ok())
+        })
+        .or_else(|| {
+            git2::Config::open_default()
+                .ok()
+                .and_then(|config| config.get_string("core.sshCommand").ok())
+        });
+
+    match command {
+        Some(value) => !value.trim().is_empty(),
+        None => false,
+    }
+}
+
 /// 执行 `git -C <path> <args...>` 并返回 stdout；非零退出码时把 stderr 塞进 `OperationFailed`。
 ///
 /// 专门处理 spawn 失败的 `NotFound` 情况，给出明确提示而不是裸 IO 错误。
 pub fn run_git(path: &str, args: &[&str]) -> GitResult<String> {
-    let mut cmd = Command::new("git");
-    cmd.arg("-C").arg(path).args(args);
-    #[cfg(windows)]
-    cmd.creation_flags(CREATE_NO_WINDOW);
+    let mut cmd = new_git_command(Some(path));
+    cmd.arg("-C")
+        .arg(path)
+        .args(args)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
     let output = cmd.output().map_err(|e| {
         if e.kind() == std::io::ErrorKind::NotFound {
             GitError::OperationFailed(

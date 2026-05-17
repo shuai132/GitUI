@@ -5,7 +5,7 @@ use crate::git::{
     credentials::make_credentials_callback,
     encoding::decode_ref_name,
     error::{GitError, GitResult},
-    shellout::{get_remote_url, is_ssh_url, run_git},
+    shellout::{get_remote_url, is_ssh_url, new_git_command, run_git},
     types::*,
 };
 
@@ -432,9 +432,7 @@ impl GitEngine {
         on_progress: impl Fn(&str, u32, Option<String>),
     ) -> GitResult<String> {
         use std::io::Read;
-        #[cfg(windows)]
-        use std::os::windows::process::CommandExt;
-        use std::process::{Command, Stdio};
+        use std::process::Stdio;
 
         let depth_str;
         let mut args: Vec<&str> = vec!["clone", "--progress"];
@@ -452,13 +450,12 @@ impl GitEngine {
         args.push(url);
         args.push(target_path);
 
-        let mut child_cmd = Command::new("git");
+        let mut child_cmd = new_git_command(None);
         child_cmd
             .args(&args)
+            .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::piped());
-        #[cfg(windows)]
-        child_cmd.creation_flags(0x08000000);
         let mut child = child_cmd.spawn().map_err(|e| {
             if e.kind() == std::io::ErrorKind::NotFound {
                 GitError::OperationFailed(

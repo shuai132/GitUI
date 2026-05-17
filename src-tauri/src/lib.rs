@@ -28,6 +28,10 @@ use watcher::WatcherService;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    if let Some(code) = git::shellout::run_windows_ssh_proxy_if_requested() {
+        std::process::exit(code);
+    }
+
     // 解析 `--open-repo <path>`：由新窗口子进程启动时注入，前端在 loadPersisted
     // 之后会调 consume_startup_repo 取走该值并激活对应仓库。
     let startup_repo = {

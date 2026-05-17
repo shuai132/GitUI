@@ -16,6 +16,8 @@
 1. **HTTPS 协议**：主要通过内置的 Git 引擎库实现，集成系统级凭据管理器（如 Keychain、Credential Manager）。
 2. **SSH 协议**：为了复用用户已有的 SSH 配置与代理环境，系统对于 SSH 类型的远端操作采用桥接宿主环境原生工具的策略。这确保了在不同操作系统下都能获得稳定、一致的验证体验。
 
+Windows 下，SSH shellout 由 `git/shellout.rs` 统一构造。GitUI 对直接启动的 `git.exe` 使用隐藏窗口配置，并在未检测到用户显式 SSH 命令配置时注入 GitUI 内置 SSH proxy；proxy 模式只转发到真实 `ssh.exe`，不启动 Tauri UI，用于避免 Git 再拉起 OpenSSH 子进程时出现短暂控制台窗口。
+
 ## 同步流程设计
 
 ### Fetch 与状态更新
