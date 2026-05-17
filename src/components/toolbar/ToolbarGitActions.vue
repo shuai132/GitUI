@@ -51,11 +51,25 @@ const {
 
 function onPullModeSelect(action: string) {
   closePullModeMenu()
+  if (action === 'manage_default_remote') {
+    remoteActions.pickRemote(pullChevronRect.value ?? undefined, false, {
+      forceMenu: true,
+      resolveSelection: false,
+    })
+    return
+  }
   doPull(action as PullMode, pullChevronRect.value ?? undefined)
 }
 
 function onPushModeSelect(action: string) {
   closePushModeMenu()
+  if (action === 'manage_default_remote') {
+    remoteActions.pickRemote(pushChevronRect.value ?? undefined, false, {
+      forceMenu: true,
+      resolveSelection: false,
+    })
+    return
+  }
   doPush(action as PushMode, pushChevronRect.value ?? undefined)
 }
 </script>

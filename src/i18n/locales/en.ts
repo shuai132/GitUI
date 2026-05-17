@@ -55,6 +55,13 @@ const messages = {
       forceWithLease: 'Push --force-with-lease (safe force)',
       force: 'Push --force (overwrite remote)',
     },
+    remoteMenu: {
+      setDefault: 'Set default',
+      clearDefault: 'Clear default',
+      manageDefault: 'Default remote...',
+      defaultUpdated: 'Default remote set to {remote}',
+      defaultCleared: 'Default remote cleared',
+    },
     actionsMenu: {
       soloCurrentBranch: 'Solo current branch',
       showRemoteBranches: 'Show remote branches',

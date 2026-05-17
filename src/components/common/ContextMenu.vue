@@ -10,6 +10,11 @@ export interface ContextMenuItem {
   disabled?: boolean
   /** 高亮为"危险"操作（红色） */
   danger?: boolean
+  /** 行尾轻量操作，适合对当前菜单项做辅助设置 */
+  trailingLabel?: string
+  trailingAction?: string
+  trailingTitle?: string
+  trailingDisabled?: boolean
   /** 有 children 时，本项作为父项，hover 弹出二级子菜单（不再支持第三级） */
   children?: ContextMenuItem[]
   /** 鼠标悬停时展示的原生 tooltip；常用于解释为什么 disabled */
@@ -132,6 +137,13 @@ function onItemClick(item: ContextMenuItem) {
   emit('close')
 }
 
+function onTrailingActionClick(item: ContextMenuItem) {
+  if (item.separator || item.disabled || item.trailingDisabled) return
+  if (!item.trailingAction) return
+  emit('select', item.trailingAction)
+  emit('close')
+}
+
 // 点击 / Esc 关闭。用 pointerdown + capture：
 // - capture 阶段触发，不会被触发点的 stopPropagation 绕过；
 // - 跳过菜单自身和带 [data-menu-anchor] 的触发按钮（让按钮自行 toggle）。
@@ -193,7 +205,7 @@ onBeforeUnmount(() => {
         </div>
         <div
           v-else
-          class="menu-item"
+          class="menu-item menu-item--leaf"
           :class="{
             'menu-item--disabled': item.disabled,
             'menu-item--danger': item.danger,
@@ -202,7 +214,17 @@ onBeforeUnmount(() => {
           @mouseenter="onNonParentMouseEnter"
           @click="onItemClick(item)"
         >
-          {{ item.label }}
+          <span class="menu-item-label">{{ item.label }}</span>
+          <button
+            v-if="item.trailingLabel && item.trailingAction"
+            type="button"
+            class="menu-item-trailing"
+            :disabled="item.disabled || item.trailingDisabled"
+            :title="item.trailingTitle"
+            @click.stop="onTrailingActionClick(item)"
+          >
+            {{ item.trailingLabel }}
+          </button>
         </div>
       </template>
     </div>
@@ -264,9 +286,37 @@ onBeforeUnmount(() => {
   gap: 12px;
 }
 
+.menu-item--leaf {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
 .menu-item-label {
   flex: 1;
   min-width: 0;
+}
+
+.menu-item-trailing {
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  color: var(--accent-blue);
+  font: inherit;
+  font-size: var(--font-sm);
+  line-height: 1;
+  padding: 2px 0 2px 8px;
+  cursor: pointer;
+}
+
+.menu-item-trailing:hover:not(:disabled) {
+  color: var(--text-primary);
+}
+
+.menu-item-trailing:disabled {
+  color: var(--text-muted);
+  cursor: default;
 }
 
 .submenu-arrow {

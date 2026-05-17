@@ -162,6 +162,48 @@ describe('ui store history column preferences', () => {
     expect(uiStore.getHistoryBranchScope('/repos/c')).toBe('all')
   })
 
+  it('persists default remote per repo path', () => {
+    const uiStore = useUiStore()
+
+    expect(uiStore.getDefaultRemote('/repos/a')).toBeNull()
+
+    uiStore.setDefaultRemoteForRepo('/repos/a', 'origin')
+    uiStore.setDefaultRemoteForRepo('/repos/b', 'gitlab')
+
+    expect(uiStore.getDefaultRemote('/repos/a')).toBe('origin')
+    expect(uiStore.getDefaultRemote('/repos/b')).toBe('gitlab')
+    expect(localStorage.getItem('gitui.remote.defaultByRepoPath')).toBe(
+      JSON.stringify({ '/repos/a': 'origin', '/repos/b': 'gitlab' }),
+    )
+
+    uiStore.clearDefaultRemoteForRepo('/repos/a')
+
+    expect(uiStore.getDefaultRemote('/repos/a')).toBeNull()
+    expect(localStorage.getItem('gitui.remote.defaultByRepoPath')).toBe(
+      JSON.stringify({ '/repos/b': 'gitlab' }),
+    )
+
+    uiStore.clearDefaultRemoteForRepo('/repos/b')
+
+    expect(localStorage.getItem('gitui.remote.defaultByRepoPath')).toBeNull()
+  })
+
+  it('drops invalid default remote storage entries', () => {
+    stubLocalStorage({
+      'gitui.remote.defaultByRepoPath': JSON.stringify({
+        '/repos/a': 'origin',
+        '/repos/b': '',
+        '': 'gitlab',
+      }),
+    })
+    setActivePinia(createPinia())
+
+    const uiStore = useUiStore()
+
+    expect(uiStore.getDefaultRemote('/repos/a')).toBe('origin')
+    expect(uiStore.getDefaultRemote('/repos/b')).toBeNull()
+  })
+
   it('ignores legacy global history branch scope at runtime', () => {
     stubLocalStorage({
       'gitui.history.branchScope': 'current_first_parent',

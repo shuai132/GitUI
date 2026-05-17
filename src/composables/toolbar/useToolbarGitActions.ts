@@ -15,7 +15,11 @@ import type { PullMode, PushMode } from '@/composables/toolbar/useRemoteActionMe
 
 interface UseToolbarGitActionsOptions {
   fetchBtnRef: Ref<HTMLButtonElement | null>
-  pickRemote: (anchorRect?: DOMRect, showFetchAll?: boolean) => Promise<string | null>
+  pickRemote: (
+    anchorRect?: DOMRect,
+    showFetchAll?: boolean,
+    options?: { forceMenu?: boolean; resolveSelection?: boolean },
+  ) => Promise<string | null>
 }
 
 export function useToolbarGitActions(options: UseToolbarGitActionsOptions) {

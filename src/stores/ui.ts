@@ -12,6 +12,7 @@ const KEYS = {
   showRemoteBranches: 'gitui.history.showRemoteBranches',
   historySizes: 'gitui.history.sizes',
   historyColumnOrder: 'gitui.history.columnOrder',
+  defaultRemoteByRepoPath: 'gitui.remote.defaultByRepoPath',
   showChangeStatsColumn: 'gitui.history.showChangeStatsColumn',
   diffViewMode: 'gitui.diff.viewMode',
   diffLayoutMode: 'gitui.diff.layoutMode',
@@ -222,6 +223,30 @@ function loadHistoryBranchScopeByRepoPath(): Record<string, HistoryBranchScope> 
   }
 }
 
+function loadDefaultRemoteByRepoPath(): Record<string, string> {
+  const raw = localStorage.getItem(KEYS.defaultRemoteByRepoPath)
+  if (!raw) return {}
+  try {
+    const parsed: unknown = JSON.parse(raw)
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {}
+
+    const result: Record<string, string> = {}
+    for (const [repoPath, remoteName] of Object.entries(parsed)) {
+      if (
+        typeof repoPath === 'string' &&
+        repoPath.length > 0 &&
+        typeof remoteName === 'string' &&
+        remoteName.length > 0
+      ) {
+        result[repoPath] = remoteName
+      }
+    }
+    return result
+  } catch {
+    return {}
+  }
+}
+
 // ── Store ─────────────────────────────────────────────────────────────
 export const useUiStore = defineStore('ui', () => {
   // 粘性请求：从 Actions 菜单转发 "丢弃所有变更" 给 WipPanel
@@ -271,6 +296,9 @@ export const useUiStore = defineStore('ui', () => {
   )
   const historyBranchScopeByRepoPath = ref<Record<string, HistoryBranchScope>>(
     loadHistoryBranchScopeByRepoPath(),
+  )
+  const defaultRemoteByRepoPath = ref<Record<string, string>>(
+    loadDefaultRemoteByRepoPath(),
   )
   const showRemoteBranches = ref<boolean>(
     loadBool(KEYS.showRemoteBranches, DEFAULT_ADVANCED_VIEW_PREFS.showRemoteBranches),
@@ -428,6 +456,37 @@ export const useUiStore = defineStore('ui', () => {
     )
   }
 
+  function persistDefaultRemoteByRepoPath(defaults: Record<string, string>) {
+    if (Object.keys(defaults).length === 0) {
+      localStorage.removeItem(KEYS.defaultRemoteByRepoPath)
+      return
+    }
+    localStorage.setItem(KEYS.defaultRemoteByRepoPath, JSON.stringify(defaults))
+  }
+
+  function getDefaultRemote(repoPath: string | null | undefined): string | null {
+    if (!repoPath) return null
+    return defaultRemoteByRepoPath.value[repoPath] ?? null
+  }
+
+  function setDefaultRemoteForRepo(
+    repoPath: string | null | undefined,
+    remoteName: string,
+  ) {
+    if (!repoPath || !remoteName) return
+    const next = { ...defaultRemoteByRepoPath.value, [repoPath]: remoteName }
+    defaultRemoteByRepoPath.value = next
+    persistDefaultRemoteByRepoPath(next)
+  }
+
+  function clearDefaultRemoteForRepo(repoPath: string | null | undefined) {
+    if (!repoPath) return
+    const next = { ...defaultRemoteByRepoPath.value }
+    delete next[repoPath]
+    defaultRemoteByRepoPath.value = next
+    persistDefaultRemoteByRepoPath(next)
+  }
+
   function toggleShowRemoteBranches() {
     showRemoteBranches.value = !showRemoteBranches.value
     localStorage.setItem(KEYS.showRemoteBranches, String(showRemoteBranches.value))
@@ -573,6 +632,7 @@ export const useUiStore = defineStore('ui', () => {
     showUnreachableCommits,
     showStashCommits,
     historyBranchScopeByRepoPath,
+    defaultRemoteByRepoPath,
     showRemoteBranches,
     historyColumnOrder,
     showChangeStatsColumn,
@@ -600,6 +660,9 @@ export const useUiStore = defineStore('ui', () => {
     getHistoryBranchScope,
     setHistoryBranchScopeForRepo,
     toggleHistoryBranchScopeForRepo,
+    getDefaultRemote,
+    setDefaultRemoteForRepo,
+    clearDefaultRemoteForRepo,
     toggleShowRemoteBranches,
     setHistoryColumnOrder,
     moveHistoryColumnTo,

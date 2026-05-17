@@ -55,6 +55,13 @@ const messages = {
       forceWithLease: 'Push --force-with-lease（安全强推）',
       force: 'Push --force（强制覆盖）',
     },
+    remoteMenu: {
+      setDefault: '设为默认',
+      clearDefault: '取消默认',
+      manageDefault: '默认远端...',
+      defaultUpdated: '已设为默认远端：{remote}',
+      defaultCleared: '已取消默认远端',
+    },
     actionsMenu: {
       soloCurrentBranch: 'Solo 当前分支',
       showRemoteBranches: '显示远程分支',
