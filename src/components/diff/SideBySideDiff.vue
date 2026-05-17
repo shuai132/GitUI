@@ -232,6 +232,17 @@ const changeStarts = computed<number[]>(() => {
 })
 
 const currentChangeIdx = ref(-1)
+const currentChangeRange = computed<{ start: number; end: number } | null>(() => {
+  const start = changeStarts.value[currentChangeIdx.value]
+  if (start == null) return null
+
+  const rows = alignedRows.value
+  let end = start
+  while (end + 1 < rows.length && isChangeRow(rows[end + 1])) {
+    end++
+  }
+  return { start, end }
+})
 
 // 当 diff 变化时重置指针
 watch(alignedRows, () => {
@@ -250,6 +261,20 @@ watch(
 
 function langForLine(side: DiffSide, line: AlignedLine): string | null {
   return langForDiffLine(side, line.lineNo)
+}
+
+function isChangeRow(row: AlignedRow): boolean {
+  return row.left.kind === 'del' || row.right.kind === 'add'
+}
+
+function changeCurrentClasses(rowIndex: number): Record<string, boolean> {
+  const range = currentChangeRange.value
+  const isCurrent = range != null && rowIndex >= range.start && rowIndex <= range.end
+  return {
+    'change-current': isCurrent,
+    'change-current-start': isCurrent && rowIndex === range?.start,
+    'change-current-end': isCurrent && rowIndex === range?.end,
+  }
 }
 
 function scrollToRow(rowIndex: number) {
@@ -363,7 +388,11 @@ function goPrevChange() {
   scrollToRow(starts[currentChangeIdx.value])
 }
 
-defineExpose({ goNextChange, goPrevChange, getScrollAnchor, scrollToLine })
+function hasChangeTargets(): boolean {
+  return changeStarts.value.length > 0
+}
+
+defineExpose({ goNextChange, goPrevChange, hasChangeTargets, getScrollAnchor, scrollToLine })
 </script>
 
 <template>
@@ -387,7 +416,7 @@ defineExpose({ goNextChange, goPrevChange, getScrollAnchor, scrollToLine })
                 v-for="(row, i) in alignedRows"
                 :key="'gl' + i"
                 class="gutter-row"
-                :class="'line-' + row.left.kind"
+                :class="['line-' + row.left.kind, changeCurrentClasses(i)]"
               >
                 <span class="ln">{{ row.left.lineNo ?? '' }}</span>
                 <span class="sign">{{ row.left.kind === 'del' ? '-' : row.left.kind === 'ctx' ? ' ' : '' }}</span>
@@ -404,7 +433,7 @@ defineExpose({ goNextChange, goPrevChange, getScrollAnchor, scrollToLine })
                    v-for="(row, i) in alignedRows"
                    :key="'l' + i"
                    class="sbs-line"
-                   :class="'line-' + row.left.kind"
+                   :class="['line-' + row.left.kind, changeCurrentClasses(i)]"
                    :data-row="i"
                  >
                    <span v-if="row.left.wordHtml" class="code" v-html="row.left.wordHtml" />
@@ -444,7 +473,7 @@ defineExpose({ goNextChange, goPrevChange, getScrollAnchor, scrollToLine })
                 v-for="(row, i) in alignedRows"
                 :key="'gr' + i"
                 class="gutter-row"
-                :class="'line-' + row.right.kind"
+                :class="['line-' + row.right.kind, changeCurrentClasses(i)]"
               >
                 <span class="ln">{{ row.right.lineNo ?? '' }}</span>
                 <span class="sign">{{ row.right.kind === 'add' ? '+' : row.right.kind === 'ctx' ? ' ' : '' }}</span>
@@ -461,7 +490,7 @@ defineExpose({ goNextChange, goPrevChange, getScrollAnchor, scrollToLine })
                    v-for="(row, i) in alignedRows"
                    :key="'r' + i"
                    class="sbs-line"
-                   :class="'line-' + row.right.kind"
+                   :class="['line-' + row.right.kind, changeCurrentClasses(i)]"
                  >
                    <span v-if="row.right.wordHtml" class="code" v-html="row.right.wordHtml" />
                    <span v-else-if="langForLine('new', row.right)" class="code" v-html="highlightLine(row.right.content, langForLine('new', row.right))" />
@@ -580,6 +609,44 @@ defineExpose({ goNextChange, goPrevChange, getScrollAnchor, scrollToLine })
   min-height: var(--diff-row-height);
   line-height: var(--diff-row-height);
   overflow: hidden;
+}
+
+.gutter-row.change-current,
+.sbs-line.change-current {
+  box-shadow:
+    inset 3px 0 0 var(--accent-blue),
+    inset 1px 0 0 color-mix(in srgb, var(--accent-blue) 58%, transparent),
+    inset -1px 0 0 color-mix(in srgb, var(--accent-blue) 42%, transparent);
+  position: relative;
+  z-index: 1;
+}
+
+.gutter-row.change-current-start,
+.sbs-line.change-current-start {
+  box-shadow:
+    inset 3px 0 0 var(--accent-blue),
+    inset 1px 0 0 color-mix(in srgb, var(--accent-blue) 58%, transparent),
+    inset -1px 0 0 color-mix(in srgb, var(--accent-blue) 42%, transparent),
+    inset 0 1px 0 color-mix(in srgb, var(--accent-blue) 64%, transparent);
+}
+
+.gutter-row.change-current-end,
+.sbs-line.change-current-end {
+  box-shadow:
+    inset 3px 0 0 var(--accent-blue),
+    inset 1px 0 0 color-mix(in srgb, var(--accent-blue) 58%, transparent),
+    inset -1px 0 0 color-mix(in srgb, var(--accent-blue) 42%, transparent),
+    inset 0 -1px 0 color-mix(in srgb, var(--accent-blue) 64%, transparent);
+}
+
+.gutter-row.change-current-start.change-current-end,
+.sbs-line.change-current-start.change-current-end {
+  box-shadow:
+    inset 3px 0 0 var(--accent-blue),
+    inset 1px 0 0 color-mix(in srgb, var(--accent-blue) 58%, transparent),
+    inset -1px 0 0 color-mix(in srgb, var(--accent-blue) 42%, transparent),
+    inset 0 1px 0 color-mix(in srgb, var(--accent-blue) 64%, transparent),
+    inset 0 -1px 0 color-mix(in srgb, var(--accent-blue) 64%, transparent);
 }
 
 .sbs-divider {

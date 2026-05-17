@@ -147,6 +147,17 @@ const changeStarts = computed<number[]>(() => {
 })
 
 const currentChangeIdx = ref(-1)
+const currentChangeRange = computed<{ start: number; end: number } | null>(() => {
+  const start = changeStarts.value[currentChangeIdx.value]
+  if (start == null) return null
+
+  const rs = rows.value
+  let end = start
+  while (end + 1 < rs.length && isChangeRow(rs[end + 1])) {
+    end++
+  }
+  return { start, end }
+})
 const scrollEl = ref<HTMLElement | null>(null)
 
 watch(rows, () => {
@@ -169,6 +180,20 @@ function langForRow(row: InlineRow): string | null {
   const side: DiffSide = row.kind === 'del' ? 'old' : 'new'
   const lineNo = row.kind === 'del' ? row.oldLineNo : row.newLineNo
   return props.syntaxLangForLine(side, lineNo)
+}
+
+function isChangeRow(row: InlineRow): boolean {
+  return row.kind === 'del' || row.kind === 'add'
+}
+
+function changeCurrentClasses(rowIndex: number): Record<string, boolean> {
+  const range = currentChangeRange.value
+  const isCurrent = range != null && rowIndex >= range.start && rowIndex <= range.end
+  return {
+    'change-current': isCurrent,
+    'change-current-start': isCurrent && rowIndex === range?.start,
+    'change-current-end': isCurrent && rowIndex === range?.end,
+  }
 }
 
 function scrollToRow(rowIndex: number) {
@@ -276,7 +301,11 @@ function goPrevChange() {
   scrollToRow(starts[currentChangeIdx.value])
 }
 
-defineExpose({ goNextChange, goPrevChange, getScrollAnchor, scrollToLine })
+function hasChangeTargets(): boolean {
+  return changeStarts.value.length > 0
+}
+
+defineExpose({ goNextChange, goPrevChange, hasChangeTargets, getScrollAnchor, scrollToLine })
 </script>
 
 <template>
@@ -297,7 +326,7 @@ defineExpose({ goNextChange, goPrevChange, getScrollAnchor, scrollToLine })
           v-for="(row, i) in rows"
           :key="i"
           class="inline-line"
-          :class="'line-' + row.kind"
+          :class="['line-' + row.kind, changeCurrentClasses(i)]"
           :data-row="i"
         >
           <template v-if="row.kind === 'header'">
@@ -356,7 +385,7 @@ defineExpose({ goNextChange, goPrevChange, getScrollAnchor, scrollToLine })
             <div
               v-else
               class="inline-line"
-              :class="'line-' + row.kind"
+              :class="['line-' + row.kind, changeCurrentClasses(rows.indexOf(row))]"
               :data-row="rows.indexOf(row)"
             >
               <span class="ln">{{ row.oldLineNo ?? '' }}</span>
@@ -494,6 +523,40 @@ defineExpose({ goNextChange, goPrevChange, getScrollAnchor, scrollToLine })
   color: var(--text-muted);
   font-size: var(--font-sm);
   padding: 2px 12px;
+}
+
+.inline-line.change-current {
+  box-shadow:
+    inset 3px 0 0 var(--accent-blue),
+    inset 1px 0 0 color-mix(in srgb, var(--accent-blue) 58%, transparent),
+    inset -1px 0 0 color-mix(in srgb, var(--accent-blue) 42%, transparent);
+  position: relative;
+  z-index: 1;
+}
+
+.inline-line.change-current-start {
+  box-shadow:
+    inset 3px 0 0 var(--accent-blue),
+    inset 1px 0 0 color-mix(in srgb, var(--accent-blue) 58%, transparent),
+    inset -1px 0 0 color-mix(in srgb, var(--accent-blue) 42%, transparent),
+    inset 0 1px 0 color-mix(in srgb, var(--accent-blue) 64%, transparent);
+}
+
+.inline-line.change-current-end {
+  box-shadow:
+    inset 3px 0 0 var(--accent-blue),
+    inset 1px 0 0 color-mix(in srgb, var(--accent-blue) 58%, transparent),
+    inset -1px 0 0 color-mix(in srgb, var(--accent-blue) 42%, transparent),
+    inset 0 -1px 0 color-mix(in srgb, var(--accent-blue) 64%, transparent);
+}
+
+.inline-line.change-current-start.change-current-end {
+  box-shadow:
+    inset 3px 0 0 var(--accent-blue),
+    inset 1px 0 0 color-mix(in srgb, var(--accent-blue) 58%, transparent),
+    inset -1px 0 0 color-mix(in srgb, var(--accent-blue) 42%, transparent),
+    inset 0 1px 0 color-mix(in srgb, var(--accent-blue) 64%, transparent),
+    inset 0 -1px 0 color-mix(in srgb, var(--accent-blue) 64%, transparent);
 }
 
 .line-header-content {

@@ -91,9 +91,11 @@ interface DiffScrollAnchor {
 const diffRef = ref<{
   goNextChange: () => void
   goPrevChange: () => void
+  hasChangeTargets: () => boolean
   getScrollAnchor: () => DiffScrollAnchor | null
   scrollToLine: (anchor: DiffScrollAnchor) => void
 } | null>(null)
+const diffViewEl = ref<HTMLElement | null>(null)
 const pendingScrollAnchor = ref<DiffScrollAnchor | null>(null)
 const activeDiffIdentityKey = computed(() => props.diffIdentityKey ?? fallbackDiffIdentityKey(props.diff))
 
@@ -102,6 +104,38 @@ function onNextChange() {
 }
 function onPrevChange() {
   diffRef.value?.goPrevChange()
+}
+
+function onDiffBodyClick(event: MouseEvent) {
+  if (!diffRef.value || isInteractiveTarget(event.target)) return
+  diffViewEl.value?.focus({ preventScroll: true })
+}
+
+function onDiffViewKeydown(event: KeyboardEvent) {
+  if (!diffRef.value || isInteractiveTarget(event.target) || hasModifierKey(event)) return
+  if ((event.key === 'ArrowDown' || event.key === 'ArrowUp') && !diffRef.value.hasChangeTargets()) return
+  if (event.key === 'ArrowDown') {
+    event.preventDefault()
+    event.stopPropagation()
+    onNextChange()
+  } else if (event.key === 'ArrowUp') {
+    event.preventDefault()
+    event.stopPropagation()
+    onPrevChange()
+  }
+}
+
+function hasModifierKey(event: KeyboardEvent): boolean {
+  return event.altKey || event.ctrlKey || event.metaKey || event.shiftKey
+}
+
+function isInteractiveTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof Element)) return false
+  return Boolean(
+    target.closest(
+      'button, input, textarea, select, option, a[href], [role="button"], [contenteditable]:not([contenteditable="false"])',
+    ),
+  )
 }
 
 watch(
@@ -334,7 +368,13 @@ function fallbackDiffIdentityKey(diff: FileDiff | null): string | null {
     @close="emit('close')"
   />
 
-  <div v-else class="diff-view" tabindex="-1">
+  <div
+    v-else
+    ref="diffViewEl"
+    class="diff-view"
+    tabindex="-1"
+    @keydown="onDiffViewKeydown"
+  >
     <DiffToolbar
       v-if="diff"
       v-model:svg-text-mode="svgTextMode"
@@ -352,7 +392,7 @@ function fallbackDiffIdentityKey(diff: FileDiff | null): string | null {
     </DiffToolbar>
 
     <!-- Diff body -->
-    <div class="diff-body">
+    <div class="diff-body" @click="onDiffBodyClick">
       <DocumentDiff
         v-if="documentKind && diff && repoId"
         :diff="diff"
