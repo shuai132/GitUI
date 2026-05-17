@@ -202,22 +202,41 @@ function persist(data: SettingsData) {
   }
 }
 
-// ── 主题解析：auto 档根据系统偏好决定 light/dark ──────────────────────
-function resolveTheme(mode: ThemeMode): 'light' | 'dark' {
-  if (mode === 'auto') {
-    if (typeof window !== 'undefined' && window.matchMedia) {
-      return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
-    }
-    return 'dark'
+export type ResolvedTheme = 'light' | 'dark'
+
+function readSystemTheme(): ResolvedTheme {
+  if (typeof window !== 'undefined' && window.matchMedia) {
+    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
   }
-  return mode
+  return 'dark'
+}
+
+const systemTheme = ref<ResolvedTheme>(readSystemTheme())
+
+function setSystemTheme(theme: ResolvedTheme) {
+  systemTheme.value = theme
+}
+
+// ── 主题解析：auto 档根据系统偏好决定 light/dark ──────────────────────
+export function resolveTheme(mode: ThemeMode): ResolvedTheme {
+  return mode === 'auto' ? systemTheme.value : mode
 }
 
 // ── 同步 Windows 标题栏主题（setTheme 在非 Tauri 环境下静默失败） ────
-async function syncWindowTheme(resolved: 'dark' | 'light') {
+let themeSyncSeq = 0
+async function syncWindowTheme(mode: ThemeMode) {
+  const seq = ++themeSyncSeq
   try {
     const { getCurrentWindow } = await import('@tauri-apps/api/window')
-    await getCurrentWindow().setTheme(resolved)
+    const win = getCurrentWindow()
+    await win.setTheme(mode === 'auto' ? null : mode)
+    if (seq !== themeSyncSeq || mode !== 'auto') return
+
+    const theme = await win.theme()
+    if (theme === 'light' || theme === 'dark') {
+      setSystemTheme(theme)
+      document.documentElement.setAttribute('data-theme', theme)
+    }
   } catch {
     // 非 Tauri 环境（浏览器开发模式）忽略
   }
@@ -229,7 +248,7 @@ export function applySettingsToDom(data: SettingsData) {
   const root = document.documentElement
   const resolved = resolveTheme(data.themeMode)
   root.setAttribute('data-theme', resolved)
-  void syncWindowTheme(resolved)
+  void syncWindowTheme(data.themeMode)
 
   // 字体 / 字号：有自定义值则覆盖，否则移除让 main.css 的默认生效
   if (data.uiFontFamily) {
@@ -275,23 +294,52 @@ export function applySettingsToDom(data: SettingsData) {
 const __initialData = loadSync()
 applySettingsToDom(__initialData)
 
-// matchMedia 订阅（仅 auto 档启用）
+// matchMedia / Tauri 订阅系统主题变化，auto 档由 store watch 决定是否应用。
 let __mql: MediaQueryList | null = null
 let __mqlListener: ((e: MediaQueryListEvent) => void) | null = null
-function bindAutoWatch(getCurrent: () => SettingsData) {
+let __tauriThemeWatchRequested = false
+function bindAutoWatch() {
   if (typeof window === 'undefined' || !window.matchMedia) return
   if (__mql && __mqlListener) {
-    __mql.removeEventListener('change', __mqlListener)
+    removeMediaQueryListener(__mql, __mqlListener)
     __mql = null
     __mqlListener = null
   }
   __mql = window.matchMedia('(prefers-color-scheme: dark)')
-  __mqlListener = () => {
-    if (getCurrent().themeMode === 'auto') {
-      applySettingsToDom(getCurrent())
-    }
+  setSystemTheme(__mql.matches ? 'dark' : 'light')
+  __mqlListener = (e: MediaQueryListEvent) => setSystemTheme(e.matches ? 'dark' : 'light')
+  addMediaQueryListener(__mql, __mqlListener)
+  bindTauriThemeWatch()
+}
+
+function addMediaQueryListener(mql: MediaQueryList, listener: (e: MediaQueryListEvent) => void) {
+  if (typeof mql.addEventListener === 'function') {
+    mql.addEventListener('change', listener)
+  } else {
+    mql.addListener(listener)
   }
-  __mql.addEventListener('change', __mqlListener)
+}
+
+function removeMediaQueryListener(mql: MediaQueryList, listener: (e: MediaQueryListEvent) => void) {
+  if (typeof mql.removeEventListener === 'function') {
+    mql.removeEventListener('change', listener)
+  } else {
+    mql.removeListener(listener)
+  }
+}
+
+function bindTauriThemeWatch() {
+  if (__tauriThemeWatchRequested) return
+  __tauriThemeWatchRequested = true
+  void import('@tauri-apps/api/window')
+    .then(({ getCurrentWindow }) => getCurrentWindow().onThemeChanged(({ payload }) => {
+      if (payload === 'light' || payload === 'dark') {
+        setSystemTheme(payload)
+      }
+    }))
+    .catch(() => {
+      // 非 Tauri 环境（浏览器开发模式）忽略
+    })
 }
 
 // ── Store ─────────────────────────────────────────────────────────────
@@ -312,6 +360,7 @@ export const useSettingsStore = defineStore('settings', () => {
   const uiLanguage = ref<UiLanguage>(normalizeUiLanguage(__initialData.uiLanguage))
   const updateStrategy = ref<UpdateStrategy>(__initialData.updateStrategy ?? 'auto')
   const skippedVersion = ref<string | null>(__initialData.skippedVersion ?? null)
+  const resolvedTheme = computed<ResolvedTheme>(() => resolveTheme(themeMode.value))
 
   function snapshot(): SettingsData {
     return {
@@ -381,7 +430,12 @@ export const useSettingsStore = defineStore('settings', () => {
   )
 
   // auto 档的系统主题订阅
-  bindAutoWatch(snapshot)
+  bindAutoWatch()
+  watch(systemTheme, () => {
+    if (themeMode.value === 'auto') {
+      applySettingsToDom(snapshot())
+    }
+  }, { immediate: true })
 
   // ── actions ─────────────────────────────────────────────────────────
   function setAccentOverride(key: AccentKey, hex: string | undefined) {
@@ -457,6 +511,7 @@ export const useSettingsStore = defineStore('settings', () => {
     uiLanguage,
     updateStrategy,
     skippedVersion,
+    resolvedTheme,
     uiFontIsDefault,
     codeFontIsDefault,
     setAccentOverride,

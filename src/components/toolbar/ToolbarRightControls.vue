@@ -95,12 +95,7 @@ useBlurOnOutsidePointerDown(searchBoxEl, () => {
 
 // ── Theme ───────────────────────────────────────────────────────────
 const resolvedTheme = computed<'light' | 'dark'>(() => {
-  const mode = settingsStore.themeMode
-  if (mode !== 'auto') return mode
-  if (typeof window !== 'undefined' && window.matchMedia) {
-    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
-  }
-  return 'dark'
+  return settingsStore.resolvedTheme
 })
 
 function toggleTheme() {
