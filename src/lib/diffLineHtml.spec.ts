@@ -138,6 +138,20 @@ describe('diffLineHtml', () => {
     expect(textContent(rightHtml)).toBe('<div ref="previewContainer" class="canvas-preview"></div>')
   })
 
+  it('marks only the inserted lambda capture name inside empty captures', () => {
+    const { leftHtml, rightHtml } = diffLinePairHtml(
+      '        [](std::shared_ptr<int> task) {',
+      '        [iterations](std::shared_ptr<int> task) {',
+      'cpp',
+      'cpp',
+    )
+
+    expect(markTexts(leftHtml, 'word-del')).toEqual([])
+    expect(markTexts(rightHtml, 'word-add')).toEqual(['iterations'])
+    expect(textContent(leftHtml)).toBe('        [](std::shared_ptr<int> task) {')
+    expect(textContent(rightHtml)).toBe('        [iterations](std::shared_ptr<int> task) {')
+  })
+
   it('does not add empty markers when both sides have changed content', () => {
     const { leftHtml, rightHtml } = diffLinePairHtml(
       'rightToken',

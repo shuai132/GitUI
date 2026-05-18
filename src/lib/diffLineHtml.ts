@@ -313,7 +313,7 @@ function splitSegments(value: string): Segment[] {
 
   for (const char of value) {
     const kind = segmentKind(char)
-    if (kind !== 'cjk' && current !== null && current.kind === kind) {
+    if (kind !== 'cjk' && kind !== 'punct' && current !== null && current.kind === kind) {
       current.text += char
     } else {
       current = { kind, text: char }
