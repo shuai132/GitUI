@@ -191,15 +191,16 @@ function diffIdentifierParts(
 
   const flushChanges = () => {
     const maxLen = Math.max(delBuffer.length, addBuffer.length)
+    const hasBothSides = delBuffer.length > 0 && addBuffer.length > 0
     for (let i = 0; i < maxLen; i++) {
       const del = delBuffer[i]
       const add = addBuffer[i]
       if (del !== undefined) appendRenderToken(leftTokens, { kind: 'del', text: del })
-      if (del === undefined && add !== undefined && !isReplacementRun) {
+      if (del === undefined && add !== undefined && (!isReplacementRun || !hasBothSides)) {
         appendRenderToken(leftTokens, { kind: 'add-placeholder', text: '' })
       }
       if (add !== undefined) appendRenderToken(rightTokens, { kind: 'add', text: add })
-      if (add === undefined && del !== undefined && !isReplacementRun) {
+      if (add === undefined && del !== undefined && (!isReplacementRun || !hasBothSides)) {
         appendRenderToken(rightTokens, { kind: 'del-placeholder', text: '' })
       }
     }

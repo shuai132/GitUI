@@ -152,6 +152,64 @@ describe('diffLineHtml', () => {
     expect(textContent(rightHtml)).toBe('        [iterations](std::shared_ptr<int> task) {')
   })
 
+  it('does not absorb a stable call closing paren into an inserted function name', () => {
+    const { leftHtml, rightHtml } = diffLinePairHtml(
+      '    await loadFileDiff(0)',
+      '    await selectFirstOrderedFileDiff()',
+      'typescript',
+      'typescript',
+    )
+
+    expect(markTexts(leftHtml, 'word-del')).toEqual(['load', '0'])
+    expect(markTexts(rightHtml, 'word-add')).toEqual(['selectFirstOrdered'])
+    expect(textContent(leftHtml)).toBe('    await loadFileDiff(0)')
+    expect(textContent(rightHtml)).toBe('    await selectFirstOrderedFileDiff()')
+  })
+
+  it('shows an old-side placeholder for inserted call wrappers before a stable suffix', () => {
+    const { leftHtml, rightHtml } = diffLinePairHtml(
+      'const props = defineProps<{',
+      'const props = withDefaults(defineProps<{',
+      'typescript',
+      'typescript',
+    )
+
+    expect(leftHtml).toContain('word-add word-placeholder')
+    expect(markTexts(rightHtml, 'word-add').join('')).toBe('withDefaults(')
+    expect(textContent(leftHtml)).toBe('const props = defineProps<{')
+    expect(textContent(rightHtml)).toBe('const props = withDefaults(defineProps<{')
+  })
+
+  it('shows an old-side placeholder for inserted trailing call arguments', () => {
+    const { leftHtml, rightHtml } = diffLinePairHtml(
+      '}>()',
+      '}>(), {',
+      'typescript',
+      'typescript',
+    )
+
+    expect(leftHtml).toContain('word-add word-placeholder')
+    expect(markTexts(rightHtml, 'word-add').join('')).toBe(', {')
+    expect(textContent(leftHtml)).toBe('}>()')
+    expect(textContent(rightHtml)).toBe('}>(), {')
+  })
+
+  it('shows old-side placeholders for inserted identifier suffixes', () => {
+    const { leftHtml, rightHtml } = diffLinePairHtml(
+      "historyBranchScope: 'gitui.history.branchScope',",
+      "historyBranchScopeByRepoPath: 'gitui.history.branchScopeByRepoPath',",
+      'typescript',
+      'typescript',
+    )
+
+    expect(leftHtml.match(/word-add word-placeholder/g) ?? []).toHaveLength(2)
+    expect(markTexts(rightHtml, 'word-add').join('|')).toBe('ByRepoPath|ByRepoPath')
+    expect(textContent(leftHtml)).toBe("historyBranchScope: 'gitui.history.branchScope',")
+    expect(textContent(rightHtml)).toBe(
+      "historyBranchScopeByRepoPath: 'gitui.history.branchScopeByRepoPath',",
+    )
+  })
+
   it('does not add empty markers when both sides have changed content', () => {
     const { leftHtml, rightHtml } = diffLinePairHtml(
       'rightToken',
