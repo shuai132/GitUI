@@ -474,6 +474,14 @@ const {
   openRebaseDialog,
 )
 
+function showCommitTooltipWhenMenuClosed(e: MouseEvent, commit: CommitInfo | undefined) {
+  if (commitMenu.visible) {
+    hideCommitTooltip()
+    return
+  }
+  showCommitTooltip(e, commit)
+}
+
 // ── WIP 行文件 diff：离开 WIP 模式时清掉 diff store 里的工作区 diff ───
 watch(selectedWip, (v) => {
   if (!v) diffStore.clear()
@@ -739,7 +747,7 @@ onUnmounted(() => {
                 }"
                 :draggable="!filteredCommits[toRealIdx(vRow.index)]?.is_stash"
                 @click="selectRow(vRow.index)"
-                @contextmenu="onCommitContextMenu($event, filteredCommits[toRealIdx(vRow.index)])"
+                @contextmenu="onCommitContextMenu($event, filteredCommits[toRealIdx(vRow.index)], hideCommitTooltip)"
                 @dragstart="onCommitDragStart($event, filteredCommits[toRealIdx(vRow.index)])"
                 @dragover="onCommitDragOver($event, filteredCommits[toRealIdx(vRow.index)])"
                 @drop="onCommitDrop($event, filteredCommits[toRealIdx(vRow.index)])"
@@ -760,7 +768,7 @@ onUnmounted(() => {
                     v-if="col.id === 'description'"
                     class="col-message"
                     :style="{ width: col.width + 'px' }"
-                    @mouseenter="showCommitTooltip($event, filteredCommits[toRealIdx(vRow.index)])"
+                    @mouseenter="showCommitTooltipWhenMenuClosed($event, filteredCommits[toRealIdx(vRow.index)])"
                     @mousemove="moveCommitTooltip"
                     @mouseleave="hideCommitTooltip"
                   >
@@ -961,7 +969,7 @@ onUnmounted(() => {
 
   <!-- Commit hover tooltip（自定义样式，跟随鼠标） -->
   <div
-    v-if="commitTooltip.visible"
+    v-if="commitTooltip.visible && !commitMenu.visible"
     class="commit-tooltip"
     :style="{ left: commitTooltip.x + 'px', top: commitTooltip.y + 'px' }"
   >{{ commitTooltip.text }}</div>

@@ -40,6 +40,7 @@ const openSubmenuIndex = ref<number | null>(null)
 const submenuSide = ref<'right' | 'left'>('right')
 const submenuVPos = ref<'top' | 'bottom'>('top')
 let submenuCloseTimer: number | null = null
+let pendingOutsideClickBlocker: ((event: MouseEvent) => void) | null = null
 
 const submenuStyles = ref<Record<string, string>>({})
 
@@ -48,6 +49,23 @@ function clearSubmenuCloseTimer() {
     window.clearTimeout(submenuCloseTimer)
     submenuCloseTimer = null
   }
+}
+
+function clearPendingOutsideClickBlocker() {
+  if (pendingOutsideClickBlocker !== null) {
+    document.removeEventListener('click', pendingOutsideClickBlocker, true)
+    pendingOutsideClickBlocker = null
+  }
+}
+
+function blockNextOutsideClick() {
+  clearPendingOutsideClickBlocker()
+  pendingOutsideClickBlocker = (event: MouseEvent) => {
+    event.preventDefault()
+    event.stopPropagation()
+    clearPendingOutsideClickBlocker()
+  }
+  document.addEventListener('click', pendingOutsideClickBlocker, true)
 }
 
 function onParentMouseEnter(idx: number, e: MouseEvent) {
@@ -153,6 +171,12 @@ function onDocumentPointerDown(e: PointerEvent) {
   if (target.closest('.context-menu')) return
   if (target.closest('.submenu')) return
   if (target.closest('[data-menu-anchor]')) return
+
+  if (e.button === 0) {
+    e.preventDefault()
+    e.stopPropagation()
+    blockNextOutsideClick()
+  }
   emit('close')
 }
 function onKey(e: KeyboardEvent) {
@@ -182,6 +206,7 @@ onBeforeUnmount(() => {
   document.removeEventListener('pointerdown', onDocumentPointerDown, true)
   document.removeEventListener('keydown', onKey)
   clearSubmenuCloseTimer()
+  clearPendingOutsideClickBlocker()
 })
 </script>
 
