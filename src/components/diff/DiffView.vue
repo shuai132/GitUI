@@ -82,6 +82,21 @@ const documentKind = computed<'pdf' | 'docx' | 'pptx' | null>(() => {
   return null
 })
 
+const fileModeChange = computed(() => {
+  const diff = props.diff
+  if (!diff || diff.old_file_mode == null || diff.new_file_mode == null) return null
+  if (diff.old_file_mode === diff.new_file_mode) return null
+  const oldTypeBits = fileTypeBits(diff.old_file_mode)
+  const newTypeBits = fileTypeBits(diff.new_file_mode)
+  return {
+    kind: oldTypeBits === newTypeBits ? 'mode' : 'type',
+    oldType: fileModeTypeLabel(diff.old_file_mode),
+    newType: fileModeTypeLabel(diff.new_file_mode),
+    oldMode: formatFileMode(diff.old_file_mode),
+    newMode: formatFileMode(diff.new_file_mode),
+  }
+})
+
 interface DiffScrollAnchor {
   oldLineNo?: number
   newLineNo?: number
@@ -380,6 +395,29 @@ function normalizeTextDecoderLabel(encoding: string): string {
   return encoding
 }
 
+function fileModeTypeLabel(mode: number): string {
+  switch (fileTypeBits(mode)) {
+    case 0o040000:
+      return t('diff.fileType.directory')
+    case 0o100000:
+      return t('diff.fileType.file')
+    case 0o120000:
+      return t('diff.fileType.symlink')
+    case 0o160000:
+      return t('diff.fileType.gitlink')
+    default:
+      return t('diff.fileType.unknown')
+  }
+}
+
+function fileTypeBits(mode: number): number {
+  return mode & 0o170000
+}
+
+function formatFileMode(mode: number): string {
+  return mode.toString(8).padStart(6, '0')
+}
+
 function fallbackDiffIdentityKey(diff: FileDiff | null): string | null {
   if (!diff) return null
   return [
@@ -439,6 +477,27 @@ function fallbackDiffIdentityKey(diff: FileDiff | null): string | null {
         :repo-id="repoId"
         :wip="wip ?? null"
       />
+      <div
+        v-else-if="diff && diff.hunks.length === 0 && fileModeChange"
+        class="metadata-state"
+      >
+        <div class="metadata-title">
+          <template v-if="fileModeChange.kind === 'type'">
+            {{
+              t('diff.empty.typeChanged', {
+                oldType: fileModeChange.oldType,
+                newType: fileModeChange.newType,
+              })
+            }}
+          </template>
+          <template v-else>
+            {{ t('diff.empty.modeChanged') }}
+          </template>
+        </div>
+        <div class="metadata-detail">
+          {{ fileModeChange.oldMode }} -> {{ fileModeChange.newMode }}
+        </div>
+      </div>
       <SideBySideDiff
         v-else-if="uiStore.diffLayoutMode === 'side-by-side'"
         ref="diffRef"
@@ -508,5 +567,26 @@ function fallbackDiffIdentityKey(diff: FileDiff | null): string | null {
   flex-direction: column;
   overflow: hidden;
   min-height: 0;
+}
+
+.metadata-state {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.metadata-title {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.metadata-detail {
+  font-family: var(--code-font-family, 'SF Mono', monospace);
+  font-size: 12px;
 }
 </style>

@@ -209,6 +209,7 @@ const statusIconMap: Record<FileStatusKind, { d: string; stroke?: boolean }> = {
   added: { d: 'M12 5v14M5 12h14' },
   deleted: { d: 'M5 12h14' },
   renamed: { d: 'M5 12h7M12 12l-4-4M12 12l-4 4M19 12h-7M12 12l4-4M12 12l4 4' },
+  type_changed: { d: 'M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71 M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71' },
   untracked: { d: 'M12 5v14M5 12h14', stroke: true },
   conflicted: { d: 'M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z M12 9v4 M12 17h.01' },
 }

@@ -575,6 +575,15 @@ const messages = {
       selectFile: 'Select a file to view changes',
       binaryFile: 'Binary file',
       noChanges: 'No content changes',
+      typeChanged: 'File type changed: {oldType} -> {newType}',
+      modeChanged: 'File mode changed',
+    },
+    fileType: {
+      file: 'regular file',
+      symlink: 'symbolic link',
+      gitlink: 'submodule link',
+      directory: 'directory',
+      unknown: 'unknown type',
     },
     hunk: {
       rollback: 'Rollback hunk',

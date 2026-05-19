@@ -23,7 +23,7 @@ export function useWipHunkAction(options: UseWipHunkActionOptions) {
     const diff = toValue(options.diff)
     const wip = toValue(options.wip)
     if (!diff || !wip || diff.is_binary || diff.hunks.length === 0) return null
-    if (wip.status === 'renamed' || wip.status === 'conflicted') return null
+    if (wip.status === 'renamed' || wip.status === 'type_changed' || wip.status === 'conflicted') return null
     return wip.staged ? 'unstage' : 'stage'
   })
 
@@ -39,7 +39,7 @@ export function useWipHunkAction(options: UseWipHunkActionOptions) {
     const diff = toValue(options.diff)
     const wip = toValue(options.wip)
     if (!repoId || !diff || !wip) return
-    if (wip.status === 'renamed' || wip.status === 'conflicted') return
+    if (wip.status === 'renamed' || wip.status === 'type_changed' || wip.status === 'conflicted') return
 
     if (isWholeFileIndexAction(wip.status)) {
       const filePath = diff.new_path ?? diff.old_path

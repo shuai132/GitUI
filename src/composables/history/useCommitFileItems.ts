@@ -28,7 +28,18 @@ export function commitFileStatus(diff: FileDiff): FileStatusKind {
   if (!diff.old_blob_oid) return 'added'
   if (!diff.new_blob_oid) return 'deleted'
   if (diff.old_path !== diff.new_path) return 'renamed'
+  if (
+    diff.old_file_mode != null &&
+    diff.new_file_mode != null &&
+    fileTypeBits(diff.old_file_mode) !== fileTypeBits(diff.new_file_mode)
+  ) {
+    return 'type_changed'
+  }
   return 'modified'
+}
+
+function fileTypeBits(mode: number): number {
+  return mode & 0o170000
 }
 
 export function useCommitFileItems(

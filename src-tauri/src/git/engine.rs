@@ -736,6 +736,44 @@ mod tests {
         assert_eq!(status.unstaged[0].deletions, 1);
     }
 
+    #[cfg(unix)]
+    #[test]
+    fn test_get_status_includes_typechange() {
+        let test_repo = TestRepo::new();
+        let path = test_repo.path_str();
+        let tracked_path = test_repo.dir.path().join("existing.txt");
+
+        fs::remove_file(&tracked_path).unwrap();
+        std::os::unix::fs::symlink("target.txt", &tracked_path).unwrap();
+
+        let status = GitEngine::get_status(path).expect("Failed to get status");
+        assert_eq!(status.unstaged.len(), 1);
+        assert_eq!(status.unstaged[0].path, "existing.txt");
+        assert_eq!(status.unstaged[0].status, FileStatusKind::TypeChanged);
+
+        let diff = GitEngine::get_file_diff(path, "existing.txt", false).unwrap();
+        assert_eq!(diff.old_file_mode, Some(0o100644));
+        assert_eq!(diff.new_file_mode, Some(0o120000));
+        assert!(!diff.hunks.is_empty());
+        assert!(diff.additions > 0);
+        assert!(diff.deletions > 0);
+
+        GitEngine::stage_file(path, "existing.txt").unwrap();
+
+        let status = GitEngine::get_status(path).expect("Failed to get status after stage");
+        assert_eq!(status.staged.len(), 1);
+        assert_eq!(status.staged[0].path, "existing.txt");
+        assert_eq!(status.staged[0].status, FileStatusKind::TypeChanged);
+        assert!(status.unstaged.is_empty());
+
+        let diff = GitEngine::get_file_diff(path, "existing.txt", true).unwrap();
+        assert_eq!(diff.old_file_mode, Some(0o100644));
+        assert_eq!(diff.new_file_mode, Some(0o120000));
+        assert!(!diff.hunks.is_empty());
+        assert!(diff.additions > 0);
+        assert!(diff.deletions > 0);
+    }
+
     #[test]
     fn test_get_log() {
         let test_repo = TestRepo::new();

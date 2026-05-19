@@ -14,6 +14,7 @@ pub enum FileStatusKind {
     Modified,
     Deleted,
     Renamed,
+    TypeChanged,
     Untracked,
     Conflicted,
 }

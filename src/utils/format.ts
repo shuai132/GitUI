@@ -70,6 +70,7 @@ export function fileStatusLabel(status: string): string {
     modified: 'M',
     deleted: 'D',
     renamed: 'R',
+    type_changed: 'T',
     untracked: '?',
     conflicted: 'C',
   }
@@ -82,6 +83,7 @@ export function fileStatusColor(status: string): string {
     modified: 'var(--accent-yellow)',
     deleted: 'var(--accent-red)',
     renamed: 'var(--accent-blue)',
+    type_changed: 'var(--accent-orange)',
     untracked: 'var(--text-muted)',
     conflicted: 'var(--accent-orange)',
   }

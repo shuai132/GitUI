@@ -4,7 +4,14 @@ export interface RepoMeta {
   name: string
 }
 
-export type FileStatusKind = 'added' | 'modified' | 'deleted' | 'renamed' | 'untracked' | 'conflicted'
+export type FileStatusKind =
+  | 'added'
+  | 'modified'
+  | 'deleted'
+  | 'renamed'
+  | 'type_changed'
+  | 'untracked'
+  | 'conflicted'
 
 export interface RemoteInfo {
   name: string

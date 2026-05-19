@@ -574,6 +574,15 @@ const messages = {
       selectFile: '选择文件查看变更',
       binaryFile: '二进制文件',
       noChanges: '无内容变更',
+      typeChanged: '文件类型变更：{oldType} -> {newType}',
+      modeChanged: '文件模式变更',
+    },
+    fileType: {
+      file: '普通文件',
+      symlink: '符号链接',
+      gitlink: '子模块链接',
+      directory: '目录',
+      unknown: '未知类型',
     },
     hunk: {
       rollback: '回滚区块',

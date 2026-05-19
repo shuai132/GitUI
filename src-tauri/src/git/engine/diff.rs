@@ -190,7 +190,7 @@ impl GitEngine {
         }
 
         let mut diff_opts = DiffOptions::new();
-        diff_opts.pathspec(file_path);
+        diff_opts.pathspec(file_path).include_typechange(true);
 
         let diff = if staged {
             let head_tree = repo
@@ -211,8 +211,162 @@ impl GitEngine {
             repo.diff_index_to_workdir(Some(&index), Some(&mut diff_opts))?
         };
 
-        let diffs = Self::parse_diff(&repo, &diff)?;
-        Ok(diffs.into_iter().next().unwrap_or(FileDiff {
+        let mut file_diff = Self::parse_diff(&repo, &diff)?
+            .into_iter()
+            .next()
+            .unwrap_or_else(|| Self::empty_file_diff(file_path));
+        Self::supplement_typechange_hunks(&repo, file_path, staged, &mut file_diff)?;
+        Ok(file_diff)
+    }
+
+    fn supplement_typechange_hunks(
+        repo: &Repository,
+        file_path: &str,
+        staged: bool,
+        diff: &mut FileDiff,
+    ) -> GitResult<()> {
+        if !diff.hunks.is_empty() {
+            return Ok(());
+        }
+
+        let Some(old_mode) = diff.old_file_mode else {
+            return Ok(());
+        };
+        let Some(new_mode) = diff.new_file_mode else {
+            return Ok(());
+        };
+        if file_type_bits(old_mode) == file_type_bits(new_mode) {
+            return Ok(());
+        }
+
+        let old_bytes = diff
+            .old_blob_oid
+            .as_deref()
+            .and_then(|oid| Self::blob_content(repo, oid))
+            .unwrap_or_default();
+        let new_bytes = if staged {
+            diff.new_blob_oid
+                .as_deref()
+                .and_then(|oid| Self::blob_content(repo, oid))
+                .unwrap_or_default()
+        } else {
+            Self::worktree_content(repo, file_path, new_mode).unwrap_or_else(|| {
+                diff.new_blob_oid
+                    .as_deref()
+                    .and_then(|oid| Self::blob_content(repo, oid))
+                    .unwrap_or_default()
+            })
+        };
+
+        Self::fill_buffer_diff(repo, file_path, &old_bytes, &new_bytes, diff)
+    }
+
+    fn blob_content(repo: &Repository, oid_str: &str) -> Option<Vec<u8>> {
+        git2::Oid::from_str(oid_str)
+            .ok()
+            .and_then(|oid| repo.find_blob(oid).ok())
+            .map(|blob| blob.content().to_vec())
+    }
+
+    fn worktree_content(repo: &Repository, file_path: &str, mode: u32) -> Option<Vec<u8>> {
+        let full_path = repo.workdir()?.join(file_path);
+        if file_type_bits(mode) == 0o120000 {
+            return std::fs::read_link(full_path)
+                .ok()
+                .map(|target| target.to_string_lossy().as_bytes().to_vec());
+        }
+        std::fs::read(full_path).ok()
+    }
+
+    fn fill_buffer_diff(
+        repo: &Repository,
+        file_path: &str,
+        old_bytes: &[u8],
+        new_bytes: &[u8],
+        diff: &mut FileDiff,
+    ) -> GitResult<()> {
+        let is_binary = old_bytes.contains(&0) || new_bytes.contains(&0);
+        diff.is_binary = diff.is_binary || is_binary;
+
+        let attr_encoding: Option<String> = repo
+            .get_attr(
+                Path::new(file_path),
+                "working-tree-encoding",
+                AttrCheckFlags::default(),
+            )
+            .ok()
+            .flatten()
+            .map(|s| s.to_string());
+        let bom_enc = encoding_rs::Encoding::for_bom(new_bytes)
+            .map(|(e, _)| e)
+            .or_else(|| encoding_rs::Encoding::for_bom(old_bytes).map(|(e, _)| e));
+        let enc = if is_binary {
+            encoding_rs::UTF_8
+        } else {
+            let mut sample = Vec::with_capacity(old_bytes.len().saturating_add(new_bytes.len()));
+            sample.extend_from_slice(old_bytes);
+            sample.extend_from_slice(new_bytes);
+            detect_file_encoding(&sample, attr_encoding.as_deref(), bom_enc)
+        };
+        diff.encoding = if enc == encoding_rs::UTF_8 && bom_enc == Some(encoding_rs::UTF_8) {
+            "UTF-8 BOM".to_owned()
+        } else {
+            enc.name().to_owned()
+        };
+
+        if is_binary {
+            return Ok(());
+        }
+
+        let mut diff_opts = git2::DiffOptions::new();
+        diff_opts.context_lines(3).interhunk_lines(0);
+        let patch = git2::Patch::from_buffers(
+            old_bytes,
+            Some(std::path::Path::new(file_path)),
+            new_bytes,
+            Some(std::path::Path::new(file_path)),
+            Some(&mut diff_opts),
+        )?;
+
+        let mut hunks = Vec::new();
+        let mut additions = 0usize;
+        let mut deletions = 0usize;
+        for hi in 0..patch.num_hunks() {
+            let (hunk, num_lines) = patch.hunk(hi)?;
+            let mut cur = DiffHunk {
+                old_start: hunk.old_start(),
+                old_lines: hunk.old_lines(),
+                new_start: hunk.new_start(),
+                new_lines: hunk.new_lines(),
+                header: decode_with(enc, hunk.header()),
+                lines: vec![],
+            };
+            for li in 0..num_lines {
+                let line = patch.line_in_hunk(hi, li)?;
+                let origin = line.origin();
+                match origin {
+                    '+' => additions += 1,
+                    '-' => deletions += 1,
+                    _ => {}
+                }
+                cur.lines.push(DiffLine {
+                    origin,
+                    content: decode_with(enc, line.content()),
+                    old_lineno: line.old_lineno(),
+                    new_lineno: line.new_lineno(),
+                });
+            }
+            hunks.push(cur);
+        }
+
+        diff.hunks = hunks;
+        diff.additions = additions;
+        diff.deletions = deletions;
+        Ok(())
+    }
+
+    fn empty_file_diff(file_path: &str) -> FileDiff {
+        FileDiff {
             old_path: None,
             new_path: Some(file_path.to_string()),
             is_binary: false,
@@ -224,7 +378,7 @@ impl GitEngine {
             old_file_mode: None,
             new_file_mode: None,
             encoding: "UTF-8".to_owned(),
-        }))
+        }
     }
 
     /// 如果 `file_path` 是冲突文件，用 stage 2（ours）blob 与工作区内容做 diff。
@@ -966,6 +1120,10 @@ impl GitEngine {
 
 fn diff_file_mode(file: &git2::DiffFile<'_>) -> Option<u32> {
     file.exists().then(|| u32::from(file.mode()))
+}
+
+fn file_type_bits(mode: u32) -> u32 {
+    mode & 0o170000
 }
 
 fn line_number(value: u32) -> Option<u32> {

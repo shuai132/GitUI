@@ -42,6 +42,15 @@ impl GitEngine {
                     additions: 0,
                     deletions: 0,
                 });
+            } else if status.is_index_typechange() {
+                staged.push(FileEntry {
+                    path: path_str.clone(),
+                    old_path: None,
+                    status: FileStatusKind::TypeChanged,
+                    staged: true,
+                    additions: 0,
+                    deletions: 0,
+                });
             } else if status.is_index_deleted() {
                 staged.push(FileEntry {
                     path: path_str.clone(),
@@ -72,6 +81,15 @@ impl GitEngine {
                     path: path_str.clone(),
                     old_path: None,
                     status: FileStatusKind::Modified,
+                    staged: false,
+                    additions: 0,
+                    deletions: 0,
+                });
+            } else if status.is_wt_typechange() {
+                unstaged.push(FileEntry {
+                    path: path_str.clone(),
+                    old_path: None,
+                    status: FileStatusKind::TypeChanged,
                     staged: false,
                     additions: 0,
                     deletions: 0,
@@ -164,13 +182,17 @@ impl GitEngine {
         };
 
         if !staged.is_empty() {
+            let mut opts = DiffOptions::new();
+            opts.include_typechange(true);
             let head_tree = repo
                 .head()
                 .ok()
                 .and_then(|h| h.peel_to_commit().ok())
                 .and_then(|c| c.tree().ok());
             if let Ok(index) = repo.index() {
-                if let Ok(diff) = repo.diff_tree_to_index(head_tree.as_ref(), Some(&index), None) {
+                if let Ok(diff) =
+                    repo.diff_tree_to_index(head_tree.as_ref(), Some(&index), Some(&mut opts))
+                {
                     fill_stats(&mut staged, &diff);
                 }
             }
@@ -178,7 +200,7 @@ impl GitEngine {
 
         if !unstaged.is_empty() {
             let mut opts = DiffOptions::new();
-            opts.include_untracked(false);
+            opts.include_untracked(false).include_typechange(true);
             if let Ok(index) = repo.index() {
                 if let Ok(diff) = repo.diff_index_to_workdir(Some(&index), Some(&mut opts)) {
                     fill_stats(&mut unstaged, &diff);
