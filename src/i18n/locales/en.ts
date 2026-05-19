@@ -14,6 +14,7 @@ const messages = {
   },
   app: {
     sidebar: {
+      collapseHint: 'Collapse sidebar',
       expandHint: 'Double-click to expand sidebar',
       resizeHint: 'Drag to resize / double-click to hide',
     },

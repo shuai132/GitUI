@@ -14,6 +14,7 @@ const messages = {
   },
   app: {
     sidebar: {
+      collapseHint: '收起侧边栏',
       expandHint: '双击展开侧边栏',
       resizeHint: '拖动调整宽度 / 双击隐藏',
     },
