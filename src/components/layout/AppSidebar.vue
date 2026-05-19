@@ -106,6 +106,16 @@ function collapseSidebar() {
   background: transparent;
   color: var(--text-muted);
   cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease, background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+}
+
+.repo-header:hover .sidebar-collapse-btn,
+.repo-header:focus-within .sidebar-collapse-btn,
+.sidebar-collapse-btn:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .sidebar-collapse-btn:hover {
