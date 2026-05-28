@@ -175,6 +175,8 @@ const messages = {
       allRepos: 'All repositories',
       removeRepo: 'Remove repository',
       menu: {
+        copyName: 'Copy name',
+        copyAbsolutePath: 'Copy absolute path',
         newWindow: 'Open in new window',
         reveal: 'Reveal in Finder',
         openTerminal: 'Open in terminal',

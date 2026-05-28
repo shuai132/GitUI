@@ -175,6 +175,8 @@ const messages = {
       allRepos: '所有仓库',
       removeRepo: '移除仓库',
       menu: {
+        copyName: '复制名称',
+        copyAbsolutePath: '复制绝对路径',
         newWindow: '在新窗口打开',
         reveal: '在 Finder 中显示',
         openTerminal: '在终端中打开',

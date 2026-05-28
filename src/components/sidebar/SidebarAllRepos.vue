@@ -238,6 +238,9 @@ const repoMenu = reactive({
 })
 
 const repoMenuItems = computed<ContextMenuItem[]>(() => [
+  { label: t('sidebar.repo.menu.copyName'), action: 'copy-name' },
+  { label: t('sidebar.repo.menu.copyAbsolutePath'), action: 'copy-absolute-path' },
+  { separator: true },
   { label: t('sidebar.repo.menu.newWindow'), action: 'new-window' },
   { label: t('sidebar.repo.menu.reveal'), action: 'reveal' },
   { label: t('sidebar.repo.menu.openTerminal'), action: 'terminal' },
@@ -261,6 +264,12 @@ async function onRepoMenuAction(action: string) {
   if (!r) return
   try {
     switch (action) {
+      case 'copy-name':
+        await navigator.clipboard.writeText(r.name)
+        break
+      case 'copy-absolute-path':
+        await navigator.clipboard.writeText(r.path)
+        break
       case 'new-window':
         await git.openInNewWindow(r.id)
         break
