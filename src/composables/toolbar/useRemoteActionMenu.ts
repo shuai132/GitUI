@@ -122,6 +122,10 @@ export function useRemoteActionMenu() {
     showFetchAll = false,
     options: PickRemoteOptions = {},
   ): Promise<string | null> {
+    closePullModeMenu()
+    closePushModeMenu()
+    closeRemoteMenu()
+
     const id = repoStore.activeRepoId
     if (!id) return null
     let remotes: RemoteInfo[]
@@ -187,11 +191,15 @@ export function useRemoteActionMenu() {
     fn?.(remoteMenu.resolveSelection ? action : null)
   }
 
-  function onRemoteMenuClose() {
+  function closeRemoteMenu() {
     remoteMenu.visible = false
     const fn = remoteMenu.resolve
     remoteMenu.resolve = null
     fn?.(null)
+  }
+
+  function onRemoteMenuClose() {
+    closeRemoteMenu()
   }
 
   function onPullChevronClick(e: MouseEvent) {
@@ -200,6 +208,8 @@ export function useRemoteActionMenu() {
       pullModeMenu.visible = false
       return
     }
+    closeRemoteMenu()
+    closePushModeMenu()
     const el = e.currentTarget as HTMLElement
     const rect = el.getBoundingClientRect()
     pullChevronRect.value = rect
@@ -218,6 +228,8 @@ export function useRemoteActionMenu() {
       pushModeMenu.visible = false
       return
     }
+    closeRemoteMenu()
+    closePullModeMenu()
     const el = e.currentTarget as HTMLElement
     const rect = el.getBoundingClientRect()
     pushChevronRect.value = rect
