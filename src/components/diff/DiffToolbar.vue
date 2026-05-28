@@ -296,14 +296,14 @@ const currentChangeLabel = computed(() => {
 .change-nav {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 2px;
   flex-shrink: 0;
 }
 
 .change-nav-buttons {
   display: inline-flex;
   flex-direction: column;
-  width: 24px;
+  width: 18px;
   height: 22px;
   overflow: hidden;
   border-radius: 4px;
@@ -313,7 +313,7 @@ const currentChangeLabel = computed(() => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
+  width: 18px;
   height: 11px;
   background: transparent;
   border: none;
@@ -329,7 +329,7 @@ const currentChangeLabel = computed(() => {
 }
 
 .change-count {
-  min-width: 34px;
+  min-width: 28px;
   color: var(--text-muted);
   font-family: var(--code-font-family, 'SF Mono', monospace);
   font-size: 10px;
