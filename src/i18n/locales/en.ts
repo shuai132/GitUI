@@ -66,6 +66,7 @@ const messages = {
     actionsMenu: {
       soloCurrentBranch: 'Solo current branch',
       showRemoteBranches: 'Show remote branches',
+      syntaxHighlight: 'Syntax highlighting',
       showUnreachable: 'Show dangling refs',
       showStashes: 'Show stashes',
       debugLog: 'Debug log',
@@ -756,6 +757,8 @@ const messages = {
       diffLayoutSideBySide: 'Side-by-side',
       diffGroupByHunk: 'Group diff by hunk',
       diffGroupByHunkHint: 'Show change blocks by default; when off, unified and side-by-side both show the full file',
+      diffSyntaxHighlight: 'Diff syntax highlighting',
+      diffSyntaxHighlightHint: 'Controls whether text diffs render language token colors',
       soloCurrentBranch: 'Solo current branch',
       soloCurrentBranchHint: 'Show only the first-parent line from the current HEAD',
       showRemoteBranches: 'Show remote branches',

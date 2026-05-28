@@ -66,6 +66,7 @@ const messages = {
     actionsMenu: {
       soloCurrentBranch: 'Solo 当前分支',
       showRemoteBranches: '显示远程分支',
+      syntaxHighlight: '语法高亮',
       showUnreachable: '显示悬垂引用',
       showStashes: '显示贮藏',
       debugLog: '调试日志',
@@ -755,6 +756,8 @@ const messages = {
       diffLayoutSideBySide: '左右分栏',
       diffGroupByHunk: 'Diff 按 hunk 分组',
       diffGroupByHunkHint: '默认按变更块展示；关闭后单列和左右分栏都显示完整文件',
+      diffSyntaxHighlight: 'Diff 语法高亮',
+      diffSyntaxHighlightHint: '控制文本 diff 是否按语言渲染 token 颜色',
       soloCurrentBranch: 'Solo 当前分支',
       soloCurrentBranchHint: '历史图只显示当前 HEAD 的 first-parent 主线',
       showRemoteBranches: '显示远程分支',

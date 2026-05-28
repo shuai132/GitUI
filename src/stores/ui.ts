@@ -113,6 +113,7 @@ const TERMINAL_DOCK_VALUES = ['bottom', 'right'] as const
 export const DEFAULT_ADVANCED_VIEW_PREFS = {
   diffLayoutMode: 'inline' as DiffLayoutMode,
   diffGroupByHunk: true,
+  diffHighlightEnabled: true,
   showRemoteBranches: true,
   showChangeStatsColumn: false,
   showUnreachableCommits: true,
@@ -365,7 +366,9 @@ export const useUiStore = defineStore('ui', () => {
         : DEFAULT_ADVANCED_VIEW_PREFS.diffGroupByHunk,
     ),
   )
-  const diffHighlightEnabled = ref<boolean>(loadBool(KEYS.diffHighlight, true))
+  const diffHighlightEnabled = ref<boolean>(
+    loadBool(KEYS.diffHighlight, DEFAULT_ADVANCED_VIEW_PREFS.diffHighlightEnabled),
+  )
   const debugPanelVisible = ref<boolean>(
     loadBool(KEYS.debugPanel, DEFAULT_ADVANCED_VIEW_PREFS.debugPanelVisible),
   )
@@ -623,6 +626,7 @@ export const useUiStore = defineStore('ui', () => {
   function resetAdvancedViewPrefs() {
     diffLayoutMode.value = DEFAULT_ADVANCED_VIEW_PREFS.diffLayoutMode
     diffGroupByHunk.value = DEFAULT_ADVANCED_VIEW_PREFS.diffGroupByHunk
+    diffHighlightEnabled.value = DEFAULT_ADVANCED_VIEW_PREFS.diffHighlightEnabled
     showRemoteBranches.value = DEFAULT_ADVANCED_VIEW_PREFS.showRemoteBranches
     showChangeStatsColumn.value = DEFAULT_ADVANCED_VIEW_PREFS.showChangeStatsColumn
     showUnreachableCommits.value = DEFAULT_ADVANCED_VIEW_PREFS.showUnreachableCommits
@@ -632,6 +636,7 @@ export const useUiStore = defineStore('ui', () => {
 
     localStorage.setItem(KEYS.diffLayoutMode, diffLayoutMode.value)
     localStorage.setItem(KEYS.diffGroupByHunk, String(diffGroupByHunk.value))
+    localStorage.setItem(KEYS.diffHighlight, String(diffHighlightEnabled.value))
     localStorage.setItem(KEYS.showRemoteBranches, String(showRemoteBranches.value))
     localStorage.setItem(KEYS.showChangeStatsColumn, String(showChangeStatsColumn.value))
     localStorage.setItem(KEYS.showUnreachable, String(showUnreachableCommits.value))

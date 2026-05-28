@@ -100,6 +100,7 @@ describe('ui store history column preferences', () => {
 
     uiStore.setDiffLayoutMode('side-by-side')
     uiStore.setDiffGroupByHunk(false)
+    uiStore.toggleDiffHighlight()
     uiStore.setHistoryBranchScopeForRepo('/repos/a', 'current_first_parent')
     uiStore.toggleShowRemoteBranches()
     uiStore.toggleShowChangeStatsColumn()
@@ -112,6 +113,7 @@ describe('ui store history column preferences', () => {
 
     expect(uiStore.diffLayoutMode).toBe(DEFAULT_ADVANCED_VIEW_PREFS.diffLayoutMode)
     expect(uiStore.diffGroupByHunk).toBe(DEFAULT_ADVANCED_VIEW_PREFS.diffGroupByHunk)
+    expect(uiStore.diffHighlightEnabled).toBe(DEFAULT_ADVANCED_VIEW_PREFS.diffHighlightEnabled)
     expect(uiStore.getHistoryBranchScope('/repos/a')).toBe('current_first_parent')
     expect(uiStore.showRemoteBranches).toBe(DEFAULT_ADVANCED_VIEW_PREFS.showRemoteBranches)
     expect(uiStore.showChangeStatsColumn).toBe(DEFAULT_ADVANCED_VIEW_PREFS.showChangeStatsColumn)

@@ -133,6 +133,13 @@ const actionsMenuItems = computed<ContextMenuItem[]>(() => {
       action: 'toggle-remote-branches',
       disabled: !hasRepo.value,
     },
+    {
+      label:
+        (uiStore.diffHighlightEnabled ? '✓ ' : '   ') +
+        t('toolbar.actionsMenu.syntaxHighlight'),
+      action: 'toggle-diff-highlight',
+      disabled: !hasRepo.value,
+    },
     { separator: true },
     {
       label:
@@ -273,6 +280,9 @@ async function onActionsSelect(action: string) {
       break
     case 'toggle-remote-branches':
       uiStore.toggleShowRemoteBranches()
+      break
+    case 'toggle-diff-highlight':
+      uiStore.toggleDiffHighlight()
       break
     case 'toggle-debug':
       uiStore.toggleDebugPanel()
