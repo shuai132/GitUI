@@ -317,6 +317,7 @@ const messages = {
     },
     contextMenu: {
       checkout: '检出此提交',
+      checkoutRemoteBranch: '检出: {branch}',
       createBranch: '在此创建分支...',
       cherryPick: 'Cherry pick 此提交',
       resetTo: '将 {branch} 重置到此提交',

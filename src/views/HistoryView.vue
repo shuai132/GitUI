@@ -407,6 +407,10 @@ const currentBranchName = computed(
     historyStore.branches.find((b) => b.is_head && !b.is_remote)?.name ?? 'HEAD',
 )
 
+const remoteBranches = computed(() =>
+  historyStore.branches.filter((branch) => branch.is_remote),
+)
+
 const headCommitOid = computed(() => {
   const headBranch = historyStore.branches.find((b) => b.is_head && !b.is_remote)
   return headBranch?.commit_oid ?? workspaceStore.status?.head_commit ?? ''
@@ -450,6 +454,8 @@ const {
   showCreateBranchDialog,
   showCreateTagDialog,
   createTagAnnotated,
+  showCheckoutRemoteDialog,
+  checkoutInitialRemote,
   dialogCommit,
 
   showEditMessageDialog,
@@ -938,6 +944,7 @@ onUnmounted(() => {
   <HistoryDialogs
     v-model:show-create-branch-dialog="showCreateBranchDialog"
     v-model:show-create-tag-dialog="showCreateTagDialog"
+    v-model:show-checkout-remote-dialog="showCheckoutRemoteDialog"
     v-model:show-merge-dialog="showMergeDialog"
     v-model:show-rebase-dialog="showRebaseDialog"
     v-model:show-drag-dialog="showDragDialog"
@@ -950,6 +957,8 @@ onUnmounted(() => {
     v-model:edit-message-auto-stash="editMessageAutoStash"
     :create-tag-annotated="createTagAnnotated"
     :dialog-commit="dialogCommit"
+    :remote-branches="remoteBranches"
+    :checkout-initial-remote="checkoutInitialRemote"
     :merge-source-candidates="mergeSourceCandidates"
     :rebase-upstream="rebaseUpstream"
     :rebase-onto="rebaseOnto"

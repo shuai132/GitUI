@@ -8,6 +8,16 @@ export function filterBranchTags(branches: BranchInfo[], showRemoteBranches: boo
   return showRemoteBranches ? branches : branches.filter((b) => !b.is_remote)
 }
 
+export function remoteBranchTagsAtCommit(
+  branches: BranchInfo[],
+  commitOid: string,
+  showRemoteBranches: boolean,
+): BranchInfo[] {
+  return filterBranchTags(branches, showRemoteBranches).filter(
+    (branch) => branch.is_remote && branch.commit_oid === commitOid,
+  )
+}
+
 export function useCommitTags() {
   const { t } = useI18n()
   const historyStore = useHistoryStore()

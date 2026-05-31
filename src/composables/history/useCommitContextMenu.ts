@@ -5,8 +5,10 @@ import { useStashStore } from '@/stores/stash'
 import { useMergeRebaseStore } from '@/stores/mergeRebase'
 import { usePluginsStore } from '@/stores/plugins'
 import { useWorkspaceStore } from '@/stores/workspace'
+import { useUiStore } from '@/stores/ui'
 import { useGlobalToast } from '@/composables/useGlobalToast'
 import { mergeSourceNamesAtCommit } from '@/utils/mergeSources'
+import { remoteBranchTagsAtCommit } from '@/composables/history/useCommitTags'
 import type { ContextMenuItem } from '@/components/common/ContextMenu.vue'
 import type { CommitInfo } from '@/types/git'
 
@@ -23,6 +25,7 @@ export function useCommitContextMenu(
   const mergeRebaseStore = useMergeRebaseStore()
   const pluginsStore = usePluginsStore()
   const workspaceStore = useWorkspaceStore()
+  const uiStore = useUiStore()
   const { showToast } = useGlobalToast()
 
   onMounted(() => {
@@ -43,6 +46,8 @@ export function useCommitContextMenu(
   const showCreateBranchDialog = ref(false)
   const showCreateTagDialog = ref(false)
   const createTagAnnotated = ref(false)
+  const showCheckoutRemoteDialog = ref(false)
+  const checkoutInitialRemote = ref<string | null>(null)
   const dialogCommit = ref<CommitInfo | null>(null)
 
   // Edit Message Dialog
@@ -81,6 +86,16 @@ export function useCommitContextMenu(
 
   function pluginAction(pluginId: string, commandId: string): string {
     return `plugin:${pluginId}:${commandId}`
+  }
+
+  function checkoutRemoteAction(branchName: string): string {
+    return `checkout-remote:${branchName}`
+  }
+
+  function parseCheckoutRemoteAction(action: string): string | null {
+    const prefix = 'checkout-remote:'
+    if (!action.startsWith(prefix)) return null
+    return action.slice(prefix.length) || null
   }
 
   function parsePluginAction(action: string): { pluginId: string; commandId: string } | null {
@@ -163,9 +178,18 @@ export function useCommitContextMenu(
       !c.is_unreachable &&
       !ongoing &&
       (isHead || (c.parent_oids.length === 1 && isAncestorOfHead(c.oid)))
+    const checkoutRemoteItems = remoteBranchTagsAtCommit(
+      historyStore.branches,
+      c.oid,
+      uiStore.showRemoteBranches,
+    ).map((branch) => ({
+      label: t('history.contextMenu.checkoutRemoteBranch', { branch: branch.name }),
+      action: checkoutRemoteAction(branch.name),
+    }))
 
     const items: ContextMenuItem[] = [
       { label: t('history.contextMenu.checkout'), action: 'checkout' },
+      ...checkoutRemoteItems,
       { separator: true },
       {
         label: t('history.contextMenu.editMessage'),
@@ -240,6 +264,12 @@ export function useCommitContextMenu(
         )
         if (result.message) showToast('success', result.message)
         await refreshAfterPlugin(result.refresh)
+        return
+      }
+      const checkoutRemoteBranch = parseCheckoutRemoteAction(action)
+      if (checkoutRemoteBranch) {
+        checkoutInitialRemote.value = checkoutRemoteBranch
+        showCheckoutRemoteDialog.value = true
         return
       }
 
@@ -414,6 +444,8 @@ export function useCommitContextMenu(
     showCreateBranchDialog,
     showCreateTagDialog,
     createTagAnnotated,
+    showCheckoutRemoteDialog,
+    checkoutInitialRemote,
     dialogCommit,
 
     showEditMessageDialog,

@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import type { CommitInfo } from '@/types/git'
+import type { BranchInfo, CommitInfo } from '@/types/git'
 import FileHistoryModal from '@/components/file-history/FileHistoryModal.vue'
 import CreateBranchDialog from '@/components/commit/CreateBranchDialog.vue'
 import CreateTagDialog from '@/components/commit/CreateTagDialog.vue'
+import CheckoutRemoteDialog from '@/components/branch/CheckoutRemoteDialog.vue'
 import Modal from '@/components/common/Modal.vue'
 import MergeDialog from '@/components/merge/MergeDialog.vue'
 import RebasePlanDialog from '@/components/rebase/RebasePlanDialog.vue'
@@ -26,6 +27,9 @@ defineProps<{
   showCreateTagDialog: boolean
   createTagAnnotated: boolean
   dialogCommit: CommitInfo | null
+  showCheckoutRemoteDialog: boolean
+  remoteBranches: BranchInfo[]
+  checkoutInitialRemote: string | null
   showMergeDialog: boolean
   mergeSourceCandidates: string[]
   showRebaseDialog: boolean
@@ -50,6 +54,7 @@ defineProps<{
 const emit = defineEmits<{
   'update:showCreateBranchDialog': [value: boolean]
   'update:showCreateTagDialog': [value: boolean]
+  'update:showCheckoutRemoteDialog': [value: boolean]
   'update:showMergeDialog': [value: boolean]
   'update:showRebaseDialog': [value: boolean]
   'update:showDragDialog': [value: boolean]
@@ -81,6 +86,13 @@ const emit = defineEmits<{
     :commit="dialogCommit"
     :annotated="createTagAnnotated"
     @close="emit('update:showCreateTagDialog', false)"
+  />
+
+  <CheckoutRemoteDialog
+    :visible="showCheckoutRemoteDialog"
+    :remote-branches="remoteBranches"
+    :initial-remote="checkoutInitialRemote"
+    @close="emit('update:showCheckoutRemoteDialog', false)"
   />
 
   <MergeDialog
