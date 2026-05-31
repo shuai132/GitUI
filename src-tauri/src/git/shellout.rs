@@ -5,7 +5,13 @@
 //! OpenSSH + ssh-agent + `~/.ssh/config`（即命令行 git 已经能跑的那套配置）绕开问题。
 //! HTTPS 仍走 libgit2 + 系统 credential helper，不变。
 
-use std::process::{Command, Stdio};
+use std::{
+    env,
+    ffi::{OsStr, OsString},
+    path::PathBuf,
+    process::{Command, Stdio},
+    sync::OnceLock,
+};
 
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
@@ -20,6 +26,9 @@ const CREATE_NO_WINDOW: u32 = 0x08000000;
 const GITUI_SSH_PROXY_ENV: &str = "GITUI_SSH_PROXY";
 #[cfg(windows)]
 const GITUI_SSH_PROXY_VALUE: &str = "1";
+
+#[cfg(unix)]
+static SHELLOUT_PATH: OnceLock<Option<OsString>> = OnceLock::new();
 
 use crate::git::{
     engine::GitEngine,
@@ -109,9 +118,134 @@ fn run_windows_ssh_proxy_if_requested_inner() -> Option<i32> {
 /// 创建 GitUI 后台 shellout 使用的 `git` 命令。
 pub fn new_git_command(repo_path: Option<&str>) -> Command {
     let mut cmd = Command::new("git");
+    configure_shellout_environment(&mut cmd);
     configure_hidden_process(&mut cmd);
     configure_windows_ssh_proxy(&mut cmd, repo_path);
     cmd
+}
+
+fn configure_shellout_environment(cmd: &mut Command) {
+    #[cfg(unix)]
+    if let Some(path) = shellout_path() {
+        cmd.env("PATH", path);
+    }
+}
+
+#[cfg(unix)]
+fn shellout_path() -> Option<&'static OsString> {
+    SHELLOUT_PATH
+        .get_or_init(|| {
+            build_shellout_path(
+                env::var_os("PATH"),
+                resolve_user_shell_path(),
+                common_shellout_dirs(),
+            )
+        })
+        .as_ref()
+}
+
+#[cfg(unix)]
+fn common_shellout_dirs() -> Vec<PathBuf> {
+    let mut dirs = vec![
+        PathBuf::from("/opt/homebrew/bin"),
+        PathBuf::from("/opt/homebrew/sbin"),
+        PathBuf::from("/usr/local/bin"),
+        PathBuf::from("/usr/local/sbin"),
+        PathBuf::from("/opt/local/bin"),
+        PathBuf::from("/opt/local/sbin"),
+    ];
+
+    if let Some(home) = env::var_os("HOME") {
+        let home = PathBuf::from(home);
+        dirs.push(home.join(".local/bin"));
+        dirs.push(home.join("bin"));
+    }
+
+    dirs
+}
+
+#[cfg(unix)]
+fn build_shellout_path(
+    current_path: Option<OsString>,
+    shell_path: Option<OsString>,
+    extra_dirs: Vec<PathBuf>,
+) -> Option<OsString> {
+    let mut dirs = Vec::new();
+    push_path_dirs(&mut dirs, shell_path.as_deref());
+    push_path_dirs(&mut dirs, current_path.as_deref());
+    for dir in extra_dirs {
+        push_unique_path(&mut dirs, dir);
+    }
+
+    if dirs.is_empty() {
+        return None;
+    }
+
+    env::join_paths(dirs).ok()
+}
+
+#[cfg(unix)]
+fn push_path_dirs(dirs: &mut Vec<PathBuf>, path_env: Option<&OsStr>) {
+    let Some(path_env) = path_env else {
+        return;
+    };
+    for dir in env::split_paths(path_env) {
+        push_unique_path(dirs, dir);
+    }
+}
+
+#[cfg(unix)]
+fn push_unique_path(dirs: &mut Vec<PathBuf>, dir: PathBuf) {
+    if dir.as_os_str().is_empty() || dirs.iter().any(|existing| existing == &dir) {
+        return;
+    }
+    dirs.push(dir);
+}
+
+#[cfg(unix)]
+fn resolve_user_shell_path() -> Option<OsString> {
+    let shell = env::var_os("SHELL")
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| OsString::from("/bin/zsh"));
+
+    // Use a non-interactive login shell so macOS GUI launches can pick up
+    // user-level PATH setup such as Homebrew's shellenv without running
+    // interactive prompts from shell startup files.
+    let output = Command::new(shell)
+        .arg("-lc")
+        .arg(format!(
+            "printf '%s%s%s\\n' '{begin}' \"$PATH\" '{end}'",
+            begin = SHELL_PATH_BEGIN,
+            end = SHELL_PATH_END
+        ))
+        .stdin(Stdio::null())
+        .stderr(Stdio::null())
+        .output()
+        .ok()?;
+
+    if !output.status.success() {
+        return None;
+    }
+
+    parse_marked_shell_path(&output.stdout)
+}
+
+#[cfg(unix)]
+const SHELL_PATH_BEGIN: &str = "__GITUI_PATH_BEGIN__";
+#[cfg(unix)]
+const SHELL_PATH_END: &str = "__GITUI_PATH_END__";
+
+#[cfg(unix)]
+fn parse_marked_shell_path(stdout: &[u8]) -> Option<OsString> {
+    let text = String::from_utf8_lossy(stdout);
+    let start = text.find(SHELL_PATH_BEGIN)? + SHELL_PATH_BEGIN.len();
+    let end = text[start..].find(SHELL_PATH_END)? + start;
+    let path = text[start..end].trim_matches(|ch| ch == '\r' || ch == '\n');
+    if path.is_empty() {
+        None
+    } else {
+        Some(OsString::from(path))
+    }
 }
 
 #[cfg(windows)]
@@ -204,7 +338,7 @@ pub fn run_git(path: &str, args: &[&str]) -> GitResult<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::is_ssh_url;
+    use super::*;
 
     #[test]
     fn ssh_scheme() {
@@ -238,5 +372,52 @@ mod tests {
     fn https_with_userinfo_not_ssh() {
         // `https://user@host/path` 不应被当作 scp-like（有 scheme 前缀兜底）
         assert!(!is_ssh_url("https://user@github.com/foo/bar.git"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn shellout_path_prefers_shell_path_and_deduplicates() {
+        let current = env::join_paths(["/usr/bin", "/opt/homebrew/bin"])
+            .expect("valid current path")
+            .into();
+        let shell = env::join_paths(["/opt/homebrew/bin", "/Users/me/.local/bin"])
+            .expect("valid shell path")
+            .into();
+
+        let merged = build_shellout_path(
+            Some(current),
+            Some(shell),
+            vec![
+                PathBuf::from("/usr/local/bin"),
+                PathBuf::from("/opt/homebrew/bin"),
+            ],
+        )
+        .expect("merged path");
+        let dirs: Vec<PathBuf> = env::split_paths(&merged).collect();
+
+        assert_eq!(
+            dirs,
+            vec![
+                PathBuf::from("/opt/homebrew/bin"),
+                PathBuf::from("/Users/me/.local/bin"),
+                PathBuf::from("/usr/bin"),
+                PathBuf::from("/usr/local/bin"),
+            ]
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn parses_marked_shell_path_with_startup_noise() {
+        let stdout = format!(
+            "hello\n{begin}/opt/homebrew/bin:/usr/bin{end}\nignored\n",
+            begin = SHELL_PATH_BEGIN,
+            end = SHELL_PATH_END
+        );
+
+        assert_eq!(
+            parse_marked_shell_path(stdout.as_bytes()),
+            Some(OsString::from("/opt/homebrew/bin:/usr/bin"))
+        );
     }
 }
