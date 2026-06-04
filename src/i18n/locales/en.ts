@@ -36,6 +36,7 @@ const messages = {
       popWithCount: 'Pop latest stash ({count} total)',
       popEmpty: 'No stash',
       terminalSystem: 'Open repository in system terminal',
+      refreshRepository: 'Reload current repository state',
       terminalToggleShow: 'Show in-app terminal',
       terminalToggleHide: 'Hide in-app terminal',
       layoutCustom: 'Custom layout → switch to stacked',

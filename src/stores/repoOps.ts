@@ -6,12 +6,20 @@ import { ref } from 'vue'
 // 后端仍未返回，A 的按钮继续转。调用方要在开始操作时锁住当时的 repoId，
 // finally 清除时用同一个 id，避免 await 期间用户切仓库造成误清。
 
-export type OpKind = 'pull' | 'push' | 'fetch' | 'stash' | 'pop' | 'gc'
+export type OpKind = 'pull' | 'push' | 'fetch' | 'stash' | 'pop' | 'gc' | 'refresh'
 
 type BusyBucket = Record<OpKind, boolean>
 
 function makeBucket(): BusyBucket {
-  return { pull: false, push: false, fetch: false, stash: false, pop: false, gc: false }
+  return {
+    pull: false,
+    push: false,
+    fetch: false,
+    stash: false,
+    pop: false,
+    gc: false,
+    refresh: false,
+  }
 }
 
 // 共享的"全 false"快照。getBusy 在仓库未记录过或 repoId 为 null 时返回它，

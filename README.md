@@ -34,7 +34,7 @@
 - [x] 字符编码自适应：commit message 按 git `encoding` header 解码、文件内容按 `.gitattributes` 的 `working-tree-encoding` 或 chardetng 自动检测，混合 UTF-8 / GBK 仓库正常显示
 - [x] Stash：push / pop / apply / delete（含 untracked 文件），用提交信息作 stash message
 - [x] Reflog 查看、git gc 触发入口；右键丢失引用提交可从 HEAD reflog 中剥链移除
-- [x] 工作目录文件监控，状态自动刷新
+- [x] 工作目录文件监控，状态自动刷新；支持手动重新加载当前仓库状态
 - [x] 内置终端：应用内（xterm.js + PTY）/ 调用外部终端
 - [x] 本地插件系统：安装 / 启用 / 禁用 / 卸载本地可信插件，支持插件命令注入 Actions 菜单和提交右键菜单，并通过后端进程执行
 - [x] 调试日志面板：命令历史 + Rust 后端日志

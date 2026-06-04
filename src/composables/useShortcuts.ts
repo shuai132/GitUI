@@ -18,6 +18,7 @@ import { useRepoStore } from '@/stores/repos'
 import { useTerminalStore } from '@/stores/terminal'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useGlobalToast } from '@/composables/useGlobalToast'
+import { useRepositoryRefresh } from '@/composables/useRepositoryRefresh'
 
 export function useShortcuts() {
   const shortcutsStore = useShortcutsStore()
@@ -27,6 +28,7 @@ export function useShortcuts() {
   const terminalStore = useTerminalStore()
   const workspaceStore = useWorkspaceStore()
   const { showError } = useGlobalToast()
+  const { refreshActiveRepository } = useRepositoryRefresh()
 
   function shouldIgnore(): boolean {
     const el = document.activeElement
@@ -53,8 +55,9 @@ export function useShortcuts() {
       consume()
       const id = repoStore.activeRepoId
       if (id) {
-        historyStore.loadLog()
-        historyStore.loadBranches()
+        refreshActiveRepository().catch((err: unknown) => {
+          showError(String(err))
+        })
       }
       return
     }

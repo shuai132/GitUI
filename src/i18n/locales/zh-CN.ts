@@ -36,6 +36,7 @@ const messages = {
       popWithCount: 'Pop 最新 stash (共 {count} 条)',
       popEmpty: '没有 stash',
       terminalSystem: '在系统终端打开仓库',
+      refreshRepository: '重新加载当前仓库状态',
       terminalToggleShow: '显示应用内终端',
       terminalToggleHide: '隐藏应用内终端',
       layoutCustom: '自定义布局 → 切换为上下',

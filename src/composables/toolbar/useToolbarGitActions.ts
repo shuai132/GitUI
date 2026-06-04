@@ -10,6 +10,7 @@ import { resolveExternalTerminalApp, useSettingsStore } from '@/stores/settings'
 import { bindingToLabel, useShortcutsStore, type ShortcutActionId } from '@/stores/shortcuts'
 import { useGitCommands } from '@/composables/useGitCommands'
 import { useRepoCreation } from '@/composables/useRepoCreation'
+import { useRepositoryRefresh } from '@/composables/useRepositoryRefresh'
 import { useGlobalToast } from '@/composables/useGlobalToast'
 import type { PullMode, PushMode } from '@/composables/toolbar/useRemoteActionMenu'
 
@@ -33,6 +34,7 @@ export function useToolbarGitActions(options: UseToolbarGitActionsOptions) {
   const shortcutsStore = useShortcutsStore()
   const git = useGitCommands()
   const repoCreation = useRepoCreation()
+  const { refreshActiveRepository } = useRepositoryRefresh()
   const { t } = useI18n()
   const { showToast, showError } = useGlobalToast()
 
@@ -171,6 +173,14 @@ export function useToolbarGitActions(options: UseToolbarGitActionsOptions) {
     }
   }
 
+  async function onRefreshRepository() {
+    try {
+      await refreshActiveRepository()
+    } catch (e: unknown) {
+      showError(String(e))
+    }
+  }
+
   async function onOpenSystemTerminal() {
     const id = repoStore.activeRepoId
     if (!id) return
@@ -201,6 +211,7 @@ export function useToolbarGitActions(options: UseToolbarGitActionsOptions) {
     onStash,
     onPop,
     onFetch,
+    onRefreshRepository,
     onOpenSystemTerminal,
   }
 }
