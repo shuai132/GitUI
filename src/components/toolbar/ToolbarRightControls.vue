@@ -135,6 +135,13 @@ const actionsMenuItems = computed<ContextMenuItem[]>(() => {
     },
     {
       label:
+        (uiStore.showChangeStatsColumn ? '✓ ' : '   ') +
+        t('toolbar.actionsMenu.showChangeStatsColumn'),
+      action: 'toggle-change-stats-column',
+      disabled: !hasRepo.value,
+    },
+    {
+      label:
         (uiStore.diffHighlightEnabled ? '✓ ' : '   ') +
         t('toolbar.actionsMenu.syntaxHighlight'),
       action: 'toggle-diff-highlight',
@@ -280,6 +287,9 @@ async function onActionsSelect(action: string) {
       break
     case 'toggle-remote-branches':
       uiStore.toggleShowRemoteBranches()
+      break
+    case 'toggle-change-stats-column':
+      uiStore.toggleShowChangeStatsColumn()
       break
     case 'toggle-diff-highlight':
       uiStore.toggleDiffHighlight()

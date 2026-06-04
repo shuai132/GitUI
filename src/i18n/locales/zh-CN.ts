@@ -67,6 +67,7 @@ const messages = {
     actionsMenu: {
       soloCurrentBranch: 'Solo 当前分支',
       showRemoteBranches: '显示远程分支',
+      showChangeStatsColumn: '显示变更列',
       syntaxHighlight: '语法高亮',
       showUnreachable: '显示悬垂引用',
       showStashes: '显示贮藏',

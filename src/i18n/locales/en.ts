@@ -67,6 +67,7 @@ const messages = {
     actionsMenu: {
       soloCurrentBranch: 'Solo current branch',
       showRemoteBranches: 'Show remote branches',
+      showChangeStatsColumn: 'Show changes column',
       syntaxHighlight: 'Syntax highlighting',
       showUnreachable: 'Show dangling refs',
       showStashes: 'Show stashes',
