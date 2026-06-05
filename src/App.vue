@@ -29,6 +29,7 @@ import { useShortcuts } from '@/composables/useShortcuts'
 import { useSettingsStore } from '@/stores/settings'
 import { findWipFileBySelection } from '@/utils/wipSelection'
 import { isNetworkUpdateCheckError, recordLastUpdateCheckTime } from '@/utils/updateCheck'
+import { shouldRefreshHistoryDomain } from '@/utils/statusChangeRefresh'
 import { listen } from '@tauri-apps/api/event'
 import { check, type Update } from '@tauri-apps/plugin-updater'
 import UpdateDialog from '@/components/common/UpdateDialog.vue'
@@ -237,9 +238,15 @@ function toggleSidebar() {
 onStatusChanged(async ({ repo_id: repoId, kind }) => {
   if (repoId !== repoStore.activeRepoId) return
 
+  const previousHead = workspaceStore.status?.head_commit ?? null
+
   // 先等 status 刷新完，再决定 diff 怎么处理——
   // 这样可以判断当前预览的文件是否还存在，避免对已消失的文件发起加载
   await workspaceStore.refresh(repoId)
+  if (repoId !== repoStore.activeRepoId) return
+
+  const nextHead = workspaceStore.status?.head_commit ?? null
+
   if (kind === 'config' || kind === 'other_git') {
     submodulesStore.loadSubmodules()
   }
@@ -261,8 +268,9 @@ onStatusChanged(async ({ repo_id: repoId, kind }) => {
     }
   }
 
-  // 普通 worktree/index 变化只影响 WIP；引用或保守归类的 .git 变化才刷新历史域。
-  if (kind === 'refs' || kind === 'other_git') {
+  // 普通 worktree/index 变化只影响 WIP；引用、保守归类的 .git 变化，
+  // 或 status 读到 HEAD 变化时才刷新历史域。
+  if (shouldRefreshHistoryDomain(kind, previousHead, nextHead)) {
     historyStore.loadLog()
     historyStore.loadBranches()
     historyStore.loadTags()
