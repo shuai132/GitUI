@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, reactive, computed, watch, onMounted } from 'vue'
+import { ref, reactive, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { CommitInfo, FileDiff, FileBlame, BlameHunk } from '@/types/git'
 import { useGitCommands } from '@/composables/useGitCommands'
@@ -21,6 +21,19 @@ const props = defineProps<{
 const emit = defineEmits<{
   close: []
 }>()
+
+const overlayRef = ref<HTMLElement | null>(null)
+
+function isShortcutRecording() {
+  return document.querySelector('.shortcut-key.recording') !== null
+}
+
+function isTopmostModal() {
+  const overlay = overlayRef.value
+  if (!overlay) return false
+  const overlays = Array.from(document.querySelectorAll<HTMLElement>('[data-modal-overlay="true"]'))
+  return overlays[overlays.length - 1] === overlay
+}
 
 const repoStore = useRepoStore()
 const gitCmd = useGitCommands()
@@ -205,14 +218,32 @@ function startListResize(e: PointerEvent) {
   document.body.style.userSelect = 'none'
 }
 
-// ESC 关闭
 function onKeydown(e: KeyboardEvent) {
-  if (e.key === 'Escape') emit('close')
+  if (e.key !== 'Escape') return
+  if (isShortcutRecording() || !isTopmostModal()) return
+
+  e.preventDefault()
+  e.stopPropagation()
+  e.stopImmediatePropagation()
+  emit('close')
 }
+
+onMounted(() => {
+  document.addEventListener('keydown', onKeydown, { capture: true })
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('keydown', onKeydown, { capture: true })
+})
 </script>
 
 <template>
-  <div class="modal-overlay" @click.self="emit('close')" @keydown="onKeydown" tabindex="-1">
+  <div
+    ref="overlayRef"
+    class="modal-overlay"
+    data-modal-overlay="true"
+    @click.self="emit('close')"
+  >
     <div class="modal-box">
       <!-- Header -->
       <div class="modal-header">

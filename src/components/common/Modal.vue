@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onBeforeUnmount, watch } from 'vue'
+import { onBeforeUnmount, ref, watch } from 'vue'
 
 const props = defineProps<{
   visible: boolean
@@ -13,20 +13,40 @@ const emit = defineEmits<{
   close: []
 }>()
 
+const overlayRef = ref<HTMLElement | null>(null)
+
+function isShortcutRecording() {
+  return document.querySelector('.shortcut-key.recording') !== null
+}
+
+function isTopmostModal() {
+  const overlay = overlayRef.value
+  if (!overlay) return false
+  const overlays = Array.from(document.querySelectorAll<HTMLElement>('[data-modal-overlay="true"]'))
+  return overlays[overlays.length - 1] === overlay
+}
+
 function onKey(e: KeyboardEvent) {
-  if (e.key === 'Escape') emit('close')
+  if (e.key !== 'Escape') return
+  if (isShortcutRecording() || !isTopmostModal()) return
+
+  e.preventDefault()
+  e.stopPropagation()
+  e.stopImmediatePropagation()
+  emit('close')
 }
 
 watch(
   () => props.visible,
   (v) => {
-    if (v) document.addEventListener('keydown', onKey)
-    else document.removeEventListener('keydown', onKey)
+    if (v) document.addEventListener('keydown', onKey, { capture: true })
+    else document.removeEventListener('keydown', onKey, { capture: true })
   },
+  { immediate: true },
 )
 
 onBeforeUnmount(() => {
-  document.removeEventListener('keydown', onKey)
+  document.removeEventListener('keydown', onKey, { capture: true })
 })
 
 function onOverlayClick() {
@@ -37,7 +57,13 @@ function onOverlayClick() {
 <template>
   <Teleport to="body">
     <Transition name="modal-fade">
-      <div v-if="visible" class="modal-overlay" @mousedown.self="onOverlayClick">
+      <div
+        v-if="visible"
+        ref="overlayRef"
+        class="modal-overlay"
+        data-modal-overlay="true"
+        @mousedown.self="onOverlayClick"
+      >
         <div class="modal-box" :style="{ width: width ?? '460px', height }">
           <div v-if="title || $slots.header" class="modal-header">
             <slot name="header">
