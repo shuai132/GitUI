@@ -350,6 +350,7 @@ const messages = {
       confirmStashDelete: { body: "确认删除 stash{'@'}{index} \"{message}\"？此操作不可撤销。" },
       dropUnreachable: {
         title: '从 reflog 中移除',
+        previewing: '正在计算将受影响的 reflog 引用...',
         body: '将从 HEAD reflog 中移除 {count} 条引用，使 {shortOid} 不再显示为丢失引用。若 {shortOid} 仍有其他丢失引用的后代，它们的 reflog 入口也会被一并清掉。对象本身仍由后续 git gc 按默认策略自然回收。',
         emptyBody: '{shortOid} 在 HEAD reflog 闭包里已经没有对应入口，无需操作（可能已被其他工具清理）。',
         confirm: '确认移除',

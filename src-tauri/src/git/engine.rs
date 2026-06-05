@@ -869,6 +869,59 @@ mod tests {
     }
 
     #[test]
+    fn test_drop_unreachable_commit_prunes_descendant_reflog_entries() {
+        let test_repo = TestRepo::new();
+        let repo = &test_repo.repo;
+        let path = test_repo.path_str();
+        let base = repo.head().unwrap().peel_to_commit().unwrap().id();
+
+        let a = commit_file(&test_repo, "lost a", "lost-a.txt", "a\n");
+        let b = commit_file(&test_repo, "lost b", "lost-b.txt", "b\n");
+        let c = commit_file(&test_repo, "lost c", "lost-c.txt", "c\n");
+
+        let base_obj = repo
+            .find_object(base, Some(git2::ObjectType::Commit))
+            .unwrap();
+        repo.reset(&base_obj, git2::ResetType::Hard, None).unwrap();
+        drop(base_obj);
+
+        let before =
+            GitEngine::get_log(path, 0, 20, true, false, LogBranchScope::All, true).unwrap();
+        let before_oids = before
+            .commits
+            .iter()
+            .map(|commit| commit.oid.as_str())
+            .collect::<Vec<_>>();
+        let a_oid = a.to_string();
+        let b_oid = b.to_string();
+        let c_oid = c.to_string();
+        assert!(before_oids.contains(&a_oid.as_str()));
+        assert!(before_oids.contains(&b_oid.as_str()));
+        assert!(before_oids.contains(&c_oid.as_str()));
+
+        let preview = GitEngine::preview_drop_unreachable_commit(path, &b_oid).unwrap();
+        assert_eq!(preview, 2);
+
+        let removed = GitEngine::drop_unreachable_commit(path, &b_oid).unwrap();
+        assert_eq!(removed, 2);
+        assert_eq!(
+            GitEngine::preview_drop_unreachable_commit(path, &b_oid).unwrap(),
+            0
+        );
+
+        let after =
+            GitEngine::get_log(path, 0, 20, true, false, LogBranchScope::All, true).unwrap();
+        let after_oids = after
+            .commits
+            .iter()
+            .map(|commit| commit.oid.as_str())
+            .collect::<Vec<_>>();
+        assert!(after_oids.contains(&a_oid.as_str()));
+        assert!(!after_oids.contains(&b_oid.as_str()));
+        assert!(!after_oids.contains(&c_oid.as_str()));
+    }
+
+    #[test]
     fn test_get_commit_change_stats_for_root_and_text_commit() {
         let test_repo = TestRepo::new();
         let path = test_repo.path_str();

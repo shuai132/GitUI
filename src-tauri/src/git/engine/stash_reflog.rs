@@ -1,4 +1,5 @@
 use git2::{Repository, StashFlags};
+use std::collections::HashMap;
 
 use crate::git::{
     encoding::decode_commit_text,
@@ -171,9 +172,8 @@ impl GitEngine {
     /// 计算"让 target 从 HEAD reflog 闭包里消失"所需要移除的 reflog entry 索引集合。
     ///
     /// 算法：对每个 HEAD reflog entry 的 `new_oid x`，当 `x == target` 或 target
-    /// 是 x 的祖先（即从 x 出发 revwalk 能遇到 target）时，该 entry 被列入移除集合。
-    /// 这样移除后，任何以 x 为起点的 revwalk 都不会再带出 target，前端视图也就
-    /// 不再把 target 显示为 unreachable。
+    /// 是 x 的祖先时，该 entry 被列入移除集合。相同 `new_oid` 只做一次图关系查询，
+    /// 避免在 reflog 较长时反复遍历同一段提交图。
     ///
     /// 抽出独立函数供 `drop_unreachable_commit` 和 `preview_drop_unreachable_commit` 共用。
     fn compute_drop_unreachable_indices(
@@ -182,25 +182,22 @@ impl GitEngine {
         target: git2::Oid,
     ) -> Vec<usize> {
         let mut indices: Vec<usize> = Vec::new();
+        let mut hit_cache: HashMap<git2::Oid, bool> = HashMap::new();
+
         for i in 0..reflog.len() {
             let Some(entry) = reflog.get(i) else { continue };
             let root = entry.id_new();
-            if root == target {
-                indices.push(i);
-                continue;
-            }
-            // 判断 target 是否是 root 的祖先：从 root revwalk 看 target 能否被访问
-            let Ok(mut walk) = repo.revwalk() else {
-                continue;
+
+            let hit = if let Some(hit) = hit_cache.get(&root) {
+                *hit
+            } else {
+                let hit = root == target || repo.graph_descendant_of(root, target).unwrap_or(false);
+                hit_cache.insert(root, hit);
+                hit
             };
-            if walk.push(root).is_err() {
-                continue;
-            }
-            for anc in walk.flatten() {
-                if anc == target {
-                    indices.push(i);
-                    break;
-                }
+
+            if hit {
+                indices.push(i);
             }
         }
         indices

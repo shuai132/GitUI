@@ -350,6 +350,7 @@ const messages = {
       confirmStashDelete: { body: "Delete stash{'@'}{index} \"{message}\"? This cannot be undone." },
       dropUnreachable: {
         title: 'Remove from reflog',
+        previewing: 'Computing affected reflog entries...',
         body: 'Remove {count} reflog entr(y/ies) so that {shortOid} no longer appears as unreachable. If {shortOid} has other unreachable descendants, their reflog entries are removed as well. Objects themselves are reclaimed later by git gc under the default policy.',
         emptyBody:
           'No matching entry for {shortOid} in the HEAD reflog closure; nothing to do (it may have been cleared by another tool).',

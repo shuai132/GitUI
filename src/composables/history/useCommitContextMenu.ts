@@ -66,8 +66,11 @@ export function useCommitContextMenu(
     visible: false,
     commit: null as CommitInfo | null,
     count: 0,
+    previewing: false,
+    previewError: null as string | null,
     submitting: false,
   })
+  let dropUnreachablePreviewSeq = 0
 
   // ── Helpers ──────────────────────────────────────────────────────────
   function stashEntryForCommit(oid: string) {
@@ -148,6 +151,45 @@ export function useCommitContextMenu(
     if (refresh.includes('workspace')) await workspaceStore.refresh()
     if (refresh.includes('history')) await historyStore.loadLog()
     if (refresh.includes('branches')) await historyStore.loadBranches()
+  }
+
+  function openDropUnreachableDialog(c: CommitInfo) {
+    const requestSeq = ++dropUnreachablePreviewSeq
+    dropUnreachableDialog.commit = c
+    dropUnreachableDialog.count = 0
+    dropUnreachableDialog.previewing = true
+    dropUnreachableDialog.previewError = null
+    dropUnreachableDialog.submitting = false
+    dropUnreachableDialog.visible = true
+
+    void historyStore.previewDropUnreachableCommit(c.oid)
+      .then((count) => {
+        if (
+          requestSeq !== dropUnreachablePreviewSeq ||
+          dropUnreachableDialog.commit?.oid !== c.oid
+        ) {
+          return
+        }
+        dropUnreachableDialog.count = count
+      })
+      .catch((err: unknown) => {
+        if (
+          requestSeq !== dropUnreachablePreviewSeq ||
+          dropUnreachableDialog.commit?.oid !== c.oid
+        ) {
+          return
+        }
+        dropUnreachableDialog.previewError = String(err)
+      })
+      .finally(() => {
+        if (
+          requestSeq !== dropUnreachablePreviewSeq ||
+          dropUnreachableDialog.commit?.oid !== c.oid
+        ) {
+          return
+        }
+        dropUnreachableDialog.previewing = false
+      })
   }
 
   const isEditingHeadCommit = computed(
@@ -352,11 +394,7 @@ export function useCommitContextMenu(
           await navigator.clipboard.writeText(c.oid)
           break
         case 'drop-unreachable': {
-          const count = await historyStore.previewDropUnreachableCommit(c.oid)
-          dropUnreachableDialog.commit = c
-          dropUnreachableDialog.count = count
-          dropUnreachableDialog.submitting = false
-          dropUnreachableDialog.visible = true
+          openDropUnreachableDialog(c)
           break
         }
         case 'create-tag':
@@ -417,11 +455,20 @@ export function useCommitContextMenu(
 
   async function onDropUnreachableConfirm() {
     const c = dropUnreachableDialog.commit
-    if (!c) return
+    if (
+      !c ||
+      dropUnreachableDialog.previewing ||
+      dropUnreachableDialog.previewError ||
+      dropUnreachableDialog.count <= 0 ||
+      dropUnreachableDialog.submitting
+    ) {
+      return
+    }
     dropUnreachableDialog.submitting = true
     try {
       await historyStore.dropUnreachableCommit(c.oid)
       dropUnreachableDialog.visible = false
+      dropUnreachableDialog.commit = null
     } catch (err) {
       alert(String(err))
     } finally {
@@ -430,8 +477,11 @@ export function useCommitContextMenu(
   }
 
   function onDropUnreachableCancel() {
+    dropUnreachablePreviewSeq += 1
     dropUnreachableDialog.visible = false
     dropUnreachableDialog.commit = null
+    dropUnreachableDialog.previewing = false
+    dropUnreachableDialog.previewError = null
   }
 
   return {

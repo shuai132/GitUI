@@ -19,6 +19,8 @@ interface DropUnreachableDialogState {
   visible: boolean
   commit: CommitInfo | null
   count: number
+  previewing: boolean
+  previewError: string | null
   submitting: boolean
 }
 
@@ -206,8 +208,18 @@ const emit = defineEmits<{
     @close="emit('dropUnreachableCancel')"
   >
     <p class="drop-unreachable-body">
-      <template v-if="dropUnreachableDialog.count === 0">
-        {{ $t('history.dialog.dropUnreachable.emptyBody', { shortOid: dropUnreachableDialog.commit?.short_oid ?? '' }) }}
+      <template v-if="dropUnreachableDialog.previewing">
+        {{ $t('history.dialog.dropUnreachable.previewing') }}
+      </template>
+      <template v-else-if="dropUnreachableDialog.previewError">
+        <span class="drop-unreachable-error">{{ dropUnreachableDialog.previewError }}</span>
+      </template>
+      <template v-else-if="dropUnreachableDialog.count === 0">
+        {{
+          $t('history.dialog.dropUnreachable.emptyBody', {
+            shortOid: dropUnreachableDialog.commit?.short_oid ?? '',
+          })
+        }}
       </template>
       <template v-else>
         {{ $t('history.dialog.dropUnreachable.body', {
@@ -217,11 +229,24 @@ const emit = defineEmits<{
       </template>
     </p>
     <template #footer>
-      <button class="btn btn-secondary" @click="emit('dropUnreachableCancel')">
-        {{ dropUnreachableDialog.count === 0 ? $t('history.dialog.dropUnreachable.close') : $t('common.cancel') }}
+      <button
+        class="btn btn-secondary"
+        :disabled="dropUnreachableDialog.submitting"
+        @click="emit('dropUnreachableCancel')"
+      >
+        {{
+          !dropUnreachableDialog.previewing &&
+          (dropUnreachableDialog.previewError || dropUnreachableDialog.count === 0)
+            ? $t('history.dialog.dropUnreachable.close')
+            : $t('common.cancel')
+        }}
       </button>
       <button
-        v-if="dropUnreachableDialog.count > 0"
+        v-if="
+          !dropUnreachableDialog.previewing &&
+          !dropUnreachableDialog.previewError &&
+          dropUnreachableDialog.count > 0
+        "
         class="btn btn-primary"
         :disabled="dropUnreachableDialog.submitting"
         @click="emit('dropUnreachableConfirm')"
@@ -323,5 +348,9 @@ const emit = defineEmits<{
   color: var(--text-primary);
   font-size: var(--font-md);
   line-height: 1.55;
+}
+
+.drop-unreachable-error {
+  color: var(--accent-red);
 }
 </style>
