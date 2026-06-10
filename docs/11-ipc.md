@@ -67,7 +67,7 @@ GitUI 采用 Tauri v2 的 IPC 机制实现前后端通信，包括双向的请�
 
 | 事件名 | 含义 | 触发时机 |
 |------|------|------|
-| `repo://status-changed` | 仓库状态变更 | 当前激活仓库的文件监控感知到工作区或 `.git` 变动，payload 为 `{ repo_id, kind }`，`kind` 见 `useGitEvents.ts::StatusChangeKind`。 |
+| `repo://status-changed` | 仓库状态变更 | 当前激活仓库的文件监控感知到工作区、`.git` 变动或系统 rescan 兜底信号，payload 为 `{ repo_id, kind }`；rescan / 无路径批次归类为 `other_git`，`kind` 见 `useGitEvents.ts::StatusChangeKind`。 |
 | `repo://operation-progress` | 长耗时任务进度 | Clone、Fetch 等网络或大 IO 操作时推送。 |
 | `repo://error` | 后台异步错误 | 如后台自动 Fetch 失败。 |
 | `terminal://data` / `exit` | 终端流数据 | 内部 PTY 会话的输出或结束通知。 |

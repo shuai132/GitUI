@@ -1,15 +1,132 @@
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
-use std::time::Duration;
+use std::sync::{mpsc, Arc};
+use std::thread::{self, JoinHandle};
+use std::time::{Duration, Instant};
 
 use git2::{Index, Repository};
-use notify::RecommendedWatcher;
-use notify::RecursiveMode;
-use notify_debouncer_mini::{new_debouncer, DebounceEventResult, Debouncer};
+use notify::{Config, Event, RecommendedWatcher, RecursiveMode, Watcher};
 use parking_lot::Mutex;
 
-pub type WatchHandle = Debouncer<RecommendedWatcher>;
+const WATCH_DEBOUNCE: Duration = Duration::from_millis(300);
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WatchEventBatch {
+    pub paths: Vec<PathBuf>,
+    pub needs_rescan: bool,
+}
+
+pub type WatchEventResult = Result<WatchEventBatch, notify::Error>;
+
+enum WatchMessage {
+    Event(Result<Event, notify::Error>),
+    Stop,
+}
+
+pub struct WatchHandle {
+    watcher: Option<RecommendedWatcher>,
+    stop_tx: mpsc::Sender<WatchMessage>,
+    worker: Option<JoinHandle<()>>,
+}
+
+impl WatchHandle {
+    fn new<F>(watch_root: PathBuf, callback: F) -> notify::Result<Self>
+    where
+        F: Fn(WatchEventResult) + Send + 'static,
+    {
+        let (tx, rx) = mpsc::channel();
+        let tx_for_watcher = tx.clone();
+        let worker = thread::Builder::new()
+            .name("gitui watcher debounce".to_string())
+            .spawn(move || run_debounce_loop(rx, WATCH_DEBOUNCE, callback))
+            .map_err(notify::Error::io)?;
+
+        let mut watcher = RecommendedWatcher::new(
+            move |event| {
+                let _ = tx_for_watcher.send(WatchMessage::Event(event));
+            },
+            Config::default(),
+        )?;
+        watcher.watch(&watch_root, RecursiveMode::Recursive)?;
+
+        Ok(Self {
+            watcher: Some(watcher),
+            stop_tx: tx,
+            worker: Some(worker),
+        })
+    }
+}
+
+impl Drop for WatchHandle {
+    fn drop(&mut self) {
+        self.watcher.take();
+        let _ = self.stop_tx.send(WatchMessage::Stop);
+        if let Some(worker) = self.worker.take() {
+            let _ = worker.join();
+        }
+    }
+}
+
+fn run_debounce_loop<F>(rx: mpsc::Receiver<WatchMessage>, debounce: Duration, callback: F)
+where
+    F: Fn(WatchEventResult),
+{
+    let mut pending_paths = BTreeSet::new();
+    let mut needs_rescan = false;
+    let mut deadline: Option<Instant> = None;
+
+    loop {
+        let message = match deadline {
+            Some(when) => match rx.recv_timeout(when.saturating_duration_since(Instant::now())) {
+                Ok(message) => Some(message),
+                Err(mpsc::RecvTimeoutError::Timeout) => {
+                    flush_debounced_batch(&mut pending_paths, &mut needs_rescan, &callback);
+                    deadline = None;
+                    None
+                }
+                Err(mpsc::RecvTimeoutError::Disconnected) => break,
+            },
+            None => match rx.recv() {
+                Ok(message) => Some(message),
+                Err(_) => break,
+            },
+        };
+
+        let Some(message) = message else {
+            continue;
+        };
+
+        match message {
+            WatchMessage::Stop => break,
+            WatchMessage::Event(Ok(event)) => {
+                if event.need_rescan() || event.paths.is_empty() {
+                    needs_rescan = true;
+                }
+                pending_paths.extend(event.paths);
+                deadline = Some(Instant::now() + debounce);
+            }
+            WatchMessage::Event(Err(err)) => callback(Err(err)),
+        }
+    }
+}
+
+fn flush_debounced_batch<F>(
+    pending_paths: &mut BTreeSet<PathBuf>,
+    needs_rescan: &mut bool,
+    callback: &F,
+) where
+    F: Fn(WatchEventResult),
+{
+    if pending_paths.is_empty() && !*needs_rescan {
+        return;
+    }
+
+    let batch = WatchEventBatch {
+        paths: std::mem::take(pending_paths).into_iter().collect(),
+        needs_rescan: std::mem::take(needs_rescan),
+    };
+    callback(Ok(batch));
+}
 
 /// 路径过滤器：使用 libgit2 的 ignore 规则为 watcher 事件减噪。
 ///
@@ -78,38 +195,18 @@ impl WatcherService {
         callback: F,
     ) -> notify::Result<WatchHandle>
     where
-        F: Fn(DebounceEventResult) + Send + 'static,
+        F: Fn(WatchEventResult) + Send + 'static,
     {
-        let filtered = move |result: DebounceEventResult| match result {
-            Ok(events) => {
-                let relevant: Vec<_> = if let Some(filter) = &ignore_filter {
-                    if let Ok(repo) = Repository::open(&filter.root) {
-                        if let Ok(index) = repo.index() {
-                            events
-                                .into_iter()
-                                .filter(|e| !filter.should_ignore_with_git(&repo, &index, &e.path))
-                                .collect()
-                        } else {
-                            events
-                        }
-                    } else {
-                        events
-                    }
-                } else {
-                    events
-                };
-                if !relevant.is_empty() {
+        let filtered = move |result: WatchEventResult| match result {
+            Ok(batch) => {
+                if let Some(relevant) = filter_watch_batch(batch, ignore_filter.as_ref()) {
                     callback(Ok(relevant));
                 }
             }
             Err(errs) => callback(Err(errs)),
         };
 
-        let mut debouncer = new_debouncer(Duration::from_millis(300), filtered)?;
-        debouncer
-            .watcher()
-            .watch(&watch_root, RecursiveMode::Recursive)?;
-        Ok(debouncer)
+        WatchHandle::new(watch_root, filtered)
     }
 
     /// 只保留指定仓库的 watcher。用于激活仓库切换，避免后台监听非激活仓库。
@@ -121,12 +218,12 @@ impl WatcherService {
         callback: F,
     ) -> notify::Result<()>
     where
-        F: Fn(DebounceEventResult) + Send + 'static,
+        F: Fn(WatchEventResult) + Send + 'static,
     {
-        self.unwatch_all();
-        let debouncer = Self::build_handle(watch_root, ignore_filter, callback)?;
         let mut watchers = self.watchers.lock();
-        watchers.insert(repo_id, debouncer);
+        watchers.clear();
+        let handle = Self::build_handle(watch_root, ignore_filter, callback)?;
+        watchers.insert(repo_id, handle);
         Ok(())
     }
 
@@ -146,10 +243,42 @@ impl WatcherService {
     }
 }
 
+fn filter_watch_batch(
+    batch: WatchEventBatch,
+    ignore_filter: Option<&Arc<IgnoreFilter>>,
+) -> Option<WatchEventBatch> {
+    if batch.needs_rescan {
+        return Some(batch);
+    }
+
+    let Some(filter) = ignore_filter else {
+        return (!batch.paths.is_empty()).then_some(batch);
+    };
+
+    let Ok(repo) = Repository::open(&filter.root) else {
+        return Some(batch);
+    };
+    let Ok(index) = repo.index() else {
+        return Some(batch);
+    };
+
+    let relevant = batch
+        .paths
+        .into_iter()
+        .filter(|path| !filter.should_ignore_with_git(&repo, &index, path))
+        .collect::<Vec<_>>();
+
+    (!relevant.is_empty()).then_some(WatchEventBatch {
+        paths: relevant,
+        needs_rescan: false,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use git2::{Repository, Signature};
+    use notify::EventKind;
     use std::fs;
     use tempfile::TempDir;
 
@@ -241,6 +370,55 @@ mod tests {
         let (dir, _repo, filter) = init_repo();
 
         assert!(!filter.should_ignore(&dir.path().join(".git/HEAD")));
+    }
+
+    #[test]
+    fn debounce_loop_preserves_pathless_rescan_signal() {
+        let (tx, rx) = mpsc::channel();
+        let (batch_tx, batch_rx) = mpsc::channel();
+        let worker = thread::spawn(move || {
+            run_debounce_loop(rx, Duration::from_millis(1), move |result| {
+                batch_tx.send(result.unwrap()).unwrap();
+            });
+        });
+
+        tx.send(WatchMessage::Event(Ok(Event::new(EventKind::Other))))
+            .unwrap();
+        let batch = batch_rx.recv_timeout(Duration::from_secs(1)).unwrap();
+        tx.send(WatchMessage::Stop).unwrap();
+        worker.join().unwrap();
+
+        assert!(batch.needs_rescan);
+        assert!(batch.paths.is_empty());
+    }
+
+    #[test]
+    fn ignored_batch_without_rescan_is_filtered_out() {
+        let (dir, _repo, filter) = init_repo();
+        fs::write(dir.path().join(".gitignore"), "ignored.txt\n").unwrap();
+        fs::write(dir.path().join("ignored.txt"), "ignored").unwrap();
+
+        let batch = WatchEventBatch {
+            paths: vec![dir.path().join("ignored.txt")],
+            needs_rescan: false,
+        };
+
+        assert!(filter_watch_batch(batch, Some(&filter)).is_none());
+    }
+
+    #[test]
+    fn rescan_batch_is_not_filtered_out() {
+        let (dir, _repo, filter) = init_repo();
+        fs::write(dir.path().join(".gitignore"), "ignored.txt\n").unwrap();
+        fs::write(dir.path().join("ignored.txt"), "ignored").unwrap();
+
+        let batch = WatchEventBatch {
+            paths: vec![dir.path().join("ignored.txt")],
+            needs_rescan: true,
+        };
+
+        let filtered = filter_watch_batch(batch, Some(&filter)).unwrap();
+        assert!(filtered.needs_rescan);
     }
 
     #[test]

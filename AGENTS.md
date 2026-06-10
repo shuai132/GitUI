@@ -94,7 +94,7 @@ npm run tauri build             # 打包发布
 - `src-tauri/src/git/`：git2 封装层。`engine.rs` 是核心 API，`types.rs` 是 IPC 数据结构，`error.rs` 是错误类型，`credentials.rs` 是凭据回调链
 - `src-tauri/src/commands/`：IPC 命令层，按功能域分文件（`repo / status / commit / log / diff / branch / remote / submodule / stash / system`），在 `lib.rs::generate_handler!` 注册
 - `src-tauri/src/repo_manager.rs`：多仓库状态中心（`RepoManager`，Tauri 全局 state）
-- `src-tauri/src/watcher.rs`：文件系统监控（`notify-debouncer-mini`，300ms 防抖）
+- `src-tauri/src/watcher.rs`：文件系统监控（`notify` + 内部 300ms 防抖）
 - `src/composables/useGitCommands.ts`：所有 `invoke()` 的类型安全封装，新增命令必经此处
 - `src/composables/useGitEvents.ts`：Tauri Events 监听
 - `src/stores/`：Pinia stores，按域分文件

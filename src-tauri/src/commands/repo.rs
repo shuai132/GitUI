@@ -2,7 +2,6 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
-use notify_debouncer_mini::DebounceEventResult;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager, State};
 use uuid::Uuid;
@@ -11,7 +10,7 @@ use crate::{
     auto_fetch::AutoFetchService,
     git::{engine::GitEngine, error::GitError, types::RepoMeta},
     repo_manager::RepoManager,
-    watcher::{IgnoreFilter, WatcherService},
+    watcher::{IgnoreFilter, WatchEventResult, WatcherService},
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -142,14 +141,18 @@ pub async fn validate_repo_path(path: String) -> Result<bool, GitError> {
     Ok(Path::new(&path).join(".git").exists() || GitEngine::open(&path).is_ok())
 }
 
-fn classify_status_change(root: &Path, result: &DebounceEventResult) -> StatusChangeKind {
-    let Ok(events) = result else {
+fn classify_status_change(root: &Path, result: &WatchEventResult) -> StatusChangeKind {
+    let Ok(batch) = result else {
         return StatusChangeKind::OtherGit;
     };
+    if batch.needs_rescan {
+        return StatusChangeKind::OtherGit;
+    }
 
-    events
+    batch
+        .paths
         .iter()
-        .map(|event| classify_status_path(root, &event.path))
+        .map(|path| classify_status_path(root, path))
         .max_by_key(|kind| status_change_priority(*kind))
         .unwrap_or(StatusChangeKind::OtherGit)
 }
@@ -352,6 +355,20 @@ mod tests {
         assert_eq!(
             classify_status_path(root, Path::new("/repo/src/main.rs")),
             StatusChangeKind::Worktree
+        );
+    }
+
+    #[test]
+    fn classifies_rescan_batch_as_conservative_git_change() {
+        let root = Path::new("/repo");
+        let batch: WatchEventResult = Ok(crate::watcher::WatchEventBatch {
+            paths: Vec::new(),
+            needs_rescan: true,
+        });
+
+        assert_eq!(
+            classify_status_change(root, &batch),
+            StatusChangeKind::OtherGit
         );
     }
 
