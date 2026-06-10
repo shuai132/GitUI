@@ -23,7 +23,7 @@
 - [x] 添加仓库：打开本地 / 克隆远程（含浅克隆、递归子模块、实时进度）/ 新建本地仓库
 - [x] 工作副本：暂存 / 取消暂存（支持文件级、目录级和 hunk 级）、提交、amend、discard（未暂存文件、hunk 或全部）；文件右键菜单（复制路径、在 Finder/编辑器/终端中打开、打开 / 初始化 / 更新 Submodule、添加到 .gitignore、按仓库移动到变更列表最前 / 最后）；支持文件树状显示
 - [x] 提交历史：分页加载、提交图可视化、打开仓库自动定位当前 HEAD、按仓库保存当前分支 first-parent Solo、远程分支过滤、可排序历史列、可隐藏变更规模列（文件数、增删行、大文件 / 二进制提示）、丢失引用 / 贮藏可视化、本地搜索、提交行 tag 胶囊；变动文件右键菜单（复制路径、在 Finder/编辑器中打开、打开 / 初始化 / 更新 Submodule、签出该文件历史版本、按仓库移动到变更列表最前 / 最后），历史 gitlink 会标记为 Submodule
-- [x] 提交操作：checkout、远程分支 chip 快速检出、cherry-pick、revert、reset（soft / mixed / hard）、创建 tag、修改提交信息（HEAD 走 amend，历史提交走 rebase reword）
+- [x] 提交操作：checkout、远程分支 chip 快速检出、cherry-pick、revert、reset（soft / mixed / hard）、创建 tag、修改提交信息（HEAD 走 amend，历史提交走 rebase reword，支持编辑作者/提交时间并双向一键对齐）
 - [x] Merge / Rebase：完整 merge（ff / no-ff / squash）、交互式 rebase（reword / squash / fixup / drop / reorder）；右键菜单或拖拽 commit 触发；冲突时用内置三路合并编辑器解决；可选"自动 stash & 恢复"
 - [x] 分支管理：本地 / 远程树形、创建 / 切换 / 删除、检出远程分支并建立追踪
 - [x] Tag 管理：侧边栏 TAGS 列表、创建、删除（含仅远程）、推拉同步

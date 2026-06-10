@@ -124,7 +124,7 @@ const emit = defineEmits<{
     v-if="showEditMessageDialog"
     :visible="showEditMessageDialog"
     :title="$t('history.dialog.editMessage.title')"
-    width="480px"
+    width="min(560px, calc(100vw - 32px))"
     @close="emit('update:showEditMessageDialog', false)"
   >
     <div v-if="!isEditingHeadCommit" class="edit-message-hint">
@@ -139,7 +139,7 @@ const emit = defineEmits<{
       @input="emit('update:editMessageText', ($event.target as HTMLTextAreaElement).value)"
     />
     <div class="edit-message-times">
-      <label class="edit-message-time-row">
+      <div class="edit-message-time-row">
         <span class="edit-message-time-label">{{ $t('history.dialog.editMessage.committerDate') }}</span>
         <input
           :value="editMessageCommitterTime"
@@ -148,8 +148,17 @@ const emit = defineEmits<{
           class="edit-message-time-input"
           @input="emit('update:editMessageCommitterTime', ($event.target as HTMLInputElement).value)"
         />
-      </label>
-      <label class="edit-message-time-row">
+        <button
+          type="button"
+          class="edit-message-sync-time-btn"
+          :disabled="!editMessageAuthorTime || editMessageCommitterTime === editMessageAuthorTime"
+          :title="$t('history.dialog.editMessage.syncCommitterDateTitle')"
+          @click="emit('update:editMessageCommitterTime', editMessageAuthorTime)"
+        >
+          {{ $t('history.dialog.editMessage.syncCommitterDate') }}
+        </button>
+      </div>
+      <div class="edit-message-time-row">
         <span class="edit-message-time-label">{{ $t('history.dialog.editMessage.authorDate') }}</span>
         <input
           :value="editMessageAuthorTime"
@@ -158,7 +167,16 @@ const emit = defineEmits<{
           class="edit-message-time-input"
           @input="emit('update:editMessageAuthorTime', ($event.target as HTMLInputElement).value)"
         />
-      </label>
+        <button
+          type="button"
+          class="edit-message-sync-time-btn"
+          :disabled="!editMessageCommitterTime || editMessageAuthorTime === editMessageCommitterTime"
+          :title="$t('history.dialog.editMessage.syncAuthorDateTitle')"
+          @click="emit('update:editMessageAuthorTime', editMessageCommitterTime)"
+        >
+          {{ $t('history.dialog.editMessage.syncAuthorDate') }}
+        </button>
+      </div>
       <label class="edit-message-time-row">
         <span class="edit-message-time-label">{{ $t('history.dialog.editMessage.authorName') }}</span>
         <input
@@ -328,6 +346,7 @@ const emit = defineEmits<{
 
 .edit-message-time-input {
   flex: 1;
+  min-width: 0;
   background: var(--bg-surface);
   border: 1px solid var(--border);
   border-radius: 4px;
@@ -343,6 +362,29 @@ const emit = defineEmits<{
   border-color: var(--accent-blue);
 }
 
+.edit-message-sync-time-btn {
+  flex: 0 0 auto;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  font-size: var(--font-sm);
+  line-height: 1.2;
+  padding: 5px 8px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.edit-message-sync-time-btn:hover:not(:disabled) {
+  color: var(--text-primary);
+  border-color: var(--accent-blue);
+}
+
+.edit-message-sync-time-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 .drop-unreachable-body {
   margin: 0;
   color: var(--text-primary);
@@ -352,5 +394,24 @@ const emit = defineEmits<{
 
 .drop-unreachable-error {
   color: var(--accent-red);
+}
+
+@media (max-width: 560px) {
+  .edit-message-time-row {
+    align-items: stretch;
+    flex-wrap: wrap;
+  }
+
+  .edit-message-time-label {
+    width: 100%;
+  }
+
+  .edit-message-time-input {
+    flex-basis: 100%;
+  }
+
+  .edit-message-sync-time-btn {
+    width: 100%;
+  }
 }
 </style>
