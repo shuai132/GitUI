@@ -191,9 +191,11 @@ pub fn run() {
         })
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { api, .. } = event {
-                // Hide to tray instead of quitting
-                window.hide().unwrap();
-                api.prevent_close();
+                // 关闭主窗口就是退出应用；托盘不用于关闭后的保活。
+                if window.label() == "main" {
+                    window.app_handle().exit(0);
+                    api.prevent_close();
+                }
             }
         })
         .build(tauri::generate_context!())
