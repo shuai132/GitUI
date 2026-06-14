@@ -10,7 +10,46 @@ import { useGlobalToast } from '@/composables/useGlobalToast'
 import { mergeSourceNamesAtCommit } from '@/utils/mergeSources'
 import { remoteBranchTagsAtCommit } from '@/composables/history/useCommitTags'
 import type { ContextMenuItem } from '@/components/common/ContextMenu.vue'
-import type { CommitInfo } from '@/types/git'
+import type { BranchInfo, CommitInfo } from '@/types/git'
+
+const CHECKOUT_REMOTE_ACTION_PREFIX = 'checkout-remote:'
+const COPY_BRANCH_NAME_ACTION_PREFIX = 'copy-branch-name:'
+
+type MenuLabel = (key: string, params?: Record<string, string>) => string
+
+export function checkoutRemoteAction(branchName: string): string {
+  return `${CHECKOUT_REMOTE_ACTION_PREFIX}${branchName}`
+}
+
+export function parseCheckoutRemoteAction(action: string): string | null {
+  if (!action.startsWith(CHECKOUT_REMOTE_ACTION_PREFIX)) return null
+  return action.slice(CHECKOUT_REMOTE_ACTION_PREFIX.length) || null
+}
+
+export function copyBranchNameAction(branchName: string): string {
+  return `${COPY_BRANCH_NAME_ACTION_PREFIX}${branchName}`
+}
+
+export function parseCopyBranchNameAction(action: string): string | null {
+  if (!action.startsWith(COPY_BRANCH_NAME_ACTION_PREFIX)) return null
+  return action.slice(COPY_BRANCH_NAME_ACTION_PREFIX.length) || null
+}
+
+export function remoteBranchContextMenuItems(
+  branches: BranchInfo[],
+  label: MenuLabel,
+): ContextMenuItem[] {
+  return branches.flatMap((branch) => [
+    {
+      label: label('history.contextMenu.checkoutRemoteBranch', { branch: branch.name }),
+      action: checkoutRemoteAction(branch.name),
+    },
+    {
+      label: label('history.contextMenu.copyBranchName'),
+      action: copyBranchNameAction(branch.name),
+    },
+  ])
+}
 
 export function useCommitContextMenu(
   currentBranchName: Ref<string>,
@@ -89,16 +128,6 @@ export function useCommitContextMenu(
 
   function pluginAction(pluginId: string, commandId: string): string {
     return `plugin:${pluginId}:${commandId}`
-  }
-
-  function checkoutRemoteAction(branchName: string): string {
-    return `checkout-remote:${branchName}`
-  }
-
-  function parseCheckoutRemoteAction(action: string): string | null {
-    const prefix = 'checkout-remote:'
-    if (!action.startsWith(prefix)) return null
-    return action.slice(prefix.length) || null
   }
 
   function parsePluginAction(action: string): { pluginId: string; commandId: string } | null {
@@ -220,14 +249,10 @@ export function useCommitContextMenu(
       !c.is_unreachable &&
       !ongoing &&
       (isHead || (c.parent_oids.length === 1 && isAncestorOfHead(c.oid)))
-    const checkoutRemoteItems = remoteBranchTagsAtCommit(
-      historyStore.branches,
-      c.oid,
-      uiStore.showRemoteBranches,
-    ).map((branch) => ({
-      label: t('history.contextMenu.checkoutRemoteBranch', { branch: branch.name }),
-      action: checkoutRemoteAction(branch.name),
-    }))
+    const checkoutRemoteItems = remoteBranchContextMenuItems(
+      remoteBranchTagsAtCommit(historyStore.branches, c.oid, uiStore.showRemoteBranches),
+      t,
+    )
 
     const items: ContextMenuItem[] = [
       { label: t('history.contextMenu.checkout'), action: 'checkout' },
@@ -312,6 +337,11 @@ export function useCommitContextMenu(
       if (checkoutRemoteBranch) {
         checkoutInitialRemote.value = checkoutRemoteBranch
         showCheckoutRemoteDialog.value = true
+        return
+      }
+      const copiedBranchName = parseCopyBranchNameAction(action)
+      if (copiedBranchName) {
+        await navigator.clipboard.writeText(copiedBranchName)
         return
       }
 

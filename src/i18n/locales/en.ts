@@ -345,6 +345,7 @@ const messages = {
     contextMenu: {
       checkout: 'Checkout this commit',
       checkoutRemoteBranch: 'Checkout: {branch}',
+      copyBranchName: 'Copy branch name',
       createBranch: 'Create branch here...',
       cherryPick: 'Cherry pick this commit',
       resetTo: 'Reset {branch} to this commit',
