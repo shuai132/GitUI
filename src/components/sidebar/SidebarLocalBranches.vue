@@ -7,8 +7,10 @@ import { useWorkspaceStore } from '@/stores/workspace'
 import { useRepoStore } from '@/stores/repos'
 import { useUiStore } from '@/stores/ui'
 import { useSidebarSectionState } from '@/composables/useSidebarSectionState'
+import { buildLocalBranchTree } from '@/utils/branchTree'
 import ContextMenu, { type ContextMenuItem } from '@/components/common/ContextMenu.vue'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
+import BranchTreeNode from './BranchTreeNode.vue'
 import type { BranchInfo } from '@/types/git'
 
 const { t } = useI18n()
@@ -40,9 +42,19 @@ const localBranches = computed(() => {
   return branches
 })
 
+const localBranchTree = computed(() => buildLocalBranchTree(localBranches.value))
+
 function jumpToBranchCommit(commitOid: string) {
   historyStore.pendingJumpOid = commitOid
   router.push('/history')
+}
+
+function onSelectLocalBranch(branch: BranchInfo) {
+  if (branch.commit_oid) jumpToBranchCommit(branch.commit_oid)
+}
+
+function onDblclickLocalBranch(branch: BranchInfo) {
+  if (!branch.is_head) switchBranch(branch.name)
 }
 
 async function switchBranch(name: string) {
@@ -223,31 +235,17 @@ async function onContextAction(action: string) {
       <span class="section-count">{{ localBranches.length }}</span>
     </div>
     <template v-if="!sectionState.isCollapsed('local-branches')">
-      <div
-        v-for="b in localBranches"
-        :key="b.name"
-        class="branch-item"
-        :class="{ 'branch-item--current': b.is_head }"
-        @click="b.commit_oid && jumpToBranchCommit(b.commit_oid)"
-        @dblclick.stop="!b.is_head && switchBranch(b.name)"
-        @contextmenu="openContextMenu($event, b)"
-      >
-        <span class="branch-dot" :class="b.is_head ? 'dot-solid' : 'dot-outline'" />
-        <span class="branch-label">{{ b.name }}</span>
-        <span
-          v-if="b.is_head && b.name !== 'HEAD' && activeRepoBranchScope === 'current_first_parent'"
-          class="solo-badge"
-        >
-          SOLO
-        </span>
-        <span
-          v-if="(b.ahead ?? 0) > 0 || (b.behind ?? 0) > 0"
-          class="ahead-behind"
-        >
-          <span v-if="(b.ahead ?? 0) > 0" class="ab-ahead">↑{{ b.ahead }}</span>
-          <span v-if="(b.behind ?? 0) > 0" class="ab-behind">↓{{ b.behind }}</span>
-        </span>
-      </div>
+      <BranchTreeNode
+        v-for="node in localBranchTree"
+        :key="node.kind === 'folder' ? 'f:' + node.path : 'b:' + node.fullName"
+        :node="node"
+        :level="0"
+        :show-local-status="true"
+        :solo-current-branch="activeRepoBranchScope === 'current_first_parent'"
+        @select-branch="onSelectLocalBranch"
+        @dblclick-branch="onDblclickLocalBranch"
+        @branch-context-menu="openContextMenu"
+      />
     </template>
 
     <ContextMenu
@@ -277,38 +275,4 @@ async function onContextAction(action: string) {
 
 <style scoped>
 @import './sidebar-common.css';
-
-.ahead-behind {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: var(--font-xs);
-  font-variant-numeric: tabular-nums;
-  flex-shrink: 0;
-  background: var(--bg-overlay);
-  padding: 1px 5px;
-  border-radius: 7px;
-  line-height: 1.4;
-}
-
-.solo-badge {
-  flex-shrink: 0;
-  border: 1px solid color-mix(in srgb, var(--accent-blue) 35%, transparent);
-  border-radius: 3px;
-  padding: 0 3px;
-  font-size: 9px;
-  font-weight: 600;
-  line-height: 1.25;
-  color: color-mix(in srgb, var(--accent-blue) 82%, var(--fg-muted));
-  background: color-mix(in srgb, var(--accent-blue) 8%, transparent);
-  letter-spacing: 0;
-}
-
-.ab-ahead {
-  color: var(--accent-green);
-}
-
-.ab-behind {
-  color: var(--accent-orange);
-}
 </style>

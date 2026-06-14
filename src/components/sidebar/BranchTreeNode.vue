@@ -9,6 +9,8 @@ const props = defineProps<{
   /** 仅顶层 remote folder（remote name 行）传 true，用于显示删除按钮 */
   isRemoteRoot?: boolean
   currentUpstream?: string
+  showLocalStatus?: boolean
+  soloCurrentBranch?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -55,6 +57,14 @@ function onFolderContextMenu(e: MouseEvent) {
     e.stopPropagation()
     emit('remoteContextMenu', e, props.node.name)
   }
+}
+
+function hasAheadBehind(branch: BranchInfo): boolean {
+  return (branch.ahead ?? 0) > 0 || (branch.behind ?? 0) > 0
+}
+
+function showSoloBadge(branch: BranchInfo): boolean {
+  return !!props.showLocalStatus && !!props.soloCurrentBranch && branch.is_head && branch.name !== 'HEAD'
 }
 
 // 缩进：level=0 与 section-title 的 padding-left (12px) 对齐，
@@ -109,6 +119,8 @@ const indentPx = (level: number) => 12 + level * 12 + 'px'
         :node="child"
         :level="level + 1"
         :current-upstream="currentUpstream"
+        :show-local-status="showLocalStatus"
+        :solo-current-branch="soloCurrentBranch"
         @select-branch="(b) => emit('selectBranch', b)"
         @dblclick-branch="(b) => emit('dblclickBranch', b)"
         @branch-context-menu="(ev, b) => emit('branchContextMenu', ev, b)"
@@ -141,6 +153,11 @@ const indentPx = (level: number) => 12 + level * 12 + 'px'
         }"
       />
       <span class="tree-label">{{ node.name }}</span>
+      <span v-if="showSoloBadge(node.branch)" class="solo-badge">SOLO</span>
+      <span v-if="showLocalStatus && hasAheadBehind(node.branch)" class="ahead-behind">
+        <span v-if="(node.branch.ahead ?? 0) > 0" class="ab-ahead">↑{{ node.branch.ahead }}</span>
+        <span v-if="(node.branch.behind ?? 0) > 0" class="ab-behind">↓{{ node.branch.behind }}</span>
+      </span>
     </div>
   </template>
 </template>
@@ -223,6 +240,40 @@ const indentPx = (level: number) => 12 + level * 12 + 'px'
   white-space: nowrap;
   flex: 1;
   min-width: 0;
+}
+
+.ahead-behind {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--font-xs);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+  background: var(--bg-overlay);
+  padding: 1px 5px;
+  border-radius: 7px;
+  line-height: 1.4;
+}
+
+.solo-badge {
+  flex-shrink: 0;
+  border: 1px solid color-mix(in srgb, var(--accent-blue) 35%, transparent);
+  border-radius: 3px;
+  padding: 0 3px;
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 1.25;
+  color: color-mix(in srgb, var(--accent-blue) 82%, var(--fg-muted));
+  background: color-mix(in srgb, var(--accent-blue) 8%, transparent);
+  letter-spacing: 0;
+}
+
+.ab-ahead {
+  color: var(--accent-green);
+}
+
+.ab-behind {
+  color: var(--accent-orange);
 }
 
 /* 顶层 remote folder 的删除按钮：默认隐藏，hover 时显示 */

@@ -45,16 +45,29 @@ function newFolder(name: string, path: string): MutableFolder {
 }
 
 function freezeFolder(f: MutableFolder): FolderNode {
+  return {
+    kind: 'folder',
+    name: f.name,
+    path: f.path,
+    children: freezeChildren(f),
+  }
+}
+
+function freezeChildren(f: MutableFolder): BranchTreeNode[] {
   // folder 按名字排序在前，branch 按名字排序在后
   const folders = Array.from(f.childFolders.values())
     .sort((a, b) => a.name.localeCompare(b.name))
     .map(freezeFolder)
   const branches = [...f.childBranches].sort((a, b) => a.name.localeCompare(b.name))
+  return [...folders, ...branches]
+}
+
+function toBranchNode(branch: BranchInfo, name: string): BranchNode {
   return {
-    kind: 'folder',
-    name: f.name,
-    path: f.path,
-    children: [...folders, ...branches],
+    kind: 'branch',
+    name,
+    fullName: branch.name,
+    branch,
   }
 }
 
@@ -63,8 +76,8 @@ function freezeFolder(f: MutableFolder): FolderNode {
  *
  * - 只处理传入的分支列表（调用方负责先按 is_remote 过滤）
  * - 返回的根节点数组 = 按第一段命名分组得到的若干 folder（通常就是 `origin`）
- * - 若某条分支只有一段（如本地分支 `main`），会归到一个隐式的根 folder，
- *   但典型用法只传远程分支进来，所以至少会有两段
+ * - 若误传入只有一段的分支，会归到一个隐式的根 folder；
+ *   典型用法只传远程分支进来，所以至少会有两段
  * - `predefinedRoots` 用于预先注入已知的 remote（例如没 fetch 过的空 remote）
  */
 export function buildBranchTree(branches: BranchInfo[], predefinedRoots?: string[]): FolderNode[] {
@@ -106,23 +119,58 @@ export function buildBranchTree(branches: BranchInfo[], predefinedRoots?: string
     const leafName = parts[parts.length - 1]
     if (parts.length === 1) {
       // 特殊情况：没有斜杠，直接作为根 folder 下的 branch（很少见）
-      root.childBranches.push({
-        kind: 'branch',
-        name: leafName,
-        fullName: b.name,
-        branch: b,
-      })
+      root.childBranches.push(toBranchNode(b, leafName))
     } else {
-      cursor.childBranches.push({
-        kind: 'branch',
-        name: leafName,
-        fullName: b.name,
-        branch: b,
-      })
+      cursor.childBranches.push(toBranchNode(b, leafName))
     }
   }
 
   return Array.from(roots.values())
     .sort((a, b) => a.name.localeCompare(b.name))
     .map(freezeFolder)
+}
+
+/**
+ * 构造本地分支树。
+ *
+ * 与远程分支不同，本地单段分支（如 `main`）应直接作为根级叶子显示；
+ * 只有包含 `/` 的分支才按路径分组。folder path 额外加 `local:` 前缀，
+ * 避免和远程树的折叠状态 key 冲突。
+ */
+export function buildLocalBranchTree(branches: BranchInfo[]): BranchTreeNode[] {
+  const root = newFolder('', 'local:')
+
+  for (const branch of branches) {
+    const parts = branch.name.split('/')
+    if (parts.length === 0) continue
+
+    const leafName = parts[parts.length - 1]
+    if (parts.length === 1) {
+      root.childBranches.push(toBranchNode(branch, leafName))
+      continue
+    }
+
+    let cursor = root
+    const pathParts: string[] = []
+    for (let i = 0; i < parts.length - 1; i++) {
+      const segment = parts[i]
+      pathParts.push(segment)
+      const childPath = `local:${pathParts.join('/')}`
+      let next = cursor.childFolders.get(segment)
+      if (!next) {
+        next = newFolder(segment, childPath)
+        cursor.childFolders.set(segment, next)
+      }
+      cursor = next
+    }
+
+    cursor.childBranches.push(toBranchNode(branch, leafName))
+  }
+
+  const children = freezeChildren(root)
+  const detachedHead = children.filter(
+    (node) => node.kind === 'branch' && node.fullName === 'HEAD',
+  )
+  const rest = children.filter((node) => !(node.kind === 'branch' && node.fullName === 'HEAD'))
+  return [...detachedHead, ...rest]
 }
