@@ -15,6 +15,7 @@ mod remote;
 mod stash_reflog;
 mod submodule;
 mod workspace;
+mod worktree;
 
 /// commit summary 取 message 第一行（trim）。
 /// 自实现而不是 `Commit::summary_bytes()`，是因为我们已经按编码 hint 把 message

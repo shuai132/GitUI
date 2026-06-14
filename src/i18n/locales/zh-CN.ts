@@ -170,6 +170,30 @@ const messages = {
         nameInvalid: '目录名不能包含 / 或 \\',
       },
     },
+    worktree: {
+      title: '新建 Worktree',
+      sourceLabel: '源仓库',
+      startPointLabel: '起点分支',
+      remoteStartPoint: '{name}（远程）',
+      branchLabel: '新分支',
+      branchPlaceholder: 'feature/my-work',
+      parentDirLabel: '创建在',
+      parentDirPlaceholder: '选择一个父目录…',
+      chooseDir: '浏览…',
+      dirNameLabel: '目录名',
+      finalPathLabel: 'Worktree 路径：',
+      loadingBranches: '正在加载分支…',
+      hint: '会创建 linked worktree，并自动加入所有仓库列表。',
+      submit: '创建 Worktree',
+      submitting: '创建中…',
+      errors: {
+        sourceRequired: '请选择源仓库',
+        parentRequired: '请选择父目录',
+        branchRequired: '请输入新分支名',
+        startPointRequired: '请选择起点分支',
+        dirNameInvalid: '目录名不能包含 / 或 \\',
+      },
+    },
   },
   sidebar: {
     repo: {
@@ -180,6 +204,7 @@ const messages = {
       menu: {
         copyName: '复制名称',
         copyAbsolutePath: '复制绝对路径',
+        createWorktree: '新建 Worktree…',
         newWindow: '在新窗口打开',
         reveal: '在 Finder 中显示',
         openTerminal: '在终端中打开',

@@ -62,6 +62,7 @@ pub fn run() {
             validate_repo_path,
             clone_repo,
             init_repo,
+            create_worktree,
             // Status
             get_status,
             stage_file,

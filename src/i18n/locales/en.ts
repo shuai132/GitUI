@@ -170,6 +170,30 @@ const messages = {
         nameInvalid: 'Directory name cannot contain / or \\',
       },
     },
+    worktree: {
+      title: 'Create worktree',
+      sourceLabel: 'Source',
+      startPointLabel: 'Start point',
+      remoteStartPoint: '{name} (remote)',
+      branchLabel: 'New branch',
+      branchPlaceholder: 'feature/my-work',
+      parentDirLabel: 'Create in',
+      parentDirPlaceholder: 'Pick a parent directory…',
+      chooseDir: 'Browse…',
+      dirNameLabel: 'Directory name',
+      finalPathLabel: 'Worktree path:',
+      loadingBranches: 'Loading branches…',
+      hint: 'Creates a linked worktree and adds it to All repositories.',
+      submit: 'Create worktree',
+      submitting: 'Creating…',
+      errors: {
+        sourceRequired: 'Please choose a source repository',
+        parentRequired: 'Please pick a parent directory',
+        branchRequired: 'Please enter a new branch name',
+        startPointRequired: 'Please choose a start point',
+        dirNameInvalid: 'Directory name cannot contain / or \\',
+      },
+    },
   },
   sidebar: {
     repo: {
@@ -180,6 +204,7 @@ const messages = {
       menu: {
         copyName: 'Copy name',
         copyAbsolutePath: 'Copy absolute path',
+        createWorktree: 'Create worktree…',
         newWindow: 'Open in new window',
         reveal: 'Reveal in Finder',
         openTerminal: 'Open in terminal',

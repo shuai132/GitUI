@@ -86,6 +86,16 @@ export function useGitCommands() {
   const initRepo = (path: string) =>
     call<string>('init_repo', { path })
 
+  const createWorktree = (
+    repoId: string,
+    opts: {
+      path: string
+      branchName: string
+      startPoint?: string
+      startPointIsRemote: boolean
+    },
+  ) => call<string>('create_worktree', { repoId, opts })
+
   // ---- Status ----
   const getStatus = (repoId: string) =>
     call<WorkspaceStatus>('get_status', { repoId })
@@ -505,6 +515,7 @@ export function useGitCommands() {
     validateRepoPath,
     cloneRepo,
     initRepo,
+    createWorktree,
     getStatus,
     stageFile,
     unstageFile,

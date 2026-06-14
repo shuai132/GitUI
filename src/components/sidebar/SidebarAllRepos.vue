@@ -10,6 +10,7 @@ import { useRepoCreation } from '@/composables/useRepoCreation'
 import { scrollElementByWheel } from '@/utils/wheelScroll'
 import { revealItemInDir } from '@tauri-apps/plugin-opener'
 import ContextMenu, { type ContextMenuItem } from '@/components/common/ContextMenu.vue'
+import CreateWorktreeDialog from '@/components/repo/CreateWorktreeDialog.vue'
 import type { RepoMeta } from '@/types/git'
 import { buildRepoTreeRows, type SubmodulesByRepoId } from '@/utils/repoTree'
 
@@ -236,10 +237,14 @@ const repoMenu = reactive({
   y: 0,
   target: null as RepoMeta | null,
 })
+const worktreeDialogVisible = ref(false)
+const worktreeSourceRepo = ref<RepoMeta | null>(null)
 
 const repoMenuItems = computed<ContextMenuItem[]>(() => [
   { label: t('sidebar.repo.menu.copyName'), action: 'copy-name' },
   { label: t('sidebar.repo.menu.copyAbsolutePath'), action: 'copy-absolute-path' },
+  { separator: true },
+  { label: t('sidebar.repo.menu.createWorktree'), action: 'create-worktree' },
   { separator: true },
   { label: t('sidebar.repo.menu.newWindow'), action: 'new-window' },
   { label: t('sidebar.repo.menu.reveal'), action: 'reveal' },
@@ -270,6 +275,10 @@ async function onRepoMenuAction(action: string) {
       case 'copy-absolute-path':
         await navigator.clipboard.writeText(r.path)
         break
+      case 'create-worktree':
+        worktreeSourceRepo.value = r
+        worktreeDialogVisible.value = true
+        break
       case 'new-window':
         await git.openInNewWindow(r.id)
         break
@@ -283,6 +292,10 @@ async function onRepoMenuAction(action: string) {
   } catch (err) {
     console.error(err)
   }
+}
+
+function closeWorktreeDialog() {
+  worktreeDialogVisible.value = false
 }
 </script>
 
@@ -371,6 +384,11 @@ async function onRepoMenuAction(action: string) {
       :items="repoMenuItems"
       @close="closeRepoMenu"
       @select="onRepoMenuAction"
+    />
+    <CreateWorktreeDialog
+      :visible="worktreeDialogVisible"
+      :repo="worktreeSourceRepo"
+      @close="closeWorktreeDialog"
     />
   </div>
 </template>

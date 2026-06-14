@@ -215,6 +215,17 @@ pub struct CloneOptions {
     pub recurse_submodules: bool,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateWorktreeOptions {
+    pub path: String,
+    pub branch_name: String,
+    #[serde(default)]
+    pub start_point: Option<String>,
+    #[serde(default)]
+    pub start_point_is_remote: bool,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct CloneProgressPayload {
     pub op: &'static str, // "clone"
@@ -340,6 +351,36 @@ pub async fn init_repo(path: String) -> Result<String, GitError> {
         Ok(Err(e)) => Err(e),
         Err(join_err) => Err(GitError::OperationFailed(format!(
             "init task panicked: {}",
+            join_err
+        ))),
+    }
+}
+
+#[tauri::command]
+pub async fn create_worktree(
+    repo_id: String,
+    opts: CreateWorktreeOptions,
+    repo_manager: State<'_, RepoManager>,
+) -> Result<String, GitError> {
+    let meta = repo_manager
+        .get_meta(&repo_id)
+        .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
+    let repo_path = meta.path.clone();
+
+    let handle = tokio::task::spawn_blocking(move || {
+        GitEngine::create_worktree(
+            &repo_path,
+            &opts.path,
+            &opts.branch_name,
+            opts.start_point.as_deref(),
+            opts.start_point_is_remote,
+        )
+    });
+
+    match handle.await {
+        Ok(result) => result,
+        Err(join_err) => Err(GitError::OperationFailed(format!(
+            "worktree task panicked: {}",
             join_err
         ))),
     }

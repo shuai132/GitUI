@@ -164,6 +164,22 @@ export const useRepoStore = defineStore('repos', () => {
     return await openRepo(workdir)
   }
 
+  /**
+   * 从已打开仓库创建 linked worktree。完成后统一走 openRepo 加入列表并激活。
+   */
+  async function createWorktree(
+    repoId: string,
+    opts: {
+      path: string
+      branchName: string
+      startPoint?: string
+      startPointIsRemote: boolean
+    },
+  ): Promise<RepoMeta> {
+    const workdir = await git.createWorktree(repoId, opts)
+    return await openRepo(workdir)
+  }
+
   async function closeRepo(repoId: string) {
     await git.closeRepo(repoId)
     repos.value = repos.value.filter((r) => r.id !== repoId)
@@ -205,6 +221,7 @@ export const useRepoStore = defineStore('repos', () => {
     openRepo,
     cloneRepo,
     initRepo,
+    createWorktree,
     closeRepo,
     setActive,
     reorderRepos,

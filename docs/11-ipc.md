@@ -15,6 +15,7 @@ GitUI 采用 Tauri v2 的 IPC 机制实现前后端通信，包括双向的请�
 - `open_repo` / `close_repo` / `list_repos`：仓库名册的基础维护。
 - `set_active_repo`：同步当前激活仓库到后端，使 watcher 与 auto-fetch 只跟随该仓库。
 - `clone_repo` / `init_repo`：创建新仓库，支持进度事件回调。
+- `create_worktree`：从已打开仓库创建 linked worktree，接收目标路径、新本地分支名和可选起点分支，返回创建后的 worktree 路径。
 - `validate_repo_path`：路径合法性校验。
 
 ### 工作区与索引 (Status / Index)
