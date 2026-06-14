@@ -244,11 +244,11 @@ const repoMenuItems = computed<ContextMenuItem[]>(() => [
   { label: t('sidebar.repo.menu.copyName'), action: 'copy-name' },
   { label: t('sidebar.repo.menu.copyAbsolutePath'), action: 'copy-absolute-path' },
   { separator: true },
-  { label: t('sidebar.repo.menu.createWorktree'), action: 'create-worktree' },
-  { separator: true },
   { label: t('sidebar.repo.menu.newWindow'), action: 'new-window' },
   { label: t('sidebar.repo.menu.reveal'), action: 'reveal' },
   { label: t('sidebar.repo.menu.openTerminal'), action: 'terminal' },
+  { separator: true },
+  { label: t('sidebar.repo.menu.createWorktree'), action: 'create-worktree' },
 ])
 
 function openRepoMenu(e: MouseEvent, repo: RepoMeta) {
