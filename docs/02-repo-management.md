@@ -52,8 +52,12 @@ GitUI 支持多仓库同时挂载与快速切换。本中心模块负责仓库�
 
 ## 多实例协作 (macOS)
 
-- **独立进程**：支持在新进程中打开仓库，实现窗口间的完全隔离。
+- **独立进程**：支持在新进程中打开仓库，实现窗口间的 Git 状态、文件监听和内置终端隔离。
 - **启动握手**：通过命令行参数与 Managed State 协调，确保新实例启动后能自动激活目标仓库。
+- **单一托盘 owner**：所有 GitUI 进程通过 app data 下的 owner lock file 选出唯一 `TrayCoordinator` owner。owner 绑定 loopback TCP listener，并把端口和随机 token 写入 owner state；非 owner 进程保持一条本地连接注册自己的 `window_id`、pid 和当前 active repo。
+- **存活窗口 registry**：托盘菜单只由 owner 的 registry 驱动，仅列出仍有存活窗口且该窗口有 active repo 的仓库。registry 连接断开即清理对应窗口；同名仓库菜单项显示为 `name - path` 以消歧。
+- **跨进程唤起**：托盘仓库项使用 `window:<window_id>` 作为菜单 id。点击 owner 本窗口时直接显示并聚焦；点击其他进程窗口时通过持久连接发送 `ShowWindow`。托盘左键和 Dock Reopen 优先唤起最近活跃的存活仓库窗口。
+- **owner 接管**：owner 崩溃或退出时，存活客户端重新参与选主，获得锁的进程接管托盘。TCP 只绑定 `127.0.0.1`，消息必须匹配 owner state 中的 token。
 
 ## 界面定制
 
@@ -63,4 +67,4 @@ GitUI 支持多仓库同时挂载与快速切换。本中心模块负责仓库�
 
 顶部工具栏在系统终端按钮右侧提供手动刷新入口，用于在文件监听或外部同步未及时反映时重新加载当前激活仓库的前端状态。该入口复用全局“刷新仓库”快捷键语义，只针对当前激活仓库生效。
 
-关闭主窗口时应用直接退出，托盘不承担关闭后的保活语义；托盘菜单在应用运行期间提供显示窗口与退出入口。macOS 托盘图标使用独立 template 资源，由系统根据菜单栏状态自动着色；Windows / Linux 继续使用应用默认图标。
+关闭窗口时按托盘 owner 状态分支处理：非 owner 窗口注销 registry、停止 watcher / auto-fetch 后退出；owner 窗口关闭时如果还有其他窗口存活，则阻止关闭并隐藏本窗口，停止本进程 watcher / auto-fetch，但保留 owner 进程继续托管原托盘；如果没有其他窗口则清理 coordinator 后退出。逻辑已关闭的 owner 窗口不会被 Dock Reopen 或托盘“显示窗口”重新显示，唤起会优先转发给存活客户端窗口。macOS 托盘图标使用独立 template 资源，由系统根据菜单栏状态自动着色；Windows / Linux 继续使用应用默认图标。

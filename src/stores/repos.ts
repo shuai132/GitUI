@@ -27,6 +27,16 @@ export const useRepoStore = defineStore('repos', () => {
   const store = new LazyStore(STORE_FILE)
 
   const repoViewStates = new Map<string, RepoViewState>()
+  let activeGeneration = 0
+
+  function nextActiveGeneration(): number {
+    activeGeneration += 1
+    return activeGeneration
+  }
+
+  async function syncBackendActive(repoId: string | null) {
+    await git.setActiveRepo(repoId, nextActiveGeneration())
+  }
 
   function saveViewState(repoId: string, state: RepoViewState) {
     repoViewStates.set(repoId, state)
@@ -104,6 +114,7 @@ export const useRepoStore = defineStore('repos', () => {
       if (hasFailed) {
         await persist()
       }
+      await syncBackendActive(activeRepoId.value)
     } catch (e: unknown) {
       error.value = String(e)
     } finally {
@@ -123,14 +134,14 @@ export const useRepoStore = defineStore('repos', () => {
       // 按 path 去重：相同路径已打开则直接激活，避免后端重复注册仓库名册
       const existing = repos.value.find((r) => r.path === path)
       if (existing) {
-        activeRepoId.value = existing.id
-        await persist()
+        await setActive(existing.id)
         return existing
       }
 
       const meta = await git.openRepo(path)
       repos.value.push(meta)
       activeRepoId.value = meta.id
+      await syncBackendActive(meta.id)
       await persist()
       return meta
     } catch (e: unknown) {
@@ -181,11 +192,16 @@ export const useRepoStore = defineStore('repos', () => {
   }
 
   async function closeRepo(repoId: string) {
-    await git.closeRepo(repoId)
-    repos.value = repos.value.filter((r) => r.id !== repoId)
-    if (activeRepoId.value === repoId) {
-      activeRepoId.value = repos.value[0]?.id ?? null
-    }
+    const wasActive = activeRepoId.value === repoId
+    const remaining = repos.value.filter((r) => r.id !== repoId)
+    const nextActiveRepoId = wasActive
+      ? remaining[0]?.id ?? null
+      : activeRepoId.value
+    const generation = nextActiveGeneration()
+
+    await git.closeRepo(repoId, nextActiveRepoId, generation)
+    repos.value = remaining
+    if (wasActive) activeRepoId.value = nextActiveRepoId
     // 顺手清掉工具栏按钮的 busy 标志桶，避免关闭的仓库在 map 里留僵尸条目
     useRepoOpsStore().clearRepo(repoId)
     await persist()
@@ -193,6 +209,7 @@ export const useRepoStore = defineStore('repos', () => {
 
   async function setActive(repoId: string) {
     activeRepoId.value = repoId
+    await syncBackendActive(repoId)
     await persist()
   }
 

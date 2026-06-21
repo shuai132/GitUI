@@ -21,8 +21,6 @@ use terminal::TerminalManager;
 // RunEvent::Reopen 仅在 macOS 的 tauri 枚举里存在（Dock 图标点击事件），
 // 在 Linux / Windows 上该变体不存在，需要 cfg 隔离 use 和匹配逻辑。
 #[cfg(target_os = "macos")]
-use tauri::Emitter;
-#[cfg(target_os = "macos")]
 use tauri::RunEvent;
 use watcher::WatcherService;
 
@@ -52,6 +50,7 @@ pub fn run() {
         .manage(WatcherService::new())
         .manage(AutoFetchService::new())
         .manage(TerminalManager::new())
+        .manage(tray::TrayCoordinator::new())
         .manage(StartupRepo(std::sync::Mutex::new(startup_repo)))
         .invoke_handler(tauri::generate_handler![
             // Repo
@@ -191,9 +190,20 @@ pub fn run() {
         })
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { api, .. } = event {
-                // 关闭主窗口就是退出应用；托盘不用于关闭后的保活。
                 if window.label() == "main" {
-                    window.app_handle().exit(0);
+                    let app = window.app_handle();
+                    let action = app.state::<tray::TrayCoordinator>().close_local_window();
+                    app.state::<WatcherService>().unwatch_all();
+                    app.state::<AutoFetchService>().set_active_repo(None);
+                    app.state::<RepoManager>().clear_active_runtime();
+                    match action {
+                        tray::LocalWindowCloseAction::HideOwnerHost => {
+                            let _ = window.hide();
+                        }
+                        tray::LocalWindowCloseAction::ExitProcess => {
+                            app.exit(0);
+                        }
+                    }
                     api.prevent_close();
                 }
             }
@@ -204,19 +214,13 @@ pub fn run() {
             // macOS: 点击 Dock 图标唤回隐藏窗口。其他平台无该事件，整段跳过。
             #[cfg(target_os = "macos")]
             if let RunEvent::Reopen { .. } = _event {
-                if let Some(window) = _app.get_webview_window("main") {
-                    let _ = window.show();
-                    let _ = window.set_focus();
-                }
+                _app.state::<tray::TrayCoordinator>()
+                    .show_preferred_window();
             }
             // macOS: `open -a GitUI <path>` 或 Finder 拖拽打开时触发。
             // URL 形如 file:///path/to/dir，取第一个 file:// URL 转换为本地路径。
             #[cfg(target_os = "macos")]
             if let RunEvent::Opened { urls } = &_event {
-                if let Some(window) = _app.get_webview_window("main") {
-                    let _ = window.show();
-                    let _ = window.set_focus();
-                }
                 let path = urls.iter().find_map(|u| {
                     if u.scheme() == "file" {
                         u.to_file_path().ok()
@@ -232,8 +236,11 @@ pub fn run() {
                             *guard = Some(path_str.clone());
                         }
                     }
-                    // 热启动：前端已就绪，直接推事件
-                    let _ = _app.emit("repo://open-path", path_str);
+                    _app.state::<tray::TrayCoordinator>()
+                        .show_with_open_path(path_str);
+                } else {
+                    _app.state::<tray::TrayCoordinator>()
+                        .show_preferred_window();
                 }
             }
         });

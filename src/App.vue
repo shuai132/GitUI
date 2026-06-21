@@ -160,23 +160,7 @@ onMounted(async () => {
   } catch (e) {
     console.error('[gitPrefs] sync auto-fetch interval failed', e)
   }
-  // 同步初始激活仓库到后端，watcher 与 auto-fetch 都只跟随该仓库
-  try {
-    await git.setActiveRepo(repoStore.activeRepoId)
-  } catch (e) {
-    console.error('[repo] sync active repo failed', e)
-  }
 })
-
-// 切换激活仓库时通知后端，watcher 与 auto-fetch 跟着切换
-watch(
-  () => repoStore.activeRepoId,
-  (id) => {
-    git.setActiveRepo(id).catch((e) => {
-      console.error('[repo] set active repo failed', e)
-    })
-  },
-)
 
 // 监听 Rust 后端日志事件
 listen<{ level: string; target: string; message: string; ts: number }>(

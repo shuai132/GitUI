@@ -63,11 +63,15 @@ export function useGitCommands() {
   const openRepo = (path: string) =>
     call<RepoMeta>('open_repo', { path })
 
-  const closeRepo = (repoId: string) =>
-    call<void>('close_repo', { repoId })
+  const closeRepo = (
+    repoId: string,
+    nextActiveRepoId: string | null,
+    generation: number,
+  ) =>
+    call<void>('close_repo', { repoId, nextActiveRepoId, generation })
 
-  const setActiveRepo = (repoId: string | null) =>
-    call<void>('set_active_repo', { repoId })
+  const setActiveRepo = (repoId: string | null, generation: number) =>
+    call<void>('set_active_repo', { repoId, generation })
 
   const listRepos = () =>
     call<RepoMeta[]>('list_repos')
