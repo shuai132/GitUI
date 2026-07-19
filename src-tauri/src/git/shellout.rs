@@ -14,15 +14,6 @@ use std::{
 };
 
 #[cfg(windows)]
-use std::os::windows::process::CommandExt;
-
-/// Windows: 抑制子进程弹出黑色 CMD 控制台窗口。
-/// GUI 子系统进程 spawn 控制台应用（git.exe）时，系统默认会为子进程新建控制台窗口，
-/// 加此标志可阻止。macOS/Linux 编译时此常量不存在，由 cfg 隔离。
-#[cfg(windows)]
-const CREATE_NO_WINDOW: u32 = 0x08000000;
-
-#[cfg(windows)]
 const GITUI_SSH_PROXY_ENV: &str = "GITUI_SSH_PROXY";
 #[cfg(windows)]
 const GITUI_SSH_PROXY_VALUE: &str = "1";
@@ -34,6 +25,7 @@ use crate::git::{
     engine::GitEngine,
     error::{GitError, GitResult},
 };
+use crate::process::configure_background_command;
 
 /// 判断一个远端 URL 是否应走 SSH 分支。
 ///
@@ -98,7 +90,7 @@ fn run_windows_ssh_proxy_if_requested_inner() -> Option<i32> {
         .stdin(Stdio::inherit())
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit());
-    configure_hidden_process(&mut cmd);
+    configure_background_command(&mut cmd);
 
     let code = match cmd.status() {
         Ok(status) => status.code().unwrap_or(1),
@@ -119,7 +111,7 @@ fn run_windows_ssh_proxy_if_requested_inner() -> Option<i32> {
 pub fn new_git_command(repo_path: Option<&str>) -> Command {
     let mut cmd = Command::new("git");
     configure_shellout_environment(&mut cmd);
-    configure_hidden_process(&mut cmd);
+    configure_background_command(&mut cmd);
     configure_windows_ssh_proxy(&mut cmd, repo_path);
     cmd
 }
@@ -247,14 +239,6 @@ fn parse_marked_shell_path(stdout: &[u8]) -> Option<OsString> {
         Some(OsString::from(path))
     }
 }
-
-#[cfg(windows)]
-fn configure_hidden_process(cmd: &mut Command) {
-    cmd.creation_flags(CREATE_NO_WINDOW);
-}
-
-#[cfg(not(windows))]
-fn configure_hidden_process(_cmd: &mut Command) {}
 
 #[cfg(windows)]
 fn configure_windows_ssh_proxy(cmd: &mut Command, repo_path: Option<&str>) {

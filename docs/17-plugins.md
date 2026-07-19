@@ -42,6 +42,8 @@
 
 带 `backend` 的插件命令由 Rust Plugin Host 启动本地进程执行。GitUI 通过 stdin 发送 JSON-RPC 请求，插件通过 stdout 返回结果。
 
+插件后端属于非交互后台进程。Windows 下 Host 使用无控制台启动配置，插件若需要展示界面，应由自身显式创建 GUI，而不能依赖控制台窗口。
+
 `backend.command` 可以是绝对路径，也可以是 `PATH` 中的命令名。打包后的 GUI 应用不一定继承终端 PATH；Host 在命令找不到时会先检查常见 Node 版本管理器目录，再尝试通过用户 shell 解析一次，并缓存解析到的绝对路径。插件作者在依赖 `node`、`python` 等运行时时仍应优先写绝对路径或确保运行时安装在系统 PATH。
 
 请求方法为 `execute_command`，参数包含命令 ID 与当前上下文。上下文可包含当前仓库 ID、仓库路径与调用方提供的选择信息。

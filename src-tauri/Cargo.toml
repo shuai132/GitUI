@@ -20,7 +20,8 @@ tauri-plugin-dialog = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 fs2 = "0.4"
-git2 = { version = "0.19", features = ["https", "ssh"] }
+# 0.20+ 在 Windows 隐藏 credential helper 控制台；避免降级后恢复黑框闪现。
+git2 = { version = "0.20.4", features = ["https", "ssh"] }
 tokio = { version = "1", features = ["full"] }
 notify = "6"
 ignore = "0.4"

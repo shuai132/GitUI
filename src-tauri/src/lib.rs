@@ -4,6 +4,7 @@ mod git;
 mod logger;
 #[cfg(target_os = "macos")]
 mod menu;
+mod process;
 mod repo_manager;
 mod terminal;
 mod tray;

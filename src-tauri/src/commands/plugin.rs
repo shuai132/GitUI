@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tauri::{AppHandle, Manager};
 
-use crate::git::error::GitError;
+use crate::{git::error::GitError, process::configure_background_command};
 
 const MANIFEST_FILE: &str = "plugin.json";
 const STATE_FILE: &str = "plugin-state.json";
@@ -504,6 +504,7 @@ where
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
+    configure_background_command(&mut child);
     child
 }
 

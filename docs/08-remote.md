@@ -16,7 +16,7 @@
 1. **HTTPS 协议**：主要通过内置的 Git 引擎库实现，集成系统级凭据管理器（如 Keychain、Credential Manager）。
 2. **SSH 协议**：为了复用用户已有的 SSH 配置与代理环境，系统对于 SSH 类型的远端操作采用桥接宿主环境原生工具的策略。这确保了在不同操作系统下都能获得稳定、一致的验证体验。
 
-Windows 下，SSH shellout 由 `git/shellout.rs` 统一构造。GitUI 对直接启动的 `git.exe` 使用隐藏窗口配置，并在未检测到用户显式 SSH 命令配置时注入 GitUI 内置 SSH proxy；proxy 模式只转发到真实 `ssh.exe`，不启动 Tauri UI，用于避免 Git 再拉起 OpenSSH 子进程时出现短暂控制台窗口。
+Windows 下，后台子进程统一使用无控制台启动配置。SSH shellout 由 `git/shellout.rs` 构造，并在未检测到用户显式 SSH 命令配置时注入 GitUI 内置 SSH proxy；proxy 模式只转发到真实 `ssh.exe`，不启动 Tauri UI。HTTPS 凭据助手使用带 Windows 隐藏进程修复的 `git2-rs`，避免远程 Tag 查询及其他认证操作出现短暂控制台窗口。
 
 Unix / macOS 下，系统 Git shellout 会补齐宿主工具 PATH：合并用户 login shell 中的 PATH 与常见包管理器、本地 bin 目录，再传给 `git` 及其 hook 子进程。这样从 Finder / Dock 启动的 GUI 应用也能让 pre-push hook 找到 `git-lfs` 等命令行工具；找不到系统 `git` 本体时仍按命令失败处理。
 
