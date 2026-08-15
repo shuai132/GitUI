@@ -97,7 +97,7 @@ function onKeydown(event: KeyboardEvent) {
 .sidebar-search-control {
   width: 20px;
   height: 20px;
-  display: inline-flex;
+  display: none;
   align-items: center;
   flex-shrink: 0;
   overflow: hidden;
@@ -106,6 +106,12 @@ function onKeydown(event: KeyboardEvent) {
   background: transparent;
   color: var(--text-muted);
   transition: width 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+
+:global(.section:hover) .sidebar-search-control,
+:global(.repos-footer:hover) .sidebar-search-control,
+.sidebar-search-control--expanded {
+  display: inline-flex;
 }
 
 .sidebar-search-control--expanded {
