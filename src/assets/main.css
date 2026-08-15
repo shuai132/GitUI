@@ -1,5 +1,13 @@
 @import "tailwindcss";
 
+/* 搜索控件属于独立的 scoped 子组件，父区域的 hover 状态需在全局层连接。 */
+.section:hover .sidebar-search-control,
+.repos-footer:hover .sidebar-search-control {
+  visibility: visible;
+  opacity: 1;
+  pointer-events: auto;
+}
+
 @layer base {
   /* 默认深色主题（Catppuccin Macchiato 变体）。
      :root 继续作为深色默认，避免破坏所有未 opt-in 的存量组件。

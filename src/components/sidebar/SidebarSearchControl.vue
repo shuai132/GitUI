@@ -111,8 +111,6 @@ function onKeydown(event: KeyboardEvent) {
   transition: width 0.15s ease, border-color 0.15s ease, background 0.15s ease, opacity 0.1s ease;
 }
 
-:global(.section:hover) .sidebar-search-control,
-:global(.repos-footer:hover) .sidebar-search-control,
 .sidebar-search-control--expanded {
   visibility: visible;
   opacity: 1;
