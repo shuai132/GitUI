@@ -221,9 +221,9 @@ const messages = {
       },
       confirmDelete: '确认删除本地分支 "{name}"？此操作无法撤销。',
       confirmDeleteRemote: '确认删除远程分支 "{name}"？此操作无法撤销。',
-      confirmDeleteWithRemote: '分支 "{name}" 在远程也存在。删除本地分支的同时，是否也从远程删除？',
+      confirmDeleteWithRemote: '本地分支 "{name}" 跟踪远程分支 "{upstream}"。是否同时删除该远程分支？',
       deleteLocalOnly: '仅删除本地',
-      deleteLocalAndRemote: '本地与远程一并删除',
+      deleteLocalAndRemote: '同时删除远程分支 "{upstream}"',
       confirmSwitchForce: '强制切换将丢弃工作区所有未提交的更改。确认强制切换到分支 "{name}"？',
     },
     tag: {

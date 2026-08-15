@@ -192,7 +192,7 @@ async function onContextAction(action: string) {
         openConfirm(
           t('sidebar.branch.menu.delete'),
           hasUpstream
-            ? t('sidebar.branch.confirmDeleteWithRemote', { name: b.name })
+            ? t('sidebar.branch.confirmDeleteWithRemote', { name: b.name, upstream: b.upstream })
             : t('sidebar.branch.confirmDelete', { name: b.name }),
           async () => {
             // 1. 删除本地
@@ -209,7 +209,9 @@ async function onContextAction(action: string) {
             }
           },
           {
-            checkboxLabel: hasUpstream ? t('sidebar.branch.deleteLocalAndRemote') : undefined,
+            checkboxLabel: hasUpstream
+              ? t('sidebar.branch.deleteLocalAndRemote', { upstream: b.upstream })
+              : undefined,
             checkboxValue: false,
             loadingLabel: t('common.deleting', '删除中...'),
           },
