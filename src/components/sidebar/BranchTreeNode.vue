@@ -11,6 +11,7 @@ const props = defineProps<{
   currentUpstream?: string
   showLocalStatus?: boolean
   soloCurrentBranch?: boolean
+  forceExpanded?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -84,7 +85,7 @@ const indentPx = (level: number) => 12 + level * 12 + 'px'
     >
       <svg
         class="chevron"
-        :class="{ open: !treeState.isCollapsed(node.path) }"
+        :class="{ open: forceExpanded || !treeState.isCollapsed(node.path) }"
         width="10"
         height="10"
         viewBox="0 0 24 24"
@@ -112,7 +113,7 @@ const indentPx = (level: number) => 12 + level * 12 + 'px'
       </button>
     </div>
 
-    <template v-if="!treeState.isCollapsed(node.path)">
+    <template v-if="forceExpanded || !treeState.isCollapsed(node.path)">
       <BranchTreeNode
         v-for="child in node.children"
         :key="child.kind === 'folder' ? 'f:' + child.path : 'b:' + child.fullName"
@@ -121,6 +122,7 @@ const indentPx = (level: number) => 12 + level * 12 + 'px'
         :current-upstream="currentUpstream"
         :show-local-status="showLocalStatus"
         :solo-current-branch="soloCurrentBranch"
+        :force-expanded="forceExpanded"
         @select-branch="(b) => emit('selectBranch', b)"
         @dblclick-branch="(b) => emit('dblclickBranch', b)"
         @branch-context-menu="(ev, b) => emit('branchContextMenu', ev, b)"

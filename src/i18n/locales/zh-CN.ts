@@ -196,6 +196,12 @@ const messages = {
     },
   },
   sidebar: {
+    search: {
+      title: '搜索此列表',
+      placeholder: '搜索…',
+      clear: '清除搜索',
+      noResults: '没有匹配项',
+    },
     repo: {
       noRepo: '无仓库',
       addRepo: '添加仓库',

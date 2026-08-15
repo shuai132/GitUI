@@ -1,4 +1,5 @@
 import type { RepoMeta, SubmoduleInfo } from '@/types/git'
+import { matchesSidebarSearch, normalizeSidebarSearchQuery } from './sidebarSearch'
 
 export interface RepoTreeRow {
   repo: RepoMeta
@@ -85,4 +86,26 @@ export function buildRepoTreeRows(
   }
 
   return rows
+}
+
+export function filterRepoTreeRows(rows: RepoTreeRow[], query: string): RepoTreeRow[] {
+  if (!normalizeSidebarSearchQuery(query)) return rows
+
+  const parentByRepoId = new Map(
+    rows.flatMap((row) => row.parentRepoId ? [[row.repo.id, row.parentRepoId] as const] : []),
+  )
+  const includedRepoIds = new Set<string>()
+
+  for (const row of rows) {
+    if (!matchesSidebarSearch(query, row.repo.name, row.repo.path)) continue
+    includedRepoIds.add(row.repo.id)
+
+    let parentRepoId = parentByRepoId.get(row.repo.id)
+    while (parentRepoId) {
+      includedRepoIds.add(parentRepoId)
+      parentRepoId = parentByRepoId.get(parentRepoId)
+    }
+  }
+
+  return rows.filter((row) => includedRepoIds.has(row.repo.id))
 }

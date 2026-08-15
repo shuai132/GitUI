@@ -196,6 +196,12 @@ const messages = {
     },
   },
   sidebar: {
+    search: {
+      title: 'Search this list',
+      placeholder: 'Search…',
+      clear: 'Clear search',
+      noResults: 'No matches',
+    },
     repo: {
       noRepo: 'No repository',
       addRepo: 'Add repository',

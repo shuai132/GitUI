@@ -123,3 +123,10 @@
 .section-add-btn:hover {
   color: var(--text-primary);
 }
+
+.section-empty {
+  padding: 5px 12px 5px 28px;
+  color: var(--text-muted);
+  font-size: var(--font-xs);
+  font-style: italic;
+}

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, reactive } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRepoStore } from '@/stores/repos'
 import { useSubmodulesStore } from '@/stores/submodules'
@@ -8,6 +8,8 @@ import ContextMenu, { type ContextMenuItem } from '@/components/common/ContextMe
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import EditSubmoduleDialog from '@/components/submodule/EditSubmoduleDialog.vue'
 import AddSubmoduleDialog from '@/components/submodule/AddSubmoduleDialog.vue'
+import SidebarSearchControl from './SidebarSearchControl.vue'
+import { matchesSidebarSearch, normalizeSidebarSearchQuery } from '@/utils/sidebarSearch'
 import type { SubmoduleInfo } from '@/types/git'
 
 const { t } = useI18n()
@@ -16,6 +18,17 @@ const submodulesStore = useSubmodulesStore()
 const sectionState = useSidebarSectionState()
 
 const submodules = computed(() => submodulesStore.submodules)
+const searchQuery = ref('')
+const filteredSubmodules = computed(() =>
+  submodules.value.filter((submodule) =>
+    matchesSidebarSearch(searchQuery.value, submodule.name, submodule.path, submodule.url),
+  ),
+)
+const hasSearchQuery = computed(() => !!normalizeSidebarSearchQuery(searchQuery.value))
+
+watch(() => repoStore.activeRepoId, () => {
+  searchQuery.value = ''
+})
 
 const addSubmoduleDlg = reactive({ visible: false })
 
@@ -179,7 +192,11 @@ async function onSubmoduleClick(s: SubmoduleInfo) {
         <polyline points="9 18 15 12 9 6" />
       </svg>
       <span class="section-label">SUBMODULES</span>
-      <span class="section-count">{{ submodules.length }}</span>
+      <span class="section-count">{{ hasSearchQuery ? filteredSubmodules.length : submodules.length }}</span>
+      <SidebarSearchControl
+        v-model="searchQuery"
+        @open="sectionState.isCollapsed('submodules') && sectionState.toggle('submodules')"
+      />
       <button
         class="section-add-btn"
         :title="t('sidebar.submodule.addButton')"
@@ -188,7 +205,7 @@ async function onSubmoduleClick(s: SubmoduleInfo) {
     </div>
     <template v-if="!sectionState.isCollapsed('submodules')">
       <div
-        v-for="s in submodules"
+        v-for="s in filteredSubmodules"
         :key="s.name"
         class="submodule-item"
         :class="{
@@ -244,6 +261,9 @@ async function onSubmoduleClick(s: SubmoduleInfo) {
             <circle cx="12" cy="19" r="1.7"/>
           </svg>
         </button>
+      </div>
+      <div v-if="hasSearchQuery && filteredSubmodules.length === 0" class="section-empty">
+        {{ t('sidebar.search.noResults') }}
       </div>
     </template>
 

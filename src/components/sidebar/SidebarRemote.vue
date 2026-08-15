@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { useHistoryStore } from '@/stores/history'
@@ -14,6 +14,8 @@ import AddRemoteDialog from '@/components/remote/AddRemoteDialog.vue'
 import EditRemoteDialog from '@/components/remote/EditRemoteDialog.vue'
 import CheckoutRemoteDialog from '@/components/branch/CheckoutRemoteDialog.vue'
 import BranchTreeNode from './BranchTreeNode.vue' // Wait, BranchTreeNode is in the parent dir in the old code. We need to import from '../layout/BranchTreeNode.vue' or move it.
+import SidebarSearchControl from './SidebarSearchControl.vue'
+import { matchesSidebarSearch, normalizeSidebarSearchQuery } from '@/utils/sidebarSearch'
 import type { BranchInfo } from '@/types/git'
 
 const { t } = useI18n()
@@ -29,9 +31,22 @@ const currentUpstream = computed(() => localBranches.value.find((b) => b.is_head
 
 const remoteBranchesFlat = computed(() => historyStore.branches.filter((b) => b.is_remote))
 
-const remoteTree = computed(() =>
-  buildBranchTree(remoteBranchesFlat.value, historyStore.remotes.map((r) => r.name))
+const searchQuery = ref('')
+const filteredRemoteBranches = computed(() =>
+  remoteBranchesFlat.value.filter((branch) => matchesSidebarSearch(searchQuery.value, branch.name)),
 )
+const hasSearchQuery = computed(() => !!normalizeSidebarSearchQuery(searchQuery.value))
+
+const remoteTree = computed(() =>
+  buildBranchTree(
+    filteredRemoteBranches.value,
+    hasSearchQuery.value ? undefined : historyStore.remotes.map((remote) => remote.name),
+  )
+)
+
+watch(() => repoStore.activeRepoId, () => {
+  searchQuery.value = ''
+})
 
 // Add / Edit Remote
 const addRemoteDlg = reactive({ visible: false })
@@ -267,7 +282,11 @@ function onConfirmDialogCancel() {
         <polyline points="9 18 15 12 9 6" />
       </svg>
       <span class="section-label">REMOTE</span>
-      <span class="section-count">{{ remoteBranchesFlat.length }}</span>
+      <span class="section-count">{{ hasSearchQuery ? filteredRemoteBranches.length : remoteBranchesFlat.length }}</span>
+      <SidebarSearchControl
+        v-model="searchQuery"
+        @open="sectionState.isCollapsed('remote') && sectionState.toggle('remote')"
+      />
       <button
         class="section-add-btn"
         :title="t('sidebar.remote.addButton')"
@@ -282,12 +301,16 @@ function onConfirmDialogCancel() {
         :level="0"
         :is-remote-root="true"
         :current-upstream="currentUpstream"
+        :force-expanded="hasSearchQuery"
         @select-branch="onSelectRemoteBranch"
         @dblclick-branch="onDblclickRemoteBranch"
         @branch-context-menu="openBranchContextMenu"
         @delete-remote="onDeleteRemote"
         @remote-context-menu="openRemoteItemMenu"
       />
+      <div v-if="hasSearchQuery && filteredRemoteBranches.length === 0" class="section-empty">
+        {{ t('sidebar.search.noResults') }}
+      </div>
     </template>
 
     <ContextMenu

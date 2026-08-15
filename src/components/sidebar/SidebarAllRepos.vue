@@ -11,8 +11,14 @@ import { scrollElementByWheel } from '@/utils/wheelScroll'
 import { revealItemInDir } from '@tauri-apps/plugin-opener'
 import ContextMenu, { type ContextMenuItem } from '@/components/common/ContextMenu.vue'
 import CreateWorktreeDialog from '@/components/repo/CreateWorktreeDialog.vue'
+import SidebarSearchControl from './SidebarSearchControl.vue'
 import type { RepoMeta } from '@/types/git'
-import { buildRepoTreeRows, type SubmodulesByRepoId } from '@/utils/repoTree'
+import {
+  buildRepoTreeRows,
+  filterRepoTreeRows,
+  type SubmodulesByRepoId,
+} from '@/utils/repoTree'
+import { normalizeSidebarSearchQuery } from '@/utils/sidebarSearch'
 
 const { t } = useI18n()
 const repoStore = useRepoStore()
@@ -26,6 +32,9 @@ const submodulesByRepoId = ref<SubmodulesByRepoId>({})
 let submoduleRelationSeq = 0
 
 const repoRows = computed(() => buildRepoTreeRows(repoStore.repos, submodulesByRepoId.value))
+const searchQuery = ref('')
+const hasSearchQuery = computed(() => !!normalizeSidebarSearchQuery(searchQuery.value))
+const filteredRepoRows = computed(() => filterRepoTreeRows(repoRows.value, searchQuery.value))
 
 async function reloadRepoSubmoduleRelations() {
   const requestSeq = ++submoduleRelationSeq
@@ -165,7 +174,7 @@ function updateDragOverFromPointer(clientY: number) {
 }
 
 function onRepoPointerDown(e: PointerEvent, rowIndex: number, repoId: string) {
-  if (e.button !== 0) return
+  if (e.button !== 0 || hasSearchQuery.value) return
   dragState.value = {
     fromRowIndex: rowIndex,
     repoId,
@@ -308,6 +317,7 @@ function closeWorktreeDialog() {
     <div class="repos-resize" @pointerdown="startReposResize" />
     <div class="section-title repos-title">
       <span class="section-label">{{ t('sidebar.repo.allRepos') }}</span>
+      <SidebarSearchControl v-model="searchQuery" />
       <button
         class="section-add-btn repos-add-btn"
         :title="t('repo.menu.title')"
@@ -322,7 +332,7 @@ function closeWorktreeDialog() {
         :style="{ top: dropIndicatorTop + 'px' }"
       />
       <div
-        v-for="(row, idx) in repoRows"
+        v-for="(row, idx) in filteredRepoRows"
         :key="row.repo.id"
         class="repo-item"
         :class="{
@@ -374,6 +384,9 @@ function closeWorktreeDialog() {
             <line x1="6" y1="6" x2="18" y2="18"/>
           </svg>
         </button>
+      </div>
+      <div v-if="hasSearchQuery && filteredRepoRows.length === 0" class="section-empty">
+        {{ t('sidebar.search.noResults') }}
       </div>
     </div>
 

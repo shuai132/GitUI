@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import type { RepoMeta, SubmoduleInfo } from '@/types/git'
-import { buildRepoTreeRows, normalizeRepoPath, resolveSubmoduleWorkdir } from '@/utils/repoTree'
+import {
+  buildRepoTreeRows,
+  filterRepoTreeRows,
+  normalizeRepoPath,
+  resolveSubmoduleWorkdir,
+} from '@/utils/repoTree'
 
 function repo(id: string, path: string): RepoMeta {
   return { id, path, name: id }
@@ -51,5 +56,23 @@ describe('repoTree', () => {
       ['parent', 0],
       ['nested', 0],
     ])
+  })
+
+  it('filters repositories by name or path and preserves matching ancestors', () => {
+    const rows = buildRepoTreeRows(
+      [
+        repo('parent', '/work/parent'),
+        repo('sibling', '/work/sibling'),
+        repo('child', '/work/parent/libs/payment-sdk'),
+      ],
+      { parent: [submodule('libs/payment-sdk')] },
+    )
+
+    expect(filterRepoTreeRows(rows, 'PAYMENT').map((row) => row.repo.id)).toEqual([
+      'parent',
+      'child',
+    ])
+    expect(filterRepoTreeRows(rows, 'sibling').map((row) => row.repo.id)).toEqual(['sibling'])
+    expect(filterRepoTreeRows(rows, '  ')).toBe(rows)
   })
 })

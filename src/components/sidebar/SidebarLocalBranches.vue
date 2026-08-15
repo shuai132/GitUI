@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, reactive } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { useHistoryStore } from '@/stores/history'
@@ -11,6 +11,8 @@ import { buildLocalBranchTree } from '@/utils/branchTree'
 import ContextMenu, { type ContextMenuItem } from '@/components/common/ContextMenu.vue'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import BranchTreeNode from './BranchTreeNode.vue'
+import SidebarSearchControl from './SidebarSearchControl.vue'
+import { matchesSidebarSearch, normalizeSidebarSearchQuery } from '@/utils/sidebarSearch'
 import type { BranchInfo } from '@/types/git'
 
 const { t } = useI18n()
@@ -42,7 +44,16 @@ const localBranches = computed(() => {
   return branches
 })
 
-const localBranchTree = computed(() => buildLocalBranchTree(localBranches.value))
+const searchQuery = ref('')
+const filteredLocalBranches = computed(() =>
+  localBranches.value.filter((branch) => matchesSidebarSearch(searchQuery.value, branch.name)),
+)
+const hasSearchQuery = computed(() => !!normalizeSidebarSearchQuery(searchQuery.value))
+const localBranchTree = computed(() => buildLocalBranchTree(filteredLocalBranches.value))
+
+watch(() => repoStore.activeRepoId, () => {
+  searchQuery.value = ''
+})
 
 function jumpToBranchCommit(commitOid: string) {
   historyStore.pendingJumpOid = commitOid
@@ -234,7 +245,11 @@ async function onContextAction(action: string) {
         <polyline points="9 18 15 12 9 6" />
       </svg>
       <span class="section-label">LOCAL BRANCHES</span>
-      <span class="section-count">{{ localBranches.length }}</span>
+      <span class="section-count">{{ hasSearchQuery ? filteredLocalBranches.length : localBranches.length }}</span>
+      <SidebarSearchControl
+        v-model="searchQuery"
+        @open="sectionState.isCollapsed('local-branches') && sectionState.toggle('local-branches')"
+      />
     </div>
     <template v-if="!sectionState.isCollapsed('local-branches')">
       <BranchTreeNode
@@ -244,10 +259,14 @@ async function onContextAction(action: string) {
         :level="0"
         :show-local-status="true"
         :solo-current-branch="activeRepoBranchScope === 'current_first_parent'"
+        :force-expanded="hasSearchQuery"
         @select-branch="onSelectLocalBranch"
         @dblclick-branch="onDblclickLocalBranch"
         @branch-context-menu="openContextMenu"
       />
+      <div v-if="hasSearchQuery && filteredLocalBranches.length === 0" class="section-empty">
+        {{ t('sidebar.search.noResults') }}
+      </div>
     </template>
 
     <ContextMenu

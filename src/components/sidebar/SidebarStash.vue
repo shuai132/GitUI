@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, reactive } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { useHistoryStore } from '@/stores/history'
@@ -7,6 +7,8 @@ import { useRepoStore } from '@/stores/repos'
 import { useStashStore } from '@/stores/stash'
 import { useSidebarSectionState } from '@/composables/useSidebarSectionState'
 import ContextMenu, { type ContextMenuItem } from '@/components/common/ContextMenu.vue'
+import SidebarSearchControl from './SidebarSearchControl.vue'
+import { matchesSidebarSearch, normalizeSidebarSearchQuery } from '@/utils/sidebarSearch'
 import type { StashEntry } from '@/types/git'
 
 const { t } = useI18n()
@@ -15,6 +17,17 @@ const historyStore = useHistoryStore()
 const repoStore = useRepoStore()
 const stashStore = useStashStore()
 const sectionState = useSidebarSectionState()
+const searchQuery = ref('')
+const filteredEntries = computed(() =>
+  stashStore.entries.filter((entry) =>
+    matchesSidebarSearch(searchQuery.value, String(entry.index), entry.message),
+  ),
+)
+const hasSearchQuery = computed(() => !!normalizeSidebarSearchQuery(searchQuery.value))
+
+watch(() => repoStore.activeRepoId, () => {
+  searchQuery.value = ''
+})
 
 function jumpToBranchCommit(commitOid: string) {
   historyStore.pendingJumpOid = commitOid
@@ -91,11 +104,15 @@ async function onStashMenuAction(action: string) {
         <polyline points="9 18 15 12 9 6" />
       </svg>
       <span class="section-label">STASH</span>
-      <span class="section-count">{{ stashStore.entries.length }}</span>
+      <span class="section-count">{{ hasSearchQuery ? filteredEntries.length : stashStore.entries.length }}</span>
+      <SidebarSearchControl
+        v-model="searchQuery"
+        @open="sectionState.isCollapsed('stash') && sectionState.toggle('stash')"
+      />
     </div>
     <template v-if="!sectionState.isCollapsed('stash')">
       <div
-        v-for="s in stashStore.entries"
+        v-for="s in filteredEntries"
         :key="s.index"
         class="branch-item stash-item"
         :title="s.message"
@@ -105,6 +122,9 @@ async function onStashMenuAction(action: string) {
         <span class="branch-dot dot-outline" />
         <span class="stash-index">{{ '{' + s.index + '}' }}</span>
         <span class="branch-label">{{ s.message }}</span>
+      </div>
+      <div v-if="hasSearchQuery && filteredEntries.length === 0" class="section-empty">
+        {{ t('sidebar.search.noResults') }}
       </div>
     </template>
 

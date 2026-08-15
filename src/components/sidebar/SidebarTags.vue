@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, reactive } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { useHistoryStore } from '@/stores/history'
@@ -9,6 +9,8 @@ import { usePickRemote } from '@/composables/usePickRemote'
 import { useGitCommands } from '@/composables/useGitCommands'
 import ContextMenu, { type ContextMenuItem } from '@/components/common/ContextMenu.vue'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
+import SidebarSearchControl from './SidebarSearchControl.vue'
+import { matchesSidebarSearch, normalizeSidebarSearchQuery } from '@/utils/sidebarSearch'
 import type { TagInfo } from '@/types/git'
 
 const { t } = useI18n()
@@ -20,6 +22,15 @@ const { pickRemote } = usePickRemote()
 const git = useGitCommands()
 
 const tags = computed(() => historyStore.tags)
+const searchQuery = ref('')
+const filteredTags = computed(() =>
+  tags.value.filter((tag) => matchesSidebarSearch(searchQuery.value, tag.name)),
+)
+const hasSearchQuery = computed(() => !!normalizeSidebarSearchQuery(searchQuery.value))
+
+watch(() => repoStore.activeRepoId, () => {
+  searchQuery.value = ''
+})
 
 type TagRemoteStatus = 'synced' | 'local_only' | 'unknown'
 function tagRemoteStatus(tag: TagInfo): TagRemoteStatus {
@@ -253,11 +264,15 @@ async function onTagMenuAction(action: string) {
         <polyline points="9 18 15 12 9 6" />
       </svg>
       <span class="section-label">TAGS</span>
-      <span class="section-count">{{ tags.length }}</span>
+      <span class="section-count">{{ hasSearchQuery ? filteredTags.length : tags.length }}</span>
+      <SidebarSearchControl
+        v-model="searchQuery"
+        @open="sectionState.isCollapsed('tags') && sectionState.toggle('tags')"
+      />
     </div>
     <template v-if="!sectionState.isCollapsed('tags')">
       <div
-        v-for="tag in tags"
+        v-for="tag in filteredTags"
         :key="tag.name"
         class="branch-item tag-item"
         :class="{ 'tag-item--lightweight': !tag.is_annotated }"
@@ -290,6 +305,9 @@ async function onTagMenuAction(action: string) {
           class="tag-status-icon tag-status-icon--local"
           aria-hidden="true"
         >↑</span>
+      </div>
+      <div v-if="hasSearchQuery && filteredTags.length === 0" class="section-empty">
+        {{ t('sidebar.search.noResults') }}
       </div>
     </template>
 
