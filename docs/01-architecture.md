@@ -47,7 +47,7 @@
 3. **映射**：前端拦截错误，根据错误码映射为用户友好的中文提示。
 4. **回溯**：原始错误信息被保留在错误历史中，供排查使用。
 
-`useGitCommands` 抛出的 IPC 错误带有已记录标识，由 `ToolbarToast` 统一做一次非阻塞提示；业务组件不重复弹窗。剪贴板、目录选择等未经过 IPC 的前端异常由 `useGlobalToast.showActionError` 补充短时提示，但不写入后端错误历史。
+`useGitCommands` 抛出的 IPC 错误带有已记录标识，由 `ToolbarToast` 统一做一次非阻塞提示；业务组件不重复弹窗。剪贴板、目录选择等未经过 IPC 的前端异常由 `useGlobalToast.showActionError` 补充短时提示，但不写入后端错误历史。错误历史清空使用应用内危险确认，只移除前端诊断记录。
 
 ## 数据流向
 

@@ -2,6 +2,7 @@
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Modal from '@/components/common/Modal.vue'
+import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import { useErrorsStore } from '@/stores/errors'
 import type { ErrorEntry } from '@/stores/errors'
 
@@ -13,6 +14,7 @@ const errorsStore = useErrorsStore()
 
 // 展开查看原始错误的条目 id 集合
 const expanded = ref(new Set<number>())
+const showClearConfirmation = ref(false)
 
 function toggle(id: number) {
   if (expanded.value.has(id)) {
@@ -33,8 +35,13 @@ function formatTime(ts: number): string {
 }
 
 function onClear() {
-  if (!confirm(t('errorHistory.confirmClear'))) return
+  showClearConfirmation.value = true
+}
+
+function onConfirmClear() {
   errorsStore.clear()
+  expanded.value.clear()
+  showClearConfirmation.value = false
 }
 
 function onCopy(entry: ErrorEntry) {
@@ -85,6 +92,16 @@ function onCopy(entry: ErrorEntry) {
       <button class="btn btn-secondary" @click="emit('close')">{{ t('errorHistory.close') }}</button>
     </template>
   </Modal>
+
+  <ConfirmDialog
+    :visible="showClearConfirmation"
+    :title="t('errorHistory.clearTitle')"
+    :message="t('errorHistory.confirmClear')"
+    :confirm-label="t('errorHistory.clear')"
+    :danger="true"
+    @confirm="onConfirmClear"
+    @cancel="showClearConfirmation = false"
+  />
 </template>
 
 <style scoped>

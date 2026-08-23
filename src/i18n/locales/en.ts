@@ -624,8 +624,9 @@ const messages = {
     empty: 'No error records',
     copyTitle: 'Copy',
     clear: 'Clear',
+    clearTitle: 'Clear error history?',
     close: 'Close',
-    confirmClear: 'Clear all error records?',
+    confirmClear: 'Clear all error records? This only removes the diagnostic history and cannot be undone.',
     rawErrorLabel: 'Raw error:',
   },
   workspace: {

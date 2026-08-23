@@ -623,8 +623,9 @@ const messages = {
     empty: '暂无错误记录',
     copyTitle: '复制',
     clear: '清空',
+    clearTitle: '清空错误历史？',
     close: '关闭',
-    confirmClear: '清空所有错误记录？',
+    confirmClear: '清空所有错误记录？这只会移除诊断历史，且无法撤销。',
     rawErrorLabel: '原始错误：',
   },
   workspace: {
