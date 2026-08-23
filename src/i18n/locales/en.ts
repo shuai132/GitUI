@@ -241,6 +241,22 @@ const messages = {
       deleteLocalOnly: 'Delete local only',
       deleteLocalAndRemote: 'Also delete remote branch "{upstream}"',
       confirmSwitchForce: 'Force switching will discard all uncommitted changes in the working directory. Switch to branch "{name}"?',
+      switchDialog: {
+        title: 'Switch branches with local changes',
+        intro: '{count} file(s) have uncommitted changes. Choose where those changes should remain after switching.',
+        source: 'Current',
+        target: 'Target',
+        choiceHint: 'Bringing changes uses a safe checkout and stops on conflicts. Stashing keeps them in the sidebar for later recovery.',
+        stashSafe: 'Your local changes are safely stored in Stash. Retry the switch, or cancel and handle them later.',
+        carryAndSwitch: 'Bring changes and switch',
+        stashAndSwitch: 'Stash and switch',
+        retry: 'Retry switch',
+        switching: 'Switching…',
+        stashing: 'Stashing and switching…',
+        stashMessage: 'GitUI: saved before switching from {source} to {target}',
+        carryFailed: 'Could not bring local changes to the target branch: {detail}\nChoose “Stash and switch” to continue safely.',
+        failedAfterStash: 'Local changes are saved in Stash, but switching branches failed: {detail}',
+      },
     },
     tag: {
       menu: {

@@ -241,6 +241,22 @@ const messages = {
       deleteLocalOnly: '仅删除本地',
       deleteLocalAndRemote: '同时删除远程分支 "{upstream}"',
       confirmSwitchForce: '强制切换将丢弃工作区所有未提交的更改。确认强制切换到分支 "{name}"？',
+      switchDialog: {
+        title: '切换分支时处理本地改动',
+        intro: '当前有 {count} 个文件包含未提交改动。请选择这些改动在切换后的位置。',
+        source: '当前',
+        target: '目标',
+        choiceHint: '携带改动会使用安全检出，冲突时停止；Stash 后切换会把改动留在侧边栏供稍后恢复。',
+        stashSafe: '本地改动已安全保存在 Stash 中，可重试切换或取消后稍后处理。',
+        carryAndSwitch: '携带改动并切换',
+        stashAndSwitch: 'Stash 后切换',
+        retry: '重试切换',
+        switching: '切换中…',
+        stashing: '保存并切换中…',
+        stashMessage: 'GitUI：从 {source} 切换到 {target} 前保存',
+        carryFailed: '无法把本地改动带到目标分支：{detail}\n可改选“Stash 后切换”。',
+        failedAfterStash: '本地改动已保存在 Stash，但分支切换失败：{detail}',
+      },
     },
     tag: {
       menu: {

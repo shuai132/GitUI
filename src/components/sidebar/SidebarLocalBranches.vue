@@ -10,8 +10,10 @@ import { useSidebarSectionState } from '@/composables/useSidebarSectionState'
 import { buildLocalBranchTree } from '@/utils/branchTree'
 import ContextMenu, { type ContextMenuItem } from '@/components/common/ContextMenu.vue'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
+import BranchSwitchDialog from '@/components/branch/BranchSwitchDialog.vue'
 import BranchTreeNode from './BranchTreeNode.vue'
 import SidebarSearchControl from './SidebarSearchControl.vue'
+import { useBranchSwitch } from '@/composables/useBranchSwitch'
 import { matchesSidebarSearch, normalizeSidebarSearchQuery } from '@/utils/sidebarSearch'
 import type { BranchInfo } from '@/types/git'
 
@@ -22,6 +24,7 @@ const workspaceStore = useWorkspaceStore()
 const repoStore = useRepoStore()
 const uiStore = useUiStore()
 const sectionState = useSidebarSectionState()
+const branchSwitch = reactive(useBranchSwitch())
 const activeRepoPath = computed(() => repoStore.activeRepo()?.path)
 const activeRepoBranchScope = computed(() =>
   uiStore.getHistoryBranchScope(activeRepoPath.value),
@@ -65,12 +68,12 @@ function onSelectLocalBranch(branch: BranchInfo) {
 }
 
 function onDblclickLocalBranch(branch: BranchInfo) {
-  if (!branch.is_head) switchBranch(branch.name)
+  if (!branch.is_head) void switchBranch(branch.name)
 }
 
 async function switchBranch(name: string) {
   try {
-    await historyStore.switchBranch(name)
+    await branchSwitch.requestSwitch(name)
   } catch (e) {
     console.error(e)
   }
@@ -186,7 +189,12 @@ async function onContextAction(action: string) {
         if (force) {
           if (!confirm(t('sidebar.branch.confirmSwitchForce', { name: b.name }))) break
         }
-        await historyStore.switchBranch(b.name, force)
+        if (force) {
+          await historyStore.switchBranch(b.name, true)
+          await workspaceStore.refresh()
+        } else {
+          await branchSwitch.requestSwitch(b.name)
+        }
         break
       }
       case 'copy-name':
@@ -290,6 +298,19 @@ async function onContextAction(action: string) {
       v-model:checkbox-value="confirmDlg.checkboxValue"
       @confirm="onConfirmDialogConfirm"
       @cancel="onConfirmDialogCancel"
+    />
+
+    <BranchSwitchDialog
+      :visible="branchSwitch.dialogVisible"
+      :source-branch="branchSwitch.sourceBranch"
+      :target-branch="branchSwitch.targetBranch"
+      :change-count="branchSwitch.changeCount"
+      :loading="branchSwitch.loading"
+      :active-mode="branchSwitch.activeMode"
+      :changes-stashed="branchSwitch.changesStashed"
+      :error="branchSwitch.error"
+      @confirm="branchSwitch.confirmSwitch"
+      @cancel="branchSwitch.cancelSwitch"
     />
   </div>
 </template>

@@ -1,12 +1,15 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, reactive } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useHistoryStore } from '@/stores/history'
 import { useWorkspaceStore } from '@/stores/workspace'
+import BranchSwitchDialog from './BranchSwitchDialog.vue'
+import { useBranchSwitch } from '@/composables/useBranchSwitch'
 
 const { t } = useI18n()
 const historyStore = useHistoryStore()
 const workspaceStore = useWorkspaceStore()
+const branchSwitch = reactive(useBranchSwitch())
 
 const newBranchName = ref('')
 const showNewBranch = ref(false)
@@ -42,8 +45,7 @@ async function switchBranch(name: string) {
   switchingTo.value = name
   error.value = null
   try {
-    await historyStore.switchBranch(name)
-    await workspaceStore.refresh()
+    await branchSwitch.requestSwitch(name)
   } catch (e: unknown) {
     error.value = String(e)
   } finally {
@@ -125,6 +127,19 @@ async function deleteBranch(name: string) {
         <span class="branch-name">{{ branch.name }}</span>
       </div>
     </div>
+
+    <BranchSwitchDialog
+      :visible="branchSwitch.dialogVisible"
+      :source-branch="branchSwitch.sourceBranch"
+      :target-branch="branchSwitch.targetBranch"
+      :change-count="branchSwitch.changeCount"
+      :loading="branchSwitch.loading"
+      :active-mode="branchSwitch.activeMode"
+      :changes-stashed="branchSwitch.changesStashed"
+      :error="branchSwitch.error"
+      @confirm="branchSwitch.confirmSwitch"
+      @cancel="branchSwitch.cancelSwitch"
+    />
   </div>
 </template>
 
