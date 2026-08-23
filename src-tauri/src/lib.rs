@@ -97,6 +97,7 @@ pub fn run() {
             revert_continue,
             revert_abort,
             reset_to_commit,
+            undo_last_commit,
             create_tag,
             // Log
             get_log,

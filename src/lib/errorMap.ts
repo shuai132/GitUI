@@ -76,6 +76,16 @@ function extractKindAndMessage(raw: unknown): { kind?: GitErrorKind; message: st
 
 /** 按子串命中的模式规则，越靠前优先级越高。build(msg) 返回 FriendlyError。 */
 const PATTERNS: Array<{ test: (msg: string) => boolean; build: (msg: string) => FriendlyError }> = [
+  // 最近提交撤销的安全拒绝（后端会在原子检查后返回这些业务错误）
+  {
+    test: (m) => /提交已发布到上游/.test(m),
+    build: () => ({ key: 'errors.commit.undoPublished' }),
+  },
+  {
+    test: (m) =>
+      /HEAD 已变化|游离 HEAD 下不能撤销|只能撤销具有一个父提交|正在执行其他 Git 操作，无法撤销提交|无法识别当前本地分支/.test(m),
+    build: () => ({ key: 'errors.commit.undoUnavailable' }),
+  },
   // Auto-fetch 后台失败
   {
     test: (m) => /Auto-fetch failed/i.test(m),

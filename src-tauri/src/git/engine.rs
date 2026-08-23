@@ -796,6 +796,102 @@ mod tests {
     }
 
     #[test]
+    fn test_undo_last_commit_restores_changes_to_worktree() {
+        let test_repo = TestRepo::new();
+        let path = test_repo.path_str();
+        let parent_oid = test_repo.repo.head().unwrap().target().unwrap();
+        let commit_oid = commit_file(&test_repo, "second commit", "existing.txt", "changed\n");
+
+        let reset_oid = GitEngine::undo_last_commit(path, &commit_oid.to_string()).unwrap();
+
+        assert_eq!(reset_oid, parent_oid.to_string());
+        assert_eq!(test_repo.repo.head().unwrap().target(), Some(parent_oid));
+        let status = GitEngine::get_status(path).unwrap();
+        assert!(status.staged.is_empty());
+        assert_eq!(status.unstaged.len(), 1);
+        assert_eq!(status.unstaged[0].path, "existing.txt");
+        assert_eq!(
+            fs::read_to_string(test_repo.dir.path().join("existing.txt")).unwrap(),
+            "changed\n",
+        );
+    }
+
+    #[test]
+    fn test_undo_last_commit_rejects_changed_or_detached_head() {
+        let test_repo = TestRepo::new();
+        let path = test_repo.path_str();
+        let first = test_repo.repo.head().unwrap().target().unwrap();
+        let second = commit_file(&test_repo, "second commit", "existing.txt", "second\n");
+
+        let stale_error = GitEngine::undo_last_commit(path, &first.to_string())
+            .unwrap_err()
+            .to_string();
+        assert!(stale_error.contains("HEAD 已变化"));
+        assert_eq!(test_repo.repo.head().unwrap().target(), Some(second));
+
+        test_repo.repo.set_head_detached(second).unwrap();
+        let detached_error = GitEngine::undo_last_commit(path, &second.to_string())
+            .unwrap_err()
+            .to_string();
+        assert!(detached_error.contains("游离 HEAD"));
+        assert_eq!(test_repo.repo.head().unwrap().target(), Some(second));
+    }
+
+    #[test]
+    fn test_undo_last_commit_rejects_root_commit() {
+        let test_repo = TestRepo::new();
+        let path = test_repo.path_str();
+        let root = test_repo.repo.head().unwrap().target().unwrap();
+
+        let error = GitEngine::undo_last_commit(path, &root.to_string())
+            .unwrap_err()
+            .to_string();
+
+        assert!(error.contains("一个父提交"));
+        assert_eq!(test_repo.repo.head().unwrap().target(), Some(root));
+    }
+
+    #[test]
+    fn test_undo_last_commit_rejects_commit_contained_by_upstream() {
+        let test_repo = TestRepo::new();
+        let path = test_repo.path_str();
+        let commit_oid = commit_file(&test_repo, "second commit", "existing.txt", "second\n");
+        test_repo
+            .repo
+            .remote("origin", "https://example.com/repo.git")
+            .unwrap();
+        test_repo
+            .repo
+            .reference(
+                "refs/remotes/origin/main",
+                commit_oid,
+                true,
+                "test upstream",
+            )
+            .unwrap();
+        let head_name = test_repo
+            .repo
+            .head()
+            .unwrap()
+            .shorthand()
+            .unwrap()
+            .to_string();
+        test_repo
+            .repo
+            .find_branch(&head_name, git2::BranchType::Local)
+            .unwrap()
+            .set_upstream(Some("origin/main"))
+            .unwrap();
+
+        let error = GitEngine::undo_last_commit(path, &commit_oid.to_string())
+            .unwrap_err()
+            .to_string();
+
+        assert!(error.contains("已发布到上游"));
+        assert_eq!(test_repo.repo.head().unwrap().target(), Some(commit_oid));
+    }
+
+    #[test]
     fn test_get_log_can_exclude_remote_only_commits() {
         let test_repo = TestRepo::new();
         let path = test_repo.path_str();

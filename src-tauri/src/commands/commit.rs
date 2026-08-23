@@ -119,6 +119,18 @@ pub async fn reset_to_commit(
 }
 
 #[tauri::command]
+pub async fn undo_last_commit(
+    repo_id: String,
+    expected_head: String,
+    repo_manager: State<'_, RepoManager>,
+) -> Result<String, GitError> {
+    let meta = repo_manager
+        .get_meta(&repo_id)
+        .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
+    GitEngine::undo_last_commit(&meta.path, &expected_head)
+}
+
+#[tauri::command]
 pub async fn amend_commit(
     repo_id: String,
     message: String,

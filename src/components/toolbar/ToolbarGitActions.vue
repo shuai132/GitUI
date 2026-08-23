@@ -37,6 +37,8 @@ const {
   canRemoteOp,
   canStash,
   canStashPop,
+  canUndoLastCommit,
+  undoingCommit,
   withShortcut,
   showAddRepoMenu,
   onPull,
@@ -48,6 +50,7 @@ const {
   onFetch,
   onRefreshRepository,
   onOpenSystemTerminal,
+  onUndoLastCommit,
 } = toolbarActions
 
 function onPullModeSelect(action: string) {
@@ -91,6 +94,22 @@ function onPushModeSelect(action: string) {
     </button>
 
     <div class="toolbar-sep" />
+
+    <!-- Undo the commit just created in this window -->
+    <button
+      v-if="canUndoLastCommit"
+      class="btn-tool btn-tool--undo"
+      :title="t('toolbar.title.undoCommit')"
+      :disabled="undoingCommit"
+      @click="onUndoLastCommit"
+    >
+      <span v-if="undoingCommit" class="spinner" />
+      <svg v-else width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M9 14 4 9l5-5"/>
+        <path d="M4 9h10a6 6 0 0 1 6 6v1"/>
+      </svg>
+      <span>{{ t('toolbar.opLabels.undoCommit') }}</span>
+    </button>
 
     <!-- Pull -->
     <div class="btn-tool-group">
@@ -292,6 +311,11 @@ function onPushModeSelect(action: string) {
   background: var(--bg-overlay);
   color: var(--text-primary);
   border-color: var(--text-muted);
+}
+
+.btn-tool--undo {
+  border-color: color-mix(in srgb, var(--accent-orange) 50%, var(--border));
+  color: var(--accent-orange);
 }
 
 .btn-tool:disabled {

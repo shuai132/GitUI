@@ -576,6 +576,66 @@ impl GitEngine {
         Ok(())
     }
 
+    /// 撤销当前分支刚创建且尚未发布的单父提交。
+    ///
+    /// `expected_head` 是前端创建提交后记录的 OID。校验与 reset 在同一次仓库
+    /// 打开中完成，避免 UI 状态过期时误把后来产生的提交一并回退。
+    pub fn undo_last_commit(path: &str, expected_head: &str) -> GitResult<String> {
+        let repo = Self::open(path)?;
+        if repo.state() != RepositoryState::Clean {
+            return Err(GitError::OperationFailed(
+                "仓库正在执行其他 Git 操作，无法撤销提交".to_string(),
+            ));
+        }
+
+        let expected_oid = git2::Oid::from_str(expected_head)
+            .map_err(|e| GitError::OperationFailed(e.message().to_string()))?;
+        let head = repo.head()?;
+        if !head.is_branch() {
+            return Err(GitError::OperationFailed(
+                "游离 HEAD 下不能撤销最近提交".to_string(),
+            ));
+        }
+
+        let head_commit = head.peel_to_commit()?;
+        if head_commit.id() != expected_oid {
+            return Err(GitError::OperationFailed(
+                "HEAD 已变化，不能撤销过期的提交".to_string(),
+            ));
+        }
+        if head_commit.parent_count() != 1 {
+            return Err(GitError::OperationFailed(
+                "只能撤销具有一个父提交的普通提交".to_string(),
+            ));
+        }
+
+        let branch_name = head
+            .shorthand()
+            .ok_or_else(|| GitError::OperationFailed("无法识别当前本地分支".to_string()))?;
+        if let Ok(upstream) = repo
+            .find_branch(branch_name, BranchType::Local)
+            .and_then(|branch| branch.upstream())
+        {
+            if let Ok(upstream_commit) = upstream.get().peel_to_commit() {
+                let upstream_oid = upstream_commit.id();
+                let published = upstream_oid == expected_oid
+                    || repo
+                        .graph_descendant_of(upstream_oid, expected_oid)
+                        .unwrap_or(false);
+                if published {
+                    return Err(GitError::OperationFailed(
+                        "提交已发布到上游，请使用 Revert 保留共享历史".to_string(),
+                    ));
+                }
+            }
+        }
+
+        let parent = head_commit.parent(0)?;
+        let parent_oid = parent.id().to_string();
+        repo.reset(parent.as_object(), ResetType::Mixed, None)?;
+        Ok(parent_oid)
+    }
+
     /// 在指定提交上创建标签
     /// - message = Some(非空) → 附注标签
     /// - message = None 或空字符串 → 轻量标签

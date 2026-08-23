@@ -238,6 +238,9 @@ export function useGitCommands() {
     mode: 'soft' | 'mixed' | 'hard',
   ) => call<void>('reset_to_commit', { repoId, oid, mode })
 
+  const undoLastCommit = (repoId: string, expectedHead: string) =>
+    call<string>('undo_last_commit', { repoId, expectedHead })
+
   const createTag = (
     repoId: string,
     name: string,
@@ -551,6 +554,7 @@ export function useGitCommands() {
     revertContinue,
     revertAbort,
     resetToCommit,
+    undoLastCommit,
     createTag,
     getLog,
     getCommitChangeStats,

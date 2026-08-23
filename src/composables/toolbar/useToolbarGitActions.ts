@@ -1,4 +1,4 @@
-import { computed, watch, type Ref } from 'vue'
+import { computed, ref, watch, type Ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRepoStore } from '@/stores/repos'
 import { useHistoryStore } from '@/stores/history'
@@ -52,6 +52,19 @@ export function useToolbarGitActions(options: UseToolbarGitActionsOptions) {
     return s.staged.length + s.unstaged.length + s.untracked.length > 0
   })
   const canStashPop = computed(() => hasRepo.value && stashStore.entries.length > 0)
+  const undoingCommit = ref(false)
+  const canUndoLastCommit = computed(() => {
+    const candidate = workspaceStore.undoCommitCandidate
+    if (
+      !candidate ||
+      candidate.repoId !== repoStore.activeRepoId ||
+      workspaceStore.status?.head_commit !== candidate.oid
+    ) {
+      return false
+    }
+    const headBranch = historyStore.branches.find((branch) => branch.is_head && !branch.is_remote)
+    return !headBranch?.upstream || headBranch.ahead !== 0
+  })
 
   function withShortcut(label: string, actionId: ShortcutActionId): string {
     const b = shortcutsStore.bindings[actionId]
@@ -106,6 +119,7 @@ export function useToolbarGitActions(options: UseToolbarGitActionsOptions) {
     try {
       await git.pushBranch(id, remote, branch, mode)
       await historyStore.loadBranches()
+      workspaceStore.clearUndoCommitCandidate(id)
       showToast('success', t('toolbar.opSuccess', { label: t('toolbar.opLabels.push') }))
     } catch {
       // 错误在 ToolbarToast 中拦截处理
@@ -191,6 +205,25 @@ export function useToolbarGitActions(options: UseToolbarGitActionsOptions) {
     }
   }
 
+  async function onUndoLastCommit() {
+    if (!canUndoLastCommit.value || undoingCommit.value) return
+    undoingCommit.value = true
+    try {
+      const undoneRepoId = await workspaceStore.undoLastCommit()
+      if (!undoneRepoId || repoStore.activeRepoId !== undoneRepoId) return
+      await Promise.all([historyStore.loadLog(), historyStore.loadBranches()])
+      if (repoStore.activeRepoId !== undoneRepoId) return
+      historyStore.selectedCommit = null
+      historyStore.selectedWip = true
+      historyStore.showDetail = true
+      showToast('success', t('toolbar.opSuccess', { label: t('toolbar.opLabels.undoCommit') }))
+    } catch {
+      // 错误在 ToolbarToast 中拦截处理
+    } finally {
+      undoingCommit.value = false
+    }
+  }
+
   watch(() => uiStore.fetchSignal, () => {
     onFetch()
   })
@@ -202,6 +235,8 @@ export function useToolbarGitActions(options: UseToolbarGitActionsOptions) {
     canRemoteOp,
     canStash,
     canStashPop,
+    canUndoLastCommit,
+    undoingCommit,
     withShortcut,
     showAddRepoMenu,
     onPull,
@@ -213,5 +248,6 @@ export function useToolbarGitActions(options: UseToolbarGitActionsOptions) {
     onFetch,
     onRefreshRepository,
     onOpenSystemTerminal,
+    onUndoLastCommit,
   }
 }

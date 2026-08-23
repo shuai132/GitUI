@@ -5,6 +5,12 @@ import { useGitCommands } from '@/composables/useGitCommands'
 import { useRepoStore } from './repos'
 import { useMergeRebaseStore } from './mergeRebase'
 
+export interface UndoCommitCandidate {
+  repoId: string
+  oid: string
+  message: string
+}
+
 export const useWorkspaceStore = defineStore('workspace', () => {
   const status = ref<WorkspaceStatus | null>(null)
   const selectedFile = ref<FileEntry | null>(null)
@@ -14,6 +20,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
 
   // 当前提交信息草稿（WipPanel 输入框 ↔ 工具栏 Stash 共享）
   const commitDraft = ref('')
+  const undoCommitCandidate = ref<UndoCommitCandidate | null>(null)
 
   const git = useGitCommands()
   let refreshSeq = 0
@@ -23,6 +30,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     () => useRepoStore().activeRepoId,
     () => {
       commitDraft.value = ''
+      undoCommitCandidate.value = null
     },
   )
 
@@ -41,6 +49,12 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       // 同一仓库的多次刷新也只允许最后一次写入，避免旧快照覆盖新快照。
       if (requestSeq !== refreshSeq || id !== repoStore.activeRepoId) return
       status.value = result
+      if (
+        undoCommitCandidate.value?.repoId === id &&
+        result.head_commit !== undoCommitCandidate.value.oid
+      ) {
+        undoCommitCandidate.value = null
+      }
       // 把后端顺带返回的 repo_state 同步到 mergeRebase store，供横幅/对话框消费
       useMergeRebaseStore().setRepoState(result.repo_state)
       // Clear selected file if it no longer exists
@@ -99,8 +113,12 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     const repoStore = useRepoStore()
     const id = repoStore.activeRepoId
     if (!id) return
+    const previousHead = status.value?.head_commit
     const oid = await git.createCommit(id, message)
     await refresh(id)
+    undoCommitCandidate.value = previousHead && repoStore.activeRepoId === id
+      ? { repoId: id, oid, message }
+      : null
     return oid
   }
 
@@ -110,7 +128,27 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     if (!id) return
     const oid = await git.amendCommit(id, message)
     await refresh(id)
+    undoCommitCandidate.value = null
     return oid
+  }
+
+  async function undoLastCommit(): Promise<string | undefined> {
+    const repoStore = useRepoStore()
+    const candidate = undoCommitCandidate.value
+    if (!candidate || candidate.repoId !== repoStore.activeRepoId) return
+
+    await git.undoLastCommit(candidate.repoId, candidate.oid)
+    undoCommitCandidate.value = null
+    if (repoStore.activeRepoId === candidate.repoId && commitDraft.value.trim() === '') {
+      commitDraft.value = candidate.message
+    }
+    await refresh(candidate.repoId)
+    return candidate.repoId
+  }
+
+  function clearUndoCommitCandidate(repoId?: string) {
+    if (repoId && undoCommitCandidate.value?.repoId !== repoId) return
+    undoCommitCandidate.value = null
   }
 
   async function discardAll() {
@@ -149,6 +187,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     loading,
     error,
     commitDraft,
+    undoCommitCandidate,
     refresh,
     stageFile,
     unstageFile,
@@ -156,6 +195,8 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     unstageAll,
     commit,
     amend,
+    undoLastCommit,
+    clearUndoCommitCandidate,
     discardAll,
     discardFile,
     selectFile,

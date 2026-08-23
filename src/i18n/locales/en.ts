@@ -37,6 +37,7 @@ const messages = {
       popEmpty: 'No stash',
       terminalSystem: 'Open repository in system terminal',
       refreshRepository: 'Reload current repository state',
+      undoCommit: 'Undo the unpushed commit just created in this window',
       terminalToggleShow: 'Show in-app terminal',
       terminalToggleHide: 'Hide in-app terminal',
       layoutCustom: 'Custom layout → switch to stacked',
@@ -92,6 +93,7 @@ const messages = {
       cherryPick: 'Cherry pick',
       revert: 'Revert',
       reset: 'Reset',
+      undoCommit: 'Undo commit',
       createBranch: 'Create branch',
       switchBranch: 'Switch branch',
       deleteBranch: 'Delete branch',
@@ -1049,6 +1051,10 @@ const messages = {
     pull: {
       mergeRequired: 'Pull requires a merge: fast-forward not possible, a merge commit was created',
       diverged: 'Pull failed: the remote branch has diverged and cannot be fast-forwarded. Use merge or rebase mode',
+    },
+    commit: {
+      undoPublished: 'This commit is already published upstream; use Revert to preserve shared history',
+      undoUnavailable: 'The commit undo context is no longer valid; check the current HEAD',
     },
     rebase: {
       conflict: 'Rebase conflict detected — resolve it to continue',

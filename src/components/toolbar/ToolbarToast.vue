@@ -22,6 +22,7 @@ const OP_LABELS: Record<string, () => string> = {
   cherry_pick_commit: () => t('toolbar.opLabels.cherryPick'),
   revert_commit: () => t('toolbar.opLabels.revert'),
   reset_to_commit: () => t('toolbar.opLabels.reset'),
+  undo_last_commit: () => t('toolbar.opLabels.undoCommit'),
   create_branch: () => t('toolbar.opLabels.createBranch'),
   switch_branch: () => t('toolbar.opLabels.switchBranch'),
   delete_branch: () => t('toolbar.opLabels.deleteBranch'),

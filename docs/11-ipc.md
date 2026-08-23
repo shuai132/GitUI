@@ -28,6 +28,7 @@ GitUI 采用 Tauri v2 的 IPC 机制实现前后端通信，包括双向的请�
 
 ### 提交管理 (Commit)
 - `create_commit` / `amend_commit` / `amend_commit_message`：提交创建与修补。
+- `undo_last_commit(repo_id, expected_head)`：撤销当前分支刚创建的未发布单父提交；原子校验 HEAD 与 upstream 后执行 mixed reset，返回父提交 OID。
 - `checkout_commit` / `reset_to_commit`：版本回退与切换。
 - `cherry_pick_commit` / `revert_commit` / `create_tag`：高级版本操作。
 

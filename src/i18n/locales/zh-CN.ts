@@ -37,6 +37,7 @@ const messages = {
       popEmpty: '没有 stash',
       terminalSystem: '在系统终端打开仓库',
       refreshRepository: '重新加载当前仓库状态',
+      undoCommit: '撤销当前窗口刚创建且尚未推送的提交',
       terminalToggleShow: '显示应用内终端',
       terminalToggleHide: '隐藏应用内终端',
       layoutCustom: '自定义布局 → 切换为上下',
@@ -92,6 +93,7 @@ const messages = {
       cherryPick: 'Cherry pick',
       revert: 'Revert',
       reset: 'Reset',
+      undoCommit: '撤销提交',
       createBranch: '创建分支',
       switchBranch: '切换分支',
       deleteBranch: '删除分支',
@@ -1048,6 +1050,10 @@ const messages = {
     pull: {
       mergeRequired: 'Pull 需要合并：无法 fast-forward，已创建 merge commit',
       diverged: 'Pull 失败：远端分支已分叉，无法 fast-forward。请使用 merge 或 rebase 模式',
+    },
+    commit: {
+      undoPublished: '该提交已发布到上游；请使用 Revert 保留共享历史',
+      undoUnavailable: '提交撤销上下文已失效，请重新检查当前 HEAD',
     },
     rebase: {
       conflict: 'Rebase 出现冲突，请解决后继续',
