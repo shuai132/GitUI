@@ -424,8 +424,23 @@ export function useGitCommands() {
     mode: 'normal' | 'force' | 'force_with_lease',
   ) => call<void>('push_branch', { repoId, remoteName, branchName, mode })
 
-  const pushTag = (repoId: string, remoteName: string, tagName: string, force = false) =>
-    call<void>('push_tag', { repoId, remoteName, tagName, force })
+  const pushTag = (
+    repoId: string,
+    remoteName: string,
+    tagName: string,
+    force = false,
+    expectedLocalOid?: string,
+    expectedRemoteOid?: string | null,
+    verifyRemoteTarget = false,
+  ) => call<void>('push_tag', {
+    repoId,
+    remoteName,
+    tagName,
+    force,
+    expectedLocalOid: expectedLocalOid ?? null,
+    expectedRemoteOid: expectedRemoteOid ?? null,
+    verifyRemoteTarget,
+  })
 
   const deleteRemoteTag = (repoId: string, remoteName: string, tagName: string) =>
     call<void>('delete_remote_tag', { repoId, remoteName, tagName })

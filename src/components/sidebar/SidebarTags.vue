@@ -7,6 +7,7 @@ import { useRepoStore } from '@/stores/repos'
 import { useSidebarSectionState } from '@/composables/useSidebarSectionState'
 import { usePickRemote } from '@/composables/usePickRemote'
 import { useGitCommands } from '@/composables/useGitCommands'
+import { useGlobalToast } from '@/composables/useGlobalToast'
 import ContextMenu, { type ContextMenuItem } from '@/components/common/ContextMenu.vue'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import SidebarSearchControl from './SidebarSearchControl.vue'
@@ -20,6 +21,7 @@ const repoStore = useRepoStore()
 const sectionState = useSidebarSectionState()
 const { pickRemote } = usePickRemote()
 const git = useGitCommands()
+const { showError } = useGlobalToast()
 
 const tags = computed(() => historyStore.tags)
 const searchQuery = ref('')
@@ -52,6 +54,17 @@ function tagItemTitle(tag: TagInfo): string {
     ? `${tag.name}\n\n${tag.message}`
     : tag.name
   return `${base}\n[${tagStatusLabel(tagRemoteStatus(tag))}]`
+}
+
+function shortOid(oid: string): string {
+  return oid.slice(0, 7)
+}
+
+function isCurrentTag(repoId: string, tag: TagInfo): boolean {
+  if (repoStore.activeRepoId !== repoId) return false
+  return historyStore.tags.some(
+    (current) => current.name === tag.name && current.ref_oid === tag.ref_oid,
+  )
 }
 
 function jumpToBranchCommit(commitOid: string) {
@@ -152,7 +165,7 @@ async function onConfirmDialogConfirm() {
     await confirmDlg._resolve()
   } catch (err) {
     console.error(err)
-    alert(t('common.operationFailed', { detail: String(err) }))
+    showError(t('common.operationFailed', { detail: String(err) }))
   } finally {
     confirmDlg.loading = false
     confirmDlg.visible = false
@@ -192,12 +205,57 @@ async function onTagMenuAction(action: string) {
         if (!id) break
         const remote = await pickRemote(id)
         if (!remote) break
-        const force = action === 'push-force'
-        if (force) {
-          if (!confirm(t('sidebar.tag.confirmPushForce', { name: tag.name }))) break
+        if (!isCurrentTag(id, tag)) {
+          showError(t('sidebar.tag.contextChanged'))
+          break
         }
-        await git.pushTag(id, remote, tag.name, force)
-        historyStore.markTagPushed(tag.name)
+        const force = action === 'push-force'
+        if (!force) {
+          await git.pushTag(id, remote, tag.name, false, tag.ref_oid)
+          historyStore.markTagPushed(tag.name)
+          break
+        }
+
+        const remoteTags = await git.listRemoteTags(id, remote)
+        if (!isCurrentTag(id, tag)) {
+          showError(t('sidebar.tag.contextChanged'))
+          break
+        }
+        const remoteTag = remoteTags.find((candidate) => candidate.name === tag.name)
+        if (!remoteTag || remoteTag.ref_oid === tag.ref_oid) {
+          await git.pushTag(id, remote, tag.name, false, tag.ref_oid)
+          historyStore.markTagPushed(tag.name)
+          break
+        }
+
+        openConfirm(
+          t('sidebar.tag.forcePushTitle'),
+          t('sidebar.tag.forcePushPreview', {
+            name: tag.name,
+            remote,
+            localOid: shortOid(tag.ref_oid),
+            remoteOid: shortOid(remoteTag.ref_oid),
+          }),
+          async () => {
+            if (!isCurrentTag(id, tag)) {
+              throw new Error(t('sidebar.tag.contextChanged'))
+            }
+            await git.pushTag(
+              id,
+              remote,
+              tag.name,
+              true,
+              tag.ref_oid,
+              remoteTag.ref_oid,
+              true,
+            )
+            historyStore.markTagPushed(tag.name)
+          },
+          {
+            confirmLabel: t('sidebar.tag.forcePushConfirm'),
+            loadingLabel: t('sidebar.tag.forcePushing'),
+          },
+        )
         break
       }
       case 'delete': {
@@ -250,7 +308,7 @@ async function onTagMenuAction(action: string) {
     }
   } catch (err) {
     console.error(err)
-    alert(t('common.operationFailed', { detail: String(err) }))
+    showError(t('common.operationFailed', { detail: String(err) }))
   }
 }
 </script>

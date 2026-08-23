@@ -303,7 +303,11 @@ const messages = {
       confirmDeleteWithRemote: '标签 "{name}" 已同步到远程。删除本地标签的同时，是否也从远程删除？',
       deleteLocalOnly: '仅删除本地',
       deleteLocalAndRemote: '本地与远程一并删除',
-      confirmPushForce: '确认强制推送标签 "{name}"？如果远程已存在同名标签且指向不同 commit，将会被覆盖。',
+      forcePushTitle: '覆盖已发布的 Tag？',
+      forcePushPreview: '确认把标签 "{name}" 强推到 "{remote}"？\n\n远端：{remoteOid}\n本地：{localOid}\n\n已经拉取过该 Tag 的用户仍可能保留旧对象，需显式替换。',
+      forcePushConfirm: '覆盖远端 Tag',
+      forcePushing: '正在强推…',
+      contextChanged: '仓库或本地 Tag 已变化，旧的 Tag 操作已取消；请重新选择目标',
     },
     stash: {
       menu: {

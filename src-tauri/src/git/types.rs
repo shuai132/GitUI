@@ -233,6 +233,8 @@ pub struct BranchInfo {
 pub struct TagInfo {
     /// 标签短名（去掉 `refs/tags/` 前缀）
     pub name: String,
+    /// refs/tags/<name> 直接指向的对象 oid；附注标签为 tag object oid。
+    pub ref_oid: String,
     /// 标签指向的 commit oid（附注标签会 peel 到 commit）
     pub commit_oid: String,
     /// 是否为附注标签（annotated），否则为轻量标签

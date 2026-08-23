@@ -145,6 +145,7 @@ function branch(name: string): BranchInfo {
 function tag(name: string): TagInfo {
   return {
     name,
+    ref_oid: `${name}-ref-oid`,
     commit_oid: `${name}-oid`,
     is_annotated: false,
   }

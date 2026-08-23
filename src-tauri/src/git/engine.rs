@@ -238,6 +238,120 @@ mod tests {
     }
 
     #[test]
+    fn tag_info_keeps_exact_ref_oid_separate_from_peeled_commit() {
+        let test_repo = TestRepo::new();
+        let head_oid = test_repo.repo.head().unwrap().target().unwrap();
+        GitEngine::create_tag(test_repo.path_str(), "light", &head_oid.to_string(), None).unwrap();
+        GitEngine::create_tag(
+            test_repo.path_str(),
+            "annotated",
+            &head_oid.to_string(),
+            Some("release"),
+        )
+        .unwrap();
+
+        let tags = GitEngine::list_tags(test_repo.path_str()).unwrap();
+        let light = tags.iter().find(|tag| tag.name == "light").unwrap();
+        assert_eq!(light.ref_oid, head_oid.to_string());
+        assert_eq!(light.commit_oid, head_oid.to_string());
+
+        let annotated = tags.iter().find(|tag| tag.name == "annotated").unwrap();
+        assert_ne!(annotated.ref_oid, annotated.commit_oid);
+        assert_eq!(annotated.commit_oid, head_oid.to_string());
+        assert!(test_repo
+            .repo
+            .find_tag(Oid::from_str(&annotated.ref_oid).unwrap())
+            .is_ok());
+    }
+
+    #[test]
+    fn guarded_force_push_tag_rejects_changed_local_or_remote_targets() {
+        let test_repo = TestRepo::new();
+        let remote_dir = tempfile::tempdir().unwrap();
+        let remote_repo = Repository::init_bare(remote_dir.path()).unwrap();
+        test_repo
+            .repo
+            .remote("origin", remote_dir.path().to_str().unwrap())
+            .unwrap();
+        let initial_oid = test_repo.repo.head().unwrap().target().unwrap();
+        GitEngine::create_tag(test_repo.path_str(), "v1", &initial_oid.to_string(), None).unwrap();
+        let initial_tag_oid = test_repo
+            .repo
+            .find_reference("refs/tags/v1")
+            .unwrap()
+            .target()
+            .unwrap();
+        GitEngine::push_tag(
+            test_repo.path_str(),
+            "origin",
+            "v1",
+            false,
+            Some(&initial_tag_oid.to_string()),
+            None,
+            false,
+        )
+        .unwrap();
+
+        let next_oid = commit_file(&test_repo, "next", "next.txt", "next\n");
+        test_repo.repo.tag_delete("v1").unwrap();
+        let next_object = test_repo.repo.find_object(next_oid, None).unwrap();
+        test_repo
+            .repo
+            .tag_lightweight("v1", &next_object, false)
+            .unwrap();
+        drop(next_object);
+
+        let local_error = GitEngine::push_tag(
+            test_repo.path_str(),
+            "origin",
+            "v1",
+            true,
+            Some(&initial_tag_oid.to_string()),
+            Some(&initial_tag_oid.to_string()),
+            true,
+        )
+        .unwrap_err();
+        assert!(local_error.to_string().contains("Tag target changed"));
+        assert_eq!(
+            remote_repo.find_reference("refs/tags/v1").unwrap().target(),
+            Some(initial_tag_oid)
+        );
+
+        let remote_error = GitEngine::push_tag(
+            test_repo.path_str(),
+            "origin",
+            "v1",
+            true,
+            Some(&next_oid.to_string()),
+            Some(&next_oid.to_string()),
+            true,
+        )
+        .unwrap_err();
+        assert!(remote_error
+            .to_string()
+            .contains("Remote tag target changed"));
+        assert_eq!(
+            remote_repo.find_reference("refs/tags/v1").unwrap().target(),
+            Some(initial_tag_oid)
+        );
+
+        GitEngine::push_tag(
+            test_repo.path_str(),
+            "origin",
+            "v1",
+            true,
+            Some(&next_oid.to_string()),
+            Some(&initial_tag_oid.to_string()),
+            true,
+        )
+        .unwrap();
+        assert_eq!(
+            remote_repo.find_reference("refs/tags/v1").unwrap().target(),
+            Some(next_oid)
+        );
+    }
+
+    #[test]
     fn push_keeps_an_existing_upstream_when_using_another_remote() {
         let test_repo = TestRepo::new();
         let origin_dir = tempfile::tempdir().unwrap();

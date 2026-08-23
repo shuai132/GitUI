@@ -96,13 +96,24 @@ pub async fn push_tag(
     remote_name: String,
     tag_name: String,
     force: bool,
+    expected_local_oid: Option<String>,
+    expected_remote_oid: Option<String>,
+    verify_remote_target: bool,
     repo_manager: State<'_, RepoManager>,
 ) -> Result<(), GitError> {
     log::debug!("[push_tag] remote={remote_name} tag={tag_name} force={force}");
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    let result = GitEngine::push_tag(&meta.path, &remote_name, &tag_name, force);
+    let result = GitEngine::push_tag(
+        &meta.path,
+        &remote_name,
+        &tag_name,
+        force,
+        expected_local_oid.as_deref(),
+        expected_remote_oid.as_deref(),
+        verify_remote_target,
+    );
     log::debug!("[push_tag] result={result:?}");
     result
 }

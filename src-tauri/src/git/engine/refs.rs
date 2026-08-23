@@ -235,6 +235,7 @@ impl GitEngine {
                 });
                 tags.push(TagInfo {
                     name: short,
+                    ref_oid: oid.to_string(),
                     commit_oid,
                     is_annotated: true,
                     message,
@@ -250,6 +251,7 @@ impl GitEngine {
                     .unwrap_or_else(|_| oid.to_string());
                 tags.push(TagInfo {
                     name: short,
+                    ref_oid: oid.to_string(),
                     commit_oid,
                     is_annotated: false,
                     message: None,
@@ -299,6 +301,7 @@ impl GitEngine {
                                 tag_name.clone(),
                                 TagInfo {
                                     name: tag_name,
+                                    ref_oid: String::new(),
                                     commit_oid: oid.to_string(),
                                     is_annotated: true,
                                     message: None,
@@ -309,18 +312,25 @@ impl GitEngine {
                         }
                     } else {
                         let tag_name = refname["refs/tags/".len()..].to_string();
-                        map.insert(
-                            tag_name.clone(),
-                            TagInfo {
-                                name: tag_name,
-                                commit_oid: oid.to_string(),
-                                is_annotated: false,
-                                message: None,
-                                tagger_name: None,
-                                time: None,
-                            },
-                        );
+                        let entry = map.entry(tag_name.clone()).or_insert_with(|| TagInfo {
+                            name: tag_name,
+                            ref_oid: oid.to_string(),
+                            commit_oid: oid.to_string(),
+                            is_annotated: false,
+                            message: None,
+                            tagger_name: None,
+                            time: None,
+                        });
+                        entry.ref_oid = oid.to_string();
+                        if !entry.is_annotated {
+                            entry.commit_oid = oid.to_string();
+                        }
                     }
+                }
+            }
+            for tag in map.values_mut() {
+                if tag.ref_oid.is_empty() {
+                    tag.ref_oid.clone_from(&tag.commit_oid);
                 }
             }
             log::debug!(
@@ -353,6 +363,7 @@ impl GitEngine {
                         tag_name.clone(),
                         TagInfo {
                             name: tag_name,
+                            ref_oid: String::new(),
                             commit_oid: head.oid().to_string(),
                             is_annotated: true,
                             message: None,
@@ -363,17 +374,24 @@ impl GitEngine {
                 }
             } else {
                 let tag_name = name["refs/tags/".len()..].to_string();
-                map.insert(
-                    tag_name.clone(),
-                    TagInfo {
-                        name: tag_name,
-                        commit_oid: head.oid().to_string(),
-                        is_annotated: false,
-                        message: None,
-                        tagger_name: None,
-                        time: None,
-                    },
-                );
+                let entry = map.entry(tag_name.clone()).or_insert_with(|| TagInfo {
+                    name: tag_name,
+                    ref_oid: head.oid().to_string(),
+                    commit_oid: head.oid().to_string(),
+                    is_annotated: false,
+                    message: None,
+                    tagger_name: None,
+                    time: None,
+                });
+                entry.ref_oid = head.oid().to_string();
+                if !entry.is_annotated {
+                    entry.commit_oid = head.oid().to_string();
+                }
+            }
+        }
+        for tag in map.values_mut() {
+            if tag.ref_oid.is_empty() {
+                tag.ref_oid.clone_from(&tag.commit_oid);
             }
         }
         let _ = remote.disconnect();

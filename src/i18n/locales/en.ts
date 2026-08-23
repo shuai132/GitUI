@@ -303,7 +303,11 @@ const messages = {
       confirmDeleteWithRemote: 'Tag "{name}" is synced to remote. Do you want to delete it from remote as well?',
       deleteLocalOnly: 'Delete local only',
       deleteLocalAndRemote: 'Delete both local and remote',
-      confirmPushForce: 'Force push tag "{name}"? This will overwrite the tag on the remote if it already exists.',
+      forcePushTitle: 'Overwrite a published Tag?',
+      forcePushPreview: 'Force push tag "{name}" to "{remote}"?\n\nRemote: {remoteOid}\nLocal: {localOid}\n\nAnyone who already fetched this Tag may keep the old object until they replace it explicitly.',
+      forcePushConfirm: 'Overwrite remote Tag',
+      forcePushing: 'Force pushing…',
+      contextChanged: 'The repository or local Tag changed, so the pending Tag operation was cancelled. Select the Tag again.',
     },
     stash: {
       menu: {

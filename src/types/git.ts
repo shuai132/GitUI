@@ -140,6 +140,7 @@ export interface BranchInfo {
 
 export interface TagInfo {
   name: string
+  ref_oid: string
   commit_oid: string
   is_annotated: boolean
   message?: string

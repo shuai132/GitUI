@@ -125,8 +125,43 @@ impl GitEngine {
     /// 推送一个本地 tag 到远端。refspec `refs/tags/<name>:refs/tags/<name>`。
     /// 不带 force：已存在同名远端 tag 时 git2 会返回 non-fast-forward 错误，
     /// 由前端错误映射（`errors.push.nonFastForward`）给出中文提示。
-    pub fn push_tag(path: &str, remote_name: &str, tag_name: &str, force: bool) -> GitResult<()> {
+    pub fn push_tag(
+        path: &str,
+        remote_name: &str,
+        tag_name: &str,
+        force: bool,
+        expected_local_oid: Option<&str>,
+        expected_remote_oid: Option<&str>,
+        verify_remote_target: bool,
+    ) -> GitResult<()> {
         log::debug!("[engine::push_tag] remote={remote_name} tag={tag_name} force={force}");
+        if let Some(expected) = expected_local_oid {
+            let repo = Self::open(path)?;
+            let reference = repo.find_reference(&format!("refs/tags/{tag_name}"))?;
+            let current = reference.target().ok_or_else(|| {
+                GitError::OperationFailed(format!(
+                    "Tag target changed: refs/tags/{tag_name} is not a direct reference"
+                ))
+            })?;
+            if current.to_string() != expected {
+                return Err(GitError::OperationFailed(format!(
+                    "Tag target changed: expected {expected}, current {current}"
+                )));
+            }
+        }
+        if verify_remote_target {
+            let current = Self::list_remote_tags(path, remote_name)?
+                .into_iter()
+                .find(|tag| tag.name == tag_name)
+                .map(|tag| tag.ref_oid);
+            if current.as_deref() != expected_remote_oid {
+                return Err(GitError::OperationFailed(format!(
+                    "Remote tag target changed: expected {}, current {}",
+                    expected_remote_oid.unwrap_or("missing"),
+                    current.as_deref().unwrap_or("missing")
+                )));
+            }
+        }
         let refspec = if force {
             format!("+refs/tags/{name}:refs/tags/{name}", name = tag_name)
         } else {
