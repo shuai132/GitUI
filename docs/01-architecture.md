@@ -41,6 +41,8 @@
 
 公共 `Modal` 统一提供 modal dialog 语义和键盘焦点边界：打开时焦点进入最上层弹窗，Tab / Shift+Tab 在其中循环，关闭后恢复到原触发控件；嵌套弹窗沿用最上层优先的 Escape 与焦点规则。
 
+公共 `ContextMenu` 使用 menu / menuitem 语义，打开时聚焦首个可用项；方向键、Home / End、Enter / Space、Escape 和左右键二级菜单导航由组件统一处理，业务组件只提供 item 与 action。
+
 ## 错误处理流
 
 系统建立了从底层到 UI 的完整错误映射链：
