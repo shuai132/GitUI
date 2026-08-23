@@ -54,7 +54,7 @@ GitUI 采用 Tauri v2 的 IPC 机制实现前后端通信，包括双向的请�
 ### 合并与变基 (Merge / Rebase)
 - `merge_branch` / `merge_continue` / `merge_abort`：合并流程控制。`merge_branch` 必须传确认时的 HEAD OID / ref 与 source OID，后端在写入前解析并复核引用。
 - `rebase_start` / `rebase_continue` / `rebase_abort` / `rebase_plan`：交互式变基流。计划与启动请求都携带预期 HEAD OID / ref、upstream 和可选 onto OID，任一目标变化时拒绝旧计划。
-- `get_conflict_file` / `mark_conflict_resolved`：冲突解决契约。
+- `get_conflict_file` / `mark_conflict_resolved` / `checkout_conflict_side`：冲突解决契约。读取结果携带 index 三方条目的不透明上下文标识；保存合成内容或选择某侧时必须传回，条目已变化或已被解决则不写工作区与 Index。
 
 ### 贮藏 (Stash)
 

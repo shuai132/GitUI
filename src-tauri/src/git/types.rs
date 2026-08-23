@@ -169,6 +169,8 @@ pub struct RebaseTodoItem {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConflictFile {
     pub path: String,
+    /// Index 中三方条目的不透明身份，解决冲突时必须原样传回。
+    pub context_id: String,
     pub base: Option<String>,
     pub ours: Option<String>,
     pub theirs: Option<String>,

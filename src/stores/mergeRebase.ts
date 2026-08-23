@@ -26,6 +26,8 @@ export const useMergeRebaseStore = defineStore('mergeRebase', () => {
   const lastError = ref<string | null>(null)
 
   const git = useGitCommands()
+  let conflictCacheGeneration = 0
+  const conflictLoadSeq = new Map<string, number>()
 
   const isOngoing = computed(() => {
     const k = repoState.value?.kind
@@ -43,7 +45,9 @@ export const useMergeRebaseStore = defineStore('mergeRebase', () => {
   function setRepoState(state: RepoState | null) {
     repoState.value = state
     // 切状态时清冲突缓存
+    conflictCacheGeneration++
     conflictCache.value = new Map()
+    conflictLoadSeq.clear()
   }
 
   async function refreshFromServer() {
@@ -331,37 +335,50 @@ export const useMergeRebaseStore = defineStore('mergeRebase', () => {
 
   // ── Conflict ─────────────────────────────────────────────────────────
 
-  async function loadConflictFile(filePath: string): Promise<ConflictFile | null> {
-    const repoStore = useRepoStore()
-    if (!repoStore.activeRepoId) return null
-    const cached = conflictCache.value.get(filePath)
+  function conflictCacheKey(repoId: string, filePath: string): string {
+    return `${repoId}\u0000${filePath}`
+  }
+
+  async function loadConflictFile(repoId: string, filePath: string): Promise<ConflictFile> {
+    const key = conflictCacheKey(repoId, filePath)
+    const cached = conflictCache.value.get(key)
     if (cached) return cached
+    const generation = conflictCacheGeneration
+    const requestSeq = (conflictLoadSeq.get(key) ?? 0) + 1
+    conflictLoadSeq.set(key, requestSeq)
     try {
-      const file = await git.getConflictFile(repoStore.activeRepoId, filePath)
-      conflictCache.value.set(filePath, file)
+      const file = await git.getConflictFile(repoId, filePath)
+      if (
+        generation === conflictCacheGeneration &&
+        conflictLoadSeq.get(key) === requestSeq
+      ) {
+        conflictCache.value.set(key, file)
+      }
       return file
     } catch (e: unknown) {
       lastError.value = String(e)
-      return null
+      throw e
     }
   }
 
-  async function resolveConflict(filePath: string, content: string) {
-    const repoStore = useRepoStore()
-    if (!repoStore.activeRepoId) return
-    await git.markConflictResolved(repoStore.activeRepoId, filePath, content)
-    conflictCache.value.delete(filePath)
-    const workspaceStore = useWorkspaceStore()
-    await workspaceStore.refresh()
+  async function resolveConflict(repoId: string, file: ConflictFile, content: string) {
+    await git.markConflictResolved(repoId, file.path, content, file.context_id)
+    conflictCache.value.delete(conflictCacheKey(repoId, file.path))
+    if (useRepoStore().activeRepoId === repoId) {
+      await useWorkspaceStore().refresh(repoId)
+    }
   }
 
-  async function useConflictSide(filePath: string, side: 'ours' | 'theirs') {
-    const repoStore = useRepoStore()
-    if (!repoStore.activeRepoId) return
-    await git.checkoutConflictSide(repoStore.activeRepoId, filePath, side)
-    conflictCache.value.delete(filePath)
-    const workspaceStore = useWorkspaceStore()
-    await workspaceStore.refresh()
+  async function useConflictSide(
+    repoId: string,
+    file: ConflictFile,
+    side: 'ours' | 'theirs',
+  ) {
+    await git.checkoutConflictSide(repoId, file.path, side, file.context_id)
+    conflictCache.value.delete(conflictCacheKey(repoId, file.path))
+    if (useRepoStore().activeRepoId === repoId) {
+      await useWorkspaceStore().refresh(repoId)
+    }
   }
 
   // ── 拖拽触发的临时状态（在 HistoryView 和 DragActionDialog 间共享） ──
@@ -369,7 +386,9 @@ export const useMergeRebaseStore = defineStore('mergeRebase', () => {
 
   function reset() {
     repoState.value = null
+    conflictCacheGeneration++
     conflictCache.value = new Map()
+    conflictLoadSeq.clear()
     busy.value = false
     lastError.value = null
     dragPayload.value = null

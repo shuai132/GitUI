@@ -1129,6 +1129,7 @@ const messages = {
       labelOurs: 'ours',
       labelTheirs: 'theirs',
       markersPresent: '仍有未处理的冲突标记',
+      contextChanged: '冲突加载后仓库或内容已变化，请重新选择冲突后再操作。',
       outputReadonly: '勾选 A / B 的行逐行组装 Output',
       save: '保存并 stage',
       saving: '保存中...',

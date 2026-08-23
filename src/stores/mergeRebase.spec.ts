@@ -1,6 +1,6 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { WorkspaceStatus } from '@/types/git'
+import type { ConflictFile, WorkspaceStatus } from '@/types/git'
 import { useMergeRebaseStore } from './mergeRebase'
 
 const status: WorkspaceStatus = {
@@ -32,6 +32,9 @@ const mocks = vi.hoisted(() => ({
     getRepoState: vi.fn(),
     mergeBranch: vi.fn(),
     rebaseStart: vi.fn(),
+    getConflictFile: vi.fn(),
+    markConflictResolved: vi.fn(),
+    checkoutConflictSide: vi.fn(),
   },
 }))
 
@@ -55,6 +58,8 @@ describe('merge and rebase auto-stash lifecycle', () => {
     mocks.git.stashPop.mockResolvedValue(undefined)
     mocks.git.mergeBranch.mockResolvedValue(undefined)
     mocks.git.rebaseStart.mockResolvedValue(undefined)
+    mocks.git.markConflictResolved.mockResolvedValue(undefined)
+    mocks.git.checkoutConflictSide.mockResolvedValue(undefined)
   })
 
   it('keeps original changes stashed when Merge stops on a conflict', async () => {
@@ -110,5 +115,62 @@ describe('merge and rebase auto-stash lifecycle', () => {
     expect(mocks.git.stashPop).toHaveBeenCalledWith('repo-1', 0, 'auto-stash-oid')
     expect(mocks.stash.refresh).toHaveBeenCalledOnce()
     expect(store.lastError).toBeNull()
+  })
+
+  it('isolates conflict cache entries by repository', async () => {
+    const repoOneFile: ConflictFile = {
+      path: 'same.txt',
+      context_id: 'repo-one-context',
+      ours: 'one',
+      theirs: 'two',
+      merged_preview: '',
+      is_binary: false,
+    }
+    const repoTwoFile: ConflictFile = {
+      ...repoOneFile,
+      context_id: 'repo-two-context',
+      ours: 'three',
+    }
+    mocks.git.getConflictFile
+      .mockResolvedValueOnce(repoOneFile)
+      .mockResolvedValueOnce(repoTwoFile)
+    const store = useMergeRebaseStore()
+
+    expect(await store.loadConflictFile('repo-1', 'same.txt')).toEqual(repoOneFile)
+    expect(await store.loadConflictFile('repo-2', 'same.txt')).toEqual(repoTwoFile)
+    expect(await store.loadConflictFile('repo-1', 'same.txt')).toEqual(repoOneFile)
+    expect(mocks.git.getConflictFile).toHaveBeenCalledTimes(2)
+  })
+
+  it('passes the loaded conflict identity and only refreshes its active repository', async () => {
+    const file: ConflictFile = {
+      path: 'conflict.txt',
+      context_id: 'conflict-context',
+      ours: 'one',
+      theirs: 'two',
+      merged_preview: '',
+      is_binary: false,
+    }
+    const store = useMergeRebaseStore()
+
+    await store.resolveConflict('repo-1', file, 'resolved')
+    expect(mocks.git.markConflictResolved).toHaveBeenCalledWith(
+      'repo-1',
+      'conflict.txt',
+      'resolved',
+      'conflict-context',
+    )
+    expect(mocks.workspace.refresh).toHaveBeenCalledWith('repo-1')
+
+    mocks.workspace.refresh.mockClear()
+    mocks.repo.activeRepoId = 'repo-2'
+    await store.useConflictSide('repo-1', file, 'ours')
+    expect(mocks.git.checkoutConflictSide).toHaveBeenCalledWith(
+      'repo-1',
+      'conflict.txt',
+      'ours',
+      'conflict-context',
+    )
+    expect(mocks.workspace.refresh).not.toHaveBeenCalled()
   })
 })

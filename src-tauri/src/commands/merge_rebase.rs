@@ -166,12 +166,13 @@ pub async fn mark_conflict_resolved(
     repo_id: String,
     file_path: String,
     content: String,
+    expected_context: String,
     repo_manager: State<'_, RepoManager>,
 ) -> Result<(), GitError> {
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    GitEngine::mark_conflict_resolved(&meta.path, &file_path, &content)
+    GitEngine::mark_conflict_resolved(&meta.path, &file_path, &content, &expected_context)
 }
 
 #[tauri::command]
@@ -179,10 +180,11 @@ pub async fn checkout_conflict_side(
     repo_id: String,
     file_path: String,
     side: String,
+    expected_context: String,
     repo_manager: State<'_, RepoManager>,
 ) -> Result<(), GitError> {
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    GitEngine::checkout_conflict_side(&meta.path, &file_path, &side)
+    GitEngine::checkout_conflict_side(&meta.path, &file_path, &side, &expected_context)
 }

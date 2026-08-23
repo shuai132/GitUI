@@ -1130,6 +1130,7 @@ const messages = {
       labelOurs: 'ours',
       labelTheirs: 'theirs',
       markersPresent: 'Conflict markers still present',
+      contextChanged: 'The repository or conflict changed after it was loaded. Select the conflict again before resolving it.',
       outputReadonly: 'Tick lines in A / B to assemble the Output',
       save: 'Save & stage',
       saving: 'Saving…',

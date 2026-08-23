@@ -433,6 +433,7 @@ function fallbackDiffIdentityKey(diff: FileDiff | null): string | null {
   <!-- 冲突文件：专用双栏解决视图（自带 toolbar） -->
   <ConflictView
     v-if="conflictFilePath"
+    :repo-id="repoId"
     :file-path="conflictFilePath"
     @close="emit('close')"
   />

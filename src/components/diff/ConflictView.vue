@@ -12,6 +12,7 @@ import { useSyncedConflictPanes } from '@/composables/diff/useSyncedConflictPane
 const { t } = useI18n()
 
 const props = defineProps<{
+  repoId?: string
   filePath: string | null
 }>()
 
@@ -23,25 +24,37 @@ const conflict = ref<ConflictFile | null>(null)
 const loading = ref(false)
 const saving = ref(false)
 const errorMsg = ref<string | null>(null)
+let loadRequestSeq = 0
 
 async function load() {
-  if (!props.filePath) {
+  const requestSeq = ++loadRequestSeq
+  const repoId = props.repoId
+  const filePath = props.filePath
+  if (!repoId || !filePath) {
     conflict.value = null
+    loading.value = false
     return
   }
   loading.value = true
   errorMsg.value = null
+  conflict.value = null
   try {
-    const file = await mr.loadConflictFile(props.filePath)
+    const file = await mr.loadConflictFile(repoId, filePath)
+    if (
+      requestSeq !== loadRequestSeq ||
+      props.repoId !== repoId ||
+      props.filePath !== filePath
+    ) return
     conflict.value = file
   } catch (e) {
+    if (requestSeq !== loadRequestSeq) return
     errorMsg.value = String(e)
   } finally {
-    loading.value = false
+    if (requestSeq === loadRequestSeq) loading.value = false
   }
 }
 
-watch(() => props.filePath, load, { immediate: true })
+watch(() => [props.repoId, props.filePath], load, { immediate: true })
 
 const alignment = computed(() => {
   if (!conflict.value || conflict.value.is_binary) {
@@ -143,11 +156,16 @@ function lineHtml(content: string, side: 'ours' | 'theirs' | 'output', lineNo: n
 }
 
 async function onSave() {
-  if (!props.filePath) return
+  const repoId = props.repoId
+  const file = conflict.value
+  if (!repoId || !file || file.path !== props.filePath) {
+    errorMsg.value = t('conflict.view.contextChanged')
+    return
+  }
   saving.value = true
   errorMsg.value = null
   try {
-    await mr.resolveConflict(props.filePath, savedText.value)
+    await mr.resolveConflict(repoId, file, savedText.value)
     emit('close')
   } catch (e) {
     errorMsg.value = String(e)
@@ -184,7 +202,11 @@ async function onSave() {
       <button class="btn btn-secondary" @click="clearAll">
         {{ t('conflict.view.clearAll') }}
       </button>
-      <button class="btn btn-primary" :disabled="saving" @click="onSave">
+      <button
+        class="btn btn-primary"
+        :disabled="saving || !conflict || conflict.is_binary"
+        @click="onSave"
+      >
         {{ saving ? t('conflict.view.saving') : t('conflict.view.save') }}
       </button>
       <button class="btn-icon" :title="t('diff.toolbar.close')" @click="emit('close')">

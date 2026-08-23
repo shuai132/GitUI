@@ -68,6 +68,7 @@ impl GitEngine {
 
         Ok(ConflictFile {
             path: file_path.to_string(),
+            context_id: conflict_context_id(&conflict),
             base,
             ours,
             theirs,
@@ -77,8 +78,16 @@ impl GitEngine {
     }
 
     /// 把解决后的内容写回工作区并标记为已解决（stage）。
-    pub fn mark_conflict_resolved(path: &str, file_path: &str, content: &str) -> GitResult<()> {
+    pub fn mark_conflict_resolved(
+        path: &str,
+        file_path: &str,
+        content: &str,
+        expected_context: &str,
+    ) -> GitResult<()> {
         let repo = Self::open(path)?;
+        let mut index = repo.index()?;
+        let conflict = find_conflict(&index, file_path)?;
+        ensure_conflict_context(&conflict, expected_context)?;
         let workdir = repo
             .workdir()
             .ok_or_else(|| GitError::OperationFailed("裸仓库不支持冲突文件".to_string()))?;
@@ -90,7 +99,6 @@ impl GitEngine {
         std::fs::write(&disk, content)
             .map_err(|e| GitError::OperationFailed(format!("写入文件失败：{e}")))?;
 
-        let mut index = repo.index()?;
         // add_path 会把 stage 1/2/3 的 conflict 条目替换为 stage 0，等价于解决
         index.add_path(std::path::Path::new(file_path))?;
         index.write()?;
@@ -98,10 +106,16 @@ impl GitEngine {
     }
 
     /// 使用冲突的某一侧（ours 或 theirs）作为解决方案。
-    pub fn checkout_conflict_side(path: &str, file_path: &str, side: &str) -> GitResult<()> {
+    pub fn checkout_conflict_side(
+        path: &str,
+        file_path: &str,
+        side: &str,
+        expected_context: &str,
+    ) -> GitResult<()> {
         let repo = Self::open(path)?;
-        let index = repo.index()?;
+        let mut index = repo.index()?;
         let conflict = find_conflict(&index, file_path)?;
+        ensure_conflict_context(&conflict, expected_context)?;
 
         let entry = match side {
             "ours" => conflict.our.as_ref(),
@@ -119,9 +133,8 @@ impl GitEngine {
                     .ok_or_else(|| GitError::OperationFailed("裸仓库不支持".to_string()))?;
                 let disk = workdir.join(file_path);
                 let _ = std::fs::remove_file(&disk);
-                let mut idx = repo.index()?;
-                idx.remove_path(std::path::Path::new(file_path)).ok();
-                idx.write()?;
+                index.remove_path(std::path::Path::new(file_path)).ok();
+                index.write()?;
                 return Ok(());
             }
         };
@@ -137,9 +150,8 @@ impl GitEngine {
         std::fs::write(&disk, &bytes)
             .map_err(|e| GitError::OperationFailed(format!("写入文件失败：{e}")))?;
 
-        let mut idx = repo.index()?;
-        idx.add_path(std::path::Path::new(file_path))?;
-        idx.write()?;
+        index.add_path(std::path::Path::new(file_path))?;
+        index.write()?;
         Ok(())
     }
 }
@@ -159,6 +171,30 @@ fn find_conflict(index: &git2::Index, file_path: &str) -> GitResult<IndexConflic
     Err(GitError::OperationFailed(format!(
         "未找到冲突文件：{file_path}"
     )))
+}
+
+fn conflict_context_id(conflict: &IndexConflict) -> String {
+    fn entry_id(entry: Option<&git2::IndexEntry>) -> String {
+        entry
+            .map(|entry| format!("{}:{:o}", entry.id, entry.mode))
+            .unwrap_or_else(|| "-".to_string())
+    }
+
+    format!(
+        "{}|{}|{}",
+        entry_id(conflict.ancestor.as_ref()),
+        entry_id(conflict.our.as_ref()),
+        entry_id(conflict.their.as_ref()),
+    )
+}
+
+fn ensure_conflict_context(conflict: &IndexConflict, expected_context: &str) -> GitResult<()> {
+    if conflict_context_id(conflict) == expected_context {
+        return Ok(());
+    }
+    Err(GitError::OperationFailed(
+        "Conflict target changed after it was loaded".to_string(),
+    ))
 }
 
 fn read_blob(repo: &Repository, oid: &git2::Oid) -> GitResult<Vec<u8>> {

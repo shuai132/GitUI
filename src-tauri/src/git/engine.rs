@@ -1015,6 +1015,78 @@ mod tests {
     }
 
     #[test]
+    fn conflict_resolution_rejects_a_changed_index_context_before_writing() {
+        let test_repo = TestRepo::new();
+        let path = test_repo.path_str();
+        let initial = test_repo.repo.head().unwrap().peel_to_commit().unwrap();
+        let original_branch = test_repo
+            .repo
+            .head()
+            .unwrap()
+            .shorthand()
+            .unwrap()
+            .to_string();
+        test_repo
+            .repo
+            .branch("conflict-source", &initial, false)
+            .unwrap();
+        drop(initial);
+
+        let ours = commit_file(&test_repo, "ours", "existing.txt", "ours\n");
+        checkout_branch(&test_repo.repo, "conflict-source");
+        let theirs = commit_file(&test_repo, "theirs", "existing.txt", "theirs\n");
+        checkout_branch(&test_repo.repo, &original_branch);
+
+        let merge_error = GitEngine::merge_branch(
+            path,
+            "conflict-source",
+            MergeStrategy::Auto,
+            None,
+            &ours.to_string(),
+            &format!("refs/heads/{original_branch}"),
+            &theirs.to_string(),
+        )
+        .unwrap_err();
+        assert!(merge_error.to_string().contains("冲突"), "{merge_error}");
+
+        let conflict = GitEngine::get_conflict_file(path, "existing.txt").unwrap();
+        let before = fs::read_to_string(test_repo.dir.path().join("existing.txt")).unwrap();
+        let wrong_context = "changed-index-context";
+
+        let resolve_error = GitEngine::mark_conflict_resolved(
+            path,
+            "existing.txt",
+            "stale editor output\n",
+            wrong_context,
+        )
+        .unwrap_err();
+        assert!(resolve_error
+            .to_string()
+            .contains("Conflict target changed"));
+        assert_eq!(
+            fs::read_to_string(test_repo.dir.path().join("existing.txt")).unwrap(),
+            before
+        );
+
+        let side_error =
+            GitEngine::checkout_conflict_side(path, "existing.txt", "ours", wrong_context)
+                .unwrap_err();
+        assert!(side_error.to_string().contains("Conflict target changed"));
+        assert_eq!(
+            fs::read_to_string(test_repo.dir.path().join("existing.txt")).unwrap(),
+            before
+        );
+
+        GitEngine::checkout_conflict_side(path, "existing.txt", "ours", &conflict.context_id)
+            .unwrap();
+        assert_eq!(
+            fs::read_to_string(test_repo.dir.path().join("existing.txt")).unwrap(),
+            "ours\n"
+        );
+        assert!(GitEngine::get_conflict_file(path, "existing.txt").is_err());
+    }
+
+    #[test]
     fn test_discard_stops_before_checkout_when_trash_fails() {
         let test_repo = TestRepo::new();
         let path = test_repo.path_str();

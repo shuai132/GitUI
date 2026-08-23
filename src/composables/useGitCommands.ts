@@ -221,13 +221,25 @@ export function useGitCommands() {
     repoId: string,
     filePath: string,
     content: string,
-  ) => call<void>('mark_conflict_resolved', { repoId, filePath, content })
+    expectedContext: string,
+  ) => call<void>('mark_conflict_resolved', {
+    repoId,
+    filePath,
+    content,
+    expectedContext,
+  })
 
   const checkoutConflictSide = (
     repoId: string,
     filePath: string,
     side: 'ours' | 'theirs',
-  ) => call<void>('checkout_conflict_side', { repoId, filePath, side })
+    expectedContext: string,
+  ) => call<void>('checkout_conflict_side', {
+    repoId,
+    filePath,
+    side,
+    expectedContext,
+  })
 
   // ---- Commit ----
   const createCommit = (repoId: string, message: string) =>

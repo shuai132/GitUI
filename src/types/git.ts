@@ -93,6 +93,8 @@ export interface RebaseTodoItem {
 
 export interface ConflictFile {
   path: string
+  /** Opaque identity of the index conflict entries; pass back when resolving. */
+  context_id: string
   base?: string
   ours?: string
   theirs?: string

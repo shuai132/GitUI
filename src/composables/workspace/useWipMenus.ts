@@ -106,6 +106,7 @@ export function useWipMenus(options: WipMenuOptions) {
     visible: false,
     x: 0,
     y: 0,
+    repoId: null as string | null,
     file: null as FileEntry | null,
     path: '',
     isDir: false,
@@ -237,6 +238,7 @@ export function useWipMenus(options: WipMenuOptions) {
     fileMenu.file = payload.file ?? null
     fileMenu.path = payload.path
     fileMenu.isDir = payload.isDir
+    fileMenu.repoId = repoStore.activeRepoId
     fileMenu.x = e.clientX
     fileMenu.y = e.clientY
     fileMenu.visible = true
@@ -264,20 +266,34 @@ export function useWipMenus(options: WipMenuOptions) {
     const dirPath = isDir ? absPath : (absPath.substring(0, absPath.lastIndexOf('/')) || repoPath)
 
     try {
-      if (action === 'use-ours') {
-        await mergeRebaseStore.useConflictSide(targetPath, 'ours')
-      } else if (action === 'use-theirs') {
-        await mergeRebaseStore.useConflictSide(targetPath, 'theirs')
-      } else if (action === 'mark-resolved') {
-        const content = await git.readWorktreeFile(repoStore.activeRepoId!, targetPath, true)
-          .then((b) => {
-            const binary = atob(b.bytes_base64)
-            const bytes = new Uint8Array(binary.length)
-            for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
-            return new TextDecoder().decode(bytes)
-          })
-          .catch(() => '')
-        await mergeRebaseStore.resolveConflict(targetPath, content)
+      if (action === 'use-ours' || action === 'use-theirs' || action === 'mark-resolved') {
+        const repoId = fileMenu.repoId
+        if (!repoId || repoStore.activeRepoId !== repoId) {
+          throw new Error(t('conflict.view.contextChanged'))
+        }
+        const conflict = await mergeRebaseStore.loadConflictFile(repoId, targetPath)
+        if (repoStore.activeRepoId !== repoId) {
+          throw new Error(t('conflict.view.contextChanged'))
+        }
+        if (action === 'use-ours' || action === 'use-theirs') {
+          await mergeRebaseStore.useConflictSide(
+            repoId,
+            conflict,
+            action === 'use-ours' ? 'ours' : 'theirs',
+          )
+        } else {
+          const content = await git.readWorktreeFile(repoId, targetPath, true)
+            .then((b) => {
+              const binary = atob(b.bytes_base64)
+              const bytes = new Uint8Array(binary.length)
+              for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+              return new TextDecoder().decode(bytes)
+            })
+          if (repoStore.activeRepoId !== repoId) {
+            throw new Error(t('conflict.view.contextChanged'))
+          }
+          await mergeRebaseStore.resolveConflict(repoId, conflict, content)
+        }
       } else if (action === 'toggle') {
         await toggleFile(isDir ? targetPath : f!, isDir)
       } else if (action === 'move-front') {
