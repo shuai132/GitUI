@@ -75,6 +75,48 @@ describe('repos store active backend sync', () => {
     expect(store.activeRepoId).toBe('repo-b')
   })
 
+  it('restores the previous active repository when activation fails', async () => {
+    const store = useRepoStore()
+    store.repos = [repo('repo-a', 'alpha'), repo('repo-b', 'beta')]
+    store.activeRepoId = 'repo-a'
+    commandMocks.setActiveRepo
+      .mockRejectedValueOnce(new Error('watcher failed'))
+      .mockResolvedValueOnce(undefined)
+
+    await expect(store.setActive('repo-b')).rejects.toThrow('watcher failed')
+
+    expect(store.activeRepoId).toBe('repo-a')
+    expect(commandMocks.setActiveRepo).toHaveBeenNthCalledWith(1, 'repo-b', 1)
+    expect(commandMocks.setActiveRepo).toHaveBeenNthCalledWith(2, 'repo-a', 2)
+    expect(persistedStore.values.get('activePath')).toBe('/repos/alpha')
+  })
+
+  it('does not let an older activation failure roll back a newer selection', async () => {
+    let rejectFirst!: (reason: Error) => void
+    const firstActivation = new Promise<void>((_resolve, reject) => {
+      rejectFirst = reject
+    })
+    commandMocks.setActiveRepo
+      .mockReturnValueOnce(firstActivation)
+      .mockResolvedValueOnce(undefined)
+    const store = useRepoStore()
+    store.repos = [
+      repo('repo-a', 'alpha'),
+      repo('repo-b', 'beta'),
+      repo('repo-c', 'gamma'),
+    ]
+    store.activeRepoId = 'repo-a'
+
+    const older = store.setActive('repo-b')
+    await store.setActive('repo-c')
+    rejectFirst(new Error('stale watcher failed'))
+    await expect(older).rejects.toThrow('stale watcher failed')
+
+    expect(store.activeRepoId).toBe('repo-c')
+    expect(commandMocks.setActiveRepo).toHaveBeenCalledTimes(2)
+    expect(persistedStore.values.get('activePath')).toBe('/repos/gamma')
+  })
+
   it('keeps the active repo unchanged when closing a non-active repo', async () => {
     const store = useRepoStore()
     store.repos = [repo('repo-a', 'alpha'), repo('repo-b', 'beta')]

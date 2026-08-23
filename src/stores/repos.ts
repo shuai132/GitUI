@@ -329,9 +329,26 @@ export const useRepoStore = defineStore('repos', () => {
   }
 
   async function setActive(repoId: string) {
+    const previousRepoId = activeRepoId.value
     activeRepoId.value = repoId
-    await syncBackendActive(repoId)
-    await persist()
+    const generation = nextActiveGeneration()
+    try {
+      await git.setActiveRepo(repoId, generation)
+      await persist()
+    } catch (caught: unknown) {
+      // A newer activation owns the visible state and backend generation; an older
+      // failure must not roll it back.
+      if (activeGeneration !== generation) throw caught
+
+      activeRepoId.value = previousRepoId
+      try {
+        await syncBackendActive(previousRepoId)
+        await persist()
+      } catch (rollbackError: unknown) {
+        console.error('[repos] failed to restore the previous active repository:', rollbackError)
+      }
+      throw caught
+    }
   }
 
   async function reorderRepos(fromIndex: number, toIndex: number) {
