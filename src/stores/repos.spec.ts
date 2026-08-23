@@ -9,11 +9,22 @@ const commandMocks = vi.hoisted(() => ({
   openRepo: vi.fn(),
 }))
 
+const persistedStore = vi.hoisted(() => ({
+  values: new Map<string, unknown>(),
+  save: vi.fn(async () => {}),
+}))
+
 vi.mock('@tauri-apps/plugin-store', () => ({
   LazyStore: class {
-    async get<T>(): Promise<T | null> { return null }
-    async set(_key: string, _value: unknown) {}
-    async save() {}
+    async get<T>(key: string): Promise<T | null> {
+      return (persistedStore.values.get(key) as T | undefined) ?? null
+    }
+    async set(key: string, value: unknown) {
+      persistedStore.values.set(key, value)
+    }
+    async save() {
+      await persistedStore.save()
+    }
   },
 }))
 
@@ -33,6 +44,7 @@ describe('repos store active backend sync', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     vi.clearAllMocks()
+    persistedStore.values.clear()
     commandMocks.closeRepo.mockResolvedValue(undefined)
     commandMocks.setActiveRepo.mockResolvedValue(undefined)
     commandMocks.openRepo.mockReset()
@@ -119,5 +131,65 @@ describe('repos store active backend sync', () => {
     expect(result.opened).toEqual([existing])
     expect(store.activeRepoId).toBe('repo-a')
     expect(commandMocks.setActiveRepo).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps unavailable persisted repositories through later saves', async () => {
+    const unavailablePath = '/Volumes/offline/client'
+    persistedStore.values.set('paths', ['/repos/alpha', unavailablePath])
+    persistedStore.values.set('activePath', '/repos/alpha')
+    commandMocks.openRepo.mockImplementation(async (path: string) => {
+      if (path === unavailablePath) throw new Error('volume is offline')
+      return repo('repo-a', 'alpha')
+    })
+    const store = useRepoStore()
+
+    await store.loadPersisted()
+
+    expect(store.repos.map((item) => item.path)).toEqual(['/repos/alpha'])
+    expect(store.unavailableRepos).toEqual([{
+      path: unavailablePath,
+      name: 'client',
+      error: 'Error: volume is offline',
+    }])
+
+    await store.setActive('repo-a')
+    expect(persistedStore.values.get('paths')).toEqual(['/repos/alpha', unavailablePath])
+  })
+
+  it('recovers an unavailable repository from a relocated path', async () => {
+    const store = useRepoStore()
+    store.unavailableRepos = [{
+      path: '/Volumes/offline/client',
+      name: 'client',
+      error: 'offline',
+    }]
+    const relocated = repo('repo-client', 'client')
+    commandMocks.openRepo.mockResolvedValueOnce(relocated)
+
+    const opened = await store.recoverUnavailableRepo(
+      '/Volumes/offline/client',
+      relocated.path,
+    )
+
+    expect(opened).toEqual(relocated)
+    expect(store.unavailableRepos).toEqual([])
+    expect(store.repos).toEqual([relocated])
+    expect(store.activeRepoId).toBe('repo-client')
+    expect(persistedStore.values.get('paths')).toEqual([relocated.path])
+  })
+
+  it('removes an unavailable repository only after an explicit action', async () => {
+    const store = useRepoStore()
+    store.repos = [repo('repo-a', 'alpha')]
+    store.unavailableRepos = [{
+      path: '/Volumes/offline/client',
+      name: 'client',
+      error: 'offline',
+    }]
+
+    await store.removeUnavailableRepo('/Volumes/offline/client')
+
+    expect(store.unavailableRepos).toEqual([])
+    expect(persistedStore.values.get('paths')).toEqual(['/repos/alpha'])
   })
 })

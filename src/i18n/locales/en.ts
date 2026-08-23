@@ -210,6 +210,11 @@ const messages = {
       dropHint: 'Drop Git repository folders here',
       dropActive: 'Release to open repositories',
       dropOpening: 'Opening repositories…',
+      unavailable: 'Unavailable',
+      unavailableTitle: 'Repository unavailable\nLast path: {path}\n{error}',
+      retryUnavailable: 'Retry the last path',
+      locateUnavailable: 'Locate repository folder',
+      unavailableActionFailed: 'Failed to recover repository: {detail}',
       menu: {
         copyName: 'Copy name',
         copyAbsolutePath: 'Copy absolute path',

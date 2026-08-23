@@ -210,6 +210,11 @@ const messages = {
       dropHint: '拖入 Git 仓库文件夹',
       dropActive: '松开以打开仓库',
       dropOpening: '正在打开仓库…',
+      unavailable: '不可用',
+      unavailableTitle: '仓库不可用\n最后路径：{path}\n{error}',
+      retryUnavailable: '按原路径重试',
+      locateUnavailable: '重新定位仓库目录',
+      unavailableActionFailed: '恢复仓库失败：{detail}',
       menu: {
         copyName: '复制名称',
         copyAbsolutePath: '复制绝对路径',

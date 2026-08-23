@@ -24,7 +24,7 @@ import {
   repoSearchCandidateRows,
   type SubmodulesByRepoId,
 } from '@/utils/repoTree'
-import { normalizeSidebarSearchQuery } from '@/utils/sidebarSearch'
+import { matchesSidebarSearch, normalizeSidebarSearchQuery } from '@/utils/sidebarSearch'
 import { isDropPointInsideRect, toLogicalDropPoint } from '@/utils/repoDrop'
 
 const { t } = useI18n()
@@ -45,6 +45,14 @@ const repoDisambiguationLabels = computed(() =>
 const searchQuery = ref('')
 const hasSearchQuery = computed(() => !!normalizeSidebarSearchQuery(searchQuery.value))
 const filteredRepoRows = computed(() => filterRepoTreeRows(repoRows.value, searchQuery.value))
+const filteredUnavailableRepos = computed(() =>
+  repoStore.unavailableRepos.filter((repo) =>
+    matchesSidebarSearch(searchQuery.value, repo.name, repo.path),
+  ),
+)
+const totalRepoCount = computed(
+  () => repoStore.repos.length + repoStore.unavailableRepos.length,
+)
 const searchCandidateRows = computed(() =>
   repoSearchCandidateRows(filteredRepoRows.value, searchQuery.value),
 )
@@ -63,9 +71,10 @@ const hasExternalDrag = ref(false)
 const isDropOver = ref(false)
 const isDropOpening = ref(false)
 const reposFooterHeight = computed(() => {
-  if (repoStore.repos.length > 1) return uiStore.reposHeight
+  if (totalRepoCount.value > 1) return uiStore.reposHeight
   return 72
 })
+const retryingUnavailablePath = ref<string | null>(null)
 let dropScaleFactor = 1
 let unlistenDragDrop: UnlistenFn | null = null
 let unlistenScaleChange: UnlistenFn | null = null
@@ -134,6 +143,41 @@ function onRepoSearchMouseEnter(repoId: string) {
   if (index >= 0) searchSelectedIndex.value = index
 }
 
+async function retryUnavailableRepo(path: string) {
+  if (retryingUnavailablePath.value) return
+  retryingUnavailablePath.value = path
+  try {
+    await repoStore.recoverUnavailableRepo(path)
+    repoSearchControlRef.value?.closeSearch()
+  } catch (caught: unknown) {
+    alert(t('sidebar.repo.unavailableActionFailed', { detail: String(caught) }))
+  } finally {
+    retryingUnavailablePath.value = null
+  }
+}
+
+async function locateUnavailableRepo(path: string) {
+  if (retryingUnavailablePath.value) return
+  try {
+    const { open: openDialog } = await import('@tauri-apps/plugin-dialog')
+    const selected = await openDialog({ directory: true })
+    if (typeof selected !== 'string') return
+    retryingUnavailablePath.value = path
+    await repoStore.recoverUnavailableRepo(path, selected)
+    repoSearchControlRef.value?.closeSearch()
+  } catch (caught: unknown) {
+    alert(t('sidebar.repo.unavailableActionFailed', { detail: String(caught) }))
+  } finally {
+    retryingUnavailablePath.value = null
+  }
+}
+
+function removeUnavailableRepo(path: string) {
+  void repoStore.removeUnavailableRepo(path).catch((caught: unknown) => {
+    alert(t('sidebar.repo.unavailableActionFailed', { detail: String(caught) }))
+  })
+}
+
 watch(searchQuery, () => {
   if (!isRepoSearchOpen.value) return
   resetRepoSearchSelection(false)
@@ -142,7 +186,7 @@ watch(searchQuery, () => {
 
 let handledRepoSearchSignal = 0
 watch(
-  [() => uiStore.openRepoSearchSignal, () => repoStore.repos.length],
+  [() => uiStore.openRepoSearchSignal, totalRepoCount],
   async ([signal, repoCount]) => {
     if (!signal || signal === handledRepoSearchSignal || repoCount === 0) return
     handledRepoSearchSignal = signal
@@ -335,7 +379,7 @@ const dropIndicatorTop = computed<number | null>(() => {
 
   const listEl = reposListRef.value
   if (!listEl) return null
-  const items = listEl.querySelectorAll<HTMLElement>('.repo-item')
+  const items = listEl.querySelectorAll<HTMLElement>('.repo-item[data-repo-id]')
   const item = items[over]
   if (!item) return null
   return dragInsertBefore.value ? item.offsetTop : item.offsetTop + item.offsetHeight
@@ -344,7 +388,7 @@ const dropIndicatorTop = computed<number | null>(() => {
 function updateDragOverFromPointer(clientY: number) {
   const listEl = reposListRef.value
   if (!listEl) return
-  const items = listEl.querySelectorAll<HTMLElement>('.repo-item')
+  const items = listEl.querySelectorAll<HTMLElement>('.repo-item[data-repo-id]')
   for (let i = 0; i < items.length; i++) {
     const rect = items[i].getBoundingClientRect()
     if (clientY < rect.top) {
@@ -513,14 +557,14 @@ function closeWorktreeDialog() {
     :style="{ height: reposFooterHeight + 'px' }"
   >
     <div
-      v-if="repoStore.repos.length > 1"
+      v-if="totalRepoCount > 1"
       class="repos-resize"
       @pointerdown="startReposResize"
     />
     <div class="section-title repos-title">
       <span class="section-label">{{ t('sidebar.repo.allRepos') }}</span>
       <SidebarSearchControl
-        v-if="repoStore.repos.length > 0"
+        v-if="totalRepoCount > 0"
         ref="repoSearchControlRef"
         v-model="searchQuery"
         @open="onRepoSearchOpen"
@@ -606,10 +650,58 @@ function closeWorktreeDialog() {
           </svg>
         </button>
       </div>
-      <div v-if="hasSearchQuery && filteredRepoRows.length === 0" class="section-empty">
+      <div
+        v-for="repo in filteredUnavailableRepos"
+        :key="`unavailable:${repo.path}`"
+        class="repo-item repo-item--unavailable"
+        :title="t('sidebar.repo.unavailableTitle', { path: repo.path, error: repo.error })"
+        @click="retryUnavailableRepo(repo.path)"
+      >
+        <svg
+          class="repo-item-icon repo-item-icon--unavailable"
+          width="12"
+          height="12"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+          <line x1="12" y1="9" x2="12" y2="13"/>
+          <line x1="12" y1="17" x2="12.01" y2="17"/>
+        </svg>
+        <span class="repo-item-name repo-item-name--unavailable">
+          <span class="repo-item-name-primary">{{ repo.name }}</span>
+          <span class="repo-item-unavailable-label">{{ t('sidebar.repo.unavailable') }}</span>
+        </span>
+        <button
+          class="repo-unavailable-action"
+          :disabled="retryingUnavailablePath !== null"
+          :title="t('sidebar.repo.retryUnavailable')"
+          @click.stop="retryUnavailableRepo(repo.path)"
+        >↻</button>
+        <button
+          class="repo-unavailable-action"
+          :disabled="retryingUnavailablePath !== null"
+          :title="t('sidebar.repo.locateUnavailable')"
+          @click.stop="locateUnavailableRepo(repo.path)"
+        >…</button>
+        <button
+          class="repo-unavailable-action repo-unavailable-action--remove"
+          :disabled="retryingUnavailablePath !== null"
+          :title="t('sidebar.repo.removeRepo')"
+          @click.stop="removeUnavailableRepo(repo.path)"
+        >×</button>
+      </div>
+      <div
+        v-if="hasSearchQuery && filteredRepoRows.length === 0 && filteredUnavailableRepos.length === 0"
+        class="section-empty"
+      >
         {{ t('sidebar.search.noResults') }}
       </div>
-      <div v-else-if="repoStore.repos.length === 0" class="repo-drop-empty">
+      <div v-else-if="totalRepoCount === 0" class="repo-drop-empty">
         {{ t('sidebar.repo.dropHint') }}
       </div>
     </div>
@@ -772,6 +864,16 @@ function closeWorktreeDialog() {
   color: var(--text-muted);
 }
 
+.repo-item--unavailable {
+  color: var(--text-muted);
+  opacity: 0.82;
+}
+
+.repo-item-icon--unavailable,
+.repo-item-unavailable-label {
+  color: var(--accent-yellow);
+}
+
 .repo-item-icon {
   flex-shrink: 0;
 }
@@ -800,6 +902,15 @@ function closeWorktreeDialog() {
 .repo-item-name--disambiguated .repo-item-name-primary {
   flex: 0 1 auto;
   max-width: 60%;
+}
+
+.repo-item-name--unavailable .repo-item-name-primary {
+  flex: 1;
+}
+
+.repo-item-unavailable-label {
+  flex-shrink: 0;
+  font-size: var(--font-xs);
 }
 
 .repo-item-disambiguator {
@@ -836,5 +947,41 @@ function closeWorktreeDialog() {
 .repo-item-remove:hover {
   background: rgba(237, 135, 150, 0.18);
   color: var(--accent-red);
+}
+
+.repo-unavailable-action {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 3px;
+  border: none;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: var(--font-sm);
+  line-height: 1;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.repo-item--unavailable:hover .repo-unavailable-action {
+  display: inline-flex;
+}
+
+.repo-unavailable-action:hover {
+  background: var(--bg-surface);
+  color: var(--text-primary);
+}
+
+.repo-unavailable-action--remove:hover {
+  background: rgba(237, 135, 150, 0.18);
+  color: var(--accent-red);
+}
+
+.repo-unavailable-action:disabled {
+  cursor: wait;
+  opacity: 0.45;
 }
 </style>

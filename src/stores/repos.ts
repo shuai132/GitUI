@@ -23,8 +23,24 @@ export interface OpenReposResult {
   failed: Array<{ path: string; error: unknown }>
 }
 
+export interface UnavailableRepo {
+  path: string
+  name: string
+  error: string
+}
+
+function unavailableRepo(path: string, caught: unknown): UnavailableRepo {
+  const normalized = path.replace(/[\\/]+$/, '') || path
+  return {
+    path,
+    name: normalized.split(/[\\/]/).pop() || normalized,
+    error: String(caught),
+  }
+}
+
 export const useRepoStore = defineStore('repos', () => {
   const repos = ref<RepoMeta[]>([])
+  const unavailableRepos = ref<UnavailableRepo[]>([])
   const activeRepoId = ref<string | null>(null)
   const loading = ref(false)
   const error = ref<string | null>(null)
@@ -53,7 +69,10 @@ export const useRepoStore = defineStore('repos', () => {
   }
 
   async function persist() {
-    const paths = repos.value.map((r) => r.path)
+    const paths = normalizeDroppedRepoPaths([
+      ...repos.value.map((repo) => repo.path),
+      ...unavailableRepos.value.map((repo) => repo.path),
+    ])
     const activePath =
       repos.value.find((r) => r.id === activeRepoId.value)?.path ?? null
     await store.set(KEY_PATHS, paths)
@@ -79,7 +98,7 @@ export const useRepoStore = defineStore('repos', () => {
         return np
       })
       const paths = Array.from(new Set(normalizedPaths))
-      
+
       let activePath = (await store.get<string | null>(KEY_ACTIVE_PATH)) ?? null
       if (activePath) {
         while (activePath.length > 1 && (activePath.endsWith('/') || activePath.endsWith('\\'))) {
@@ -87,20 +106,22 @@ export const useRepoStore = defineStore('repos', () => {
         }
       }
 
-      let hasFailed = rawPaths.length !== paths.length || rawPaths.some((p, i) => p !== normalizedPaths[i]) // 去重或规范化本身算一次清理
+      unavailableRepos.value = []
+      const needsPersist =
+        rawPaths.length !== paths.length ||
+        rawPaths.some((path, index) => path !== normalizedPaths[index])
       for (const path of paths) {
         try {
           const meta = await git.openRepo(path)
           // Pinia store 是单例，repos.value 不会因组件重新挂载而清空；
           // HMR / 重复触发 loadPersisted 时，这里能防止同一 path 被 push 两次
           if (repos.value.find((r) => r.path === path)) {
-            hasFailed = true
             continue
           }
           repos.value.push(meta)
         } catch (e) {
           console.error(`Failed to restore repo "${path}":`, e)
-          hasFailed = true
+          unavailableRepos.value.push(unavailableRepo(path, e))
         }
       }
 
@@ -116,8 +137,8 @@ export const useRepoStore = defineStore('repos', () => {
         activeRepoId.value = repos.value[0].id
       }
 
-      // 有清理动作（去重或恢复失败）时把新列表回写
-      if (hasFailed) {
+      // 只清理重复 / 非规范路径；恢复失败项继续写入名册，等待用户重试或移除。
+      if (needsPersist) {
         await persist()
       }
       await syncBackendActive(activeRepoId.value)
@@ -145,6 +166,7 @@ export const useRepoStore = defineStore('repos', () => {
       }
 
       const meta = await git.openRepo(path)
+      unavailableRepos.value = unavailableRepos.value.filter((repo) => repo.path !== path)
       repos.value.push(meta)
       activeRepoId.value = meta.id
       await syncBackendActive(meta.id)
@@ -178,6 +200,7 @@ export const useRepoStore = defineStore('repos', () => {
 
         try {
           const meta = await git.openRepo(path)
+          unavailableRepos.value = unavailableRepos.value.filter((repo) => repo.path !== path)
           repos.value.push(meta)
           opened.push(meta)
         } catch (caught: unknown) {
@@ -256,6 +279,54 @@ export const useRepoStore = defineStore('repos', () => {
     await persist()
   }
 
+  async function recoverUnavailableRepo(
+    unavailablePath: string,
+    replacementPath = unavailablePath,
+  ): Promise<RepoMeta> {
+    loading.value = true
+    error.value = null
+    let path = replacementPath.trim()
+    while (path.length > 1 && (path.endsWith('/') || path.endsWith('\\'))) {
+      path = path.slice(0, -1)
+    }
+
+    try {
+      const existing = repos.value.find((repo) => repo.path === path)
+      if (existing) {
+        unavailableRepos.value = unavailableRepos.value.filter(
+          (repo) => repo.path !== unavailablePath && repo.path !== path,
+        )
+        activeRepoId.value = existing.id
+        await syncBackendActive(existing.id)
+        await persist()
+        return existing
+      }
+
+      const meta = await git.openRepo(path)
+      unavailableRepos.value = unavailableRepos.value.filter(
+        (repo) => repo.path !== unavailablePath && repo.path !== path,
+      )
+      repos.value.push(meta)
+      activeRepoId.value = meta.id
+      await syncBackendActive(meta.id)
+      await persist()
+      return meta
+    } catch (caught: unknown) {
+      error.value = String(caught)
+      unavailableRepos.value = unavailableRepos.value.map((repo) =>
+        repo.path === unavailablePath ? unavailableRepo(unavailablePath, caught) : repo,
+      )
+      throw caught
+    } finally {
+      loading.value = false
+    }
+  }
+
+  async function removeUnavailableRepo(path: string) {
+    unavailableRepos.value = unavailableRepos.value.filter((repo) => repo.path !== path)
+    await persist()
+  }
+
   async function setActive(repoId: string) {
     activeRepoId.value = repoId
     await syncBackendActive(repoId)
@@ -280,6 +351,7 @@ export const useRepoStore = defineStore('repos', () => {
 
   return {
     repos,
+    unavailableRepos,
     activeRepoId,
     loading,
     error,
@@ -290,6 +362,8 @@ export const useRepoStore = defineStore('repos', () => {
     initRepo,
     createWorktree,
     closeRepo,
+    recoverUnavailableRepo,
+    removeUnavailableRepo,
     setActive,
     reorderRepos,
     activeRepo,
