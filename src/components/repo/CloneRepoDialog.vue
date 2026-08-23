@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 import Modal from '@/components/common/Modal.vue'
 import { useRepoStore } from '@/stores/repos'
+import { loadCloneParentDir, saveCloneParentDir } from '@/utils/clonePreferences'
 
 const { t } = useI18n()
 
@@ -97,7 +98,7 @@ watch(
     if (!v) return
     // 重置状态
     url.value = ''
-    parentDir.value = ''
+    parentDir.value = loadCloneParentDir()
     customName.value = ''
     depthStr.value = ''
     recurseSubmodules.value = false
@@ -118,10 +119,15 @@ async function onPickParentDir() {
     const selected = await openDialog({ directory: true })
     if (typeof selected === 'string') {
       parentDir.value = selected
+      saveCloneParentDir(selected)
     }
   } catch (e) {
     console.error(e)
   }
+}
+
+function onParentDirChange() {
+  saveCloneParentDir(parentDir.value)
 }
 
 function parseDepth(): number | undefined {
@@ -150,6 +156,7 @@ async function onSubmit() {
   }
 
   submitting.value = true
+  saveCloneParentDir(parentDir.value)
   error.value = null
   progressStage.value = ''
   progressPct.value = 0
@@ -225,6 +232,7 @@ const stageLabel = computed(() => {
           :placeholder="t('repo.clone.parentDirPlaceholder')"
           spellcheck="false"
           :disabled="submitting"
+          @change="onParentDirChange"
         />
         <button
           type="button"
