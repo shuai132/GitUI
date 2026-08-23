@@ -108,11 +108,13 @@ async function checkForUpdates() {
     </div>
 
     <div class="strategy-list">
-      <div 
+      <button
         v-for="opt in updateStrategyOptions" 
         :key="opt.value"
+        type="button"
         class="strategy-item"
         :class="{ 'is-active': settingsStore.updateStrategy === opt.value }"
+        :aria-pressed="settingsStore.updateStrategy === opt.value"
         @click="settingsStore.updateStrategy = opt.value"
       >
         <div class="strategy-radio">
@@ -122,7 +124,7 @@ async function checkForUpdates() {
           <div class="strategy-label">{{ t(opt.labelKey) }}</div>
           <div v-if="opt.value === 'auto'" class="strategy-hint">{{ t('settings.advanced.updateStrategyHint') }}</div>
         </div>
-      </div>
+      </button>
     </div>
 
     <UpdateDialog 
@@ -201,15 +203,25 @@ async function checkForUpdates() {
 
 .strategy-item {
   display: flex;
+  width: 100%;
   gap: 12px;
   padding: 12px;
+  border: 0;
   background: var(--bg-primary);
+  color: inherit;
+  font: inherit;
+  text-align: left;
   cursor: pointer;
   transition: background 0.1s;
 }
 
 .strategy-item:hover {
   background: var(--bg-overlay);
+}
+
+.strategy-item:focus-visible {
+  outline: 2px solid var(--accent-blue);
+  outline-offset: -2px;
 }
 
 .strategy-item.is-active {
