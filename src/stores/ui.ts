@@ -666,6 +666,11 @@ export const useUiStore = defineStore('ui', () => {
     openSearchSignal.value++
   }
 
+  const openRepoSearchSignal = ref(0)
+  function requestOpenRepoSearch() {
+    openRepoSearchSignal.value++
+  }
+
   const openDiffSearchSignal = ref(0)
   function requestOpenDiffSearch() {
     openDiffSearchSignal.value++
@@ -747,6 +752,8 @@ export const useUiStore = defineStore('ui', () => {
     requestOpenSettings,
     openSearchSignal,
     requestOpenSearch,
+    openRepoSearchSignal,
+    requestOpenRepoSearch,
     openDiffSearchSignal,
     requestOpenDiffSearch,
     fetchSignal,

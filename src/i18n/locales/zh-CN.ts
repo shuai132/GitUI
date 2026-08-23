@@ -1009,6 +1009,7 @@ const messages = {
     toggleTerminal: '切换终端面板',
     fetchAll: 'Fetch 所有远端',
     search: '聚焦搜索框',
+    openRepo: '快速切换仓库',
     prevCommit: '选中上一个提交',
     nextCommit: '选中下一个提交',
     commit: '提交',

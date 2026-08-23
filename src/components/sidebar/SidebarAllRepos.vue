@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { getCurrentWebview } from '@tauri-apps/api/webview'
 import { getCurrentWindow } from '@tauri-apps/api/window'
@@ -19,6 +19,8 @@ import type { RepoMeta } from '@/types/git'
 import {
   buildRepoTreeRows,
   filterRepoTreeRows,
+  moveRepoSearchSelection,
+  repoSearchCandidateRows,
   type SubmodulesByRepoId,
 } from '@/utils/repoTree'
 import { normalizeSidebarSearchQuery } from '@/utils/sidebarSearch'
@@ -39,6 +41,19 @@ const repoRows = computed(() => buildRepoTreeRows(repoStore.repos, submodulesByR
 const searchQuery = ref('')
 const hasSearchQuery = computed(() => !!normalizeSidebarSearchQuery(searchQuery.value))
 const filteredRepoRows = computed(() => filterRepoTreeRows(repoRows.value, searchQuery.value))
+const searchCandidateRows = computed(() =>
+  repoSearchCandidateRows(filteredRepoRows.value, searchQuery.value),
+)
+interface SidebarSearchControlHandle {
+  openSearch: () => Promise<void>
+  closeSearch: () => void
+}
+const repoSearchControlRef = ref<SidebarSearchControlHandle | null>(null)
+const isRepoSearchOpen = ref(false)
+const searchSelectedIndex = ref(-1)
+const searchSelectedRepoId = computed(
+  () => searchCandidateRows.value[searchSelectedIndex.value]?.repo.id ?? null,
+)
 const reposFooterRef = ref<HTMLElement | null>(null)
 const hasExternalDrag = ref(false)
 const isDropOver = ref(false)
@@ -51,6 +66,90 @@ let dropScaleFactor = 1
 let unlistenDragDrop: UnlistenFn | null = null
 let unlistenScaleChange: UnlistenFn | null = null
 let isMounted = false
+
+function resetRepoSearchSelection(preferActiveRepo: boolean) {
+  const rows = searchCandidateRows.value
+  if (rows.length === 0) {
+    searchSelectedIndex.value = -1
+    return
+  }
+  const activeIndex = preferActiveRepo
+    ? rows.findIndex((row) => row.repo.id === repoStore.activeRepoId)
+    : -1
+  searchSelectedIndex.value = activeIndex >= 0 ? activeIndex : 0
+}
+
+async function scrollSelectedRepoIntoView() {
+  await nextTick()
+  const selectedRepoId = searchSelectedRepoId.value
+  if (!selectedRepoId || !reposListRef.value) return
+  const row = Array.from(
+    reposListRef.value.querySelectorAll<HTMLElement>('[data-repo-id]'),
+  ).find((item) => item.dataset.repoId === selectedRepoId)
+  row?.scrollIntoView({ block: 'nearest' })
+}
+
+function onRepoSearchOpen() {
+  isRepoSearchOpen.value = true
+  resetRepoSearchSelection(!hasSearchQuery.value)
+  void scrollSelectedRepoIntoView()
+}
+
+function onRepoSearchClose() {
+  isRepoSearchOpen.value = false
+  searchSelectedIndex.value = -1
+}
+
+function onRepoSearchKeydown(event: KeyboardEvent) {
+  if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+    event.preventDefault()
+    event.stopPropagation()
+    searchSelectedIndex.value = moveRepoSearchSelection(
+      searchSelectedIndex.value,
+      event.key === 'ArrowDown' ? 1 : -1,
+      searchCandidateRows.value.length,
+    )
+    void scrollSelectedRepoIntoView()
+    return
+  }
+  if (event.key !== 'Enter') return
+
+  const selected = searchCandidateRows.value[searchSelectedIndex.value]
+  if (!selected) return
+  event.preventDefault()
+  event.stopPropagation()
+  repoSearchControlRef.value?.closeSearch()
+  void repoStore.setActive(selected.repo.id).catch((e: unknown) => {
+    console.error('[repo-search] failed to activate repository:', e)
+  })
+}
+
+function onRepoSearchMouseEnter(repoId: string) {
+  if (!isRepoSearchOpen.value) return
+  const index = searchCandidateRows.value.findIndex((row) => row.repo.id === repoId)
+  if (index >= 0) searchSelectedIndex.value = index
+}
+
+watch(searchQuery, () => {
+  if (!isRepoSearchOpen.value) return
+  resetRepoSearchSelection(false)
+  void scrollSelectedRepoIntoView()
+})
+
+let handledRepoSearchSignal = 0
+watch(
+  [() => uiStore.openRepoSearchSignal, () => repoStore.repos.length],
+  async ([signal, repoCount]) => {
+    if (!signal || signal === handledRepoSearchSignal || repoCount === 0) return
+    handledRepoSearchSignal = signal
+    if (uiStore.sidebarWidth === 0) {
+      uiStore.sidebarWidth = 220
+      uiStore.persistSidebarWidth()
+    }
+    await nextTick()
+    await repoSearchControlRef.value?.openSearch()
+  },
+)
 
 function isRepoDropPosition(position: { x: number; y: number }): boolean {
   const footer = reposFooterRef.value
@@ -320,7 +419,10 @@ function onRepoClick(e: MouseEvent, repoId: string) {
     e.stopPropagation()
     return
   }
-  repoStore.setActive(repoId)
+  if (isRepoSearchOpen.value) repoSearchControlRef.value?.closeSearch()
+  void repoStore.setActive(repoId).catch((caught: unknown) => {
+    console.error('[repo-list] failed to activate repository:', caught)
+  })
 }
 
 function onReposListWheel(e: WheelEvent) {
@@ -413,7 +515,14 @@ function closeWorktreeDialog() {
     />
     <div class="section-title repos-title">
       <span class="section-label">{{ t('sidebar.repo.allRepos') }}</span>
-      <SidebarSearchControl v-if="repoStore.repos.length > 1" v-model="searchQuery" />
+      <SidebarSearchControl
+        v-if="repoStore.repos.length > 0"
+        ref="repoSearchControlRef"
+        v-model="searchQuery"
+        @open="onRepoSearchOpen"
+        @close="onRepoSearchClose"
+        @keydown="onRepoSearchKeydown"
+      />
       <button
         class="section-add-btn repos-add-btn"
         :title="t('repo.menu.title')"
@@ -431,14 +540,17 @@ function closeWorktreeDialog() {
         v-for="(row, idx) in filteredRepoRows"
         :key="row.repo.id"
         class="repo-item"
+        :data-repo-id="row.repo.id"
         :class="{
           'repo-item--active': row.repo.id === repoStore.activeRepoId,
+          'repo-item--search-selected': isRepoSearchOpen && row.repo.id === searchSelectedRepoId,
           'repo-item--dragging': dragState?.isDragging && dragState?.repoId === row.repo.id,
           'repo-item--submodule': row.depth > 0,
         }"
         :style="{ paddingLeft: (12 + row.depth * 14) + 'px' }"
         :title="row.repo.path"
         @pointerdown="onRepoPointerDown($event, idx, row.repo.id)"
+        @mouseenter="onRepoSearchMouseEnter(row.repo.id)"
         @click="onRepoClick($event, row.repo.id)"
         @contextmenu="openRepoMenu($event, row.repo)"
       >
@@ -636,6 +748,11 @@ function closeWorktreeDialog() {
   color: var(--text-primary);
   background: var(--bg-overlay);
   font-weight: 500;
+}
+
+.repo-item--search-selected {
+  background: color-mix(in srgb, var(--accent-blue) 18%, var(--bg-overlay));
+  box-shadow: inset 2px 0 0 var(--accent-blue);
 }
 
 .repo-item--submodule {

@@ -3,7 +3,9 @@ import type { RepoMeta, SubmoduleInfo } from '@/types/git'
 import {
   buildRepoTreeRows,
   filterRepoTreeRows,
+  moveRepoSearchSelection,
   normalizeRepoPath,
+  repoSearchCandidateRows,
   resolveSubmoduleWorkdir,
 } from '@/utils/repoTree'
 
@@ -74,5 +76,29 @@ describe('repoTree', () => {
     ])
     expect(filterRepoTreeRows(rows, 'sibling').map((row) => row.repo.id)).toEqual(['sibling'])
     expect(filterRepoTreeRows(rows, '  ')).toBe(rows)
+  })
+
+  it('keeps parent context visible but excludes it from keyboard candidates', () => {
+    const rows = buildRepoTreeRows(
+      [
+        repo('parent', '/work/parent'),
+        repo('child', '/work/parent/vendor/payment-child'),
+      ],
+      { parent: [submodule('vendor/payment-child')] },
+    )
+    const visible = filterRepoTreeRows(rows, 'child')
+
+    expect(visible.map((row) => row.repo.id)).toEqual(['parent', 'child'])
+    expect(repoSearchCandidateRows(visible, 'child').map((row) => row.repo.id)).toEqual([
+      'child',
+    ])
+  })
+
+  it('cycles keyboard selection through repository candidates', () => {
+    expect(moveRepoSearchSelection(-1, 1, 3)).toBe(0)
+    expect(moveRepoSearchSelection(-1, -1, 3)).toBe(2)
+    expect(moveRepoSearchSelection(2, 1, 3)).toBe(0)
+    expect(moveRepoSearchSelection(0, -1, 3)).toBe(2)
+    expect(moveRepoSearchSelection(0, 1, 0)).toBe(-1)
   })
 })

@@ -5,6 +5,8 @@ import { useI18n } from 'vue-i18n'
 const query = defineModel<string>({ required: true })
 const emit = defineEmits<{
   open: []
+  close: []
+  keydown: [event: KeyboardEvent]
 }>()
 
 const { t } = useI18n()
@@ -31,15 +33,31 @@ function clearSearch() {
 }
 
 function onBlur() {
-  if (!query.value) expanded.value = false
+  if (!query.value && expanded.value) {
+    expanded.value = false
+    emit('close')
+  }
 }
 
 function onKeydown(event: KeyboardEvent) {
+  emit('keydown', event)
   if (event.key !== 'Escape') return
+  const wasOpen = expanded.value || !!query.value
   query.value = ''
   expanded.value = false
   inputRef.value?.blur()
+  if (wasOpen) emit('close')
 }
+
+function closeSearch() {
+  const wasOpen = expanded.value || !!query.value
+  query.value = ''
+  expanded.value = false
+  inputRef.value?.blur()
+  if (wasOpen) emit('close')
+}
+
+defineExpose({ openSearch: expandSearch, closeSearch })
 </script>
 
 <template>

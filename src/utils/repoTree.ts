@@ -109,3 +109,29 @@ export function filterRepoTreeRows(rows: RepoTreeRow[], query: string): RepoTree
 
   return rows.filter((row) => includedRepoIds.has(row.repo.id))
 }
+
+/**
+ * 搜索结果会保留 Submodule 的父仓库作为视觉上下文；键盘选择只应停在
+ * 真正匹配名称或路径的行，避免 Enter 误切到未匹配的父仓库。
+ */
+export function repoSearchCandidateRows(
+  visibleRows: RepoTreeRow[],
+  query: string,
+): RepoTreeRow[] {
+  if (!normalizeSidebarSearchQuery(query)) return visibleRows
+  return visibleRows.filter((row) =>
+    matchesSidebarSearch(query, row.repo.name, row.repo.path),
+  )
+}
+
+export function moveRepoSearchSelection(
+  currentIndex: number,
+  delta: -1 | 1,
+  rowCount: number,
+): number {
+  if (rowCount <= 0) return -1
+  if (currentIndex < 0 || currentIndex >= rowCount) {
+    return delta > 0 ? 0 : rowCount - 1
+  }
+  return (currentIndex + delta + rowCount) % rowCount
+}

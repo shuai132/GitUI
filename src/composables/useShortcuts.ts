@@ -79,6 +79,12 @@ export function useShortcuts() {
       return
     }
 
+    if (matchesBinding(e, b.openRepo)) {
+      consume()
+      uiStore.requestOpenRepoSearch()
+      return
+    }
+
     if (matchesBinding(e, b.toggleTerminal)) {
       consume()
       terminalStore.toggleActiveRepoVisible().catch((err: unknown) => {

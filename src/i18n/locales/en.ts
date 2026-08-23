@@ -1010,6 +1010,7 @@ const messages = {
     toggleTerminal: 'Toggle terminal panel',
     fetchAll: 'Fetch all remotes',
     search: 'Focus search box',
+    openRepo: 'Quick switch repository',
     prevCommit: 'Select previous commit',
     nextCommit: 'Select next commit',
     commit: 'Commit changes',

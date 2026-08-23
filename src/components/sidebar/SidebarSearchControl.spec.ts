@@ -46,4 +46,35 @@ describe('SidebarSearchControl', () => {
     expect(wrapper.find('output').text()).toBe('')
     expect(input.element.style.display).toBe('none')
   })
+
+  it('exposes keyboard open/close controls and forwards navigation keys', async () => {
+    let modelValue = ''
+    const wrapper = mount(SidebarSearchControl, {
+      attachTo: document.body,
+      props: {
+        modelValue,
+        'onUpdate:modelValue': async (value: string) => {
+          modelValue = value
+          await wrapper.setProps({ modelValue })
+        },
+      },
+    })
+    const exposed = wrapper.vm as unknown as {
+      openSearch: () => Promise<void>
+      closeSearch: () => void
+    }
+
+    await exposed.openSearch()
+    const input = wrapper.find<HTMLInputElement>('.sidebar-search-input')
+    expect(document.activeElement).toBe(input.element)
+
+    await input.trigger('keydown', { key: 'ArrowDown' })
+    expect(wrapper.emitted('keydown')?.[0]?.[0]).toMatchObject({ key: 'ArrowDown' })
+
+    exposed.closeSearch()
+    await nextTick()
+    expect(input.element.style.display).toBe('none')
+    expect(wrapper.emitted('close')).toHaveLength(1)
+    wrapper.unmount()
+  })
 })

@@ -17,6 +17,7 @@ export type ShortcutActionId =
   | 'toggleTerminal'
   | 'fetchAll'
   | 'search'
+  | 'openRepo'
   | 'prevCommit'
   | 'nextCommit'
   | 'commit'
@@ -58,6 +59,7 @@ export const SHORTCUT_DEFS: ShortcutDef[] = [
   { id: 'toggleTerminal',   labelKey: 'shortcuts.toggleTerminal',   defaultBinding: mkBinding('`') },
   { id: 'fetchAll',         labelKey: 'shortcuts.fetchAll',         defaultBinding: mkBinding('f', { shift: true }) },
   { id: 'search',           labelKey: 'shortcuts.search',           defaultBinding: mkBinding('f') },
+  { id: 'openRepo',         labelKey: 'shortcuts.openRepo',         defaultBinding: mkBinding('o', { shift: true }) },
   { id: 'prevCommit',       labelKey: 'shortcuts.prevCommit',       defaultBinding: { key: 'ArrowUp', alt: true } },
   { id: 'nextCommit',       labelKey: 'shortcuts.nextCommit',       defaultBinding: { key: 'ArrowDown', alt: true } },
   { id: 'commit',           labelKey: 'shortcuts.commit',           defaultBinding: mkBinding('Enter') },
