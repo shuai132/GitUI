@@ -161,6 +161,45 @@ mod tests {
             .unwrap()
     }
 
+    #[test]
+    fn pull_guard_accepts_clean_repository() {
+        let test_repo = TestRepo::new();
+
+        assert!(GitEngine::ensure_pull_ready(&test_repo.repo).is_ok());
+    }
+
+    #[test]
+    fn pull_guard_rejects_tracked_changes() {
+        let test_repo = TestRepo::new();
+        fs::write(test_repo.dir.path().join("existing.txt"), "changed\n").unwrap();
+
+        let error = GitEngine::ensure_pull_ready(&test_repo.repo).unwrap_err();
+        assert!(error.to_string().contains("Cannot pull"));
+    }
+
+    #[test]
+    fn pull_guard_rejects_untracked_files() {
+        let test_repo = TestRepo::new();
+        fs::write(test_repo.dir.path().join("untracked.txt"), "local\n").unwrap();
+
+        let error = GitEngine::ensure_pull_ready(&test_repo.repo).unwrap_err();
+        assert!(error.to_string().contains("Cannot pull"));
+    }
+
+    #[test]
+    fn pull_guard_rejects_an_unfinished_git_operation() {
+        let test_repo = TestRepo::new();
+        let head_oid = test_repo.repo.head().unwrap().target().unwrap();
+        fs::write(
+            test_repo.repo.path().join("MERGE_HEAD"),
+            format!("{head_oid}\n"),
+        )
+        .unwrap();
+
+        let error = GitEngine::ensure_pull_ready(&test_repo.repo).unwrap_err();
+        assert!(error.to_string().contains("unfinished Git operation"));
+    }
+
     fn commit_file_bytes(
         test_repo: &TestRepo,
         message: &str,

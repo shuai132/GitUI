@@ -138,6 +138,11 @@ const PATTERNS: Array<{ test: (msg: string) => boolean; build: (msg: string) => 
     test: (m) => /Cannot fast-forward.*diverged/i.test(m),
     build: () => ({ key: 'errors.pull.diverged' }),
   },
+  // Pull 期间已有未完成的 merge / rebase 等操作
+  {
+    test: (m) => /Cannot pull.*unfinished Git operation/i.test(m),
+    build: () => ({ key: 'errors.pull.ongoingOperation' }),
+  },
   // Rebase 冲突
   {
     test: (m) => /Rebase conflict|Rebase 出现冲突/i.test(m),

@@ -126,6 +126,12 @@ impl GitEngine {
     pub fn pull(path: &str, remote_name: &str, branch_name: &str, mode: &str) -> GitResult<()> {
         log::debug!("[engine::pull] mode={mode} remote={remote_name} branch={branch_name}");
 
+        // Pull 的所有路径都可能更新引用并 checkout。统一在 fetch 前拒绝脏工作区，
+        // 避免 fast-forward 的 force checkout 覆盖本地修改，也避免无意义的网络请求。
+        let repo = Self::open(path)?;
+        Self::ensure_pull_ready(&repo)?;
+        drop(repo);
+
         let url = get_remote_url(path, remote_name)?;
         if is_ssh_url(&url) {
             log::debug!("[engine::pull] ssh fetch via system git");
@@ -175,21 +181,31 @@ impl GitEngine {
         Ok(())
     }
 
-    /// Pull with rebase: fetch has already been done, now rebase HEAD onto FETCH_HEAD.
-    fn pull_rebase(repo: &git2::Repository, branch_name: &str) -> GitResult<()> {
-        // Check for dirty working tree
-        let statuses = repo.statuses(Some(
-            git2::StatusOptions::new()
-                .include_untracked(false)
-                .include_ignored(false),
-        ))?;
-        if !statuses.is_empty() {
+    pub(super) fn ensure_pull_ready(repo: &Repository) -> GitResult<()> {
+        if repo.state() != git2::RepositoryState::Clean {
             return Err(GitError::OperationFailed(
-                "Cannot rebase: working tree has uncommitted changes. Commit or stash first."
+                "Cannot pull: repository has an unfinished Git operation. Resolve or abort it first."
                     .to_string(),
             ));
         }
 
+        let statuses = repo.statuses(Some(
+            git2::StatusOptions::new()
+                .include_untracked(true)
+                .recurse_untracked_dirs(true)
+                .include_ignored(false),
+        ))?;
+        if statuses.is_empty() {
+            return Ok(());
+        }
+
+        Err(GitError::OperationFailed(
+            "Cannot pull: working tree has uncommitted changes. Commit or stash first.".to_string(),
+        ))
+    }
+
+    /// Pull with rebase: fetch has already been done, now rebase HEAD onto FETCH_HEAD.
+    fn pull_rebase(repo: &git2::Repository, branch_name: &str) -> GitResult<()> {
         let fetch_head = repo.find_reference("FETCH_HEAD")?;
         let fetch_commit = repo.reference_to_annotated_commit(&fetch_head)?;
 
@@ -238,29 +254,15 @@ impl GitEngine {
     /// Pull 的 merge 路径：远端分叉时创建 merge commit（`mode == "ff"`）。
     ///
     /// 流程：
-    /// 1. 检查工作区是否干净（有未提交变更则拒绝）
-    /// 2. `repo.merge()` 执行三方合并并写入 index
-    /// 3. 若 index 有冲突 → 保留 MERGE_HEAD 供用户手动解决，返回 conflict 错误
-    /// 4. 无冲突 → 从 index 生成 tree → 创建 merge commit（两个 parent）→ 更新 HEAD
+    /// 1. `repo.merge()` 执行三方合并并写入 index
+    /// 2. 若 index 有冲突 → 保留 MERGE_HEAD 供用户手动解决，返回 conflict 错误
+    /// 3. 无冲突 → 从 index 生成 tree → 创建 merge commit（两个 parent）→ 更新 HEAD
     fn pull_merge(
         repo: &git2::Repository,
         branch_name: &str,
         fetch_commit: &git2::AnnotatedCommit<'_>,
     ) -> GitResult<()> {
-        // 1. 工作区干净检查
-        let statuses = repo.statuses(Some(
-            git2::StatusOptions::new()
-                .include_untracked(false)
-                .include_ignored(false),
-        ))?;
-        if !statuses.is_empty() {
-            return Err(GitError::OperationFailed(
-                "Cannot merge: working tree has uncommitted changes. Commit or stash first."
-                    .to_string(),
-            ));
-        }
-
-        // 2. 执行三方合并
+        // 1. 执行三方合并（工作区已由 pull 入口统一检查）
         let mut merge_opts = git2::MergeOptions::new();
         merge_opts.fail_on_conflict(false);
         repo.merge(
@@ -269,7 +271,7 @@ impl GitEngine {
             Some(git2::build::CheckoutBuilder::default().allow_conflicts(true)),
         )?;
 
-        // 3. 冲突检查
+        // 2. 冲突检查
         let mut index = repo.index()?;
         if index.has_conflicts() {
             // 保留 MERGE_HEAD（用户需要在工作区手动解决冲突）
@@ -278,7 +280,7 @@ impl GitEngine {
             ));
         }
 
-        // 4. 生成 merge commit
+        // 3. 生成 merge commit
         let sig = repo.signature()?;
         let tree_oid = index.write_tree_to(repo)?;
         let tree = repo.find_tree(tree_oid)?;
@@ -297,10 +299,10 @@ impl GitEngine {
             &[&head_commit, &fetch_commit_obj],
         )?;
 
-        // 5. 清理合并状态（删除 MERGE_HEAD / MERGE_MSG 等）
+        // 4. 清理合并状态（删除 MERGE_HEAD / MERGE_MSG 等）
         repo.cleanup_state()?;
 
-        // 6. 确保工作目录与 HEAD 一致
+        // 5. 确保工作目录与 HEAD 一致
         repo.checkout_head(Some(git2::build::CheckoutBuilder::default().force()))?;
 
         log::debug!("[engine::pull_merge] merge commit created for branch={branch_name}");

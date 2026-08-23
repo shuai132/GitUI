@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { mapGitError } from './errorMap'
 
-describe('mapGitError commit undo', () => {
+describe('mapGitError', () => {
   it('maps a published commit to the shared-history guidance', () => {
     expect(mapGitError('undo_last_commit', {
       kind: 'OperationFailed',
@@ -14,5 +14,12 @@ describe('mapGitError commit undo', () => {
       kind: 'OperationFailed',
       message: 'HEAD 已变化，不能撤销过期的提交',
     })).toMatchObject({ key: 'errors.commit.undoUnavailable' })
+  })
+
+  it('maps an unfinished operation to actionable Pull guidance', () => {
+    expect(mapGitError('pull_branch', {
+      kind: 'OperationFailed',
+      message: 'Cannot pull: repository has an unfinished Git operation. Resolve or abort it first.',
+    })).toMatchObject({ key: 'errors.pull.ongoingOperation' })
   })
 })

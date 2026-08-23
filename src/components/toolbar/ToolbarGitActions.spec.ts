@@ -1,10 +1,14 @@
 import { mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import ToolbarGitActions from './ToolbarGitActions.vue'
 
 const mocks = vi.hoisted(() => ({
   canUndo: true,
+  pullWithChangesVisible: false,
+  pendingPullChangeCount: 0,
   onUndoLastCommit: vi.fn(),
+  confirmPullWithStash: vi.fn(),
 }))
 
 vi.mock('vue-i18n', () => ({
@@ -45,12 +49,17 @@ vi.mock('@/composables/toolbar/useToolbarGitActions', () => ({
     canRemoteOp: true,
     canStash: false,
     canStashPop: false,
+    pullWithChangesVisible: mocks.pullWithChangesVisible,
+    pendingPullChangeCount: mocks.pendingPullChangeCount,
+    pullWithChangesLoading: false,
     canUndoLastCommit: mocks.canUndo,
     undoingCommit: false,
     withShortcut: (label: string) => label,
     showAddRepoMenu: vi.fn(),
     onPull: vi.fn(),
     doPull: vi.fn(),
+    confirmPullWithStash: mocks.confirmPullWithStash,
+    cancelPullWithStash: vi.fn(),
     onPush: vi.fn(),
     doPush: vi.fn(),
     onStash: vi.fn(),
@@ -62,10 +71,13 @@ vi.mock('@/composables/toolbar/useToolbarGitActions', () => ({
   }),
 }))
 
-describe('ToolbarGitActions commit undo', () => {
+describe('ToolbarGitActions', () => {
   beforeEach(() => {
     mocks.canUndo = true
+    mocks.pullWithChangesVisible = false
+    mocks.pendingPullChangeCount = 0
     mocks.onUndoLastCommit.mockReset()
+    mocks.confirmPullWithStash.mockReset()
   })
 
   it('shows and invokes Undo only while a recent commit candidate is available', async () => {
@@ -85,5 +97,19 @@ describe('ToolbarGitActions commit undo', () => {
       global: { stubs: { ContextMenu: true } },
     })
     expect(hiddenWrapper.find('.btn-tool--undo').exists()).toBe(false)
+  })
+
+  it('wires the dirty-worktree Pull confirmation to the auto-stash action', () => {
+    mocks.pullWithChangesVisible = true
+    mocks.pendingPullChangeCount = 3
+    const wrapper = mount(ToolbarGitActions, {
+      global: { stubs: { ContextMenu: true } },
+    })
+
+    const dialog = wrapper.findComponent(ConfirmDialog)
+    expect(dialog.props('visible')).toBe(true)
+    expect(dialog.props('message')).toBe('toolbar.pullWithChanges.message')
+    dialog.vm.$emit('confirm')
+    expect(mocks.confirmPullWithStash).toHaveBeenCalledOnce()
   })
 })

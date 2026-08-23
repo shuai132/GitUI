@@ -65,6 +65,16 @@ const messages = {
       defaultUpdated: '已设为默认远端：{remote}',
       defaultCleared: '已取消默认远端',
     },
+    pullWithChanges: {
+      title: '工作区有未提交改动',
+      message: '检测到 {count} 个有改动的文件。GitUI 会先将这些改动（含未追踪文件）保存到 Stash，完成 Pull 后再恢复。恢复可能产生冲突；若 Pull 本身停在冲突中，原改动会安全保留在 Stash。',
+      confirm: 'Stash、Pull 并恢复',
+      running: '正在自动暂存并 Pull…',
+      stashMessage: 'gitui: Pull 前自动暂存（{remote}/{branch}）',
+      restoreDeferred: 'Pull 停在未完成的 Git 操作中。原始改动已保留在 Stash；请先解决或中止当前操作，再手动恢复。',
+      restoreDeferredUnknown: '无法确认 Pull 后的仓库状态。为避免覆盖，原始改动已保留在 Stash，请检查仓库后手动恢复。',
+      restoreFailed: '自动恢复原始改动失败。Stash 已保留，请手动处理：{detail}',
+    },
     actionsMenu: {
       soloCurrentBranch: 'Solo 当前分支',
       showRemoteBranches: '显示远程分支',
@@ -1077,6 +1087,7 @@ const messages = {
     pull: {
       mergeRequired: 'Pull 需要合并：无法 fast-forward，已创建 merge commit',
       diverged: 'Pull 失败：远端分支已分叉，无法 fast-forward。请使用 merge 或 rebase 模式',
+      ongoingOperation: '仓库有未完成的 Git 操作，请先解决冲突、继续或中止当前操作',
     },
     commit: {
       undoPublished: '该提交已发布到上游；请使用 Revert 保留共享历史',

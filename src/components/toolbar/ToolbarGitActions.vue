@@ -2,6 +2,7 @@
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import ContextMenu from '@/components/common/ContextMenu.vue'
+import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import { useRemoteActionMenu, type PullMode, type PushMode } from '@/composables/toolbar/useRemoteActionMenu'
 import { useToolbarGitActions } from '@/composables/toolbar/useToolbarGitActions'
 
@@ -37,12 +38,17 @@ const {
   canRemoteOp,
   canStash,
   canStashPop,
+  pullWithChangesVisible,
+  pendingPullChangeCount,
+  pullWithChangesLoading,
   canUndoLastCommit,
   undoingCommit,
   withShortcut,
   showAddRepoMenu,
   onPull,
   doPull,
+  confirmPullWithStash,
+  cancelPullWithStash,
   onPush,
   doPush,
   onStash,
@@ -273,6 +279,17 @@ function onPushModeSelect(action: string) {
       :items="pushModeMenuItems"
       @close="pushModeMenu.visible = false"
       @select="onPushModeSelect"
+    />
+
+    <ConfirmDialog
+      :visible="pullWithChangesVisible"
+      :title="t('toolbar.pullWithChanges.title')"
+      :message="t('toolbar.pullWithChanges.message', { count: pendingPullChangeCount })"
+      :confirm-label="t('toolbar.pullWithChanges.confirm')"
+      :loading-label="t('toolbar.pullWithChanges.running')"
+      :loading="pullWithChangesLoading"
+      @confirm="confirmPullWithStash"
+      @cancel="cancelPullWithStash"
     />
   </div>
 </template>

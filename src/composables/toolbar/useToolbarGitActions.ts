@@ -12,6 +12,7 @@ import { useGitCommands } from '@/composables/useGitCommands'
 import { useRepoCreation } from '@/composables/useRepoCreation'
 import { useRepositoryRefresh } from '@/composables/useRepositoryRefresh'
 import { useGlobalToast } from '@/composables/useGlobalToast'
+import { runPullWithAutoStash } from '@/composables/toolbar/pullAutoStash'
 import type { PullMode, PushMode } from '@/composables/toolbar/useRemoteActionMenu'
 
 interface UseToolbarGitActionsOptions {
@@ -21,6 +22,13 @@ interface UseToolbarGitActionsOptions {
     showFetchAll?: boolean,
     options?: { forceMenu?: boolean; resolveSelection?: boolean },
   ) => Promise<string | null>
+}
+
+interface PullRequest {
+  repoId: string
+  remote: string
+  branch: string
+  mode: PullMode
 }
 
 export function useToolbarGitActions(options: UseToolbarGitActionsOptions) {
@@ -52,6 +60,10 @@ export function useToolbarGitActions(options: UseToolbarGitActionsOptions) {
     return s.staged.length + s.unstaged.length + s.untracked.length > 0
   })
   const canStashPop = computed(() => hasRepo.value && stashStore.entries.length > 0)
+  const pendingPull = ref<PullRequest | null>(null)
+  const pendingPullChangeCount = ref(0)
+  const pullWithChangesLoading = ref(false)
+  const pullWithChangesVisible = computed(() => pendingPull.value !== null)
   const undoingCommit = ref(false)
   const canUndoLastCommit = computed(() => {
     const candidate = workspaceStore.undoCommitCandidate
@@ -89,16 +101,103 @@ export function useToolbarGitActions(options: UseToolbarGitActionsOptions) {
       if (remotes.length === 0) showError(t('toolbar.noRemoteConfigured'))
       return
     }
-    repoOpsStore.setBusy(id, 'pull', true)
+
+    // remote 选择期间用户可能已切换仓库或分支，不能把旧请求落到新上下文。
+    if (repoStore.activeRepoId !== id || currentBranch.value !== branch) return
+
+    const request: PullRequest = { repoId: id, remote, branch, mode }
+    const changedPaths = new Set([
+      ...(workspaceStore.status?.staged ?? []),
+      ...(workspaceStore.status?.unstaged ?? []),
+      ...(workspaceStore.status?.untracked ?? []),
+    ].map((file) => file.path))
+    if (changedPaths.size > 0) {
+      pendingPull.value = request
+      pendingPullChangeCount.value = changedPaths.size
+      return
+    }
+
+    await runPull(request, false)
+  }
+
+  async function refreshAfterPull(repoId: string, includeStashes: boolean) {
+    if (repoStore.activeRepoId !== repoId) return
+    const tasks: Promise<unknown>[] = [
+      historyStore.loadLog(),
+      historyStore.loadBranches(),
+      workspaceStore.refresh(repoId),
+    ]
+    if (includeStashes) tasks.push(stashStore.refresh())
+    await Promise.all(tasks)
+  }
+
+  async function runPull(request: PullRequest, autoStash: boolean) {
+    const { repoId, remote, branch, mode } = request
+    if (repoStore.activeRepoId !== repoId || currentBranch.value !== branch) return
+    repoOpsStore.setBusy(repoId, 'pull', true)
+    let pullSucceeded = false
+    let restoreCompleted = true
     try {
-      await git.pullBranch(id, remote, branch, mode)
-      await Promise.all([historyStore.loadLog(), historyStore.loadBranches()])
-      showToast('success', t('toolbar.opSuccess', { label: t('toolbar.opLabels.pull') }))
+      if (autoStash) {
+        const result = await runPullWithAutoStash({
+          stash: () => git.stashPush(
+            repoId,
+            t('toolbar.pullWithChanges.stashMessage', { remote, branch }),
+          ),
+          pull: () => git.pullBranch(repoId, remote, branch, mode),
+          getRepoState: () => git.getRepoState(repoId),
+          restore: () => git.stashPop(repoId, 0),
+        })
+        pullSucceeded = result.pullSucceeded
+        restoreCompleted = result.restore.kind === 'restored'
+
+        if (result.restore.kind === 'deferred') {
+          showError(result.restore.repoState === 'unknown'
+            ? t('toolbar.pullWithChanges.restoreDeferredUnknown')
+            : t('toolbar.pullWithChanges.restoreDeferred'))
+        } else if (result.restore.kind === 'failed') {
+          showError(t('toolbar.pullWithChanges.restoreFailed', {
+            detail: String(result.restore.cause),
+          }))
+        }
+      } else {
+        await git.pullBranch(repoId, remote, branch, mode)
+        pullSucceeded = true
+      }
+
+      await refreshAfterPull(repoId, autoStash)
+      if (pullSucceeded && restoreCompleted) {
+        showToast('success', t('toolbar.opSuccess', { label: t('toolbar.opLabels.pull') }))
+      }
     } catch {
       // 错误在 ToolbarToast 中拦截处理
     } finally {
-      repoOpsStore.setBusy(id, 'pull', false)
+      repoOpsStore.setBusy(repoId, 'pull', false)
     }
+  }
+
+  async function confirmPullWithStash() {
+    const request = pendingPull.value
+    if (!request || pullWithChangesLoading.value) return
+    if (repoStore.activeRepoId !== request.repoId || currentBranch.value !== request.branch) {
+      cancelPullWithStash()
+      return
+    }
+
+    pullWithChangesLoading.value = true
+    try {
+      await runPull(request, true)
+    } finally {
+      pullWithChangesLoading.value = false
+      pendingPull.value = null
+      pendingPullChangeCount.value = 0
+    }
+  }
+
+  function cancelPullWithStash() {
+    if (pullWithChangesLoading.value) return
+    pendingPull.value = null
+    pendingPullChangeCount.value = 0
   }
 
   async function onPush(e: MouseEvent) {
@@ -237,12 +336,17 @@ export function useToolbarGitActions(options: UseToolbarGitActionsOptions) {
     canRemoteOp,
     canStash,
     canStashPop,
+    pullWithChangesVisible,
+    pendingPullChangeCount,
+    pullWithChangesLoading,
     canUndoLastCommit,
     undoingCommit,
     withShortcut,
     showAddRepoMenu,
     onPull,
     doPull,
+    confirmPullWithStash,
+    cancelPullWithStash,
     onPush,
     doPush,
     onStash,

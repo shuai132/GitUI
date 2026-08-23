@@ -27,7 +27,7 @@
 - [x] Merge / Rebase：完整 merge（ff / no-ff / squash）、交互式 rebase（reword / squash / fixup / drop / reorder）；右键菜单或拖拽 commit 触发；冲突时用内置三路合并编辑器解决；可选"自动 stash & 恢复"
 - [x] 分支管理：本地 / 远程树形、创建 / 切换 / 删除；脏工作区切换时可明确选择携带改动或 Stash 后切换；支持检出远程分支并建立追踪
 - [x] Tag 管理：侧边栏 TAGS 列表、创建、删除（含仅远程）、推拉同步
-- [x] 远程操作：fetch、push、pull（fast-forward / ff-only / rebase 三模式）、默认远端偏好、tag 推送
+- [x] 远程操作：fetch、push、pull（fast-forward / ff-only / rebase 三模式，脏工作区可自动 stash 并安全恢复）、默认远端偏好、tag 推送
 - [x] SSH 凭据链：ssh-agent → `~/.ssh/id_ed25519` → `~/.ssh/id_rsa`，HTTPS 走系统 credential helper
 - [x] Submodule：init / update / edit URL / deinit，已克隆的可作为新仓库打开，并在所有仓库与工作区变更中作为特殊项导航
 - [x] Diff 查看器：inline / side-by-side 两种布局，均支持完整文件视图与按 hunk 分组、忽略空白变更、多语言语法高亮、行内字符级变化高亮、图片 / SVG 预览、PDF / DOCX / PPTX 文档预览与抽取文本高亮 diff

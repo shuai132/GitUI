@@ -65,6 +65,16 @@ const messages = {
       defaultUpdated: 'Default remote set to {remote}',
       defaultCleared: 'Default remote cleared',
     },
+    pullWithChanges: {
+      title: 'Uncommitted changes',
+      message: 'There are changes in {count} files. GitUI will stash them, including untracked files, run Pull, then restore them. Restoring can conflict; if Pull itself stops on a conflict, your original changes stay safely in Stash.',
+      confirm: 'Stash, Pull, and restore',
+      running: 'Stashing and pulling…',
+      stashMessage: 'gitui: auto-stash before Pull ({remote}/{branch})',
+      restoreDeferred: 'Pull stopped with a Git operation in progress. Your original changes remain in Stash; resolve or abort the operation, then restore them manually.',
+      restoreDeferredUnknown: 'GitUI could not confirm the repository state after Pull. Your original changes remain in Stash to avoid overwriting them; inspect the repository and restore them manually.',
+      restoreFailed: 'GitUI could not restore your original changes automatically. The stash is preserved; restore it manually: {detail}',
+    },
     actionsMenu: {
       soloCurrentBranch: 'Solo current branch',
       showRemoteBranches: 'Show remote branches',
@@ -1078,6 +1088,7 @@ const messages = {
     pull: {
       mergeRequired: 'Pull requires a merge: fast-forward not possible, a merge commit was created',
       diverged: 'Pull failed: the remote branch has diverged and cannot be fast-forwarded. Use merge or rebase mode',
+      ongoingOperation: 'The repository has an unfinished Git operation; resolve conflicts, continue, or abort it first',
     },
     commit: {
       undoPublished: 'This commit is already published upstream; use Revert to preserve shared history',
