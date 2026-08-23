@@ -31,19 +31,20 @@ function onCmdKeydown(e: KeyboardEvent) {
     e.preventDefault()
     const next = idx < entries.length - 1 ? idx + 1 : 0
     expandedId.value = entries[next].id
-    scrollToRow(next)
+    focusRow(next)
   } else if (e.key === 'ArrowUp') {
     e.preventDefault()
     const prev = idx > 0 ? idx - 1 : entries.length - 1
     expandedId.value = entries[prev].id
-    scrollToRow(prev)
+    focusRow(prev)
   }
 }
 
-function scrollToRow(idx: number) {
+function focusRow(idx: number) {
   nextTick(() => {
     if (!cmdListEl.value) return
-    const rows = cmdListEl.value.querySelectorAll('.debug-row')
+    const rows = cmdListEl.value.querySelectorAll<HTMLButtonElement>('.debug-row')
+    rows[idx]?.focus()
     rows[idx]?.scrollIntoView({ block: 'nearest' })
   })
 }
@@ -252,21 +253,28 @@ function startResize(e: PointerEvent) {
         @keydown="onCmdKeydown"
       >
         <template v-for="entry in debugStore.entries" :key="entry.id">
-          <div
+          <button
+            type="button"
             class="debug-row"
             :class="{
               'debug-row--selected': expandedId === entry.id,
               'debug-row--error': entry.status === 'error',
             }"
+            :aria-expanded="expandedId === entry.id"
+            :aria-controls="`debug-command-detail-${entry.id}`"
             @click="toggleExpand(entry)"
           >
             <span class="debug-time">{{ formatTime(entry.ts) }}</span>
             <span class="debug-op">{{ entry.op }}</span>
             <span class="debug-dur">{{ formatDuration(entry.duration) }}</span>
             <span class="debug-status" :class="statusClass(entry.status)">{{ statusIcon(entry.status) }}</span>
-          </div>
+          </button>
           <!-- Inline detail (single-line, scrollable) -->
-          <div v-if="expandedId === entry.id" class="detail-inline">
+          <div
+            v-if="expandedId === entry.id"
+            :id="`debug-command-detail-${entry.id}`"
+            class="detail-inline"
+          >
             <pre v-if="toGitCommand(entry)" class="detail-pre detail-git">$ {{ toGitCommand(entry) }}</pre>
             <pre class="detail-pre detail-args">{{ formatArgs(entry.args) }}</pre>
             <pre v-if="entry.error" class="detail-pre detail-error">{{ entry.error }}</pre>
@@ -406,6 +414,7 @@ function startResize(e: PointerEvent) {
 
 /* ── Command rows ─────────────────────────────────────────── */
 .debug-row {
+  width: 100%;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -413,13 +422,22 @@ function startResize(e: PointerEvent) {
   font-size: var(--font-sm);
   font-family: var(--code-font-family, 'SF Mono', 'Menlo', 'Monaco', monospace);
   cursor: pointer;
+  color: inherit;
+  background: none;
+  border: 0;
   transition: background 0.1s;
   border-left: 2px solid transparent;
+  text-align: left;
   white-space: nowrap;
 }
 
 .debug-row:hover {
   background: rgba(138, 173, 244, 0.08);
+}
+
+.debug-row:focus-visible {
+  outline: 1px solid var(--accent-blue);
+  outline-offset: -1px;
 }
 
 .debug-row--selected {
