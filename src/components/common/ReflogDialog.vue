@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Modal from '@/components/common/Modal.vue'
 import { useGitCommands } from '@/composables/useGitCommands'
+import { useGlobalToast } from '@/composables/useGlobalToast'
 import { useRepoStore } from '@/stores/repos'
 import type { ReflogEntry } from '@/types/git'
 
@@ -12,6 +13,7 @@ const props = defineProps<{ visible: boolean }>()
 const emit = defineEmits<{ close: [] }>()
 
 const git = useGitCommands()
+const { showToast, showActionError } = useGlobalToast()
 const repoStore = useRepoStore()
 
 const entries = ref<ReflogEntry[]>([])
@@ -57,8 +59,13 @@ function formatTime(ts: number): string {
   })
 }
 
-function copyOid(oid: string) {
-  navigator.clipboard.writeText(oid)
+async function copyOid(oid: string) {
+  try {
+    await navigator.clipboard.writeText(oid)
+    showToast('success', t('reflog.copySuccess'))
+  } catch (error: unknown) {
+    showActionError(error, t('reflog.copyFailed'))
+  }
 }
 </script>
 
@@ -79,9 +86,14 @@ function copyOid(oid: string) {
         <tbody>
           <tr v-for="(entry, i) in entries" :key="i">
             <td class="col-oid">
-              <span class="oid" :title="entry.oid" @click="copyOid(entry.oid)">
+              <button
+                type="button"
+                class="oid"
+                :title="t('reflog.copyTitle', { oid: entry.oid })"
+                @click="copyOid(entry.oid)"
+              >
                 {{ entry.short_oid }}
-              </span>
+              </button>
             </td>
             <td class="col-time">{{ formatTime(entry.time) }}</td>
             <td class="col-msg">{{ entry.message }}</td>
@@ -159,13 +171,18 @@ function copyOid(oid: string) {
 }
 
 .oid {
+  padding: 0;
+  border: 0;
+  background: none;
   font-family: var(--code-font-family, 'SF Mono', 'Fira Code', monospace);
+  font-size: inherit;
   color: var(--accent-blue);
   cursor: pointer;
   user-select: text;
 }
 
-.oid:hover {
+.oid:hover,
+.oid:focus-visible {
   text-decoration: underline;
 }
 

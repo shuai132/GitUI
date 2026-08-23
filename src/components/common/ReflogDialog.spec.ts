@@ -8,6 +8,9 @@ import ReflogDialog from './ReflogDialog.vue'
 
 const mocks = vi.hoisted(() => ({
   getReflog: vi.fn(),
+  writeText: vi.fn(),
+  showToast: vi.fn(),
+  showActionError: vi.fn(),
 }))
 
 vi.mock('vue-i18n', () => ({
@@ -28,6 +31,12 @@ vi.mock('@tauri-apps/plugin-store', () => ({
 
 vi.mock('@/composables/useGitCommands', () => ({
   useGitCommands: () => ({ getReflog: mocks.getReflog }),
+}))
+vi.mock('@/composables/useGlobalToast', () => ({
+  useGlobalToast: () => ({
+    showToast: mocks.showToast,
+    showActionError: mocks.showActionError,
+  }),
 }))
 
 const ModalStub = defineComponent({
@@ -57,6 +66,13 @@ describe('ReflogDialog repository context', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     mocks.getReflog.mockReset()
+    mocks.writeText.mockReset().mockResolvedValue(undefined)
+    mocks.showToast.mockReset()
+    mocks.showActionError.mockReset()
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText: mocks.writeText },
+    })
   })
 
   it('reloads on repository switch and ignores the older response', async () => {
@@ -93,5 +109,47 @@ describe('ReflogDialog repository context', () => {
 
     expect(wrapper.text()).toContain('beta entry')
     expect(wrapper.text()).not.toContain('alpha entry')
+  })
+
+  it('copies the full hash from the keyboard-accessible short hash button', async () => {
+    const reflogEntry = entry('c'.repeat(40), 'commit entry')
+    mocks.getReflog.mockResolvedValue([reflogEntry])
+    const repoStore = useRepoStore()
+    repoStore.repos = [{ id: 'repo-a', path: '/repos/alpha', name: 'alpha' }]
+    repoStore.activeRepoId = 'repo-a'
+    const wrapper = mount(ReflogDialog, {
+      props: { visible: true },
+      global: { stubs: { Modal: ModalStub } },
+    })
+    await flushPromises()
+
+    expect(wrapper.find('.oid').element.tagName).toBe('BUTTON')
+    await wrapper.find('.oid').trigger('click')
+    await flushPromises()
+
+    expect(mocks.writeText).toHaveBeenCalledWith(reflogEntry.oid)
+    expect(mocks.showToast).toHaveBeenCalledWith('success', 'reflog.copySuccess')
+  })
+
+  it('reports clipboard failures without an unhandled rejection', async () => {
+    const clipboardError = new Error('clipboard denied')
+    mocks.writeText.mockRejectedValue(clipboardError)
+    mocks.getReflog.mockResolvedValue([entry('d'.repeat(40), 'commit entry')])
+    const repoStore = useRepoStore()
+    repoStore.repos = [{ id: 'repo-a', path: '/repos/alpha', name: 'alpha' }]
+    repoStore.activeRepoId = 'repo-a'
+    const wrapper = mount(ReflogDialog, {
+      props: { visible: true },
+      global: { stubs: { Modal: ModalStub } },
+    })
+    await flushPromises()
+
+    await wrapper.find('.oid').trigger('click')
+    await flushPromises()
+
+    expect(mocks.showActionError).toHaveBeenCalledWith(
+      clipboardError,
+      'reflog.copyFailed',
+    )
   })
 })

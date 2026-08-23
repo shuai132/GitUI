@@ -634,6 +634,9 @@ const messages = {
     columnHash: 'Hash',
     columnTime: '时间',
     columnOperation: '操作',
+    copyTitle: '复制完整哈希 {oid}',
+    copySuccess: '已复制提交哈希',
+    copyFailed: '无法复制提交哈希',
     close: '关闭',
   },
   errorHistory: {

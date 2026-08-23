@@ -635,6 +635,9 @@ const messages = {
     columnHash: 'Hash',
     columnTime: 'Time',
     columnOperation: 'Operation',
+    copyTitle: 'Copy full hash {oid}',
+    copySuccess: 'Commit hash copied',
+    copyFailed: 'Could not copy commit hash',
     close: 'Close',
   },
   errorHistory: {
