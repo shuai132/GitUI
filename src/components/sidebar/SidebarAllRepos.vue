@@ -1,6 +1,9 @@
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { getCurrentWebview } from '@tauri-apps/api/webview'
+import { getCurrentWindow } from '@tauri-apps/api/window'
+import type { UnlistenFn } from '@tauri-apps/api/event'
 import { useRepoStore } from '@/stores/repos'
 import { useSubmodulesStore } from '@/stores/submodules'
 import { useUiStore } from '@/stores/ui'
@@ -19,6 +22,7 @@ import {
   type SubmodulesByRepoId,
 } from '@/utils/repoTree'
 import { normalizeSidebarSearchQuery } from '@/utils/sidebarSearch'
+import { isDropPointInsideRect, toLogicalDropPoint } from '@/utils/repoDrop'
 
 const { t } = useI18n()
 const repoStore = useRepoStore()
@@ -35,6 +39,90 @@ const repoRows = computed(() => buildRepoTreeRows(repoStore.repos, submodulesByR
 const searchQuery = ref('')
 const hasSearchQuery = computed(() => !!normalizeSidebarSearchQuery(searchQuery.value))
 const filteredRepoRows = computed(() => filterRepoTreeRows(repoRows.value, searchQuery.value))
+const reposFooterRef = ref<HTMLElement | null>(null)
+const hasExternalDrag = ref(false)
+const isDropOver = ref(false)
+const isDropOpening = ref(false)
+const reposFooterHeight = computed(() => {
+  if (repoStore.repos.length > 1) return uiStore.reposHeight
+  return 72
+})
+let dropScaleFactor = 1
+let unlistenDragDrop: UnlistenFn | null = null
+let unlistenScaleChange: UnlistenFn | null = null
+let isMounted = false
+
+function isRepoDropPosition(position: { x: number; y: number }): boolean {
+  const footer = reposFooterRef.value
+  if (!footer) return false
+  const point = toLogicalDropPoint(position, dropScaleFactor)
+  return isDropPointInsideRect(point, footer.getBoundingClientRect(), 8)
+}
+
+async function openDroppedRepos(paths: string[]) {
+  if (isDropOpening.value || paths.length === 0) return
+  isDropOpening.value = true
+  try {
+    await repoStore.openRepos(paths)
+  } catch (e) {
+    console.error('[repo-drop] failed to open dropped repositories:', e)
+  } finally {
+    isDropOpening.value = false
+  }
+}
+
+onMounted(async () => {
+  isMounted = true
+  const currentWindow = getCurrentWindow()
+  try {
+    dropScaleFactor = await currentWindow.scaleFactor()
+  } catch (e) {
+    console.warn('[repo-drop] failed to read window scale factor, falling back to 1:', e)
+  }
+
+  try {
+    const unlisten = await currentWindow.onScaleChanged(({ payload }) => {
+      dropScaleFactor = payload.scaleFactor
+    })
+    if (isMounted) unlistenScaleChange = unlisten
+    else unlisten()
+  } catch (e) {
+    console.warn('[repo-drop] failed to register scale factor listener:', e)
+  }
+
+  try {
+    const unlisten = await getCurrentWebview().onDragDropEvent((event) => {
+      const payload = event.payload
+      if (payload.type === 'leave') {
+        hasExternalDrag.value = false
+        isDropOver.value = false
+        return
+      }
+
+      hasExternalDrag.value = true
+      isDropOver.value = isRepoDropPosition(payload.position)
+
+      if (payload.type === 'drop') {
+        const shouldOpen = isDropOver.value
+        hasExternalDrag.value = false
+        isDropOver.value = false
+        if (shouldOpen) void openDroppedRepos(payload.paths)
+      }
+    })
+    if (isMounted) unlistenDragDrop = unlisten
+    else unlisten()
+  } catch (e) {
+    console.error('[repo-drop] failed to register native drag listener:', e)
+  }
+})
+
+onUnmounted(() => {
+  isMounted = false
+  unlistenDragDrop?.()
+  unlistenScaleChange?.()
+  unlistenDragDrop = null
+  unlistenScaleChange = null
+})
 
 async function reloadRepoSubmoduleRelations() {
   const requestSeq = ++submoduleRelationSeq
@@ -310,14 +398,22 @@ function closeWorktreeDialog() {
 
 <template>
   <div
+    ref="reposFooterRef"
     class="repos-footer"
-    v-if="repoStore.repos.length > 1"
-    :style="{ height: uiStore.reposHeight + 'px' }"
+    :class="{
+      'repos-footer--drop-ready': hasExternalDrag,
+      'repos-footer--drop-target': isDropOver || isDropOpening,
+    }"
+    :style="{ height: reposFooterHeight + 'px' }"
   >
-    <div class="repos-resize" @pointerdown="startReposResize" />
+    <div
+      v-if="repoStore.repos.length > 1"
+      class="repos-resize"
+      @pointerdown="startReposResize"
+    />
     <div class="section-title repos-title">
       <span class="section-label">{{ t('sidebar.repo.allRepos') }}</span>
-      <SidebarSearchControl v-model="searchQuery" />
+      <SidebarSearchControl v-if="repoStore.repos.length > 1" v-model="searchQuery" />
       <button
         class="section-add-btn repos-add-btn"
         :title="t('repo.menu.title')"
@@ -388,6 +484,28 @@ function closeWorktreeDialog() {
       <div v-if="hasSearchQuery && filteredRepoRows.length === 0" class="section-empty">
         {{ t('sidebar.search.noResults') }}
       </div>
+      <div v-else-if="repoStore.repos.length === 0" class="repo-drop-empty">
+        {{ t('sidebar.repo.dropHint') }}
+      </div>
+    </div>
+
+    <div v-if="isDropOver || isDropOpening" class="repo-drop-overlay">
+      <svg
+        width="19"
+        height="19"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M3 7h6l2 2h10v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+        <path d="M12 12v6m-3-3 3 3 3-3" />
+      </svg>
+      <span>
+        {{ isDropOpening ? t('sidebar.repo.dropOpening') : t('sidebar.repo.dropActive') }}
+      </span>
     </div>
 
     <ContextMenu
@@ -417,6 +535,16 @@ function closeWorktreeDialog() {
   position: relative;
   flex-shrink: 0;
   min-height: 40px;
+  transition: box-shadow 0.12s ease, border-color 0.12s ease;
+}
+
+.repos-footer--drop-ready {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent-blue) 55%, transparent);
+}
+
+.repos-footer--drop-target {
+  border-color: var(--accent-blue);
+  box-shadow: inset 0 0 0 2px var(--accent-blue);
 }
 
 .repos-resize {
@@ -442,6 +570,32 @@ function closeWorktreeDialog() {
   overflow-y: auto;
   position: relative;
   padding-bottom: 8px;
+}
+
+.repo-drop-empty {
+  display: flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 2px 12px 6px;
+  color: var(--text-muted);
+  font-size: var(--font-xs);
+}
+
+.repo-drop-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px;
+  background: color-mix(in srgb, var(--bg-surface) 88%, var(--accent-blue));
+  color: var(--text-primary);
+  font-size: var(--font-sm);
+  font-weight: 600;
+  text-align: center;
+  pointer-events: none;
 }
 
 .drop-indicator {

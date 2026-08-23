@@ -207,6 +207,9 @@ const messages = {
       addRepo: 'Add repository',
       allRepos: 'All repositories',
       removeRepo: 'Remove repository',
+      dropHint: 'Drop Git repository folders here',
+      dropActive: 'Release to open repositories',
+      dropOpening: 'Opening repositories…',
       menu: {
         copyName: 'Copy name',
         copyAbsolutePath: 'Copy absolute path',

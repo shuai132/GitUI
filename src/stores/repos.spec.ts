@@ -6,6 +6,7 @@ import type { RepoMeta } from '@/types/git'
 const commandMocks = vi.hoisted(() => ({
   closeRepo: vi.fn(),
   setActiveRepo: vi.fn(),
+  openRepo: vi.fn(),
 }))
 
 vi.mock('@tauri-apps/plugin-store', () => ({
@@ -34,6 +35,7 @@ describe('repos store active backend sync', () => {
     vi.clearAllMocks()
     commandMocks.closeRepo.mockResolvedValue(undefined)
     commandMocks.setActiveRepo.mockResolvedValue(undefined)
+    commandMocks.openRepo.mockReset()
   })
 
   it('sends the next active repo and same generation when closing the active repo', async () => {
@@ -72,5 +74,50 @@ describe('repos store active backend sync', () => {
     expect(commandMocks.setActiveRepo).not.toHaveBeenCalled()
     expect(store.activeRepoId).toBe('repo-a')
     expect(store.repos.map((r) => r.id)).toEqual(['repo-a'])
+  })
+
+  it('opens multiple dropped repositories and activates only the last one', async () => {
+    commandMocks.openRepo
+      .mockResolvedValueOnce(repo('repo-a', 'alpha'))
+      .mockResolvedValueOnce(repo('repo-b', 'beta'))
+    const store = useRepoStore()
+
+    const result = await store.openRepos(['/repos/alpha/', '/repos/beta'])
+
+    expect(commandMocks.openRepo).toHaveBeenNthCalledWith(1, '/repos/alpha')
+    expect(commandMocks.openRepo).toHaveBeenNthCalledWith(2, '/repos/beta')
+    expect(commandMocks.setActiveRepo).toHaveBeenCalledTimes(1)
+    expect(commandMocks.setActiveRepo).toHaveBeenCalledWith('repo-b', 1)
+    expect(store.activeRepoId).toBe('repo-b')
+    expect(store.repos.map((r) => r.id)).toEqual(['repo-a', 'repo-b'])
+    expect(result.failed).toEqual([])
+  })
+
+  it('continues opening valid repositories after a dropped path fails', async () => {
+    const failure = new Error('not a repository')
+    commandMocks.openRepo
+      .mockRejectedValueOnce(failure)
+      .mockResolvedValueOnce(repo('repo-b', 'beta'))
+    const store = useRepoStore()
+
+    const result = await store.openRepos(['/tmp/plain-folder', '/repos/beta'])
+
+    expect(result.opened.map((r) => r.id)).toEqual(['repo-b'])
+    expect(result.failed).toEqual([{ path: '/tmp/plain-folder', error: failure }])
+    expect(store.activeRepoId).toBe('repo-b')
+    expect(commandMocks.setActiveRepo).toHaveBeenCalledTimes(1)
+  })
+
+  it('deduplicates dropped paths and reuses repositories already in the list', async () => {
+    const existing = repo('repo-a', 'alpha')
+    const store = useRepoStore()
+    store.repos = [existing]
+
+    const result = await store.openRepos(['/repos/alpha/', '/repos/alpha'])
+
+    expect(commandMocks.openRepo).not.toHaveBeenCalled()
+    expect(result.opened).toEqual([existing])
+    expect(store.activeRepoId).toBe('repo-a')
+    expect(commandMocks.setActiveRepo).toHaveBeenCalledTimes(1)
   })
 })

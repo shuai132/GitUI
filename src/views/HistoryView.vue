@@ -394,13 +394,21 @@ const {
   dragTargetOid,
   draggingOid,
   dragOverOid,
-  onCommitDragStart,
-  onCommitDragOver,
-  onCommitDrop,
-  onCommitDragEnd,
+  onCommitPointerDown,
+  shouldSuppressCommitClick,
+  cancelCommitDrag,
   onDragDialogMerge,
   onDragDialogRebase,
 } = useCommitDragDrop(openMergeDialog, openRebaseDialog)
+
+function onCommitRowClick(e: MouseEvent, virtualIndex: number) {
+  if (shouldSuppressCommitClick()) {
+    e.preventDefault()
+    e.stopPropagation()
+    return
+  }
+  selectRow(virtualIndex)
+}
 
 const currentBranchName = computed(
   () =>
@@ -607,6 +615,7 @@ onMounted(() => {
 })
 onUnmounted(() => {
   window.removeEventListener('keydown', onKeyDown)
+  cancelCommitDrag()
 })
 </script>
 
@@ -634,7 +643,6 @@ onUnmounted(() => {
         />
 
         <!-- Virtual list body：水平 + 垂直滚动都收在这里，垂直滚动条永远在 body 右缘 -->
-        <!-- @wheel：JS 主动接管滚动，规避 Windows WebView2 中 draggable 行阻断 wheel 冒泡的问题 -->
         <div
           class="commit-list-body"
           ref="scrollContainer"
@@ -751,13 +759,10 @@ onUnmounted(() => {
                   height: 'var(--history-row-height)',
                   width: '100%',
                 }"
-                :draggable="!filteredCommits[toRealIdx(vRow.index)]?.is_stash"
-                @click="selectRow(vRow.index)"
+                :data-commit-oid="filteredCommits[toRealIdx(vRow.index)]?.oid"
+                @click="onCommitRowClick($event, vRow.index)"
                 @contextmenu="onCommitContextMenu($event, filteredCommits[toRealIdx(vRow.index)], hideCommitTooltip)"
-                @dragstart="onCommitDragStart($event, filteredCommits[toRealIdx(vRow.index)])"
-                @dragover="onCommitDragOver($event, filteredCommits[toRealIdx(vRow.index)])"
-                @drop="onCommitDrop($event, filteredCommits[toRealIdx(vRow.index)])"
-                @dragend="onCommitDragEnd"
+                @pointerdown="onCommitPointerDown($event, filteredCommits[toRealIdx(vRow.index)])"
               >
                 <!-- Graph column -->
                 <div class="col-graph" :style="{ width: graphColWidth + 'px' }">

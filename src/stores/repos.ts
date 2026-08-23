@@ -4,6 +4,7 @@ import { LazyStore } from '@tauri-apps/plugin-store'
 import type { RepoMeta, WorkspaceStatus } from '@/types/git'
 import { useGitCommands } from '@/composables/useGitCommands'
 import { useRepoOpsStore } from './repoOps'
+import { normalizeDroppedRepoPaths } from '@/utils/repoDrop'
 
 // 持久化存储：记录打开过的仓库路径以及上次激活的路径
 const STORE_FILE = 'gitui-repos.json'
@@ -15,6 +16,11 @@ interface RepoViewState {
   selectedWip: boolean
   wipSelectedPath: string | null
   cachedWorkspaceStatus: WorkspaceStatus | null
+}
+
+export interface OpenReposResult {
+  opened: RepoMeta[]
+  failed: Array<{ path: string; error: unknown }>
 }
 
 export const useRepoStore = defineStore('repos', () => {
@@ -153,6 +159,49 @@ export const useRepoStore = defineStore('repos', () => {
   }
 
   /**
+   * 批量注册拖入的仓库。单个无效路径不会阻断剩余路径，且全部注册完成后
+   * 只切换一次 active repo，避免为中间仓库触发无意义的全域加载。
+   */
+  async function openRepos(rawPaths: readonly string[]): Promise<OpenReposResult> {
+    loading.value = true
+    error.value = null
+    const opened: RepoMeta[] = []
+    const failed: OpenReposResult['failed'] = []
+
+    try {
+      for (const path of normalizeDroppedRepoPaths(rawPaths)) {
+        const existing = repos.value.find((repo) => repo.path === path)
+        if (existing) {
+          opened.push(existing)
+          continue
+        }
+
+        try {
+          const meta = await git.openRepo(path)
+          repos.value.push(meta)
+          opened.push(meta)
+        } catch (caught: unknown) {
+          failed.push({ path, error: caught })
+        }
+      }
+
+      const lastOpened = opened[opened.length - 1]
+      if (lastOpened) {
+        activeRepoId.value = lastOpened.id
+        await syncBackendActive(lastOpened.id)
+        await persist()
+      }
+      if (failed.length > 0) {
+        error.value = String(failed[failed.length - 1]?.error)
+      }
+
+      return { opened, failed }
+    } finally {
+      loading.value = false
+    }
+  }
+
+  /**
    * 克隆远程仓库。完成后统一走 openRepo 注册到后端 + 加入侧栏 + 激活，
    * 不在后端的 clone_repo 里直接注册 watcher，保持职责单一。
    */
@@ -236,6 +285,7 @@ export const useRepoStore = defineStore('repos', () => {
     error,
     loadPersisted,
     openRepo,
+    openRepos,
     cloneRepo,
     initRepo,
     createWorktree,

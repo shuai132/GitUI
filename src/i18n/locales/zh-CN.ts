@@ -207,6 +207,9 @@ const messages = {
       addRepo: '添加仓库',
       allRepos: '所有仓库',
       removeRepo: '移除仓库',
+      dropHint: '拖入 Git 仓库文件夹',
+      dropActive: '松开以打开仓库',
+      dropOpening: '正在打开仓库…',
       menu: {
         copyName: '复制名称',
         copyAbsolutePath: '复制绝对路径',
