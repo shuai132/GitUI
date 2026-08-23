@@ -508,8 +508,12 @@ export function useGitCommands() {
   const updateSubmodule = (repoId: string, name: string) =>
     call<void>('update_submodule', { repoId, name })
 
-  const setSubmoduleUrl = (repoId: string, name: string, url: string) =>
-    call<void>('set_submodule_url', { repoId, name, url })
+  const setSubmoduleUrl = (
+    repoId: string,
+    name: string,
+    url: string,
+    expectedUrl: string | null,
+  ) => call<void>('set_submodule_url', { repoId, name, url, expectedUrl })
 
   const submoduleWorkdir = (repoId: string, name: string) =>
     call<string>('submodule_workdir', { repoId, name })

@@ -50,11 +50,17 @@ export const useSubmodulesStore = defineStore('submodules', () => {
     await loadSubmodules()
   }
 
-  async function setUrl(name: string, url: string) {
+  async function setUrl(
+    repoId: string,
+    name: string,
+    url: string,
+    expectedUrl: string | null,
+  ) {
     const repoStore = useRepoStore()
-    if (!repoStore.activeRepoId) return
-    await git.setSubmoduleUrl(repoStore.activeRepoId, name, url)
-    await loadSubmodules()
+    await git.setSubmoduleUrl(repoId, name, url, expectedUrl)
+    if (repoStore.activeRepoId === repoId) {
+      await loadSubmodules()
+    }
   }
 
   async function workdir(name: string): Promise<string> {

@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import type { SubmoduleInfo } from '@/types/git'
 import Modal from '@/components/common/Modal.vue'
 import { useSubmodulesStore } from '@/stores/submodules'
+import { useRepoStore } from '@/stores/repos'
 
 const { t } = useI18n()
 
@@ -18,10 +19,13 @@ const emit = defineEmits<{
 }>()
 
 const submodulesStore = useSubmodulesStore()
+const repoStore = useRepoStore()
 
 const url = ref<string>('')
 const submitting = ref<boolean>(false)
 const error = ref<string | null>(null)
+const openedRepoId = ref<string | null>(null)
+const originalTarget = ref<SubmoduleInfo | null>(null)
 
 watch(
   () => props.visible,
@@ -30,24 +34,38 @@ watch(
     error.value = null
     submitting.value = false
     url.value = props.submodule?.url ?? ''
+    openedRepoId.value = repoStore.activeRepoId
+    originalTarget.value = props.submodule ? { ...props.submodule } : null
   },
   { immediate: true },
 )
 
 const canSubmit = computed(
   () =>
-    !!props.submodule &&
+    !!originalTarget.value &&
     !!url.value.trim() &&
-    url.value.trim() !== (props.submodule?.url ?? '') &&
+    url.value.trim() !== (originalTarget.value.url ?? '') &&
     !submitting.value,
 )
 
 async function onSave() {
-  if (!canSubmit.value || !props.submodule) return
+  if (!canSubmit.value) return
+  const repoId = openedRepoId.value
+  const target = originalTarget.value
+  if (!repoId || repoStore.activeRepoId !== repoId) {
+    error.value = t('submodule.formContextChanged')
+    return
+  }
+  if (!target) return
   submitting.value = true
   error.value = null
   try {
-    await submodulesStore.setUrl(props.submodule.name, url.value.trim())
+    await submodulesStore.setUrl(
+      repoId,
+      target.name,
+      url.value.trim(),
+      target.url ?? null,
+    )
     emit('success')
     emit('close')
   } catch (e: unknown) {
@@ -64,14 +82,14 @@ function onCancel() {
 
 <template>
   <Modal :visible="visible" :title="t('submodule.edit.title')" width="520px" @close="onCancel">
-    <div v-if="submodule" class="form-row">
+    <div v-if="originalTarget" class="form-row">
       <label class="form-label">{{ t('submodule.edit.nameLabel') }}</label>
-      <div class="readonly-value">{{ submodule.name }}</div>
+      <div class="readonly-value">{{ originalTarget.name }}</div>
     </div>
 
-    <div v-if="submodule" class="form-row">
+    <div v-if="originalTarget" class="form-row">
       <label class="form-label">{{ t('submodule.edit.pathLabel') }}</label>
-      <div class="readonly-value">{{ submodule.path }}</div>
+      <div class="readonly-value">{{ originalTarget.path }}</div>
     </div>
 
     <div class="form-row">

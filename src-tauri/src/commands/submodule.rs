@@ -45,12 +45,13 @@ pub async fn set_submodule_url(
     repo_id: String,
     name: String,
     url: String,
+    expected_url: Option<String>,
     repo_manager: State<'_, RepoManager>,
 ) -> Result<(), GitError> {
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    GitEngine::set_submodule_url(&meta.path, &name, &url)
+    GitEngine::set_submodule_url(&meta.path, &name, &url, expected_url.as_deref())
 }
 
 #[tauri::command]

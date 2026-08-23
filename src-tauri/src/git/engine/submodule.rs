@@ -121,8 +121,21 @@ impl GitEngine {
     }
 
     /// 修改 submodule 的 URL（写入 .gitmodules，并同步到 .git/config）
-    pub fn set_submodule_url(path: &str, name: &str, new_url: &str) -> GitResult<()> {
+    pub fn set_submodule_url(
+        path: &str,
+        name: &str,
+        new_url: &str,
+        expected_url: Option<&str>,
+    ) -> GitResult<()> {
         let mut repo = Self::open(path)?;
+        let current_url = repo.find_submodule(name)?.url().map(str::to_string);
+        if current_url.as_deref() != expected_url {
+            return Err(GitError::OperationFailed(format!(
+                "Submodule target changed: {name} expected URL {}, current URL {}",
+                expected_url.unwrap_or("missing"),
+                current_url.as_deref().unwrap_or("missing")
+            )));
+        }
         repo.submodule_set_url(name, new_url)?;
         // sync 会把 .gitmodules 中的 url 写入 .git/config 里已 init 的条目
         if let Ok(mut sub) = repo.find_submodule(name) {
@@ -433,5 +446,52 @@ mod tests {
         );
         assert!(workdir.is_dir());
         assert!(modules.is_dir());
+    }
+
+    #[test]
+    fn set_submodule_url_rejects_a_changed_target() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let repo = git2::Repository::init(temp_dir.path()).unwrap();
+        let gitmodules = temp_dir.path().join(".gitmodules");
+        let manifest =
+            "[submodule \"demo\"]\n\tpath = demo\n\turl = https://example.com/current.git\n";
+        fs::write(&gitmodules, manifest).unwrap();
+        assert!(repo.find_submodule("demo").is_ok());
+
+        let result = GitEngine::set_submodule_url(
+            temp_dir.path().to_str().unwrap(),
+            "demo",
+            "https://example.com/new.git",
+            Some("https://example.com/expected.git"),
+        );
+
+        assert!(result.is_err());
+        assert_eq!(fs::read_to_string(gitmodules).unwrap(), manifest);
+    }
+
+    #[test]
+    fn set_submodule_url_accepts_the_exact_target() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let repo = git2::Repository::init(temp_dir.path()).unwrap();
+        let gitmodules = temp_dir.path().join(".gitmodules");
+        fs::write(
+            &gitmodules,
+            "[submodule \"demo\"]\n\tpath = demo\n\turl = https://example.com/current.git\n",
+        )
+        .unwrap();
+        assert!(repo.find_submodule("demo").is_ok());
+
+        GitEngine::set_submodule_url(
+            temp_dir.path().to_str().unwrap(),
+            "demo",
+            "https://example.com/new.git",
+            Some("https://example.com/current.git"),
+        )
+        .unwrap();
+
+        assert_eq!(
+            repo.find_submodule("demo").unwrap().url(),
+            Some("https://example.com/new.git")
+        );
     }
 }

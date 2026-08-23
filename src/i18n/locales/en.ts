@@ -561,6 +561,7 @@ const messages = {
     },
   },
   submodule: {
+    formContextChanged: 'The active repository changed after this form opened. Switch back to the original repository or reopen the form.',
     edit: {
       title: 'Edit submodule',
       nameLabel: 'Name:',
