@@ -4,7 +4,9 @@ use crate::{
     git::{
         engine::GitEngine,
         error::GitError,
-        types::{CommitChangeStats, CommitDetail, CommitInfo, LogBranchScope, LogPage},
+        types::{
+            CommitChangeStats, CommitDetail, CommitInfo, CommitSearchPage, LogBranchScope, LogPage,
+        },
     },
     repo_manager::RepoManager,
 };
@@ -29,6 +31,31 @@ pub async fn get_log(
         &meta.path,
         offset,
         limit,
+        include_unreachable,
+        include_stashes,
+        branch_scope,
+        include_remote_branches,
+    )
+}
+
+#[tauri::command]
+pub async fn search_commits(
+    repo_id: String,
+    query: String,
+    limit: usize,
+    include_unreachable: bool,
+    include_stashes: bool,
+    branch_scope: LogBranchScope,
+    include_remote_branches: bool,
+    repo_manager: State<'_, RepoManager>,
+) -> Result<CommitSearchPage, GitError> {
+    let meta = repo_manager
+        .get_meta(&repo_id)
+        .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
+    GitEngine::search_commits(
+        &meta.path,
+        &query,
+        limit.min(200),
         include_unreachable,
         include_stashes,
         branch_scope,

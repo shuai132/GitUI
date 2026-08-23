@@ -16,6 +16,7 @@ import { orderedFileIndices } from '@/utils/fileOrderPrefs'
 
 const PAGE_SIZE = 200
 const CHANGE_STATS_BATCH_SIZE = 40
+const SEARCH_LIMIT = 200
 
 export const useHistoryStore = defineStore('history', () => {
   const commits = ref<CommitInfo[]>([])
@@ -39,6 +40,11 @@ export const useHistoryStore = defineStore('history', () => {
   const loading = ref(false)
   const loadingMore = ref(false)
   const error = ref<string | null>(null)
+  const commitSearchResults = ref<CommitInfo[]>([])
+  const commitSearchQuery = ref('')
+  const commitSearchHasMore = ref(false)
+  const commitSearchLoading = ref(false)
+  const commitSearchError = ref<string | null>(null)
   // 由侧边栏设置，HistoryView 消费后清空；用于从 sidebar 跳转到历史中某个 commit
   const pendingJumpOid = ref<string | null>(null)
   // 由 App 设置，HistoryView 消费后清空；只把目标 commit 滚入视野，不选中也不打开详情
@@ -57,6 +63,7 @@ export const useHistoryStore = defineStore('history', () => {
   let remoteTagsLoadingRepoId: string | null = null
   let commitDetailRequestSeq = 0
   let fileDiffRequestSeq = 0
+  let commitSearchRequestSeq = 0
 
   function activeRepoBranchScope() {
     const repoStore = useRepoStore()
@@ -242,6 +249,53 @@ export const useHistoryStore = defineStore('history', () => {
       graphLaneState.value = finalState
     } finally {
       loadingMore.value = false
+    }
+  }
+
+  function cancelCommitSearch() {
+    commitSearchRequestSeq++
+    commitSearchResults.value = []
+    commitSearchQuery.value = ''
+    commitSearchHasMore.value = false
+    commitSearchLoading.value = false
+    commitSearchError.value = null
+  }
+
+  async function searchCommits(query: string) {
+    const normalizedQuery = query.trim()
+    const repoStore = useRepoStore()
+    const repoId = repoStore.activeRepoId
+    if (!repoId || Array.from(normalizedQuery).length < 2) {
+      cancelCommitSearch()
+      return
+    }
+
+    const requestSeq = ++commitSearchRequestSeq
+    commitSearchLoading.value = true
+    commitSearchError.value = null
+    try {
+      const page = await git.searchCommits(
+        repoId,
+        normalizedQuery,
+        SEARCH_LIMIT,
+        uiStore.showUnreachableCommits,
+        uiStore.showStashCommits,
+        activeRepoBranchScope(),
+        uiStore.showRemoteBranches,
+      )
+      if (requestSeq !== commitSearchRequestSeq || !isActiveRepo(repoId)) return
+      commitSearchResults.value = page.commits
+      commitSearchQuery.value = normalizedQuery
+      commitSearchHasMore.value = page.has_more
+    } catch (e: unknown) {
+      if (requestSeq === commitSearchRequestSeq && isActiveRepo(repoId)) {
+        commitSearchResults.value = []
+        commitSearchQuery.value = normalizedQuery
+        commitSearchHasMore.value = false
+        commitSearchError.value = String(e)
+      }
+    } finally {
+      if (requestSeq === commitSearchRequestSeq) commitSearchLoading.value = false
     }
   }
 
@@ -665,6 +719,7 @@ export const useHistoryStore = defineStore('history', () => {
     remoteTagsRequestSeq++
     commitDetailRequestSeq++
     fileDiffRequestSeq++
+    commitSearchRequestSeq++
     remoteTagsLoadingRepoId = null
     commits.value = []
     branches.value = []
@@ -685,6 +740,11 @@ export const useHistoryStore = defineStore('history', () => {
     loadingMore.value = false
     loadingDetail.value = false
     error.value = null
+    commitSearchResults.value = []
+    commitSearchQuery.value = ''
+    commitSearchHasMore.value = false
+    commitSearchLoading.value = false
+    commitSearchError.value = null
     pendingJumpOid.value = null
     pendingRevealOid.value = null
     commitChangeStatsRepoId.value = null
@@ -713,10 +773,17 @@ export const useHistoryStore = defineStore('history', () => {
     loading,
     loadingMore,
     error,
+    commitSearchResults,
+    commitSearchQuery,
+    commitSearchHasMore,
+    commitSearchLoading,
+    commitSearchError,
     pendingJumpOid,
     pendingRevealOid,
     loadLog,
     loadMore,
+    searchCommits,
+    cancelCommitSearch,
     ensureCommitLoaded,
     ensureCommitChangeStats,
     loadBranches,

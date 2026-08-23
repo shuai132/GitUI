@@ -3,10 +3,19 @@ import { createPinia, setActivePinia } from 'pinia'
 import { useHistoryStore } from './history'
 import { useRepoStore } from './repos'
 import { useUiStore } from './ui'
-import type { BranchInfo, CommitChangeStats, FileDiff, LogPage, RemoteInfo, TagInfo } from '@/types/git'
+import type {
+  BranchInfo,
+  CommitChangeStats,
+  CommitSearchPage,
+  FileDiff,
+  LogPage,
+  RemoteInfo,
+  TagInfo,
+} from '@/types/git'
 
 const {
   getLogMock,
+  searchCommitsMock,
   getCommitChangeStatsMock,
   listBranchesMock,
   listRemotesMock,
@@ -16,6 +25,7 @@ const {
   listRemoteTagsMock,
 } = vi.hoisted(() => ({
   getLogMock: vi.fn(),
+  searchCommitsMock: vi.fn(),
   getCommitChangeStatsMock: vi.fn(),
   listBranchesMock: vi.fn(),
   listRemotesMock: vi.fn(),
@@ -36,6 +46,7 @@ vi.mock('@tauri-apps/plugin-store', () => ({
 vi.mock('@/composables/useGitCommands', () => ({
   useGitCommands: () => ({
     getLog: getLogMock,
+    searchCommits: searchCommitsMock,
     getCommitChangeStats: getCommitChangeStatsMock,
     listBranches: listBranchesMock,
     listRemotes: listRemotesMock,
@@ -78,6 +89,13 @@ function page(hasMore = false, oids = ['aaa']): LogPage {
     commits: oids.map(commit),
     has_more: hasMore,
     total_loaded: oids.length,
+  }
+}
+
+function searchPage(hasMore = false, oids = ['aaa']): CommitSearchPage {
+  return {
+    commits: oids.map(commit),
+    has_more: hasMore,
   }
 }
 
@@ -166,6 +184,7 @@ describe('history store log filters', () => {
   beforeEach(() => {
     stubLocalStorage()
     getLogMock.mockReset()
+    searchCommitsMock.mockReset()
     getCommitChangeStatsMock.mockReset()
     listBranchesMock.mockReset()
     listRemotesMock.mockReset()
@@ -199,6 +218,67 @@ describe('history store log filters', () => {
       'current_first_parent',
       false,
     )
+  })
+
+  it('searches the full history with the active filters', async () => {
+    searchCommitsMock.mockResolvedValueOnce(searchPage(true, ['match']))
+    const repoStore = useRepoStore()
+    const uiStore = useUiStore()
+    const historyStore = useHistoryStore()
+    setActiveRepo(repoStore, 'repo-1', '/repos/a')
+    uiStore.showUnreachableCommits = false
+    uiStore.showStashCommits = true
+    uiStore.setHistoryBranchScopeForRepo('/repos/a', 'current_first_parent')
+    uiStore.showRemoteBranches = false
+
+    await historyStore.searchCommits('  needle  ')
+
+    expect(searchCommitsMock).toHaveBeenCalledWith(
+      'repo-1',
+      'needle',
+      200,
+      false,
+      true,
+      'current_first_parent',
+      false,
+    )
+    expect(historyStore.commitSearchResults.map((item) => item.oid)).toEqual(['match'])
+    expect(historyStore.commitSearchQuery).toBe('needle')
+    expect(historyStore.commitSearchHasMore).toBe(true)
+  })
+
+  it('keeps the newest full-history search response', async () => {
+    const first = deferred<CommitSearchPage>()
+    const second = deferred<CommitSearchPage>()
+    searchCommitsMock
+      .mockReturnValueOnce(first.promise)
+      .mockReturnValueOnce(second.promise)
+    const repoStore = useRepoStore()
+    const historyStore = useHistoryStore()
+    setActiveRepo(repoStore, 'repo-1', '/repos/a')
+
+    const firstSearch = historyStore.searchCommits('first')
+    const secondSearch = historyStore.searchCommits('second')
+    second.resolve(searchPage(false, ['new']))
+    await secondSearch
+    first.resolve(searchPage(false, ['old']))
+    await firstSearch
+
+    expect(historyStore.commitSearchQuery).toBe('second')
+    expect(historyStore.commitSearchResults.map((item) => item.oid)).toEqual(['new'])
+    expect(historyStore.commitSearchLoading).toBe(false)
+  })
+
+  it('does not scan full history for a one-character query', async () => {
+    const repoStore = useRepoStore()
+    const historyStore = useHistoryStore()
+    setActiveRepo(repoStore, 'repo-1', '/repos/a')
+
+    await historyStore.searchCommits('x')
+
+    expect(searchCommitsMock).not.toHaveBeenCalled()
+    expect(historyStore.commitSearchResults).toEqual([])
+    expect(historyStore.commitSearchLoading).toBe(false)
   })
 
   it('passes current UI filters to loadMore', async () => {

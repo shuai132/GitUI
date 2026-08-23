@@ -123,6 +123,11 @@ export interface CommitInfo {
 
 export type LogBranchScope = 'all' | 'current_first_parent'
 
+export interface CommitSearchPage {
+  commits: CommitInfo[]
+  has_more: boolean
+}
+
 export interface BranchInfo {
   name: string
   is_remote: boolean

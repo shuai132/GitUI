@@ -138,16 +138,47 @@ const historyColumns = computed<HistoryColumnView[]>(() =>
 )
 
 // ── Search / filter ─────────────────────────────────────────────────
-const filteredCommits = computed(() => {
-  const q = uiStore.historySearchQuery.trim().toLowerCase()
-  if (!q) return historyStore.commits
+const normalizedHistorySearchQuery = computed(() => uiStore.historySearchQuery.trim())
+const localFilteredCommits = computed(() => {
+  const query = normalizedHistorySearchQuery.value.toLowerCase()
+  if (!query) return historyStore.commits
   return historyStore.commits.filter(c =>
-    c.summary.toLowerCase().includes(q) ||
-    c.author_name.toLowerCase().includes(q) ||
-    c.short_oid.toLowerCase().startsWith(q) ||
-    c.oid.toLowerCase().startsWith(q)
+    c.message.toLowerCase().includes(query) ||
+    c.author_name.toLowerCase().includes(query) ||
+    c.author_email.toLowerCase().includes(query) ||
+    c.oid.toLowerCase().startsWith(query)
   )
 })
+const filteredCommits = computed(() => {
+  const query = normalizedHistorySearchQuery.value
+  if (!query) return historyStore.commits
+  if (historyStore.commitSearchQuery === query) return historyStore.commitSearchResults
+  return localFilteredCommits.value
+})
+
+let commitSearchTimer: ReturnType<typeof setTimeout> | null = null
+watch(
+  () => [
+    normalizedHistorySearchQuery.value,
+    repoStore.activeRepoId ?? '',
+    activeRepoPath.value ?? '',
+    activeRepoBranchScope.value,
+    uiStore.showRemoteBranches ? '1' : '0',
+    uiStore.showUnreachableCommits ? '1' : '0',
+    uiStore.showStashCommits ? '1' : '0',
+  ],
+  ([query]) => {
+    if (commitSearchTimer) clearTimeout(commitSearchTimer)
+    commitSearchTimer = null
+    historyStore.cancelCommitSearch()
+    if (Array.from(query).length < 2) return
+    commitSearchTimer = setTimeout(() => {
+      commitSearchTimer = null
+      void historyStore.searchCommits(query)
+    }, 300)
+  },
+  { immediate: true },
+)
 
 // ── 虚拟 WIP 行：工作副本有变更时显示在列表顶部（merge/rebase 进行中时也强制显示）────
 const showWipRow = computed(() => {
@@ -197,7 +228,10 @@ function onScroll() {
   const el = scrollContainer.value
   if (!el) return
   if (headerScrollLeft.value !== el.scrollLeft) headerScrollLeft.value = el.scrollLeft
-  if (el.scrollHeight - el.scrollTop - el.clientHeight < rowH.value * 5) {
+  if (
+    !normalizedHistorySearchQuery.value &&
+    el.scrollHeight - el.scrollTop - el.clientHeight < rowH.value * 5
+  ) {
     historyStore.loadMore()
   }
   ensureVisibleCommitChangeStats()
@@ -626,6 +660,8 @@ onMounted(() => {
 })
 onUnmounted(() => {
   window.removeEventListener('keydown', onKeyDown)
+  if (commitSearchTimer) clearTimeout(commitSearchTimer)
+  historyStore.cancelCommitSearch()
   cancelCommitDrag()
 })
 </script>
@@ -880,9 +916,23 @@ onUnmounted(() => {
           </div>
 
           <!-- Load more indicators -->
-          <div v-if="historyStore.loadingMore" class="list-hint">{{ t('history.loadingMore') }}</div>
-          <div v-if="uiStore.historySearchQuery.trim()" class="list-hint dim">
-            {{ t('history.search.foundOf', { found: filteredCommits.length, loaded: historyStore.commits.length }) }}
+          <div v-if="historyStore.loadingMore && !normalizedHistorySearchQuery" class="list-hint">{{ t('history.loadingMore') }}</div>
+          <div v-if="normalizedHistorySearchQuery" class="list-hint dim">
+            <template v-if="Array.from(normalizedHistorySearchQuery).length < 2">
+              {{ t('history.search.minChars') }}
+            </template>
+            <template v-else-if="historyStore.commitSearchError">
+              {{ t('history.search.failed') }}
+            </template>
+            <template v-else-if="historyStore.commitSearchLoading || historyStore.commitSearchQuery !== normalizedHistorySearchQuery">
+              {{ t('history.search.searching', { found: localFilteredCommits.length }) }}
+            </template>
+            <template v-else-if="historyStore.commitSearchHasMore">
+              {{ t('history.search.showingFirst', { count: filteredCommits.length }) }}
+            </template>
+            <template v-else>
+              {{ t('history.search.foundAll', { count: filteredCommits.length }) }}
+            </template>
           </div>
           <div v-else-if="!historyStore.hasMore && historyStore.commits.length > 0" class="list-hint dim">
             {{ t('history.totalCount', { count: historyStore.commits.length }) }}

@@ -23,7 +23,7 @@ const messages = {
     opFailed: '{label} 失败：{message}',
     opSuccess: '{label} 成功',
     noRemoteConfigured: '当前仓库没有配置 remote',
-    search: { placeholder: '搜索提交' },
+    search: { placeholder: '搜索完整提交历史' },
     title: {
       openRepo: '打开仓库',
       pull: 'Pull (fetch + merge)',
@@ -46,7 +46,7 @@ const messages = {
       themeSwitchLight: '切换为浅色主题',
       themeSwitchDark: '切换为深色主题',
       settings: '设置',
-      search: '搜索提交',
+      search: '搜索完整提交历史',
       actions: '更多操作',
     },
     pullMode: {
@@ -293,7 +293,13 @@ const messages = {
       noActiveRepo: '请从左侧打开一个 Git 仓库',
       noCommits: '暂无提交历史',
     },
-    search: { foundOf: '找到 {found} 条（已加载 {loaded} 条）' },
+    search: {
+      minChars: '输入至少 2 个字符以搜索完整历史',
+      searching: '正在搜索完整历史…（当前页匹配 {found} 条）',
+      foundAll: '在完整历史中找到 {count} 条',
+      showingFirst: '结果较多，显示前 {count} 条',
+      failed: '搜索完整历史失败',
+    },
     columns: {
       description: '描述',
       changes: '变更',

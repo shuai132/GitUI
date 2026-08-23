@@ -34,6 +34,7 @@ GitUI 采用 Tauri v2 的 IPC 机制实现前后端通信，包括双向的请�
 
 ### 历史与对比 (Log / Diff)
 - `get_log` / `get_commit_detail` / `get_file_log`：多维度的历史记录查询。`get_log` 接收分页、`include_unreachable`、`include_stashes`、`branch_scope` 和 `include_remote_branches`，其中 `branch_scope` 见 `git/types.rs::LogBranchScope`。
+- `search_commits`：在与 `get_log` 相同的引用和过滤范围内扫描完整提交元数据，按消息、作者姓名 / 邮箱或 OID 前缀返回 `git/types.rs::CommitSearchPage`；单次结果上限由命令层收口。
 - `get_commit_change_stats`：按 OID 批量获取提交变更规模统计，返回 `git/types.rs::CommitChangeStats`，用于历史列表「变更」列的懒加载。
 - `get_file_diff` / `get_file_diff_at_commit`：文件级差异计算，均接收 `ignore_whitespace` 控制是否忽略所有空白差异。`FileDiff` 会携带两侧文件 mode，用于前端识别 submodule gitlink 等类型变更。
 - `get_blob_bytes` / `read_worktree_file`：二进制与原始文本内容按需读取。

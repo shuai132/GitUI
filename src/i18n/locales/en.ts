@@ -23,7 +23,7 @@ const messages = {
     opFailed: '{label} failed: {message}',
     opSuccess: '{label} succeeded',
     noRemoteConfigured: 'This repository has no remote configured',
-    search: { placeholder: 'Search commits' },
+    search: { placeholder: 'Search full commit history' },
     title: {
       openRepo: 'Open repository',
       pull: 'Pull (fetch + merge)',
@@ -46,7 +46,7 @@ const messages = {
       themeSwitchLight: 'Switch to light theme',
       themeSwitchDark: 'Switch to dark theme',
       settings: 'Settings',
-      search: 'Search commits',
+      search: 'Search full commit history',
       actions: 'More actions',
     },
     pullMode: {
@@ -293,7 +293,13 @@ const messages = {
       noActiveRepo: 'Open a Git repository from the sidebar to get started',
       noCommits: 'No commit history',
     },
-    search: { foundOf: '{found} match(es) in {loaded} loaded commits' },
+    search: {
+      minChars: 'Enter at least 2 characters to search the full history',
+      searching: 'Searching full history… ({found} match(es) on the current page)',
+      foundAll: '{count} match(es) across the full history',
+      showingFirst: 'Many matches; showing the first {count}',
+      failed: 'Failed to search the full history',
+    },
     columns: {
       description: 'Description',
       changes: 'Changes',

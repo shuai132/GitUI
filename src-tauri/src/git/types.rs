@@ -211,6 +211,12 @@ pub enum LogBranchScope {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CommitSearchPage {
+    pub commits: Vec<CommitInfo>,
+    pub has_more: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BranchInfo {
     pub name: String,
     pub is_remote: bool,

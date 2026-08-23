@@ -987,6 +987,112 @@ mod tests {
     }
 
     #[test]
+    fn test_search_commits_matches_full_metadata_and_reports_truncation() {
+        let test_repo = TestRepo::new();
+        let path = test_repo.path_str();
+        let body_oid = commit_file(
+            &test_repo,
+            "Visible subject\n\nHidden body needle",
+            "body.txt",
+            "body\n",
+        );
+        commit_file(&test_repo, "shared result one", "one.txt", "one\n");
+        commit_file(&test_repo, "shared result two", "two.txt", "two\n");
+        commit_file(&test_repo, "shared result three", "three.txt", "three\n");
+
+        let body = GitEngine::search_commits(
+            path,
+            "BODY NEEDLE",
+            20,
+            false,
+            false,
+            LogBranchScope::All,
+            true,
+        )
+        .unwrap();
+        assert_eq!(body.commits.len(), 1);
+        assert_eq!(body.commits[0].oid, body_oid.to_string());
+
+        let author = GitEngine::search_commits(
+            path,
+            "test@test.com",
+            20,
+            false,
+            false,
+            LogBranchScope::All,
+            true,
+        )
+        .unwrap();
+        assert!(!author.commits.is_empty());
+
+        let sha = GitEngine::search_commits(
+            path,
+            &body_oid.to_string()[..10],
+            20,
+            false,
+            false,
+            LogBranchScope::All,
+            true,
+        )
+        .unwrap();
+        assert_eq!(sha.commits.len(), 1);
+        assert_eq!(sha.commits[0].oid, body_oid.to_string());
+
+        let truncated = GitEngine::search_commits(
+            path,
+            "shared result",
+            2,
+            false,
+            false,
+            LogBranchScope::All,
+            true,
+        )
+        .unwrap();
+        assert_eq!(truncated.commits.len(), 2);
+        assert!(truncated.has_more);
+    }
+
+    #[test]
+    fn test_search_commits_respects_remote_branch_filter() {
+        let test_repo = TestRepo::new();
+        let path = test_repo.path_str();
+        let remote_oid = commit_file_to_ref(
+            &test_repo,
+            "refs/remotes/origin/search-only",
+            "remote searchable needle",
+            "remote-search.txt",
+            "remote\n",
+        );
+
+        let with_remote = GitEngine::search_commits(
+            path,
+            "searchable needle",
+            20,
+            false,
+            false,
+            LogBranchScope::All,
+            true,
+        )
+        .unwrap();
+        assert!(with_remote
+            .commits
+            .iter()
+            .any(|commit| commit.oid == remote_oid.to_string()));
+
+        let without_remote = GitEngine::search_commits(
+            path,
+            "searchable needle",
+            20,
+            false,
+            false,
+            LogBranchScope::All,
+            false,
+        )
+        .unwrap();
+        assert!(without_remote.commits.is_empty());
+    }
+
+    #[test]
     fn test_get_log_current_first_parent_excludes_merged_side_branch() {
         let test_repo = TestRepo::new();
         let repo = &test_repo.repo;

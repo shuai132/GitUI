@@ -101,6 +101,7 @@ pub fn run() {
             create_tag,
             // Log
             get_log,
+            search_commits,
             get_commit_change_stats,
             get_commit_summary,
             get_commit_detail,

@@ -4,6 +4,7 @@ import type {
   WorkspaceStatus,
   CommitDetail,
   CommitInfo,
+  CommitSearchPage,
   CommitChangeStats,
   LogPage,
   FileDiff,
@@ -267,6 +268,28 @@ export function useGitCommands() {
       branchScope,
       includeRemoteBranches,
     })
+
+  const searchCommits = (
+    repoId: string,
+    query: string,
+    limit: number,
+    includeUnreachable: boolean,
+    includeStashes: boolean,
+    branchScope: LogBranchScope,
+    includeRemoteBranches: boolean,
+  ) => call<CommitSearchPage>(
+    'search_commits',
+    {
+      repoId,
+      query,
+      limit,
+      includeUnreachable,
+      includeStashes,
+      branchScope,
+      includeRemoteBranches,
+    },
+    { silent: true },
+  )
 
   const getCommitChangeStats = (repoId: string, oids: string[]) =>
     call<CommitChangeStats[]>('get_commit_change_stats', { repoId, oids }, { silent: true })
@@ -565,6 +588,7 @@ export function useGitCommands() {
     undoLastCommit,
     createTag,
     getLog,
+    searchCommits,
     getCommitChangeStats,
     getCommitSummary,
     getCommitDetail,
