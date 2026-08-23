@@ -641,6 +641,8 @@ const messages = {
     title: 'Recent errors',
     empty: 'No error records',
     copyTitle: 'Copy',
+    copySuccess: 'Error details copied',
+    copyFailed: 'Could not copy error details',
     clear: 'Clear',
     clearTitle: 'Clear error history?',
     close: 'Close',

@@ -640,6 +640,8 @@ const messages = {
     title: '最近错误',
     empty: '暂无错误记录',
     copyTitle: '复制',
+    copySuccess: '已复制错误详情',
+    copyFailed: '无法复制错误详情',
     clear: '清空',
     clearTitle: '清空错误历史？',
     close: '关闭',

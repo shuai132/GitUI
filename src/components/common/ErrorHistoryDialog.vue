@@ -3,13 +3,15 @@ import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Modal from '@/components/common/Modal.vue'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
+import { useGlobalToast } from '@/composables/useGlobalToast'
 import { useErrorsStore } from '@/stores/errors'
 import type { ErrorEntry } from '@/stores/errors'
 
 defineProps<{ visible: boolean }>()
 const emit = defineEmits<{ close: [] }>()
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
+const { showToast, showActionError } = useGlobalToast()
 const errorsStore = useErrorsStore()
 
 // 展开查看原始错误的条目 id 集合
@@ -25,7 +27,7 @@ function toggle(id: number) {
 }
 
 function formatTime(ts: number): string {
-  return new Date(ts).toLocaleString('zh-CN', {
+  return new Date(ts).toLocaleString(locale.value === 'zh-CN' ? 'zh-CN' : 'en-US', {
     month: '2-digit',
     day: '2-digit',
     hour: '2-digit',
@@ -44,9 +46,14 @@ function onConfirmClear() {
   showClearConfirmation.value = false
 }
 
-function onCopy(entry: ErrorEntry) {
+async function onCopy(entry: ErrorEntry) {
   const text = `[${entry.op}] ${entry.friendly}\n\n${t('errorHistory.rawErrorLabel')}\n${entry.raw}`
-  navigator.clipboard.writeText(text)
+  try {
+    await navigator.clipboard.writeText(text)
+    showToast('success', t('errorHistory.copySuccess'))
+  } catch (error: unknown) {
+    showActionError(error, t('errorHistory.copyFailed'))
+  }
 }
 </script>
 
