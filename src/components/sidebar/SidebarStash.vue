@@ -214,9 +214,10 @@ function cancelStashAction() {
       />
     </div>
     <template v-if="!sectionState.isCollapsed('stash')">
-      <div
+      <button
         v-for="s in filteredEntries"
         :key="s.index"
+        type="button"
         class="branch-item stash-item"
         :title="s.message"
         @click="onStashClick(s.commit_oid)"
@@ -225,7 +226,7 @@ function cancelStashAction() {
         <span class="branch-dot dot-outline" />
         <span class="stash-index">{{ '{' + s.index + '}' }}</span>
         <span class="branch-label">{{ s.message }}</span>
-      </div>
+      </button>
       <div v-if="hasSearchQuery && filteredEntries.length === 0" class="section-empty">
         {{ t('sidebar.search.noResults') }}
       </div>
@@ -263,6 +264,19 @@ function cancelStashAction() {
 
 .stash-item .branch-dot {
   border-color: var(--accent-orange, #f5a97f);
+}
+
+.stash-item {
+  width: 100%;
+  border: none;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+}
+
+.stash-item:focus-visible {
+  outline: 1px solid var(--accent-blue);
+  outline-offset: -1px;
 }
 
 .stash-index {

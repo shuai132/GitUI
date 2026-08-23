@@ -96,6 +96,19 @@ describe('SidebarStash', () => {
     mocks.stash.pop.mockReset().mockResolvedValue(undefined)
     mocks.stash.drop.mockReset().mockResolvedValue(undefined)
     mocks.showError.mockReset()
+    mocks.routerPush.mockReset()
+    mocks.history.pendingJumpOid = null
+  })
+
+  it('uses a native button to jump to the stash commit from the keyboard', async () => {
+    const wrapper = shallowMount(SidebarStash)
+    const stashButton = wrapper.find<HTMLButtonElement>('.stash-item')
+
+    expect(stashButton.element.tagName).toBe('BUTTON')
+    await stashButton.trigger('click')
+
+    expect(mocks.history.pendingJumpOid).toBe('stash-oid')
+    expect(mocks.routerPush).toHaveBeenCalledWith('/history')
   })
 
   it('applies the selected stash in the captured repository with an OID guard', async () => {
