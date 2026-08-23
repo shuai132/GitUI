@@ -619,6 +619,8 @@ const messages = {
     toolbar: {
       prevChange: 'Previous change',
       nextChange: 'Next change',
+      ignoreWhitespace: 'Ignore all whitespace changes',
+      showWhitespace: 'Show whitespace changes',
       syntaxHighlight: 'Syntax highlighting',
       imagePreview: 'Image preview',
       textDiff: 'Text diff',
@@ -811,6 +813,8 @@ const messages = {
       diffGroupByHunkHint: 'Show change blocks by default; when off, unified and side-by-side both show the full file',
       diffSyntaxHighlight: 'Diff syntax highlighting',
       diffSyntaxHighlightHint: 'Controls whether text diffs render language token colors',
+      diffIgnoreWhitespace: 'Ignore whitespace in diffs by default',
+      diffIgnoreWhitespaceHint: 'Hide indentation, spacing, and trailing-whitespace changes; reloads only the current file',
       soloCurrentBranch: 'Solo current branch',
       soloCurrentBranchHint: 'Show only the first-parent line from the current HEAD',
       showRemoteBranches: 'Show remote branches',

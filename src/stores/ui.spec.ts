@@ -78,6 +78,17 @@ describe('ui store history column preferences', () => {
     expect(localStorage.getItem('gitui.history.showChangeStatsColumn')).toBe('true')
   })
 
+  it('keeps whitespace changes visible by default and persists the diff toggle', () => {
+    const uiStore = useUiStore()
+
+    expect(uiStore.diffIgnoreWhitespace).toBe(false)
+
+    uiStore.toggleDiffIgnoreWhitespace()
+
+    expect(uiStore.diffIgnoreWhitespace).toBe(true)
+    expect(localStorage.getItem('gitui.diff.ignoreWhitespace')).toBe('true')
+  })
+
   it('persists reordered history columns', () => {
     const uiStore = useUiStore()
 
@@ -101,6 +112,7 @@ describe('ui store history column preferences', () => {
     uiStore.setDiffLayoutMode('side-by-side')
     uiStore.setDiffGroupByHunk(false)
     uiStore.toggleDiffHighlight()
+    uiStore.toggleDiffIgnoreWhitespace()
     uiStore.setHistoryBranchScopeForRepo('/repos/a', 'current_first_parent')
     uiStore.toggleShowRemoteBranches()
     uiStore.toggleShowChangeStatsColumn()
@@ -114,6 +126,7 @@ describe('ui store history column preferences', () => {
     expect(uiStore.diffLayoutMode).toBe(DEFAULT_ADVANCED_VIEW_PREFS.diffLayoutMode)
     expect(uiStore.diffGroupByHunk).toBe(DEFAULT_ADVANCED_VIEW_PREFS.diffGroupByHunk)
     expect(uiStore.diffHighlightEnabled).toBe(DEFAULT_ADVANCED_VIEW_PREFS.diffHighlightEnabled)
+    expect(uiStore.diffIgnoreWhitespace).toBe(DEFAULT_ADVANCED_VIEW_PREFS.diffIgnoreWhitespace)
     expect(uiStore.getHistoryBranchScope('/repos/a')).toBe('current_first_parent')
     expect(uiStore.showRemoteBranches).toBe(DEFAULT_ADVANCED_VIEW_PREFS.showRemoteBranches)
     expect(uiStore.showChangeStatsColumn).toBe(DEFAULT_ADVANCED_VIEW_PREFS.showChangeStatsColumn)

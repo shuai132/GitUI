@@ -290,12 +290,12 @@ mod tests {
 
         GitEngine::apply_patch_to_index(path, patch).unwrap();
 
-        let staged = GitEngine::get_file_diff(path, "existing.txt", true).unwrap();
+        let staged = GitEngine::get_file_diff(path, "existing.txt", true, false).unwrap();
         let staged_content = diff_contents(&staged);
         assert!(staged_content.contains("LINE2\n"));
         assert!(!staged_content.contains("LINE12\n"));
 
-        let unstaged = GitEngine::get_file_diff(path, "existing.txt", false).unwrap();
+        let unstaged = GitEngine::get_file_diff(path, "existing.txt", false, false).unwrap();
         let unstaged_content = diff_contents(&unstaged);
         assert!(!unstaged_content.contains("LINE2\n"));
         assert!(unstaged_content.contains("LINE12\n"));
@@ -329,12 +329,12 @@ mod tests {
 
         GitEngine::apply_patch_to_index(path, patch).unwrap();
 
-        let staged = GitEngine::get_file_diff(path, "existing.txt", true).unwrap();
+        let staged = GitEngine::get_file_diff(path, "existing.txt", true, false).unwrap();
         let staged_content = diff_contents(&staged);
         assert!(!staged_content.contains("LINE2\n"));
         assert!(staged_content.contains("LINE12\n"));
 
-        let unstaged = GitEngine::get_file_diff(path, "existing.txt", false).unwrap();
+        let unstaged = GitEngine::get_file_diff(path, "existing.txt", false, false).unwrap();
         let unstaged_content = diff_contents(&unstaged);
         assert!(unstaged_content.contains("LINE2\n"));
         assert!(!unstaged_content.contains("LINE12\n"));
@@ -405,7 +405,7 @@ mod tests {
 
         GitEngine::apply_patch_to_workdir_and_index(path, patch).unwrap();
 
-        let staged = GitEngine::get_file_diff(path, "existing.txt", true).unwrap();
+        let staged = GitEngine::get_file_diff(path, "existing.txt", true, false).unwrap();
         let staged_content = diff_contents(&staged);
         assert!(!staged_content.contains("LINE2\n"));
         assert!(staged_content.contains("LINE12\n"));
@@ -485,7 +485,7 @@ mod tests {
 
         GitEngine::apply_patch_to_index(path, patch).unwrap();
 
-        let staged = GitEngine::get_file_diff(path, "existing.txt", true).unwrap();
+        let staged = GitEngine::get_file_diff(path, "existing.txt", true, false).unwrap();
         let staged_content = diff_contents(&staged);
         assert!(staged_content.contains("LINE16\n"));
         assert!(!staged_content.contains("inserted\n"));
@@ -524,12 +524,12 @@ mod tests {
 
         GitEngine::apply_patch_to_index(path, patch).unwrap();
 
-        let staged = GitEngine::get_file_diff(path, "existing.txt", true).unwrap();
+        let staged = GitEngine::get_file_diff(path, "existing.txt", true, false).unwrap();
         let staged_content = diff_contents(&staged);
         assert!(staged_content.contains("inserted\n"));
         assert!(!staged_content.contains("LINE16\n"));
 
-        let unstaged = GitEngine::get_file_diff(path, "existing.txt", false).unwrap();
+        let unstaged = GitEngine::get_file_diff(path, "existing.txt", false, false).unwrap();
         let unstaged_content = diff_contents(&unstaged);
         assert!(unstaged_content.contains("LINE16\n"));
     }
@@ -567,7 +567,7 @@ mod tests {
 
         GitEngine::apply_patch_to_workdir_and_index(path, patch).unwrap();
 
-        let staged = GitEngine::get_file_diff(path, "existing.txt", true).unwrap();
+        let staged = GitEngine::get_file_diff(path, "existing.txt", true, false).unwrap();
         let staged_content = diff_contents(&staged);
         assert!(staged_content.contains("inserted\n"));
         assert!(!staged_content.contains("LINE16\n"));
@@ -614,7 +614,7 @@ mod tests {
 
         GitEngine::apply_patch_to_workdir_and_index(path, patch).unwrap();
 
-        let staged = GitEngine::get_file_diff(path, "existing.txt", true).unwrap();
+        let staged = GitEngine::get_file_diff(path, "existing.txt", true, false).unwrap();
         assert!(staged.hunks.is_empty());
 
         let worktree = fs::read_to_string(test_repo.dir.path().join("existing.txt")).unwrap();
@@ -737,6 +737,73 @@ mod tests {
         assert_eq!(status.unstaged[0].deletions, 1);
     }
 
+    #[test]
+    fn test_file_diff_can_ignore_whitespace_only_changes() {
+        let test_repo = TestRepo::new();
+        let path = test_repo.path_str();
+        commit_file(
+            &test_repo,
+            "whitespace base",
+            "existing.txt",
+            "alpha\n  beta\n",
+        );
+        fs::write(
+            test_repo.dir.path().join("existing.txt"),
+            "alpha\n    beta\n",
+        )
+        .unwrap();
+
+        let visible = GitEngine::get_file_diff(path, "existing.txt", false, false).unwrap();
+        let ignored = GitEngine::get_file_diff(path, "existing.txt", false, true).unwrap();
+
+        assert!(!visible.hunks.is_empty());
+        assert_eq!((visible.additions, visible.deletions), (1, 1));
+        assert!(ignored.hunks.is_empty());
+        assert_eq!((ignored.additions, ignored.deletions), (0, 0));
+
+        let whitespace_commit = commit_file(
+            &test_repo,
+            "whitespace only",
+            "existing.txt",
+            "alpha\n    beta\n",
+        );
+        let commit_visible = GitEngine::get_file_diff_at_commit(
+            path,
+            "existing.txt",
+            &whitespace_commit.to_string(),
+            false,
+        )
+        .unwrap();
+        let commit_ignored = GitEngine::get_file_diff_at_commit(
+            path,
+            "existing.txt",
+            &whitespace_commit.to_string(),
+            true,
+        )
+        .unwrap();
+
+        assert!(!commit_visible.hunks.is_empty());
+        assert!(commit_ignored.hunks.is_empty());
+    }
+
+    #[test]
+    fn test_file_diff_keeps_logic_changes_when_ignoring_whitespace() {
+        let test_repo = TestRepo::new();
+        let path = test_repo.path_str();
+        commit_file(&test_repo, "logic base", "existing.txt", "alpha\n  beta\n");
+        fs::write(
+            test_repo.dir.path().join("existing.txt"),
+            "alpha changed\n    beta\n",
+        )
+        .unwrap();
+
+        let ignored = GitEngine::get_file_diff(path, "existing.txt", false, true).unwrap();
+
+        assert!(!ignored.hunks.is_empty());
+        assert_eq!((ignored.additions, ignored.deletions), (1, 1));
+        assert!(diff_contents(&ignored).contains("alpha changed"));
+    }
+
     #[cfg(unix)]
     #[test]
     fn test_get_status_includes_typechange() {
@@ -752,7 +819,7 @@ mod tests {
         assert_eq!(status.unstaged[0].path, "existing.txt");
         assert_eq!(status.unstaged[0].status, FileStatusKind::TypeChanged);
 
-        let diff = GitEngine::get_file_diff(path, "existing.txt", false).unwrap();
+        let diff = GitEngine::get_file_diff(path, "existing.txt", false, false).unwrap();
         assert_eq!(diff.old_file_mode, Some(0o100644));
         assert_eq!(diff.new_file_mode, Some(0o120000));
         assert!(!diff.hunks.is_empty());
@@ -767,7 +834,7 @@ mod tests {
         assert_eq!(status.staged[0].status, FileStatusKind::TypeChanged);
         assert!(status.unstaged.is_empty());
 
-        let diff = GitEngine::get_file_diff(path, "existing.txt", true).unwrap();
+        let diff = GitEngine::get_file_diff(path, "existing.txt", true, false).unwrap();
         assert_eq!(diff.old_file_mode, Some(0o100644));
         assert_eq!(diff.new_file_mode, Some(0o120000));
         assert!(!diff.hunks.is_empty());

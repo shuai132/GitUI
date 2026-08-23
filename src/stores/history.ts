@@ -56,6 +56,7 @@ export const useHistoryStore = defineStore('history', () => {
   let remoteTagsRequestSeq = 0
   let remoteTagsLoadingRepoId: string | null = null
   let commitDetailRequestSeq = 0
+  let fileDiffRequestSeq = 0
 
   function activeRepoBranchScope() {
     const repoStore = useRepoStore()
@@ -393,7 +394,7 @@ export const useHistoryStore = defineStore('history', () => {
     }, 0)
   }
 
-  async function loadFileDiff(idx: number) {
+  async function loadFileDiff(idx: number, force = false) {
     const repoStore = useRepoStore()
     const repoId = repoStore.activeRepoId
     const commit = selectedCommit.value
@@ -402,13 +403,23 @@ export const useHistoryStore = defineStore('history', () => {
 
     const diff = commit.diffs[idx]
     // 已经加载过，或者是二进制文件（无 hunk），则跳过
-    if (!diff || diff.hunks.length > 0 || diff.is_binary) return
+    if (!diff || (!force && diff.hunks.length > 0) || diff.is_binary) return
 
+    const requestSeq = ++fileDiffRequestSeq
     try {
       const path = diff.new_path || diff.old_path
       if (!path) return
-      const fullDiff = await git.getFileDiffAtCommit(repoId, path, oid)
-      if (!isActiveRepo(repoId) || selectedCommit.value?.info.oid !== oid) return
+      const fullDiff = await git.getFileDiffAtCommit(
+        repoId,
+        path,
+        oid,
+        uiStore.diffIgnoreWhitespace,
+      )
+      if (
+        requestSeq !== fileDiffRequestSeq ||
+        !isActiveRepo(repoId) ||
+        selectedCommit.value?.info.oid !== oid
+      ) return
       commit.diffs[idx] = fullDiff
     } catch (e: unknown) {
       console.error('Failed to load file diff:', e)
@@ -425,6 +436,10 @@ export const useHistoryStore = defineStore('history', () => {
     if (!commit || commit.diffs.length === 0) return
     const firstFileIdx = firstOrderedFileDiffIndex(commit.diffs)
     selectFileDiff(firstFileIdx)
+  }
+
+  async function reloadSelectedFileDiff() {
+    await loadFileDiff(selectedFileDiffIndex.value, true)
   }
 
   async function createBranch(name: string, fromOid?: string) {
@@ -649,6 +664,7 @@ export const useHistoryStore = defineStore('history', () => {
     tagsRequestSeq++
     remoteTagsRequestSeq++
     commitDetailRequestSeq++
+    fileDiffRequestSeq++
     remoteTagsLoadingRepoId = null
     commits.value = []
     branches.value = []
@@ -710,6 +726,7 @@ export const useHistoryStore = defineStore('history', () => {
     jumpAdjacentCommit,
     selectCommit,
     selectFileDiff,
+    reloadSelectedFileDiff,
     selectFirstOrderedFileDiff,
     createBranch,
     switchBranch,

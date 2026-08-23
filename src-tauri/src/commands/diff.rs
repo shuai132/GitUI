@@ -14,12 +14,13 @@ pub async fn get_file_diff(
     repo_id: String,
     file_path: String,
     staged: bool,
+    ignore_whitespace: bool,
     repo_manager: State<'_, RepoManager>,
 ) -> Result<FileDiff, GitError> {
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    GitEngine::get_file_diff(&meta.path, &file_path, staged)
+    GitEngine::get_file_diff(&meta.path, &file_path, staged, ignore_whitespace)
 }
 
 #[tauri::command]
@@ -63,12 +64,13 @@ pub async fn get_file_diff_at_commit(
     repo_id: String,
     file_path: String,
     oid: String,
+    ignore_whitespace: bool,
     repo_manager: State<'_, RepoManager>,
 ) -> Result<FileDiff, GitError> {
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    GitEngine::get_file_diff_at_commit(&meta.path, &file_path, &oid)
+    GitEngine::get_file_diff_at_commit(&meta.path, &file_path, &oid, ignore_whitespace)
 }
 
 #[tauri::command]

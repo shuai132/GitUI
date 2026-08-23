@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import type { CommitInfo, FileDiff, FileBlame, BlameHunk } from '@/types/git'
 import { useGitCommands } from '@/composables/useGitCommands'
 import { useRepoStore } from '@/stores/repos'
+import { useUiStore } from '@/stores/ui'
 import DiffView from '@/components/diff/DiffView.vue'
 import { formatTime, formatAbsoluteTime } from '@/utils/format'
 import { EXT_TO_LANG } from '@/lib/highlight'
@@ -36,6 +37,7 @@ function isTopmostModal() {
 }
 
 const repoStore = useRepoStore()
+const uiStore = useUiStore()
 const gitCmd = useGitCommands()
 
 // ── 标签页 ────────────────────────────────────────────────────────────────
@@ -50,6 +52,7 @@ const HISTORY_BATCH = 50
 const selectedCommit = ref<CommitInfo | null>(null)
 const selectedDiff = ref<FileDiff | null>(null)
 const diffLoading = ref(false)
+let diffRequestSeq = 0
 
 async function loadHistory(reset = false) {
   const repoId = repoStore.activeRepoId
@@ -69,13 +72,29 @@ async function loadHistory(reset = false) {
 async function selectCommit(commit: CommitInfo) {
   selectedCommit.value = commit
   selectedDiff.value = null
+  await loadSelectedCommitDiff(commit)
+}
+
+async function loadSelectedCommitDiff(commit: CommitInfo) {
   const repoId = repoStore.activeRepoId
   if (!repoId) return
+  const requestSeq = ++diffRequestSeq
   diffLoading.value = true
   try {
-    selectedDiff.value = await gitCmd.getFileDiffAtCommit(repoId, props.filePath, commit.oid)
+    const diff = await gitCmd.getFileDiffAtCommit(
+      repoId,
+      props.filePath,
+      commit.oid,
+      uiStore.diffIgnoreWhitespace,
+    )
+    if (
+      requestSeq !== diffRequestSeq ||
+      repoStore.activeRepoId !== repoId ||
+      selectedCommit.value?.oid !== commit.oid
+    ) return
+    selectedDiff.value = diff
   } finally {
-    diffLoading.value = false
+    if (requestSeq === diffRequestSeq) diffLoading.value = false
   }
 }
 
@@ -159,6 +178,15 @@ watch(activeTab, (tab) => {
   if (tab === 'blame') loadBlame()
 })
 
+watch(
+  () => uiStore.diffIgnoreWhitespace,
+  () => {
+    if (activeTab.value === 'history' && selectedCommit.value) {
+      void loadSelectedCommitDiff(selectedCommit.value)
+    }
+  },
+)
+
 onMounted(() => {
   if (activeTab.value === 'history') loadHistory(true)
   else loadBlame()
@@ -233,6 +261,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  diffRequestSeq++
   document.removeEventListener('keydown', onKeydown, { capture: true })
 })
 </script>

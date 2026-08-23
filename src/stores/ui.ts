@@ -25,6 +25,7 @@ const KEYS = {
   diffViewMode: 'gitui.diff.viewMode',
   diffLayoutMode: 'gitui.diff.layoutMode',
   diffGroupByHunk: 'gitui.diff.groupByHunk',
+  diffIgnoreWhitespace: 'gitui.diff.ignoreWhitespace',
   diffHighlight: 'gitui.diff.syntax-highlight',
   dockLayout: 'gitui.history.dockLayout',
   customDockLayout: 'gitui.history.customDockLayout',
@@ -114,6 +115,7 @@ export const DEFAULT_ADVANCED_VIEW_PREFS = {
   diffLayoutMode: 'inline' as DiffLayoutMode,
   diffGroupByHunk: true,
   diffHighlightEnabled: true,
+  diffIgnoreWhitespace: false,
   showRemoteBranches: true,
   showChangeStatsColumn: false,
   showUnreachableCommits: true,
@@ -369,6 +371,9 @@ export const useUiStore = defineStore('ui', () => {
   const diffHighlightEnabled = ref<boolean>(
     loadBool(KEYS.diffHighlight, DEFAULT_ADVANCED_VIEW_PREFS.diffHighlightEnabled),
   )
+  const diffIgnoreWhitespace = ref<boolean>(
+    loadBool(KEYS.diffIgnoreWhitespace, DEFAULT_ADVANCED_VIEW_PREFS.diffIgnoreWhitespace),
+  )
   const debugPanelVisible = ref<boolean>(
     loadBool(KEYS.debugPanel, DEFAULT_ADVANCED_VIEW_PREFS.debugPanelVisible),
   )
@@ -586,6 +591,11 @@ export const useUiStore = defineStore('ui', () => {
     localStorage.setItem(KEYS.diffHighlight, String(diffHighlightEnabled.value))
   }
 
+  function toggleDiffIgnoreWhitespace() {
+    diffIgnoreWhitespace.value = !diffIgnoreWhitespace.value
+    localStorage.setItem(KEYS.diffIgnoreWhitespace, String(diffIgnoreWhitespace.value))
+  }
+
   function toggleDebugPanel() {
     debugPanelVisible.value = !debugPanelVisible.value
     localStorage.setItem(KEYS.debugPanel, String(debugPanelVisible.value))
@@ -627,6 +637,7 @@ export const useUiStore = defineStore('ui', () => {
     diffLayoutMode.value = DEFAULT_ADVANCED_VIEW_PREFS.diffLayoutMode
     diffGroupByHunk.value = DEFAULT_ADVANCED_VIEW_PREFS.diffGroupByHunk
     diffHighlightEnabled.value = DEFAULT_ADVANCED_VIEW_PREFS.diffHighlightEnabled
+    diffIgnoreWhitespace.value = DEFAULT_ADVANCED_VIEW_PREFS.diffIgnoreWhitespace
     showRemoteBranches.value = DEFAULT_ADVANCED_VIEW_PREFS.showRemoteBranches
     showChangeStatsColumn.value = DEFAULT_ADVANCED_VIEW_PREFS.showChangeStatsColumn
     showUnreachableCommits.value = DEFAULT_ADVANCED_VIEW_PREFS.showUnreachableCommits
@@ -637,6 +648,7 @@ export const useUiStore = defineStore('ui', () => {
     localStorage.setItem(KEYS.diffLayoutMode, diffLayoutMode.value)
     localStorage.setItem(KEYS.diffGroupByHunk, String(diffGroupByHunk.value))
     localStorage.setItem(KEYS.diffHighlight, String(diffHighlightEnabled.value))
+    localStorage.setItem(KEYS.diffIgnoreWhitespace, String(diffIgnoreWhitespace.value))
     localStorage.setItem(KEYS.showRemoteBranches, String(showRemoteBranches.value))
     localStorage.setItem(KEYS.showChangeStatsColumn, String(showChangeStatsColumn.value))
     localStorage.setItem(KEYS.showUnreachable, String(showUnreachableCommits.value))
@@ -710,6 +722,7 @@ export const useUiStore = defineStore('ui', () => {
     diffLayoutMode,
     diffGroupByHunk,
     diffHighlightEnabled,
+    diffIgnoreWhitespace,
     debugPanelVisible,
     terminalDock,
     terminalHeight,
@@ -743,6 +756,7 @@ export const useUiStore = defineStore('ui', () => {
     setDiffGroupByHunk,
     toggleDiffGroupByHunk,
     toggleDiffHighlight,
+    toggleDiffIgnoreWhitespace,
     toggleDebugPanel,
     setTerminalDock,
     toggleTerminalDock,

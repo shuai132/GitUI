@@ -102,7 +102,7 @@ describe('useRepositoryRefresh', () => {
     expect(commandMocks.listTags).toHaveBeenCalledWith('repo-a')
     expect(commandMocks.stashList).toHaveBeenCalledWith('repo-a')
     expect(commandMocks.listSubmodules).toHaveBeenCalledWith('repo-a')
-    expect(commandMocks.getFileDiff).toHaveBeenCalledWith('repo-a', 'src/a.ts', false)
+    expect(commandMocks.getFileDiff).toHaveBeenCalledWith('repo-a', 'src/a.ts', false, false)
     expect(diffStore.currentDiff?.new_path).toBe('src/a.ts')
     expect(useRepoOpsStore().getBusy('repo-a').refresh).toBe(false)
   })
@@ -131,7 +131,7 @@ describe('useRepositoryRefresh', () => {
 
     await useRepositoryRefresh().refreshActiveRepository()
 
-    expect(commandMocks.getFileDiff).toHaveBeenCalledWith('repo-a', 'src/a.ts', true)
+    expect(commandMocks.getFileDiff).toHaveBeenCalledWith('repo-a', 'src/a.ts', true, false)
     expect(diffStore.currentStaged).toBe(true)
   })
 })

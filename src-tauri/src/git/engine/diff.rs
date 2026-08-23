@@ -178,7 +178,12 @@ impl GitEngine {
         Ok(CommitDetail { info, diffs })
     }
 
-    pub fn get_file_diff(path: &str, file_path: &str, staged: bool) -> GitResult<FileDiff> {
+    pub fn get_file_diff(
+        path: &str,
+        file_path: &str,
+        staged: bool,
+        ignore_whitespace: bool,
+    ) -> GitResult<FileDiff> {
         let repo = Self::open(path)?;
 
         // 冲突文件：index 只有 stage 1/2/3，没有 stage 0，
@@ -190,7 +195,10 @@ impl GitEngine {
         }
 
         let mut diff_opts = DiffOptions::new();
-        diff_opts.pathspec(file_path).include_typechange(true);
+        diff_opts
+            .pathspec(file_path)
+            .include_typechange(true)
+            .ignore_whitespace(ignore_whitespace);
 
         let diff = if staged {
             let head_tree = repo
@@ -1055,6 +1063,7 @@ impl GitEngine {
         path: &str,
         file_path: &str,
         oid_str: &str,
+        ignore_whitespace: bool,
     ) -> GitResult<FileDiff> {
         let repo = Self::open(path)?;
         let oid = git2::Oid::from_str(oid_str)
@@ -1063,7 +1072,9 @@ impl GitEngine {
         let commit_tree = commit.tree()?;
 
         let mut diff_opts = DiffOptions::new();
-        diff_opts.pathspec(file_path);
+        diff_opts
+            .pathspec(file_path)
+            .ignore_whitespace(ignore_whitespace);
 
         let diff = if commit.parent_count() > 0 {
             let parent_tree = commit.parent(0)?.tree()?;
@@ -1085,7 +1096,9 @@ impl GitEngine {
                 {
                     if let Ok(untracked_tree) = untracked_commit.tree() {
                         let mut untracked_opts = DiffOptions::new();
-                        untracked_opts.pathspec(file_path);
+                        untracked_opts
+                            .pathspec(file_path)
+                            .ignore_whitespace(ignore_whitespace);
                         if let Ok(untracked_diff) = repo.diff_tree_to_tree(
                             None,
                             Some(&untracked_tree),
@@ -1291,7 +1304,7 @@ mod tests {
         let test_repo = TestRepo::new();
         fs::write(test_repo.dir.path().join("new.txt"), "one\ntwo\n").unwrap();
 
-        let diff = GitEngine::get_file_diff(test_repo.path_str(), "new.txt", false).unwrap();
+        let diff = GitEngine::get_file_diff(test_repo.path_str(), "new.txt", false, false).unwrap();
         let line_numbers = diff
             .hunks
             .iter()

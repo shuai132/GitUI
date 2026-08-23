@@ -563,4 +563,47 @@ describe('history store log filters', () => {
     historyStore.jumpAdjacentCommit(1)
     expect(historyStore.pendingJumpOid).toBe('aaa')
   })
+
+  it('reloads the selected file with the whitespace preference and drops stale responses', async () => {
+    const repoStore = useRepoStore()
+    const uiStore = useUiStore()
+    const historyStore = useHistoryStore()
+    setActiveRepo(repoStore, 'repo-1', '/repos/a')
+    historyStore.selectedCommit = {
+      info: commit('commit-1'),
+      diffs: [{ ...fileDiff('src/app.ts'), hunks: [] }],
+    }
+
+    const visible = deferred<FileDiff>()
+    const ignored = deferred<FileDiff>()
+    getFileDiffAtCommitMock
+      .mockReturnValueOnce(visible.promise)
+      .mockReturnValueOnce(ignored.promise)
+
+    const visibleLoad = historyStore.reloadSelectedFileDiff()
+    uiStore.toggleDiffIgnoreWhitespace()
+    const ignoredLoad = historyStore.reloadSelectedFileDiff()
+
+    const ignoredDiff = { ...fileDiff('src/app.ts'), additions: 7 }
+    ignored.resolve(ignoredDiff)
+    await ignoredLoad
+    visible.resolve({ ...fileDiff('src/app.ts'), additions: 3 })
+    await visibleLoad
+
+    expect(getFileDiffAtCommitMock).toHaveBeenNthCalledWith(
+      1,
+      'repo-1',
+      'src/app.ts',
+      'commit-1',
+      false,
+    )
+    expect(getFileDiffAtCommitMock).toHaveBeenNthCalledWith(
+      2,
+      'repo-1',
+      'src/app.ts',
+      'commit-1',
+      true,
+    )
+    expect(historyStore.selectedCommit.diffs[0].additions).toBe(7)
+  })
 })

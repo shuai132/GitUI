@@ -502,6 +502,17 @@ watch(selectedWip, (v) => {
 })
 
 watch(
+  () => uiStore.diffIgnoreWhitespace,
+  () => {
+    if (selectedWip.value) {
+      void diffStore.refresh()
+    } else if (historyStore.selectedCommit) {
+      void historyStore.reloadSelectedFileDiff()
+    }
+  },
+)
+
+watch(
   () => historyStore.selectedCommit,
   (commit) => {
     if (commit) {

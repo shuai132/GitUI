@@ -281,8 +281,12 @@ export function useGitCommands() {
     call<CommitInfo[]>('get_file_log', { repoId, filePath, offset, limit })
 
   // ---- Diff ----
-  const getFileDiff = (repoId: string, filePath: string, staged: boolean) =>
-    call<FileDiff>('get_file_diff', { repoId, filePath, staged })
+  const getFileDiff = (
+    repoId: string,
+    filePath: string,
+    staged: boolean,
+    ignoreWhitespace: boolean,
+  ) => call<FileDiff>('get_file_diff', { repoId, filePath, staged, ignoreWhitespace })
 
   const getBlobBytes = (repoId: string, oid: string, silent = false) =>
     call<BlobData>('get_blob_bytes', { repoId, oid }, { silent })
@@ -293,8 +297,12 @@ export function useGitCommands() {
   const extractDocumentText = (repoId: string, source: DocumentTextSource, silent = false) =>
     call<DocumentText>('extract_document_text', { repoId, source }, { silent })
 
-  const getFileDiffAtCommit = (repoId: string, filePath: string, oid: string) =>
-    call<FileDiff>('get_file_diff_at_commit', { repoId, filePath, oid })
+  const getFileDiffAtCommit = (
+    repoId: string,
+    filePath: string,
+    oid: string,
+    ignoreWhitespace: boolean,
+  ) => call<FileDiff>('get_file_diff_at_commit', { repoId, filePath, oid, ignoreWhitespace })
 
   const getFileBlame = (repoId: string, filePath: string) =>
     call<FileBlame>('get_file_blame', { repoId, filePath })

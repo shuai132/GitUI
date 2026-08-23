@@ -47,6 +47,13 @@ const currentChangeLabel = computed(() => {
   if (props.changeCount <= 0 || props.currentChangeIdx < 0) return `0/${props.changeCount}`
   return `${props.currentChangeIdx + 1}/${props.changeCount}`
 })
+
+const canIgnoreWhitespace = computed(() =>
+  !props.isImageView &&
+  props.previewKind !== 'pdf' &&
+  props.previewKind !== 'docx' &&
+  props.previewKind !== 'pptx',
+)
 </script>
 
 <template>
@@ -145,6 +152,20 @@ const currentChangeLabel = computed(() => {
       </div>
 
       <div class="toolbar-divider" />
+
+      <button
+        v-if="canIgnoreWhitespace"
+        class="btn-icon btn-ignore-whitespace"
+        :class="{ active: uiStore.diffIgnoreWhitespace }"
+        :title="uiStore.diffIgnoreWhitespace ? t('diff.toolbar.showWhitespace') : t('diff.toolbar.ignoreWhitespace')"
+        @click="uiStore.toggleDiffIgnoreWhitespace()"
+      >
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M9.5 2.5H7a3 3 0 0 0 0 6h1.5" />
+          <path d="M9.5 2.5v11M12 2.5v11" />
+          <line v-if="uiStore.diffIgnoreWhitespace" x1="2.5" y1="13.5" x2="13.5" y2="2.5" stroke-width="2" />
+        </svg>
+      </button>
 
       <button
         class="btn-icon"

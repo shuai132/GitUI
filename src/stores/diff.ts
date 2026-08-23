@@ -3,6 +3,7 @@ import { ref } from 'vue'
 import type { FileDiff } from '@/types/git'
 import { useGitCommands } from '@/composables/useGitCommands'
 import { useRepoStore } from './repos'
+import { useUiStore } from './ui'
 
 export const useDiffStore = defineStore('diff', () => {
   const currentDiff = ref<FileDiff | null>(null)
@@ -26,7 +27,12 @@ export const useDiffStore = defineStore('diff', () => {
     currentPath.value = filePath
     currentStaged.value = staged
     try {
-      const result = await git.getFileDiff(repoId, filePath, staged)
+      const result = await git.getFileDiff(
+        repoId,
+        filePath,
+        staged,
+        useUiStore().diffIgnoreWhitespace,
+      )
       // 丢弃过期响应：await 期间用户可能已切换到其他仓库，
       // 此时 repoId 与当前活跃仓库不符，写入会污染新仓库的 diff。
       // 同一仓库内快速切换文件时，也只允许最后一次请求写入。

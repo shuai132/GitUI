@@ -618,6 +618,8 @@ const messages = {
     toolbar: {
       prevChange: '上一变更',
       nextChange: '下一变更',
+      ignoreWhitespace: '忽略所有空白变更',
+      showWhitespace: '显示空白变更',
       syntaxHighlight: '语法高亮',
       imagePreview: '图片预览',
       textDiff: '文本 diff',
@@ -810,6 +812,8 @@ const messages = {
       diffGroupByHunkHint: '默认按变更块展示；关闭后单列和左右分栏都显示完整文件',
       diffSyntaxHighlight: 'Diff 语法高亮',
       diffSyntaxHighlightHint: '控制文本 diff 是否按语言渲染 token 颜色',
+      diffIgnoreWhitespace: '默认忽略 Diff 空白变更',
+      diffIgnoreWhitespaceHint: '隐藏缩进、空格和行尾空白差异，只重新加载当前文件',
       soloCurrentBranch: 'Solo 当前分支',
       soloCurrentBranchHint: '历史图只显示当前 HEAD 的 first-parent 主线',
       showRemoteBranches: '显示远程分支',

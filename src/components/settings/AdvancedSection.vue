@@ -43,6 +43,13 @@ const viewToggles = computed<ToggleRow[]>(() => [
     toggle: () => uiStore.toggleDiffHighlight(),
   },
   {
+    key: 'diffIgnoreWhitespace',
+    label: t('settings.advanced.diffIgnoreWhitespace'),
+    hint: t('settings.advanced.diffIgnoreWhitespaceHint'),
+    get: () => uiStore.diffIgnoreWhitespace,
+    toggle: () => uiStore.toggleDiffIgnoreWhitespace(),
+  },
+  {
     key: 'showRemoteBranches',
     label: t('settings.advanced.showRemoteBranches'),
     hint: t('settings.advanced.showRemoteBranchesHint'),
@@ -90,6 +97,7 @@ const viewPrefsAreDefault = computed(() =>
   uiStore.diffLayoutMode === DEFAULT_ADVANCED_VIEW_PREFS.diffLayoutMode
   && uiStore.diffGroupByHunk === DEFAULT_ADVANCED_VIEW_PREFS.diffGroupByHunk
   && uiStore.diffHighlightEnabled === DEFAULT_ADVANCED_VIEW_PREFS.diffHighlightEnabled
+  && uiStore.diffIgnoreWhitespace === DEFAULT_ADVANCED_VIEW_PREFS.diffIgnoreWhitespace
   && uiStore.showRemoteBranches === DEFAULT_ADVANCED_VIEW_PREFS.showRemoteBranches
   && uiStore.showChangeStatsColumn === DEFAULT_ADVANCED_VIEW_PREFS.showChangeStatsColumn
   && uiStore.showUnreachableCommits === DEFAULT_ADVANCED_VIEW_PREFS.showUnreachableCommits
