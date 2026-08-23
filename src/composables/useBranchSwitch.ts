@@ -4,7 +4,7 @@ import { useHistoryStore } from '@/stores/history'
 import { useStashStore } from '@/stores/stash'
 import { useWorkspaceStore } from '@/stores/workspace'
 
-export type BranchSwitchMode = 'carry' | 'stash'
+export type BranchSwitchMode = 'carry' | 'stash' | 'discard'
 
 export function useBranchSwitch() {
   const historyStore = useHistoryStore()
@@ -18,6 +18,7 @@ export function useBranchSwitch() {
   const loading = ref(false)
   const activeMode = ref<BranchSwitchMode | null>(null)
   const changesStashed = ref(false)
+  const changesDiscarded = ref(false)
   const error = ref<string | null>(null)
 
   function currentChangedPaths(): Set<string> {
@@ -42,16 +43,33 @@ export function useBranchSwitch() {
         }))
         changesStashed.value = true
       }
+      if (mode === 'discard' && !changesDiscarded.value) {
+        await workspaceStore.discardAll()
+        changesDiscarded.value = true
+      }
       await historyStore.switchBranch(targetBranch.value)
       await workspaceStore.refresh()
       dialogVisible.value = false
       targetBranch.value = ''
       changesStashed.value = false
+      changesDiscarded.value = false
     } catch (cause) {
       if (!prompted) throw cause
-      error.value = changesStashed.value
-        ? t('sidebar.branch.switchDialog.failedAfterStash', { detail: String(cause) })
-        : t('sidebar.branch.switchDialog.carryFailed', { detail: String(cause) })
+      if (changesStashed.value) {
+        error.value = t('sidebar.branch.switchDialog.failedAfterStash', {
+          detail: String(cause),
+        })
+      } else if (changesDiscarded.value) {
+        error.value = t('sidebar.branch.switchDialog.failedAfterDiscard', {
+          detail: String(cause),
+        })
+      } else if (mode === 'stash') {
+        error.value = t('sidebar.branch.switchDialog.stashFailed', { detail: String(cause) })
+      } else if (mode === 'discard') {
+        error.value = t('sidebar.branch.switchDialog.discardFailed', { detail: String(cause) })
+      } else {
+        error.value = t('sidebar.branch.switchDialog.carryFailed', { detail: String(cause) })
+      }
     } finally {
       activeMode.value = null
       loading.value = false
@@ -64,6 +82,7 @@ export function useBranchSwitch() {
     sourceBranch.value = workspaceStore.status?.head_branch ?? 'HEAD'
     changeCount.value = currentChangedPaths().size
     changesStashed.value = false
+    changesDiscarded.value = false
     error.value = null
 
     if (changeCount.value === 0) {
@@ -82,6 +101,7 @@ export function useBranchSwitch() {
     dialogVisible.value = false
     targetBranch.value = ''
     changesStashed.value = false
+    changesDiscarded.value = false
     error.value = null
   }
 
@@ -93,6 +113,7 @@ export function useBranchSwitch() {
     loading,
     activeMode,
     changesStashed,
+    changesDiscarded,
     error,
     requestSwitch,
     confirmSwitch,

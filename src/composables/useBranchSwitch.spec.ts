@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   workspace: {
     status: null as WorkspaceStatus | null,
     refresh: vi.fn(),
+    discardAll: vi.fn(),
   },
   stash: {
     push: vi.fn(),
@@ -56,6 +57,7 @@ describe('branch switch flow', () => {
   beforeEach(() => {
     mocks.history.switchBranch.mockReset()
     mocks.workspace.refresh.mockReset()
+    mocks.workspace.discardAll.mockReset()
     mocks.stash.push.mockReset()
     mocks.workspace.status = workspaceStatus()
   })
@@ -131,6 +133,57 @@ describe('branch switch flow', () => {
     await flow.confirmSwitch('carry')
 
     expect(mocks.stash.push).toHaveBeenCalledTimes(1)
+    expect(mocks.history.switchBranch).toHaveBeenCalledTimes(2)
+    expect(flow.dialogVisible.value).toBe(false)
+  })
+
+  it('discards changes through the recoverable workspace flow before switching safely', async () => {
+    mocks.workspace.status = workspaceStatus(['one.txt', 'two.txt'])
+    mocks.workspace.discardAll.mockResolvedValue(undefined)
+    mocks.history.switchBranch.mockResolvedValue(undefined)
+    mocks.workspace.refresh.mockResolvedValue(undefined)
+    const flow = useBranchSwitch()
+    await flow.requestSwitch('feature')
+
+    await flow.confirmSwitch('discard')
+
+    expect(mocks.workspace.discardAll).toHaveBeenCalledTimes(1)
+    expect(mocks.history.switchBranch).toHaveBeenCalledWith('feature')
+    expect(flow.dialogVisible.value).toBe(false)
+  })
+
+  it('does not switch when recoverable discard fails', async () => {
+    mocks.workspace.status = workspaceStatus(['one.txt'])
+    mocks.workspace.discardAll.mockRejectedValue(new Error('Trash unavailable'))
+    const flow = useBranchSwitch()
+    await flow.requestSwitch('feature')
+
+    await flow.confirmSwitch('discard')
+
+    expect(mocks.history.switchBranch).not.toHaveBeenCalled()
+    expect(flow.changesDiscarded.value).toBe(false)
+    expect(flow.error.value).toContain('Trash unavailable')
+    expect(flow.dialogVisible.value).toBe(true)
+  })
+
+  it('retries switching without discarding twice after the worktree was restored', async () => {
+    mocks.workspace.status = workspaceStatus(['one.txt'])
+    mocks.workspace.discardAll.mockResolvedValue(undefined)
+    mocks.history.switchBranch
+      .mockRejectedValueOnce(new Error('ignored file conflict'))
+      .mockResolvedValueOnce(undefined)
+    mocks.workspace.refresh.mockResolvedValue(undefined)
+    const flow = useBranchSwitch()
+    await flow.requestSwitch('feature')
+
+    await flow.confirmSwitch('discard')
+
+    expect(flow.changesDiscarded.value).toBe(true)
+    expect(flow.error.value).toContain('ignored file conflict')
+
+    await flow.confirmSwitch('carry')
+
+    expect(mocks.workspace.discardAll).toHaveBeenCalledTimes(1)
     expect(mocks.history.switchBranch).toHaveBeenCalledTimes(2)
     expect(flow.dialogVisible.value).toBe(false)
   })

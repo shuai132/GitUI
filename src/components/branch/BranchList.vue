@@ -136,6 +136,7 @@ async function deleteBranch(name: string) {
       :loading="branchSwitch.loading"
       :active-mode="branchSwitch.activeMode"
       :changes-stashed="branchSwitch.changesStashed"
+      :changes-discarded="branchSwitch.changesDiscarded"
       :error="branchSwitch.error"
       @confirm="branchSwitch.confirmSwitch"
       @cancel="branchSwitch.cancelSwitch"

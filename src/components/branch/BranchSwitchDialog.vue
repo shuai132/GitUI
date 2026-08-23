@@ -13,6 +13,7 @@ defineProps<{
   loading: boolean
   activeMode: BranchSwitchMode | null
   changesStashed: boolean
+  changesDiscarded: boolean
   error: string | null
 }>()
 
@@ -26,7 +27,7 @@ const emit = defineEmits<{
   <Modal
     :visible="visible"
     :title="t('sidebar.branch.switchDialog.title')"
-    width="480px"
+    width="600px"
     @close="emit('cancel')"
   >
     <div class="switch-body">
@@ -41,11 +42,14 @@ const emit = defineEmits<{
           <dd>{{ targetBranch }}</dd>
         </div>
       </dl>
-      <p v-if="!changesStashed" class="hint">
+      <p v-if="!changesStashed && !changesDiscarded" class="hint">
         {{ t('sidebar.branch.switchDialog.choiceHint') }}
       </p>
-      <p v-else class="stash-safe">
+      <p v-else-if="changesStashed" class="protected-safe">
         {{ t('sidebar.branch.switchDialog.stashSafe') }}
+      </p>
+      <p v-else class="protected-safe">
+        {{ t('sidebar.branch.switchDialog.discardSafe') }}
       </p>
       <p v-if="error" class="switch-error">{{ error }}</p>
     </div>
@@ -55,7 +59,17 @@ const emit = defineEmits<{
         {{ t('common.cancel') }}
       </button>
       <button
-        v-if="!changesStashed"
+        v-if="!changesStashed && !changesDiscarded"
+        class="btn btn-danger"
+        :disabled="loading"
+        @click="emit('confirm', 'discard')"
+      >
+        {{ loading && activeMode === 'discard'
+          ? t('sidebar.branch.switchDialog.discarding')
+          : t('sidebar.branch.switchDialog.discardAndSwitch') }}
+      </button>
+      <button
+        v-if="!changesStashed && !changesDiscarded"
         class="btn btn-secondary"
         :disabled="loading"
         @click="emit('confirm', 'stash')"
@@ -67,7 +81,7 @@ const emit = defineEmits<{
       <button class="btn btn-primary" :disabled="loading" @click="emit('confirm', 'carry')">
         {{ loading && activeMode === 'carry'
           ? t('sidebar.branch.switchDialog.switching')
-          : changesStashed
+          : changesStashed || changesDiscarded
             ? t('sidebar.branch.switchDialog.retry')
             : t('sidebar.branch.switchDialog.carryAndSwitch') }}
       </button>
@@ -120,7 +134,7 @@ const emit = defineEmits<{
   color: var(--text-muted);
 }
 
-.stash-safe {
+.protected-safe {
   color: var(--accent-green);
 }
 

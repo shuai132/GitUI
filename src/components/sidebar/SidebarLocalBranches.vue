@@ -94,7 +94,6 @@ const contextMenuItems = computed<ContextMenuItem[]>(() => {
 
   if (!b.is_head) {
     items.push({ label: t('sidebar.branch.menu.switchTo'), action: 'switch' })
-    items.push({ label: t('sidebar.branch.menu.switchForce'), action: 'switch-force', danger: true })
   } else if (isRealCurrentBranch) {
     items.push({
       label:
@@ -183,18 +182,8 @@ async function onContextAction(action: string) {
 
   try {
     switch (action) {
-      case 'switch':
-      case 'switch-force': {
-        const force = action === 'switch-force'
-        if (force) {
-          if (!confirm(t('sidebar.branch.confirmSwitchForce', { name: b.name }))) break
-        }
-        if (force) {
-          await historyStore.switchBranch(b.name, true)
-          await workspaceStore.refresh()
-        } else {
-          await branchSwitch.requestSwitch(b.name)
-        }
+      case 'switch': {
+        await branchSwitch.requestSwitch(b.name)
         break
       }
       case 'copy-name':
@@ -308,6 +297,7 @@ async function onContextAction(action: string) {
       :loading="branchSwitch.loading"
       :active-mode="branchSwitch.activeMode"
       :changes-stashed="branchSwitch.changesStashed"
+      :changes-discarded="branchSwitch.changesDiscarded"
       :error="branchSwitch.error"
       @confirm="branchSwitch.confirmSwitch"
       @cancel="branchSwitch.cancelSwitch"
