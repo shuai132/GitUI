@@ -63,9 +63,10 @@ impl GitEngine {
     }
 
     /// Apply 指定 index 的 stash，应用后保留该 stash（不移除）。
-    pub fn stash_apply(path: &str, index: usize) -> GitResult<()> {
+    pub fn stash_apply(path: &str, index: usize, expected_oid: &str) -> GitResult<()> {
         let mut repo = Self::open(path)?;
-        let count = Self::stash_count(&repo)?;
+        let stashes = Self::list_stashes(&repo)?;
+        let count = stashes.len();
         if count == 0 {
             return Err(GitError::OperationFailed(
                 "没有可 apply 的 stash".to_string(),
@@ -75,6 +76,12 @@ impl GitEngine {
             return Err(GitError::OperationFailed(format!(
                 "stash@{{{}}} 不存在（共 {} 条）",
                 index, count
+            )));
+        }
+        let current = stashes[index].2.to_string();
+        if current != expected_oid {
+            return Err(GitError::OperationFailed(format!(
+                "Stash target changed: expected {expected_oid}, current {current}"
             )));
         }
         repo.stash_apply(index, None)?;
@@ -127,10 +134,6 @@ impl GitEngine {
             out.push((i, msg, entry.id_new()));
         }
         Ok(out)
-    }
-
-    fn stash_count(repo: &Repository) -> GitResult<usize> {
-        Ok(Self::list_stashes(repo)?.len())
     }
 
     /// 列出所有 stash 条目

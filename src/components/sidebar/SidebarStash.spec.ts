@@ -80,7 +80,7 @@ function workspaceStatus(paths: string[] = []): WorkspaceStatus {
   }
 }
 
-async function selectMenuAction(action: 'pop' | 'delete') {
+async function selectMenuAction(action: 'apply' | 'pop' | 'delete') {
   const wrapper = shallowMount(SidebarStash)
   await wrapper.find('.stash-item').trigger('contextmenu')
   wrapper.findComponent(ContextMenu).vm.$emit('select', action)
@@ -92,16 +92,22 @@ describe('SidebarStash', () => {
   beforeEach(() => {
     mocks.repo.activeRepoId = 'repo-a'
     mocks.workspace.status = workspaceStatus()
-    mocks.stash.apply.mockReset()
+    mocks.stash.apply.mockReset().mockResolvedValue(undefined)
     mocks.stash.pop.mockReset().mockResolvedValue(undefined)
     mocks.stash.drop.mockReset().mockResolvedValue(undefined)
     mocks.showError.mockReset()
   })
 
+  it('applies the selected stash in the captured repository with an OID guard', async () => {
+    await selectMenuAction('apply')
+
+    expect(mocks.stash.apply).toHaveBeenCalledWith('repo-a', 2, 'stash-oid')
+  })
+
   it('pops immediately on a clean worktree and guards the selected stash OID', async () => {
     await selectMenuAction('pop')
 
-    expect(mocks.stash.pop).toHaveBeenCalledWith(2, 'stash-oid')
+    expect(mocks.stash.pop).toHaveBeenCalledWith('repo-a', 2, 'stash-oid')
   })
 
   it('confirms before popping into local changes and counts unique paths', async () => {
@@ -118,7 +124,7 @@ describe('SidebarStash', () => {
 
     dialog.vm.$emit('confirm')
     await flushPromises()
-    expect(mocks.stash.pop).toHaveBeenCalledWith(2, 'stash-oid')
+    expect(mocks.stash.pop).toHaveBeenCalledWith('repo-a', 2, 'stash-oid')
   })
 
   it('uses a dangerous app confirmation before dropping the selected stash', async () => {
@@ -133,7 +139,7 @@ describe('SidebarStash', () => {
 
     dialog.vm.$emit('confirm')
     await flushPromises()
-    expect(mocks.stash.drop).toHaveBeenCalledWith(2, 'stash-oid')
+    expect(mocks.stash.drop).toHaveBeenCalledWith('repo-a', 2, 'stash-oid')
   })
 
   it('cancels a pending action after the active repository changes', async () => {

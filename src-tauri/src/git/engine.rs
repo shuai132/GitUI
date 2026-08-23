@@ -1503,6 +1503,30 @@ mod tests {
     }
 
     #[test]
+    fn stash_apply_rejects_a_changed_expected_target_without_mutation() {
+        let test_repo = TestRepo::new();
+        let path = test_repo.path_str();
+        fs::write(test_repo.dir.path().join("existing.txt"), "stashed\n").unwrap();
+        let created_oid = GitEngine::stash_push(path, Some("guarded apply")).unwrap();
+
+        let error = GitEngine::stash_apply(path, 0, &Oid::zero().to_string()).unwrap_err();
+
+        assert!(error.to_string().contains("Stash target changed"));
+        assert_eq!(GitEngine::stash_list(path).unwrap().len(), 1);
+        assert_eq!(
+            fs::read_to_string(test_repo.dir.path().join("existing.txt")).unwrap(),
+            "hello\n"
+        );
+
+        GitEngine::stash_apply(path, 0, &created_oid).unwrap();
+        assert_eq!(GitEngine::stash_list(path).unwrap().len(), 1);
+        assert_eq!(
+            fs::read_to_string(test_repo.dir.path().join("existing.txt")).unwrap(),
+            "stashed\n"
+        );
+    }
+
+    #[test]
     fn stash_drop_rejects_a_changed_expected_target_without_deleting() {
         let test_repo = TestRepo::new();
         let path = test_repo.path_str();

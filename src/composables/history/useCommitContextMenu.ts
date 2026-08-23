@@ -91,6 +91,7 @@ export function useCommitContextMenu(
     visible: false,
     x: 0,
     y: 0,
+    repoId: null as string | null,
     commit: null as CommitInfo | null,
   })
 
@@ -398,6 +399,7 @@ export function useCommitContextMenu(
     if (!commit) return
     e.preventDefault()
     if (hideTooltipCb) hideTooltipCb()
+    commitMenu.repoId = repoStore.activeRepoId
     commitMenu.commit = commit
     commitMenu.x = e.clientX
     commitMenu.y = e.clientY
@@ -437,16 +439,30 @@ export function useCommitContextMenu(
 
       switch (action) {
         case 'stash-apply': {
+          const repoId = commitMenu.repoId
+          if (!repoId || repoStore.activeRepoId !== repoId) {
+            showError(t('errors.history.contextChanged'))
+            break
+          }
           const entry = stashEntryForCommit(c.oid)
-          if (entry) await stashStore.apply(entry.index)
+          if (entry) await stashStore.apply(repoId, entry.index, entry.commit_oid)
           break
         }
         case 'stash-pop': {
+          const repoId = commitMenu.repoId
+          if (!repoId || repoStore.activeRepoId !== repoId) {
+            showError(t('errors.history.contextChanged'))
+            break
+          }
           const entry = stashEntryForCommit(c.oid)
-          if (entry) await stashStore.pop(entry.index)
+          if (entry) await stashStore.pop(repoId, entry.index, entry.commit_oid)
           break
         }
         case 'stash-delete': {
+          if (!commitMenu.repoId || repoStore.activeRepoId !== commitMenu.repoId) {
+            showError(t('errors.history.contextChanged'))
+            break
+          }
           const entry = stashEntryForCommit(c.oid)
           if (!entry) break
           openStashDropConfirmation(c, entry.index, entry.message)
@@ -573,7 +589,7 @@ export function useCommitContextMenu(
           )
           break
         case 'stash-drop':
-          await stashStore.drop(pending.index, pending.commitOid)
+          await stashStore.drop(pending.repoId, pending.index, pending.commitOid)
           break
       }
     } catch {

@@ -347,7 +347,7 @@ export function useToolbarGitActions(options: UseToolbarGitActionsOptions) {
     if (repoStore.activeRepoId !== repoId) return
     repoOpsStore.setBusy(repoId, 'pop', true)
     try {
-      await stashStore.pop(index, expectedOid)
+      await stashStore.pop(repoId, index, expectedOid)
     } catch {
       // 错误在 ToolbarToast 中拦截处理
     } finally {

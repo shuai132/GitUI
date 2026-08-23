@@ -47,32 +47,32 @@ export const useStashStore = defineStore('stash', () => {
     await Promise.all([refresh(), workspaceStore.refresh(id)])
   }
 
-  async function pop(index = 0, expectedOid?: string) {
+  async function pop(repoId: string, index = 0, expectedOid?: string) {
     const repoStore = useRepoStore()
-    if (!repoStore.activeRepoId) return
-    await git.stashPop(repoStore.activeRepoId, index, expectedOid)
+    await git.stashPop(repoId, index, expectedOid)
+    if (repoStore.activeRepoId !== repoId) return
     const workspaceStore = useWorkspaceStore()
     const historyStore = useHistoryStore()
     await Promise.all([
       refresh(),
-      workspaceStore.refresh(),
+      workspaceStore.refresh(repoId),
       historyStore.loadLog(),
     ])
   }
 
-  async function apply(index: number) {
+  async function apply(repoId: string, index: number, expectedOid: string) {
     const repoStore = useRepoStore()
-    if (!repoStore.activeRepoId) return
-    await git.stashApply(repoStore.activeRepoId, index)
+    await git.stashApply(repoId, index, expectedOid)
+    if (repoStore.activeRepoId !== repoId) return
     // apply 不移除 stash 条目，但会改动工作区，需要刷新
     const workspaceStore = useWorkspaceStore()
-    await workspaceStore.refresh()
+    await workspaceStore.refresh(repoId)
   }
 
-  async function drop(index: number, expectedOid?: string) {
+  async function drop(repoId: string, index: number, expectedOid?: string) {
     const repoStore = useRepoStore()
-    if (!repoStore.activeRepoId) return
-    await git.stashDrop(repoStore.activeRepoId, index, expectedOid)
+    await git.stashDrop(repoId, index, expectedOid)
+    if (repoStore.activeRepoId !== repoId) return
     // drop 只删除 stash 条目，但历史图里若绘制了 stash 节点也要刷新
     const historyStore = useHistoryStore()
     await Promise.all([refresh(), historyStore.loadLog()])

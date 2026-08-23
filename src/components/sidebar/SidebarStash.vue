@@ -105,6 +105,7 @@ const stashMenu = reactive({
   visible: false,
   x: 0,
   y: 0,
+  repoId: null as string | null,
   target: null as StashEntry | null,
 })
 
@@ -122,6 +123,7 @@ function openStashMenu(e: MouseEvent, s: StashEntry) {
   e.preventDefault()
   e.stopPropagation()
   stashMenu.target = s
+  stashMenu.repoId = repoStore.activeRepoId
   stashMenu.x = e.clientX
   stashMenu.y = e.clientY
   stashMenu.visible = true
@@ -133,17 +135,22 @@ function closeStashMenu() {
 
 async function onStashMenuAction(action: string) {
   const s = stashMenu.target
-  if (!s) return
+  const repoId = stashMenu.repoId
+  if (!s || !repoId) return
+  if (repoStore.activeRepoId !== repoId) {
+    showError(t('sidebar.stash.contextChanged'))
+    return
+  }
   try {
     switch (action) {
       case 'apply':
-        await stashStore.apply(s.index)
+        await stashStore.apply(repoId, s.index, s.commit_oid)
         break
       case 'pop':
         if (currentChangeCount() > 0) {
           captureAction('pop', s)
         } else {
-          await stashStore.pop(s.index, s.commit_oid)
+          await stashStore.pop(repoId, s.index, s.commit_oid)
         }
         break
       case 'delete':
@@ -168,9 +175,9 @@ async function confirmStashAction() {
   confirmationLoading.value = true
   try {
     if (pending.kind === 'pop') {
-      await stashStore.pop(pending.index, pending.commitOid)
+      await stashStore.pop(pending.repoId, pending.index, pending.commitOid)
     } else {
-      await stashStore.drop(pending.index, pending.commitOid)
+      await stashStore.drop(pending.repoId, pending.index, pending.commitOid)
     }
     pendingAction.value = null
   } catch (err) {

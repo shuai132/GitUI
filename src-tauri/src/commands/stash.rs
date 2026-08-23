@@ -38,12 +38,13 @@ pub async fn stash_pop(
 pub async fn stash_apply(
     repo_id: String,
     index: u32,
+    expected_oid: String,
     repo_manager: State<'_, RepoManager>,
 ) -> Result<(), GitError> {
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    GitEngine::stash_apply(&meta.path, index as usize)
+    GitEngine::stash_apply(&meta.path, index as usize, &expected_oid)
 }
 
 #[tauri::command]
