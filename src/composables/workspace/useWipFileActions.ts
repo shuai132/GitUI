@@ -36,10 +36,10 @@ export function useWipFileActions(options: WipFileActionsOptions) {
       const prefix = dirPath + '/'
       const toStage = unstagedAll.value.filter((f) => f.path.startsWith(prefix))
       if (toStage.length > 0) {
-        for (const f of toStage) await workspaceStore.stageFile(f.path)
+        await workspaceStore.stageFiles(toStage.map((file) => file.path))
       } else {
         const toUnstage = stagedAll.value.filter((f) => f.path.startsWith(prefix))
-        for (const f of toUnstage) await workspaceStore.unstageFile(f.path)
+        await workspaceStore.unstageFiles(toUnstage.map((file) => file.path))
       }
       return
     }
@@ -62,18 +62,14 @@ export function useWipFileActions(options: WipFileActionsOptions) {
 
   async function batchStage() {
     const paths = [...unstagedMultiPaths.value]
-    for (const path of paths) {
-      await workspaceStore.stageFile(path)
-    }
+    await workspaceStore.stageFiles(paths)
     unstagedListRef.value?.clearMultiSelect()
     unstagedMultiPaths.value = []
   }
 
   async function batchUnstage() {
     const paths = [...stagedMultiPaths.value]
-    for (const path of paths) {
-      await workspaceStore.unstageFile(path)
-    }
+    await workspaceStore.unstageFiles(paths)
     stagedListRef.value?.clearMultiSelect()
     stagedMultiPaths.value = []
   }

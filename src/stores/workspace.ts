@@ -143,18 +143,26 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   }
 
   async function stageFile(filePath: string) {
+    await stageFiles([filePath])
+  }
+
+  async function stageFiles(filePaths: string[]) {
     const repoStore = useRepoStore()
     const id = repoStore.activeRepoId
-    if (!id) return
-    await git.stageFile(id, filePath)
+    if (!id || filePaths.length === 0) return
+    await git.stageFiles(id, filePaths)
     await refresh(id)
   }
 
   async function unstageFile(filePath: string) {
+    await unstageFiles([filePath])
+  }
+
+  async function unstageFiles(filePaths: string[]) {
     const repoStore = useRepoStore()
     const id = repoStore.activeRepoId
-    if (!id) return
-    await git.unstageFile(id, filePath)
+    if (!id || filePaths.length === 0) return
+    await git.unstageFiles(id, filePaths)
     await refresh(id)
   }
 
@@ -274,7 +282,9 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     clearCommitDraftIfUnchanged,
     refresh,
     stageFile,
+    stageFiles,
     unstageFile,
+    unstageFiles,
     stageAll,
     unstageAll,
     commit,

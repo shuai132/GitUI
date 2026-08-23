@@ -66,7 +66,9 @@ pub fn run() {
             // Status
             get_status,
             stage_file,
+            stage_files,
             unstage_file,
+            unstage_files,
             stage_all,
             unstage_all,
             get_repo_state,

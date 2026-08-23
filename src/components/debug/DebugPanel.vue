@@ -98,8 +98,12 @@ function toGitCommand(entry: DebugEntry): string | null {
       return `git commit --amend -m "${truncate(String(a.message ?? ''), 40)}"`
     case 'stage_file':
       return `git add ${a.filePath ?? ''}`
+    case 'stage_files':
+      return `git add ${Array.isArray(a.filePaths) ? a.filePaths.join(' ') : ''}`
     case 'unstage_file':
       return `git restore --staged ${a.filePath ?? ''}`
+    case 'unstage_files':
+      return `git restore --staged ${Array.isArray(a.filePaths) ? a.filePaths.join(' ') : ''}`
     case 'stage_all':
       return 'git add -A'
     case 'unstage_all':

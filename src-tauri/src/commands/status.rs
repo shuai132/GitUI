@@ -35,6 +35,18 @@ pub async fn stage_file(
 }
 
 #[tauri::command]
+pub async fn stage_files(
+    repo_id: String,
+    file_paths: Vec<String>,
+    repo_manager: State<'_, RepoManager>,
+) -> Result<(), GitError> {
+    let meta = repo_manager
+        .get_meta(&repo_id)
+        .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
+    GitEngine::stage_files(&meta.path, &file_paths)
+}
+
+#[tauri::command]
 pub async fn unstage_file(
     repo_id: String,
     file_path: String,
@@ -44,6 +56,18 @@ pub async fn unstage_file(
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
     GitEngine::unstage_file(&meta.path, &file_path)
+}
+
+#[tauri::command]
+pub async fn unstage_files(
+    repo_id: String,
+    file_paths: Vec<String>,
+    repo_manager: State<'_, RepoManager>,
+) -> Result<(), GitError> {
+    let meta = repo_manager
+        .get_meta(&repo_id)
+        .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
+    GitEngine::unstage_files(&meta.path, &file_paths)
 }
 
 #[tauri::command]

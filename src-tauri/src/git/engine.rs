@@ -552,6 +552,72 @@ mod tests {
     }
 
     #[test]
+    fn test_stage_and_unstage_files_batch_changes_including_deletion() {
+        let test_repo = TestRepo::new();
+        let path = test_repo.path_str();
+        commit_file(&test_repo, "add deleted file", "deleted.txt", "delete me\n");
+        fs::write(test_repo.dir.path().join("existing.txt"), "changed\n").unwrap();
+        fs::write(test_repo.dir.path().join("new.txt"), "new\n").unwrap();
+        fs::remove_file(test_repo.dir.path().join("deleted.txt")).unwrap();
+        let paths = vec![
+            "existing.txt".to_string(),
+            "new.txt".to_string(),
+            "deleted.txt".to_string(),
+        ];
+
+        GitEngine::stage_files(path, &paths).unwrap();
+
+        let staged_status = GitEngine::get_status(path).unwrap();
+        let staged_paths = staged_status
+            .staged
+            .iter()
+            .map(|file| file.path.as_str())
+            .collect::<std::collections::HashSet<_>>();
+        assert_eq!(staged_paths.len(), 3);
+        assert!(staged_paths.contains("existing.txt"));
+        assert!(staged_paths.contains("new.txt"));
+        assert!(staged_paths.contains("deleted.txt"));
+
+        GitEngine::unstage_files(path, &paths).unwrap();
+
+        let unstaged_status = GitEngine::get_status(path).unwrap();
+        assert!(unstaged_status.staged.is_empty());
+        assert!(unstaged_status
+            .unstaged
+            .iter()
+            .any(|file| file.path == "existing.txt"));
+        assert!(unstaged_status
+            .unstaged
+            .iter()
+            .any(|file| file.path == "deleted.txt"));
+        assert!(unstaged_status
+            .untracked
+            .iter()
+            .any(|file| file.path == "new.txt"));
+    }
+
+    #[test]
+    fn test_unstage_files_removes_only_selected_paths_without_head() {
+        let repo_dir = tempfile::tempdir().unwrap();
+        let repo = git2::Repository::init(repo_dir.path()).unwrap();
+        fs::write(repo_dir.path().join("one.txt"), "one\n").unwrap();
+        fs::write(repo_dir.path().join("two.txt"), "two\n").unwrap();
+        let mut index = repo.index().unwrap();
+        index.add_path(Path::new("one.txt")).unwrap();
+        index.add_path(Path::new("two.txt")).unwrap();
+        index.write().unwrap();
+        drop(index);
+
+        GitEngine::unstage_files(repo_dir.path().to_str().unwrap(), &["one.txt".to_string()])
+            .unwrap();
+
+        let refreshed_repo = git2::Repository::open(repo_dir.path()).unwrap();
+        let refreshed_index = refreshed_repo.index().unwrap();
+        assert!(refreshed_index.get_path(Path::new("one.txt"), 0).is_none());
+        assert!(refreshed_index.get_path(Path::new("two.txt"), 0).is_some());
+    }
+
+    #[test]
     fn test_apply_patch_to_workdir_and_index_discards_staged_hunk() {
         let test_repo = TestRepo::new();
         let path = test_repo.path_str();

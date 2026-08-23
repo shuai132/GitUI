@@ -21,7 +21,7 @@ GitUI 采用 Tauri v2 的 IPC 机制实现前后端通信，包括双向的请�
 
 ### 工作区与索引 (Status / Index)
 - `get_status` / `get_repo_state`：获取当前工作区状态及仓库特定状态（如 Merge/Rebase 中）。`FileEntry.status` 使用 `git/types.rs::FileStatusKind`，其中 `type_changed` 表示普通文件、符号链接、gitlink 等文件类型变化。
-- `stage_file` / `unstage_file` / `stage_all` / `unstage_all`：索引区精细化管理。
+- `stage_file` / `unstage_file` / `stage_files` / `unstage_files` / `stage_all` / `unstage_all`：索引区精细化管理。批量命令接收仓库相对路径数组，复用一次仓库打开和 Index 写盘。
 - `apply_patch`：将补丁文本应用到工作区（常用于历史记录的单个变动行/Hunk回滚，或放弃未暂存 Hunk）。
 - `apply_patch_to_index`：将补丁文本应用到 Index（用于工作区单个 Hunk 的暂存 / 取消暂存）。
 - `apply_patch_to_workdir_and_index`：将补丁文本同时应用到工作区和 Index（用于放弃已暂存 Hunk）。

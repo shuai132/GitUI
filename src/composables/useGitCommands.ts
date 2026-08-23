@@ -108,8 +108,14 @@ export function useGitCommands() {
   const stageFile = (repoId: string, filePath: string) =>
     call<void>('stage_file', { repoId, filePath })
 
+  const stageFiles = (repoId: string, filePaths: string[]) =>
+    call<void>('stage_files', { repoId, filePaths })
+
   const unstageFile = (repoId: string, filePath: string) =>
     call<void>('unstage_file', { repoId, filePath })
+
+  const unstageFiles = (repoId: string, filePaths: string[]) =>
+    call<void>('unstage_files', { repoId, filePaths })
 
   const stageAll = (repoId: string) =>
     call<void>('stage_all', { repoId })
@@ -559,7 +565,9 @@ export function useGitCommands() {
     createWorktree,
     getStatus,
     stageFile,
+    stageFiles,
     unstageFile,
+    unstageFiles,
     stageAll,
     unstageAll,
     getRepoState,

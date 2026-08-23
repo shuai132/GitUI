@@ -9,6 +9,8 @@ const mocks = vi.hoisted(() => ({
   createCommit: vi.fn(),
   amendCommit: vi.fn(),
   undoLastCommit: vi.fn(),
+  stageFiles: vi.fn(),
+  unstageFiles: vi.fn(),
   discardFiles: vi.fn(),
   setRepoState: vi.fn(),
 }))
@@ -23,6 +25,8 @@ vi.mock('@/composables/useGitCommands', () => ({
     createCommit: mocks.createCommit,
     amendCommit: mocks.amendCommit,
     undoLastCommit: mocks.undoLastCommit,
+    stageFiles: mocks.stageFiles,
+    unstageFiles: mocks.unstageFiles,
     discardFiles: mocks.discardFiles,
   }),
 }))
@@ -73,6 +77,8 @@ describe('workspace commit undo candidate', () => {
     mocks.createCommit.mockReset()
     mocks.amendCommit.mockReset()
     mocks.undoLastCommit.mockReset()
+    mocks.stageFiles.mockReset()
+    mocks.unstageFiles.mockReset()
     mocks.discardFiles.mockReset()
     mocks.setRepoState.mockReset()
   })
@@ -151,6 +157,25 @@ describe('workspace commit undo candidate', () => {
 
     expect(mocks.discardFiles).toHaveBeenCalledTimes(1)
     expect(mocks.discardFiles).toHaveBeenCalledWith('repo-1', ['one.txt', 'two.txt'])
+    expect(mocks.getStatus).toHaveBeenCalledTimes(1)
+  })
+
+  it('stages and unstages multiple files with one command and one refresh each', async () => {
+    const store = useWorkspaceStore()
+    const paths = ['one.txt', 'two.txt']
+    mocks.stageFiles.mockResolvedValue(undefined)
+    mocks.unstageFiles.mockResolvedValue(undefined)
+    mocks.getStatus.mockResolvedValue(status('head'))
+
+    await store.stageFiles(paths)
+    expect(mocks.stageFiles).toHaveBeenCalledTimes(1)
+    expect(mocks.stageFiles).toHaveBeenCalledWith('repo-1', paths)
+    expect(mocks.getStatus).toHaveBeenCalledTimes(1)
+
+    mocks.getStatus.mockClear()
+    await store.unstageFiles(paths)
+    expect(mocks.unstageFiles).toHaveBeenCalledTimes(1)
+    expect(mocks.unstageFiles).toHaveBeenCalledWith('repo-1', paths)
     expect(mocks.getStatus).toHaveBeenCalledTimes(1)
   })
 

@@ -235,14 +235,38 @@ impl GitEngine {
     }
 
     pub fn stage_file(path: &str, file_path: &str) -> GitResult<()> {
+        Self::stage_files(path, &[file_path.to_string()])
+    }
+
+    pub fn stage_files(path: &str, file_paths: &[String]) -> GitResult<()> {
+        if file_paths.is_empty() {
+            return Ok(());
+        }
         let repo = Self::open(path)?;
+        let workdir = repo.workdir().ok_or_else(|| {
+            crate::git::error::GitError::OperationFailed("仓库没有工作目录".to_string())
+        })?;
         let mut index = repo.index()?;
-        index.add_path(std::path::Path::new(file_path))?;
+        for file_path in file_paths {
+            let relative_path = std::path::Path::new(file_path);
+            if std::fs::symlink_metadata(workdir.join(relative_path)).is_ok() {
+                index.add_path(relative_path)?;
+            } else if index.get_path(relative_path, 0).is_some() {
+                index.remove_path(relative_path)?;
+            }
+        }
         index.write()?;
         Ok(())
     }
 
     pub fn unstage_file(path: &str, file_path: &str) -> GitResult<()> {
+        Self::unstage_files(path, &[file_path.to_string()])
+    }
+
+    pub fn unstage_files(path: &str, file_paths: &[String]) -> GitResult<()> {
+        if file_paths.is_empty() {
+            return Ok(());
+        }
         let repo = Self::open(path)?;
         let head = repo
             .head()
@@ -252,12 +276,17 @@ impl GitEngine {
 
         match head {
             Some(head_obj) => {
-                repo.reset_default(Some(&head_obj), [file_path])?;
+                repo.reset_default(Some(&head_obj), file_paths.iter().map(String::as_str))?;
             }
             None => {
                 // No commits yet - remove from index
                 let mut index = repo.index()?;
-                index.remove_path(std::path::Path::new(file_path))?;
+                for file_path in file_paths {
+                    let relative_path = std::path::Path::new(file_path);
+                    if index.get_path(relative_path, 0).is_some() {
+                        index.remove_path(relative_path)?;
+                    }
+                }
                 index.write()?;
             }
         }
