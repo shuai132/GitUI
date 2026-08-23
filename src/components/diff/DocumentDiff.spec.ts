@@ -97,6 +97,29 @@ describe('DocumentDiff', () => {
     expect(localStorage.getItem('gitui.diff.documentPreviewPct')).toBe('55')
   })
 
+  it('resizes and persists the preview/text split from the keyboard', async () => {
+    const wrapper = mount(DocumentDiff, {
+      props: {
+        diff: fileDiff(),
+        repoId: 'repo-1',
+        documentKind: 'docx',
+      },
+      global: { plugins: [i18n] },
+    })
+    const separator = wrapper.find<HTMLElement>('[role="separator"]')
+
+    expect(separator.attributes('aria-orientation')).toBe('horizontal')
+    expect(separator.attributes('aria-valuenow')).toBe('45')
+
+    await separator.trigger('keydown', { key: 'ArrowDown' })
+    expect(separator.attributes('aria-valuenow')).toBe('50')
+    expect(localStorage.getItem('gitui.diff.documentPreviewPct')).toBe('50')
+
+    await separator.trigger('keydown', { key: 'Home' })
+    expect(separator.attributes('aria-valuenow')).toBe('15')
+    expect(localStorage.getItem('gitui.diff.documentPreviewPct')).toBe('15')
+  })
+
   it('cleans up the preview/text split resize when dragging is cancelled', async () => {
     const wrapper = mount(DocumentDiff, {
       props: {

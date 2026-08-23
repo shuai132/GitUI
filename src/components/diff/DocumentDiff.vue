@@ -260,6 +260,19 @@ function startDocumentSplitResize(e: PointerEvent) {
   document.body.style.userSelect = 'none'
 }
 
+function onDocumentSplitKeydown(e: KeyboardEvent) {
+  let next = previewPct.value
+  if (e.key === 'ArrowUp') next -= 5
+  else if (e.key === 'ArrowDown') next += 5
+  else if (e.key === 'Home') next = DOCUMENT_PREVIEW_MIN_PCT
+  else if (e.key === 'End') next = DOCUMENT_PREVIEW_MAX_PCT
+  else return
+
+  e.preventDefault()
+  previewPct.value = clampDocumentPreviewPct(next)
+  localStorage.setItem(DOCUMENT_PREVIEW_SPLIT_KEY, String(previewPct.value))
+}
+
 </script>
 
 <template>
@@ -290,7 +303,18 @@ function startDocumentSplitResize(e: PointerEvent) {
       </section>
     </div>
 
-    <div class="document-split-resize" @pointerdown="startDocumentSplitResize" />
+    <div
+      class="document-split-resize"
+      role="separator"
+      :aria-label="t('diff.document.resizePreviewText')"
+      aria-orientation="horizontal"
+      :aria-valuemin="DOCUMENT_PREVIEW_MIN_PCT"
+      :aria-valuemax="DOCUMENT_PREVIEW_MAX_PCT"
+      :aria-valuenow="previewPct"
+      tabindex="0"
+      @pointerdown="startDocumentSplitResize"
+      @keydown="onDocumentSplitKeydown"
+    />
 
     <div
       v-if="isDocumentSplitResizing"
@@ -382,6 +406,12 @@ function startDocumentSplitResize(e: PointerEvent) {
 
 .document-split-resize:hover,
 .document-split-resize:active {
+  background: rgba(138, 173, 244, 0.3);
+}
+
+.document-split-resize:focus-visible {
+  outline: 1px solid var(--accent-blue);
+  outline-offset: -1px;
   background: rgba(138, 173, 244, 0.3);
 }
 

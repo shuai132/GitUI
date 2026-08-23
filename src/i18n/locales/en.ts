@@ -803,6 +803,7 @@ const messages = {
     },
     document: {
       extractedTextDiff: 'Extracted text diff',
+      resizePreviewText: 'Resize document preview and text diff',
       noText: 'No extractable text',
       textTruncated: 'Text truncated',
       previewTooLarge: 'Document too large, preview unavailable',

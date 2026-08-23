@@ -802,6 +802,7 @@ const messages = {
     },
     document: {
       extractedTextDiff: '提取文本 diff',
+      resizePreviewText: '调整文档预览与文本差异区域',
       noText: '没有可提取文本',
       textTruncated: '文本已截断',
       previewTooLarge: '文档过大，无法预览',
