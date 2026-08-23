@@ -122,8 +122,10 @@ export function useCommitContextMenu(
   // Drop Unreachable Dialog
   const dropUnreachableDialog = reactive({
     visible: false,
+    repoId: null as string | null,
     commit: null as CommitInfo | null,
     count: 0,
+    contextId: '',
     previewing: false,
     previewError: null as string | null,
     submitting: false,
@@ -274,27 +276,34 @@ export function useCommitContextMenu(
   }
 
   function openDropUnreachableDialog(c: CommitInfo) {
+    const repoId = repoStore.activeRepoId
+    if (!repoId) return
     const requestSeq = ++dropUnreachablePreviewSeq
+    dropUnreachableDialog.repoId = repoId
     dropUnreachableDialog.commit = c
     dropUnreachableDialog.count = 0
+    dropUnreachableDialog.contextId = ''
     dropUnreachableDialog.previewing = true
     dropUnreachableDialog.previewError = null
     dropUnreachableDialog.submitting = false
     dropUnreachableDialog.visible = true
 
-    void historyStore.previewDropUnreachableCommit(c.oid)
-      .then((count) => {
+    void historyStore.previewDropUnreachableCommit(repoId, c.oid)
+      .then((preview) => {
         if (
           requestSeq !== dropUnreachablePreviewSeq ||
+          dropUnreachableDialog.repoId !== repoId ||
           dropUnreachableDialog.commit?.oid !== c.oid
         ) {
           return
         }
-        dropUnreachableDialog.count = count
+        dropUnreachableDialog.count = preview.count
+        dropUnreachableDialog.contextId = preview.context_id
       })
       .catch((err: unknown) => {
         if (
           requestSeq !== dropUnreachablePreviewSeq ||
+          dropUnreachableDialog.repoId !== repoId ||
           dropUnreachableDialog.commit?.oid !== c.oid
         ) {
           return
@@ -304,6 +313,7 @@ export function useCommitContextMenu(
       .finally(() => {
         if (
           requestSeq !== dropUnreachablePreviewSeq ||
+          dropUnreachableDialog.repoId !== repoId ||
           dropUnreachableDialog.commit?.oid !== c.oid
         ) {
           return
@@ -688,8 +698,12 @@ export function useCommitContextMenu(
 
   async function onDropUnreachableConfirm() {
     const c = dropUnreachableDialog.commit
+    const repoId = dropUnreachableDialog.repoId
+    const contextId = dropUnreachableDialog.contextId
     if (
       !c ||
+      !repoId ||
+      !contextId ||
       dropUnreachableDialog.previewing ||
       dropUnreachableDialog.previewError ||
       dropUnreachableDialog.count <= 0 ||
@@ -697,13 +711,25 @@ export function useCommitContextMenu(
     ) {
       return
     }
+    if (repoStore.activeRepoId !== repoId) {
+      onDropUnreachableCancel()
+      showError(t('errors.history.contextChanged'))
+      return
+    }
     dropUnreachableDialog.submitting = true
     try {
-      await historyStore.dropUnreachableCommit(c.oid)
+      await historyStore.dropUnreachableCommit(repoId, c.oid, contextId)
       dropUnreachableDialog.visible = false
+      dropUnreachableDialog.repoId = null
       dropUnreachableDialog.commit = null
+      dropUnreachableDialog.contextId = ''
     } catch (err) {
       showActionError(err)
+      if (repoStore.activeRepoId === repoId) {
+        openDropUnreachableDialog(c)
+      } else {
+        onDropUnreachableCancel()
+      }
     } finally {
       dropUnreachableDialog.submitting = false
     }
@@ -712,7 +738,9 @@ export function useCommitContextMenu(
   function onDropUnreachableCancel() {
     dropUnreachablePreviewSeq += 1
     dropUnreachableDialog.visible = false
+    dropUnreachableDialog.repoId = null
     dropUnreachableDialog.commit = null
+    dropUnreachableDialog.contextId = ''
     dropUnreachableDialog.previewing = false
     dropUnreachableDialog.previewError = null
   }

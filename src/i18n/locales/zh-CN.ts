@@ -1195,6 +1195,7 @@ const messages = {
     merge: { conflict: '发生冲突，请在工作区解决后继续' },
     stash: { targetChanged: 'Stash 栈已变化，已取消操作；请重新选择目标' },
     history: { contextChanged: '仓库或 HEAD 已变化，已取消旧的历史操作；请重新选择目标' },
+    reflog: { contextChanged: 'Reflog 已变化，受影响条目已重新预览；请核对新数量后再次确认' },
     worktree: { dirty: '工作区有未提交的变更，请先 commit / stash / discard' },
     cherrypick: { conflict: '{type} 出现冲突，请解决后继续' },
     config: { missingUser: '当前 git config 缺少 user.name / user.email，请先在终端设置' },

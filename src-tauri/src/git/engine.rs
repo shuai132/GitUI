@@ -2278,12 +2278,15 @@ mod tests {
         assert!(before_oids.contains(&c_oid.as_str()));
 
         let preview = GitEngine::preview_drop_unreachable_commit(path, &b_oid).unwrap();
-        assert_eq!(preview, 2);
+        assert_eq!(preview.count, 2);
 
-        let removed = GitEngine::drop_unreachable_commit(path, &b_oid).unwrap();
+        let removed =
+            GitEngine::drop_unreachable_commit(path, &b_oid, &preview.context_id).unwrap();
         assert_eq!(removed, 2);
         assert_eq!(
-            GitEngine::preview_drop_unreachable_commit(path, &b_oid).unwrap(),
+            GitEngine::preview_drop_unreachable_commit(path, &b_oid)
+                .unwrap()
+                .count,
             0
         );
 
@@ -2297,6 +2300,46 @@ mod tests {
         assert!(after_oids.contains(&a_oid.as_str()));
         assert!(!after_oids.contains(&b_oid.as_str()));
         assert!(!after_oids.contains(&c_oid.as_str()));
+    }
+
+    #[test]
+    fn drop_unreachable_commit_rejects_a_changed_preview_context() {
+        let test_repo = TestRepo::new();
+        let repo = &test_repo.repo;
+        let path = test_repo.path_str();
+        let base = repo.head().unwrap().peel_to_commit().unwrap().id();
+        let lost = commit_file(&test_repo, "lost", "lost.txt", "lost\n");
+
+        let base_obj = repo
+            .find_object(base, Some(git2::ObjectType::Commit))
+            .unwrap();
+        repo.reset(&base_obj, git2::ResetType::Hard, None).unwrap();
+        drop(base_obj);
+        let lost_oid = lost.to_string();
+        let preview = GitEngine::preview_drop_unreachable_commit(path, &lost_oid).unwrap();
+        assert_eq!(preview.count, 1);
+
+        let lost_obj = repo
+            .find_object(lost, Some(git2::ObjectType::Commit))
+            .unwrap();
+        repo.reset(&lost_obj, git2::ResetType::Hard, None).unwrap();
+        drop(lost_obj);
+        commit_file(&test_repo, "later descendant", "later.txt", "later\n");
+        let base_obj = repo
+            .find_object(base, Some(git2::ObjectType::Commit))
+            .unwrap();
+        repo.reset(&base_obj, git2::ResetType::Hard, None).unwrap();
+        drop(base_obj);
+
+        let reflog_len = repo.reflog("HEAD").unwrap().len();
+        let error =
+            GitEngine::drop_unreachable_commit(path, &lost_oid, &preview.context_id).unwrap_err();
+
+        assert!(error.to_string().contains("context changed"));
+        assert_eq!(repo.reflog("HEAD").unwrap().len(), reflog_len);
+        let refreshed = GitEngine::preview_drop_unreachable_commit(path, &lost_oid).unwrap();
+        assert!(refreshed.count > preview.count);
+        assert_ne!(refreshed.context_id, preview.context_id);
     }
 
     #[test]

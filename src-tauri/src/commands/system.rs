@@ -7,7 +7,7 @@ use crate::{
     git::{
         engine::GitEngine,
         error::GitError,
-        types::{BuildInfo, ReflogEntry},
+        types::{BuildInfo, ReflogDropPreview, ReflogEntry},
     },
     repo_manager::RepoManager,
 };
@@ -140,12 +140,13 @@ pub async fn run_gc(
 pub async fn drop_unreachable_commit(
     repo_id: String,
     oid: String,
+    expected_context_id: String,
     repo_manager: State<'_, RepoManager>,
 ) -> Result<usize, GitError> {
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    GitEngine::drop_unreachable_commit(&meta.path, &oid)
+    GitEngine::drop_unreachable_commit(&meta.path, &oid, &expected_context_id)
 }
 
 /// `drop_unreachable_commit` 的 dry-run：返回将被移除的 reflog entry 数，不改 reflog。
@@ -155,7 +156,7 @@ pub async fn preview_drop_unreachable_commit(
     repo_id: String,
     oid: String,
     repo_manager: State<'_, RepoManager>,
-) -> Result<usize, GitError> {
+) -> Result<ReflogDropPreview, GitError> {
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;

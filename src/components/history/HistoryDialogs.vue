@@ -19,8 +19,10 @@ interface FileHistoryState {
 
 interface DropUnreachableDialogState {
   visible: boolean
+  repoId: string | null
   commit: CommitInfo | null
   count: number
+  contextId: string
   previewing: boolean
   previewError: string | null
   submitting: boolean

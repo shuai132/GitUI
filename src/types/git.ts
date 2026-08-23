@@ -247,6 +247,12 @@ export interface ReflogEntry {
   time: number
 }
 
+export interface ReflogDropPreview {
+  count: number
+  /** Opaque backend context that must be returned when confirming removal. */
+  context_id: string
+}
+
 export interface BlameHunk {
   /** 起始行号（1-based） */
   start_line: number

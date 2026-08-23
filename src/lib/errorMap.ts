@@ -153,6 +153,11 @@ const PATTERNS: Array<{ test: (msg: string) => boolean; build: (msg: string) => 
     test: (m) => /Confirmed Git action context changed/i.test(m),
     build: () => ({ key: 'errors.history.contextChanged' }),
   },
+  // Reflog 删除预览后，实际受影响入口集合发生变化
+  {
+    test: (m) => /Reflog removal context changed/i.test(m),
+    build: () => ({ key: 'errors.reflog.contextChanged' }),
+  },
   // Rebase 冲突
   {
     test: (m) => /Rebase conflict|Rebase 出现冲突/i.test(m),

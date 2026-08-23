@@ -1196,6 +1196,7 @@ const messages = {
     merge: { conflict: 'Merge conflict detected — resolve it in the working tree to continue' },
     stash: { targetChanged: 'The stash stack changed, so the action was cancelled. Select the target again.' },
     history: { contextChanged: 'The repository or HEAD changed, so the pending history action was cancelled. Select the target again.' },
+    reflog: { contextChanged: 'The reflog changed, so the affected entries were refreshed. Review the new count and confirm again.' },
     worktree: { dirty: 'Working tree has uncommitted changes, please commit / stash / discard first' },
     cherrypick: { conflict: '{type} conflict detected — resolve it to continue' },
     config: { missingUser: 'git config is missing user.name / user.email, please configure it in the terminal first' },

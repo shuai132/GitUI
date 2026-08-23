@@ -36,4 +36,11 @@ describe('mapGitError', () => {
       message: 'Confirmed Git action context changed: expected HEAD old, current new',
     })).toMatchObject({ key: 'errors.history.contextChanged' })
   })
+
+  it('maps a changed reflog removal preview to review guidance', () => {
+    expect(mapGitError('drop_unreachable_commit', {
+      kind: 'OperationFailed',
+      message: 'Reflog removal context changed; preview the affected entries again',
+    })).toMatchObject({ key: 'errors.reflog.contextChanged' })
+  })
 })

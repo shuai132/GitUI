@@ -224,6 +224,15 @@ impl GitEngine {
         indices
     }
 
+    fn drop_unreachable_context_id(reflog: &git2::Reflog, indices: &[usize]) -> String {
+        indices
+            .iter()
+            .filter_map(|index| reflog.get(*index))
+            .map(|entry| entry.id_new().to_string())
+            .collect::<Vec<_>>()
+            .join(":")
+    }
+
     /// 从 HEAD reflog 中移除让 `oid` 从 unreachable 视图消失所需的所有 entry（剥链）。
     ///
     /// 行为：
@@ -233,7 +242,11 @@ impl GitEngine {
     ///
     /// 返回实际删除的 entry 数（0 表示 reflog 里没有命中项，属幂等情形）。
     /// 不直接写回前可通过 `preview_drop_unreachable_commit` 提前取数，用作二次确认文案。
-    pub fn drop_unreachable_commit(path: &str, oid: &str) -> GitResult<usize> {
+    pub fn drop_unreachable_commit(
+        path: &str,
+        oid: &str,
+        expected_context_id: &str,
+    ) -> GitResult<usize> {
         let repo = Self::open(path)?;
         let target = git2::Oid::from_str(oid)
             .map_err(|e| GitError::OperationFailed(format!("无效的 oid：{}", e)))?;
@@ -242,6 +255,12 @@ impl GitEngine {
             .map_err(|e| GitError::OperationFailed(format!("读取 reflog 失败：{}", e)))?;
 
         let indices = Self::compute_drop_unreachable_indices(&repo, &reflog, target);
+        let context_id = Self::drop_unreachable_context_id(&reflog, &indices);
+        if context_id != expected_context_id {
+            return Err(GitError::OperationFailed(
+                "Reflog removal context changed; preview the affected entries again".to_string(),
+            ));
+        }
 
         // 从末尾向前删避免索引失效；不重写前一条的 old_oid 链（rewrite_previous_entry = false），
         // 让 reflog 历史反映"entry 被移除"这件事本身，而不是伪造一段连贯的时间线。
@@ -262,13 +281,17 @@ impl GitEngine {
 
     /// `drop_unreachable_commit` 的 dry-run：只计算将要被移除的 reflog entry 数，不实际写回。
     /// 供前端在二次确认对话框里显示影响范围（"将同时移除 N 条 reflog 引用"）。
-    pub fn preview_drop_unreachable_commit(path: &str, oid: &str) -> GitResult<usize> {
+    pub fn preview_drop_unreachable_commit(path: &str, oid: &str) -> GitResult<ReflogDropPreview> {
         let repo = Self::open(path)?;
         let target = git2::Oid::from_str(oid)
             .map_err(|e| GitError::OperationFailed(format!("无效的 oid：{}", e)))?;
         let reflog = repo
             .reflog("HEAD")
             .map_err(|e| GitError::OperationFailed(format!("读取 reflog 失败：{}", e)))?;
-        Ok(Self::compute_drop_unreachable_indices(&repo, &reflog, target).len())
+        let indices = Self::compute_drop_unreachable_indices(&repo, &reflog, target);
+        Ok(ReflogDropPreview {
+            count: indices.len(),
+            context_id: Self::drop_unreachable_context_id(&reflog, &indices),
+        })
     }
 }

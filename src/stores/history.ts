@@ -581,18 +581,15 @@ export const useHistoryStore = defineStore('history', () => {
     await Promise.all([loadLog(), loadBranches()])
   }
 
-  async function dropUnreachableCommit(oid: string) {
-    const repoStore = useRepoStore()
-    if (!repoStore.activeRepoId) return 0
-    const removed = await git.dropUnreachableCommit(repoStore.activeRepoId, oid)
+  async function dropUnreachableCommit(repoId: string, oid: string, expectedContextId: string) {
+    const removed = await git.dropUnreachableCommit(repoId, oid, expectedContextId)
+    if (!isActiveRepo(repoId)) return removed
     await loadLog()
     return removed
   }
 
-  async function previewDropUnreachableCommit(oid: string) {
-    const repoStore = useRepoStore()
-    if (!repoStore.activeRepoId) return 0
-    return await git.previewDropUnreachableCommit(repoStore.activeRepoId, oid)
+  async function previewDropUnreachableCommit(repoId: string, oid: string) {
+    return await git.previewDropUnreachableCommit(repoId, oid)
   }
 
   async function amendCommitMessage(

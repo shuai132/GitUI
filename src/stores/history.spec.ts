@@ -24,6 +24,8 @@ const {
   getFileDiffAtCommitMock,
   listRemoteTagsMock,
   amendCommitMessageMock,
+  dropUnreachableCommitMock,
+  previewDropUnreachableCommitMock,
 } = vi.hoisted(() => ({
   getLogMock: vi.fn(),
   searchCommitsMock: vi.fn(),
@@ -35,6 +37,8 @@ const {
   getFileDiffAtCommitMock: vi.fn(),
   listRemoteTagsMock: vi.fn(),
   amendCommitMessageMock: vi.fn(),
+  dropUnreachableCommitMock: vi.fn(),
+  previewDropUnreachableCommitMock: vi.fn(),
 }))
 
 vi.mock('@tauri-apps/plugin-store', () => ({
@@ -57,6 +61,8 @@ vi.mock('@/composables/useGitCommands', () => ({
     getFileDiffAtCommit: getFileDiffAtCommitMock,
     listRemoteTags: listRemoteTagsMock,
     amendCommitMessage: amendCommitMessageMock,
+    dropUnreachableCommit: dropUnreachableCommitMock,
+    previewDropUnreachableCommit: previewDropUnreachableCommitMock,
   }),
 }))
 
@@ -197,6 +203,8 @@ describe('history store log filters', () => {
     getFileDiffAtCommitMock.mockReset()
     listRemoteTagsMock.mockReset()
     amendCommitMessageMock.mockReset()
+    dropUnreachableCommitMock.mockReset()
+    previewDropUnreachableCommitMock.mockReset()
     setActivePinia(createPinia())
   })
 
@@ -258,6 +266,28 @@ describe('history store log filters', () => {
     )
     expect(getLogMock).not.toHaveBeenCalled()
     expect(getCommitSummaryMock).not.toHaveBeenCalled()
+  })
+
+  it('binds reflog preview and removal to the captured repository context', async () => {
+    const removal = deferred<number>()
+    previewDropUnreachableCommitMock.mockResolvedValueOnce({ count: 2, context_id: 'preview' })
+    dropUnreachableCommitMock.mockReturnValueOnce(removal.promise)
+    const repoStore = useRepoStore()
+    const historyStore = useHistoryStore()
+    setActiveRepo(repoStore, 'repo-1', '/repos/a')
+
+    await expect(historyStore.previewDropUnreachableCommit('repo-1', 'lost')).resolves.toEqual({
+      count: 2,
+      context_id: 'preview',
+    })
+    const request = historyStore.dropUnreachableCommit('repo-1', 'lost', 'preview')
+    setActiveRepo(repoStore, 'repo-2', '/repos/b')
+    removal.resolve(2)
+    await expect(request).resolves.toBe(2)
+
+    expect(previewDropUnreachableCommitMock).toHaveBeenCalledWith('repo-1', 'lost')
+    expect(dropUnreachableCommitMock).toHaveBeenCalledWith('repo-1', 'lost', 'preview')
+    expect(getLogMock).not.toHaveBeenCalled()
   })
 
   it('searches the full history with the active filters', async () => {

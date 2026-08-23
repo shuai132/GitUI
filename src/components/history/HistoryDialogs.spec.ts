@@ -34,8 +34,10 @@ function baseProps() {
     actionConfirmationLoading: false,
     dropUnreachableDialog: {
       visible: false,
+      repoId: null,
       commit: null,
       count: 0,
+      contextId: '',
       previewing: false,
       previewError: null,
       submitting: false,

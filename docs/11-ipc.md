@@ -65,6 +65,7 @@ GitUI 采用 Tauri v2 的 IPC 机制实现前后端通信，包括双向的请�
 - `discard_file` / `discard_files`：丢弃一个或多个文件的未暂存变更，参数路径为仓库相对路径；当前工作区原件先进入系统废纸篓，已跟踪文件再恢复到 Index。批量命令只执行一次 Checkout。
 - `discard_all_changes`：调用方传入确认时的 `expectedHead` 与去重 `expectedPaths`；后端先复核当前 HEAD 和完整非 ignored 改动路径集合，再将工作区原件送入系统废纸篓。有 HEAD 时恢复 Index 与工作区，无首个提交时清空 Index；目标变化时不移动任何文件，也不处理 Submodule 工作目录。
 - `get_reflog` / `run_gc`：仓库底层维护。
+- `preview_drop_unreachable_commit` / `drop_unreachable_commit`：预览并移除让目标提交退出 HEAD reflog 闭包所需的入口。预览返回 `git/types.rs::ReflogDropPreview`；确认命令必须回传其中的不透明 context，后端只在实际入口集合完全一致时写回。
 - `set_auto_fetch_interval`：运行时调整后台自动 fetch 间隔，传入秒数；`0` 表示禁用。
 - `get_build_info`：获取应用版本与元数据。
 

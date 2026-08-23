@@ -365,6 +365,13 @@ pub struct ReflogEntry {
     pub time: i64,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ReflogDropPreview {
+    pub count: usize,
+    /// 后端生成的不透明确认上下文；删除时必须原样回传。
+    pub context_id: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SubmoduleInfo {
     pub name: String,

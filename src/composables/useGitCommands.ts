@@ -16,6 +16,7 @@ import type {
   SubmoduleInfo,
   StashEntry,
   ReflogEntry,
+  ReflogDropPreview,
   TagInfo,
   RepoState,
   MergeStrategy,
@@ -632,11 +633,11 @@ export function useGitCommands() {
   const runGc = (repoId: string) =>
     call<string>('run_gc', { repoId })
 
-  const dropUnreachableCommit = (repoId: string, oid: string) =>
-    call<number>('drop_unreachable_commit', { repoId, oid })
+  const dropUnreachableCommit = (repoId: string, oid: string, expectedContextId: string) =>
+    call<number>('drop_unreachable_commit', { repoId, oid, expectedContextId })
 
   const previewDropUnreachableCommit = (repoId: string, oid: string) =>
-    call<number>('preview_drop_unreachable_commit', { repoId, oid })
+    call<ReflogDropPreview>('preview_drop_unreachable_commit', { repoId, oid })
 
   const revealFile = (path: string) =>
     call<void>('reveal_file', { path })
