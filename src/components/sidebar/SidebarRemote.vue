@@ -354,21 +354,30 @@ function onConfirmDialogCancel() {
 
 <template>
   <div class="section" v-if="repoStore.activeRepoId">
-    <div class="section-title collapsible" @click="sectionState.toggle('remote')" @contextmenu="openRemoteSectionMenu">
-      <svg class="chevron" :class="{ open: !sectionState.isCollapsed('remote') }"
-            width="10" height="10" viewBox="0 0 24 24"
-            fill="none" stroke="currentColor" stroke-width="2.5">
-        <polyline points="9 18 15 12 9 6" />
-      </svg>
-      <span class="section-label">REMOTE</span>
-      <span class="section-count">{{ hasSearchQuery ? filteredRemoteBranches.length : remoteBranchesFlat.length }}</span>
+    <div class="section-title collapsible" @contextmenu="openRemoteSectionMenu">
+      <button
+        type="button"
+        class="section-toggle"
+        :aria-expanded="!sectionState.isCollapsed('remote')"
+        @click="sectionState.toggle('remote')"
+      >
+        <svg class="chevron" :class="{ open: !sectionState.isCollapsed('remote') }"
+              width="10" height="10" viewBox="0 0 24 24"
+              fill="none" stroke="currentColor" stroke-width="2.5">
+          <polyline points="9 18 15 12 9 6" />
+        </svg>
+        <span class="section-label">REMOTE</span>
+        <span class="section-count">{{ hasSearchQuery ? filteredRemoteBranches.length : remoteBranchesFlat.length }}</span>
+      </button>
       <SidebarSearchControl
         v-model="searchQuery"
         @open="sectionState.isCollapsed('remote') && sectionState.toggle('remote')"
       />
       <button
+        type="button"
         class="section-add-btn"
         :title="t('sidebar.remote.addButton')"
+        :aria-label="t('sidebar.remote.addButton')"
         @click.stop="openAddRemoteDialog"
       >+</button>
     </div>

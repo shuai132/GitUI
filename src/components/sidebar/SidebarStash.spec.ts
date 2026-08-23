@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   history: { pendingJumpOid: null as string | null },
   routerPush: vi.fn(),
   showError: vi.fn(),
+  toggleSection: vi.fn(),
 }))
 
 vi.mock('vue-i18n', () => ({
@@ -51,7 +52,7 @@ vi.mock('@/composables/useGlobalToast', () => ({
 vi.mock('@/composables/useSidebarSectionState', () => ({
   useSidebarSectionState: () => ({
     isCollapsed: () => false,
-    toggle: vi.fn(),
+    toggle: mocks.toggleSection,
   }),
 }))
 
@@ -98,6 +99,19 @@ describe('SidebarStash', () => {
     mocks.showError.mockReset()
     mocks.routerPush.mockReset()
     mocks.history.pendingJumpOid = null
+    mocks.toggleSection.mockReset()
+  })
+
+  it('uses a disclosure button for the section without wrapping search controls', async () => {
+    const wrapper = shallowMount(SidebarStash)
+    const toggle = wrapper.find<HTMLButtonElement>('.section-toggle')
+
+    expect(toggle.element.tagName).toBe('BUTTON')
+    expect(toggle.attributes('aria-expanded')).toBe('true')
+    expect(toggle.findComponent({ name: 'SidebarSearchControl' }).exists()).toBe(false)
+
+    await toggle.trigger('click')
+    expect(mocks.toggleSection).toHaveBeenCalledWith('stash')
   })
 
   it('uses a native button to jump to the stash commit from the keyboard', async () => {

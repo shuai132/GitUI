@@ -43,6 +43,8 @@
 
 公共 `ContextMenu` 使用 menu / menuitem 语义，打开时聚焦首个可用项；方向键、Home / End、Enter / Space、Escape 和左右键二级菜单导航由组件统一处理，业务组件只提供 item 与 action。
 
+侧栏的 Local Branches、Remote、Tags、Submodules 与 Stash 标题均使用独立折叠按钮并暴露展开状态；搜索、新增与右键菜单保持为并列控件，不嵌套在折叠触发区内。
+
 ## 错误处理流
 
 系统建立了从底层到 UI 的完整错误映射链：

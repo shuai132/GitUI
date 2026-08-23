@@ -226,21 +226,30 @@ async function onSubmoduleClick(s: SubmoduleInfo) {
 
 <template>
   <div class="section" v-if="repoStore.activeRepoId">
-    <div class="section-title collapsible" @click="sectionState.toggle('submodules')">
-      <svg class="chevron" :class="{ open: !sectionState.isCollapsed('submodules') }"
-            width="10" height="10" viewBox="0 0 24 24"
-            fill="none" stroke="currentColor" stroke-width="2.5">
-        <polyline points="9 18 15 12 9 6" />
-      </svg>
-      <span class="section-label">SUBMODULES</span>
-      <span class="section-count">{{ hasSearchQuery ? filteredSubmodules.length : submodules.length }}</span>
+    <div class="section-title collapsible">
+      <button
+        type="button"
+        class="section-toggle"
+        :aria-expanded="!sectionState.isCollapsed('submodules')"
+        @click="sectionState.toggle('submodules')"
+      >
+        <svg class="chevron" :class="{ open: !sectionState.isCollapsed('submodules') }"
+              width="10" height="10" viewBox="0 0 24 24"
+              fill="none" stroke="currentColor" stroke-width="2.5">
+          <polyline points="9 18 15 12 9 6" />
+        </svg>
+        <span class="section-label">SUBMODULES</span>
+        <span class="section-count">{{ hasSearchQuery ? filteredSubmodules.length : submodules.length }}</span>
+      </button>
       <SidebarSearchControl
         v-model="searchQuery"
         @open="sectionState.isCollapsed('submodules') && sectionState.toggle('submodules')"
       />
       <button
+        type="button"
         class="section-add-btn"
         :title="t('sidebar.submodule.addButton')"
+        :aria-label="t('sidebar.submodule.addButton')"
         @click.stop="openAddSubmoduleDialog"
       >+</button>
     </div>

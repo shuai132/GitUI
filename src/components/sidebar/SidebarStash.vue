@@ -200,14 +200,21 @@ function cancelStashAction() {
     class="section"
     v-if="stashStore.entries.length > 0 && repoStore.activeRepoId"
   >
-    <div class="section-title collapsible" @click="sectionState.toggle('stash')">
-      <svg class="chevron" :class="{ open: !sectionState.isCollapsed('stash') }"
-            width="10" height="10" viewBox="0 0 24 24"
-            fill="none" stroke="currentColor" stroke-width="2.5">
-        <polyline points="9 18 15 12 9 6" />
-      </svg>
-      <span class="section-label">STASH</span>
-      <span class="section-count">{{ hasSearchQuery ? filteredEntries.length : stashStore.entries.length }}</span>
+    <div class="section-title collapsible">
+      <button
+        type="button"
+        class="section-toggle"
+        :aria-expanded="!sectionState.isCollapsed('stash')"
+        @click="sectionState.toggle('stash')"
+      >
+        <svg class="chevron" :class="{ open: !sectionState.isCollapsed('stash') }"
+              width="10" height="10" viewBox="0 0 24 24"
+              fill="none" stroke="currentColor" stroke-width="2.5">
+          <polyline points="9 18 15 12 9 6" />
+        </svg>
+        <span class="section-label">STASH</span>
+        <span class="section-count">{{ hasSearchQuery ? filteredEntries.length : stashStore.entries.length }}</span>
+      </button>
       <SidebarSearchControl
         v-model="searchQuery"
         @open="sectionState.isCollapsed('stash') && sectionState.toggle('stash')"

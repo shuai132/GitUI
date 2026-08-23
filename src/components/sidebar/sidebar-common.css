@@ -19,12 +19,34 @@
 }
 
 .section-title.collapsible {
-  cursor: pointer;
   gap: 6px;
 }
 
-.section-title.collapsible:hover {
+.section-toggle {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  gap: 6px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-weight: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.section-toggle:hover {
   color: var(--text-secondary);
+}
+
+.section-toggle:focus-visible {
+  outline: 1px solid var(--accent-blue);
+  outline-offset: 1px;
 }
 
 .section-label {
@@ -104,7 +126,7 @@
 }
 
 .section-add-btn {
-  display: none;
+  display: inline-block;
   background: none;
   border: none;
   cursor: pointer;
@@ -114,10 +136,14 @@
   padding: 0 4px;
   border-radius: 3px;
   transition: color 0.1s;
+  opacity: 0;
+  pointer-events: none;
 }
 
-.section:hover .section-add-btn {
-  display: inline-block;
+.section:hover .section-add-btn,
+.section:focus-within .section-add-btn {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .section-add-btn:hover {

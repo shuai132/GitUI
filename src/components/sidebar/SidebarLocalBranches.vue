@@ -284,14 +284,21 @@ async function onContextAction(action: string) {
 
 <template>
   <div class="section" v-if="localBranches.length > 0 && repoStore.activeRepoId">
-    <div class="section-title collapsible" @click="sectionState.toggle('local-branches')">
-      <svg class="chevron" :class="{ open: !sectionState.isCollapsed('local-branches') }"
-            width="10" height="10" viewBox="0 0 24 24"
-            fill="none" stroke="currentColor" stroke-width="2.5">
-        <polyline points="9 18 15 12 9 6" />
-      </svg>
-      <span class="section-label">LOCAL BRANCHES</span>
-      <span class="section-count">{{ hasSearchQuery ? filteredLocalBranches.length : localBranches.length }}</span>
+    <div class="section-title collapsible">
+      <button
+        type="button"
+        class="section-toggle"
+        :aria-expanded="!sectionState.isCollapsed('local-branches')"
+        @click="sectionState.toggle('local-branches')"
+      >
+        <svg class="chevron" :class="{ open: !sectionState.isCollapsed('local-branches') }"
+              width="10" height="10" viewBox="0 0 24 24"
+              fill="none" stroke="currentColor" stroke-width="2.5">
+          <polyline points="9 18 15 12 9 6" />
+        </svg>
+        <span class="section-label">LOCAL BRANCHES</span>
+        <span class="section-count">{{ hasSearchQuery ? filteredLocalBranches.length : localBranches.length }}</span>
+      </button>
       <SidebarSearchControl
         v-model="searchQuery"
         @open="sectionState.isCollapsed('local-branches') && sectionState.toggle('local-branches')"
