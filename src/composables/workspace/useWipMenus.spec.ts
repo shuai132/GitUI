@@ -5,10 +5,15 @@ import { useWipMenus } from './useWipMenus'
 
 const toastMocks = vi.hoisted(() => ({
   showActionError: vi.fn(),
+  showToast: vi.fn(),
+  writeText: vi.fn(),
 }))
 
 vi.mock('@/composables/useGlobalToast', () => ({
-  useGlobalToast: () => ({ showActionError: toastMocks.showActionError }),
+  useGlobalToast: () => ({
+    showActionError: toastMocks.showActionError,
+    showToast: toastMocks.showToast,
+  }),
 }))
 
 const conflictedFile: FileEntry = {
@@ -79,6 +84,12 @@ function openConflictMenu(menu: ReturnType<typeof useWipMenus>) {
 describe('useWipMenus conflict context', () => {
   beforeEach(() => {
     toastMocks.showActionError.mockReset()
+    toastMocks.showToast.mockReset()
+    toastMocks.writeText.mockReset().mockResolvedValue(undefined)
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText: toastMocks.writeText },
+    })
   })
 
   it('cancels a conflict action after switching repositories', async () => {
@@ -103,5 +114,25 @@ describe('useWipMenus conflict context', () => {
     expect(mergeRebase.loadConflictFile).toHaveBeenCalledWith('repo-1', 'conflict.txt')
     expect(mergeRebase.resolveConflict).not.toHaveBeenCalled()
     expect(toastMocks.showActionError).toHaveBeenCalledOnce()
+  })
+
+  it('copies a workspace path through the shared feedback channel', async () => {
+    const { menu } = createMenu()
+    menu.openFileContextMenu(new MouseEvent('contextmenu'), {
+      file: {
+        path: 'src/main.ts',
+        status: 'modified',
+        staged: false,
+        additions: 1,
+        deletions: 0,
+      },
+      path: 'src/main.ts',
+      isDir: false,
+    })
+
+    await menu.handleFileMenuAction('copy-relative')
+
+    expect(toastMocks.writeText).toHaveBeenCalledWith('src/main.ts')
+    expect(toastMocks.showToast).toHaveBeenCalledWith('success', 'clipboard.copySuccess')
   })
 })

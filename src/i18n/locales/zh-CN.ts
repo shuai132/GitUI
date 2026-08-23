@@ -13,6 +13,10 @@ const messages = {
     edit: '编辑',
     directoryPickerFailed: '无法打开目录选择器',
   },
+  clipboard: {
+    copySuccess: '已复制到剪贴板',
+    copyFailed: '无法复制到剪贴板',
+  },
   app: {
     sidebar: {
       collapseHint: '收起侧边栏',

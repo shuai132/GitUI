@@ -10,6 +10,7 @@ import type { useWorkspaceStore } from '@/stores/workspace'
 import type { FileEntry, SubmoduleInfo } from '@/types/git'
 import type { FileOrderPlacement } from '@/utils/fileOrderPrefs'
 import { canOpenSubmodule, findSubmoduleByPath, submoduleSetupAction } from '@/utils/submodules'
+import { useClipboardFeedback } from '@/composables/useClipboardFeedback'
 import { useGlobalToast } from '@/composables/useGlobalToast'
 
 type GitCommands = ReturnType<typeof useGitCommands>
@@ -69,6 +70,7 @@ export function useWipMenus(options: WipMenuOptions) {
     updateSubmodule,
     showFileHistory,
   } = options
+  const { copyText } = useClipboardFeedback(t)
 
   const batchMenu = reactive({
     visible: false,
@@ -318,11 +320,11 @@ export function useWipMenus(options: WipMenuOptions) {
           await updateSubmodule(submodule)
         }
       } else if (action === 'copy-name') {
-        await navigator.clipboard.writeText(targetPath.split('/').pop() ?? targetPath)
+        await copyText(targetPath.split('/').pop() ?? targetPath)
       } else if (action === 'copy-relative') {
-        await navigator.clipboard.writeText(targetPath)
+        await copyText(targetPath)
       } else if (action === 'copy-absolute') {
-        await navigator.clipboard.writeText(absPath)
+        await copyText(absPath)
       } else if (action === 'reveal') {
         await git.revealFile(absPath)
       } else if (action === 'open-editor') {

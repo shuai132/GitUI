@@ -3,7 +3,7 @@ import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Modal from '@/components/common/Modal.vue'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
-import { useGlobalToast } from '@/composables/useGlobalToast'
+import { useClipboardFeedback } from '@/composables/useClipboardFeedback'
 import { useErrorsStore } from '@/stores/errors'
 import type { ErrorEntry } from '@/stores/errors'
 
@@ -11,7 +11,7 @@ defineProps<{ visible: boolean }>()
 const emit = defineEmits<{ close: [] }>()
 
 const { t, locale } = useI18n()
-const { showToast, showActionError } = useGlobalToast()
+const { copyText } = useClipboardFeedback(t)
 const errorsStore = useErrorsStore()
 
 // 展开查看原始错误的条目 id 集合
@@ -48,12 +48,10 @@ function onConfirmClear() {
 
 async function onCopy(entry: ErrorEntry) {
   const text = `[${entry.op}] ${entry.friendly}\n\n${t('errorHistory.rawErrorLabel')}\n${entry.raw}`
-  try {
-    await navigator.clipboard.writeText(text)
-    showToast('success', t('errorHistory.copySuccess'))
-  } catch (error: unknown) {
-    showActionError(error, t('errorHistory.copyFailed'))
-  }
+  await copyText(text, {
+    successMessage: t('errorHistory.copySuccess'),
+    failureMessage: t('errorHistory.copyFailed'),
+  })
 }
 </script>
 

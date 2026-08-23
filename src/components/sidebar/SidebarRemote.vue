@@ -7,6 +7,7 @@ import { useRepoStore } from '@/stores/repos'
 import { useUiStore } from '@/stores/ui'
 import { useSidebarSectionState } from '@/composables/useSidebarSectionState'
 import { useGitCommands } from '@/composables/useGitCommands'
+import { useClipboardFeedback } from '@/composables/useClipboardFeedback'
 import { useGlobalToast } from '@/composables/useGlobalToast'
 import { buildBranchTree } from '@/utils/branchTree'
 import ContextMenu, { type ContextMenuItem } from '@/components/common/ContextMenu.vue'
@@ -26,6 +27,7 @@ const repoStore = useRepoStore()
 const uiStore = useUiStore()
 const sectionState = useSidebarSectionState()
 const git = useGitCommands()
+const { copyText } = useClipboardFeedback(t)
 const { showError, showActionError } = useGlobalToast()
 
 const localBranches = computed(() => historyStore.branches.filter((b) => !b.is_remote))
@@ -274,7 +276,7 @@ async function onBranchMenuAction(action: string) {
         showCheckoutDialog.value = true
         break
       case 'copy-name':
-        await navigator.clipboard.writeText(b.name)
+        await copyText(b.name)
         break
       case 'delete': {
         const repoId = repoStore.activeRepoId

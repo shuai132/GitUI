@@ -9,6 +9,7 @@ import { useSubmodulesStore } from '@/stores/submodules'
 import { useUiStore } from '@/stores/ui'
 import { resolveExternalTerminalApp, useSettingsStore } from '@/stores/settings'
 import { useGitCommands } from '@/composables/useGitCommands'
+import { useClipboardFeedback } from '@/composables/useClipboardFeedback'
 import { useRepoCreation } from '@/composables/useRepoCreation'
 import { useGlobalToast } from '@/composables/useGlobalToast'
 import { scrollElementByWheel } from '@/utils/wheelScroll'
@@ -34,6 +35,7 @@ const submodulesStore = useSubmodulesStore()
 const uiStore = useUiStore()
 const settingsStore = useSettingsStore()
 const git = useGitCommands()
+const { copyText } = useClipboardFeedback(t)
 const repoCreation = useRepoCreation()
 const { showActionError } = useGlobalToast()
 
@@ -519,10 +521,10 @@ async function onRepoMenuAction(action: string) {
   try {
     switch (action) {
       case 'copy-name':
-        await navigator.clipboard.writeText(r.name)
+        await copyText(r.name)
         break
       case 'copy-absolute-path':
-        await navigator.clipboard.writeText(r.path)
+        await copyText(r.path)
         break
       case 'create-worktree':
         worktreeSourceRepo.value = r

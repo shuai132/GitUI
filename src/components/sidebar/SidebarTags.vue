@@ -6,6 +6,7 @@ import { useHistoryStore } from '@/stores/history'
 import { useRepoStore } from '@/stores/repos'
 import { useSidebarSectionState } from '@/composables/useSidebarSectionState'
 import { usePickRemote } from '@/composables/usePickRemote'
+import { useClipboardFeedback } from '@/composables/useClipboardFeedback'
 import { useGitCommands } from '@/composables/useGitCommands'
 import { useGlobalToast } from '@/composables/useGlobalToast'
 import ContextMenu, { type ContextMenuItem } from '@/components/common/ContextMenu.vue'
@@ -20,6 +21,7 @@ const historyStore = useHistoryStore()
 const repoStore = useRepoStore()
 const sectionState = useSidebarSectionState()
 const { pickRemote } = usePickRemote()
+const { copyText } = useClipboardFeedback(t)
 const git = useGitCommands()
 const { showError, showToast, showActionError } = useGlobalToast()
 
@@ -194,10 +196,10 @@ async function onTagMenuAction(action: string) {
 
     switch (action) {
       case 'copy-name':
-        await navigator.clipboard.writeText(tag.name)
+        await copyText(tag.name)
         break
       case 'copy-oid':
-        await navigator.clipboard.writeText(tag.commit_oid)
+        await copyText(tag.commit_oid)
         break
       case 'push':
       case 'push-force': {

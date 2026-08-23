@@ -13,6 +13,10 @@ const messages = {
     edit: 'Edit',
     directoryPickerFailed: 'Could not open the directory picker',
   },
+  clipboard: {
+    copySuccess: 'Copied to clipboard',
+    copyFailed: 'Could not copy to clipboard',
+  },
   app: {
     sidebar: {
       collapseHint: 'Collapse sidebar',

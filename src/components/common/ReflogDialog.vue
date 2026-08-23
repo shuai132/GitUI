@@ -2,8 +2,8 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Modal from '@/components/common/Modal.vue'
+import { useClipboardFeedback } from '@/composables/useClipboardFeedback'
 import { useGitCommands } from '@/composables/useGitCommands'
-import { useGlobalToast } from '@/composables/useGlobalToast'
 import { useRepoStore } from '@/stores/repos'
 import type { ReflogEntry } from '@/types/git'
 
@@ -13,7 +13,7 @@ const props = defineProps<{ visible: boolean }>()
 const emit = defineEmits<{ close: [] }>()
 
 const git = useGitCommands()
-const { showToast, showActionError } = useGlobalToast()
+const { copyText } = useClipboardFeedback(t)
 const repoStore = useRepoStore()
 
 const entries = ref<ReflogEntry[]>([])
@@ -60,12 +60,10 @@ function formatTime(ts: number): string {
 }
 
 async function copyOid(oid: string) {
-  try {
-    await navigator.clipboard.writeText(oid)
-    showToast('success', t('reflog.copySuccess'))
-  } catch (error: unknown) {
-    showActionError(error, t('reflog.copyFailed'))
-  }
+  await copyText(oid, {
+    successMessage: t('reflog.copySuccess'),
+    failureMessage: t('reflog.copyFailed'),
+  })
 }
 </script>
 

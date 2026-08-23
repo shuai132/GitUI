@@ -7,6 +7,7 @@ import type { useWorkspaceStore } from '@/stores/workspace'
 import type { FileDiff, SubmoduleInfo } from '@/types/git'
 import type { FileOrderPlacement } from '@/utils/fileOrderPrefs'
 import { canOpenSubmodule, findSubmoduleForDiff, submoduleSetupAction } from '@/utils/submodules'
+import { useClipboardFeedback } from '@/composables/useClipboardFeedback'
 import { useGlobalToast } from '@/composables/useGlobalToast'
 
 type GitCommands = ReturnType<typeof useGitCommands>
@@ -48,6 +49,7 @@ export function useCommitFileMenu(options: CommitFileMenuOptions) {
     moveFileOrder,
     showFileHistory,
   } = options
+  const { copyText } = useClipboardFeedback(t)
 
   const fileMenu = reactive({
     visible: false,
@@ -134,7 +136,7 @@ export function useCommitFileMenu(options: CommitFileMenuOptions) {
 
     try {
       if (action === 'copy-name') {
-        await navigator.clipboard.writeText(filePath.split('/').pop() ?? filePath)
+        await copyText(filePath.split('/').pop() ?? filePath)
       } else if (action === 'move-front') {
         moveFileOrder([filePath], 'front')
       } else if (action === 'move-back') {
@@ -142,9 +144,9 @@ export function useCommitFileMenu(options: CommitFileMenuOptions) {
       } else if (action === 'restore-order') {
         moveFileOrder([filePath], 'default')
       } else if (action === 'copy-relative') {
-        await navigator.clipboard.writeText(filePath)
+        await copyText(filePath)
       } else if (action === 'copy-absolute') {
-        await navigator.clipboard.writeText(absPath)
+        await copyText(absPath)
       } else if (action === 'reveal') {
         await git.revealFile(absPath)
       } else if (action === 'open-editor') {

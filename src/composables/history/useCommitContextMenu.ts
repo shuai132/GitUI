@@ -7,6 +7,7 @@ import { useMergeRebaseStore } from '@/stores/mergeRebase'
 import { usePluginsStore } from '@/stores/plugins'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useUiStore } from '@/stores/ui'
+import { useClipboardFeedback } from '@/composables/useClipboardFeedback'
 import { useGlobalToast } from '@/composables/useGlobalToast'
 import {
   isHistoryActionContextCurrent,
@@ -78,6 +79,7 @@ export function useCommitContextMenu(
   const pluginsStore = usePluginsStore()
   const workspaceStore = useWorkspaceStore()
   const uiStore = useUiStore()
+  const { copyText } = useClipboardFeedback(t)
   const { showToast, showError, showActionError } = useGlobalToast()
 
   onMounted(() => {
@@ -443,7 +445,7 @@ export function useCommitContextMenu(
       }
       const copiedBranchName = parseCopyBranchNameAction(action)
       if (copiedBranchName) {
-        await navigator.clipboard.writeText(copiedBranchName)
+        await copyText(copiedBranchName)
         return
       }
 
@@ -522,7 +524,7 @@ export function useCommitContextMenu(
           openRebaseDialog(c.oid, null)
           break
         case 'copy-sha':
-          await navigator.clipboard.writeText(c.oid)
+          await copyText(c.oid)
           break
         case 'drop-unreachable': {
           openDropUnreachableDialog(c)

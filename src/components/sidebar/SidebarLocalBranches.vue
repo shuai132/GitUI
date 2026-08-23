@@ -14,6 +14,7 @@ import BranchSwitchDialog from '@/components/branch/BranchSwitchDialog.vue'
 import BranchTreeNode from './BranchTreeNode.vue'
 import SidebarSearchControl from './SidebarSearchControl.vue'
 import { useBranchSwitch } from '@/composables/useBranchSwitch'
+import { useClipboardFeedback } from '@/composables/useClipboardFeedback'
 import { useGlobalToast } from '@/composables/useGlobalToast'
 import { matchesSidebarSearch, normalizeSidebarSearchQuery } from '@/utils/sidebarSearch'
 import type { BranchInfo } from '@/types/git'
@@ -26,6 +27,7 @@ const repoStore = useRepoStore()
 const uiStore = useUiStore()
 const sectionState = useSidebarSectionState()
 const branchSwitch = reactive(useBranchSwitch())
+const { copyText } = useClipboardFeedback(t)
 const { showActionError } = useGlobalToast()
 const activeRepoPath = computed(() => repoStore.activeRepo()?.path)
 const activeRepoBranchScope = computed(() =>
@@ -202,7 +204,7 @@ async function onContextAction(action: string) {
         break
       }
       case 'copy-name':
-        await navigator.clipboard.writeText(b.name)
+        await copyText(b.name)
         break
       case 'toggle-solo-current':
         if (b.is_head && b.name !== 'HEAD') {
