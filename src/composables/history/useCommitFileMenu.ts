@@ -55,12 +55,15 @@ export function useCommitFileMenu(options: CommitFileMenuOptions) {
     visible: false,
     x: 0,
     y: 0,
-    diffIdx: -1,
+    repoId: null as string | null,
+    repoPath: '',
+    commitOid: undefined as string | undefined,
+    diff: null as FileDiff | null,
     canOrder: true,
   })
 
   const fileMenuItems = computed<ContextMenuItem[]>(() => {
-    const diff = diffs.value[fileMenu.diffIdx]
+    const diff = fileMenu.diff
     if (!diff) return []
 
     const isDeleted = !diff.new_blob_oid && !!diff.old_blob_oid
@@ -118,7 +121,10 @@ export function useCommitFileMenu(options: CommitFileMenuOptions) {
 
   function openFileMenu(event: MouseEvent, diffIdx: number, canOrder = true) {
     event.preventDefault()
-    fileMenu.diffIdx = diffIdx
+    fileMenu.repoId = repoStore.activeRepoId
+    fileMenu.repoPath = repoStore.activeRepo()?.path ?? ''
+    fileMenu.commitOid = commitOid.value
+    fileMenu.diff = diffs.value[diffIdx] ?? null
     fileMenu.canOrder = canOrder
     fileMenu.x = event.clientX
     fileMenu.y = event.clientY
@@ -126,12 +132,17 @@ export function useCommitFileMenu(options: CommitFileMenuOptions) {
   }
 
   async function handleFileMenuAction(action: string) {
-    const diff = diffs.value[fileMenu.diffIdx]
+    const diff = fileMenu.diff
     if (!diff) return
     fileMenu.visible = false
 
+    const repoId = fileMenu.repoId
+    if (!repoId || repoStore.activeRepoId !== repoId) {
+      showActionError(new Error(t('history.fileMenu.contextChanged')))
+      return
+    }
     const filePath = diffPath(diff)
-    const repoPath = repoStore.activeRepo()?.path ?? ''
+    const repoPath = fileMenu.repoPath
     const absPath = repoPath ? `${repoPath}/${filePath}` : filePath
 
     try {
@@ -167,9 +178,8 @@ export function useCommitFileMenu(options: CommitFileMenuOptions) {
           await updateSubmodule(submodule)
         }
       } else if (action === 'checkout-file') {
-        const repoId = repoStore.activeRepoId
-        const sha = commitOid.value
-        if (repoId && sha) {
+        const sha = fileMenu.commitOid
+        if (sha) {
           await git.checkoutFileAtCommit(repoId, sha, filePath)
           await workspaceStore.refresh(repoId)
         }

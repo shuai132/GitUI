@@ -435,6 +435,7 @@ const messages = {
       updateSubmodule: 'Update submodule',
       openSubmoduleDisabled: 'Submodule working directory is unavailable',
       checkoutFileVersion: 'Checkout this file version',
+      contextChanged: 'The active repository changed, so the pending commit-file action was cancelled. Select the file again.',
     },
     wipRow: {
       unstagedTitle: 'Unstaged changes',

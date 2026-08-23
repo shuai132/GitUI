@@ -435,6 +435,7 @@ const messages = {
       updateSubmodule: '更新 Submodule',
       openSubmoduleDisabled: 'Submodule 工作区不可用',
       checkoutFileVersion: '签出此文件版本',
+      contextChanged: '当前仓库已变化，旧的提交文件菜单操作已取消；请重新选择文件',
     },
     wipRow: {
       unstagedTitle: '未暂存修改',
