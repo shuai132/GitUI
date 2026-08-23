@@ -259,6 +259,11 @@ const messages = {
       retryUnavailable: 'Retry the last path',
       locateUnavailable: 'Locate repository folder',
       unavailableActionFailed: 'Failed to recover repository: {detail}',
+      activateFailed: 'Failed to switch repositories: {detail}',
+      dropFailed: 'Could not open {count} dropped folder(s): {detail}',
+      removeFailed: 'Failed to remove the repository: {detail}',
+      reorderFailed: 'Failed to save the repository order: {detail}',
+      menuActionFailed: 'Repository action failed: {detail}',
       menu: {
         copyName: 'Copy name',
         copyAbsolutePath: 'Copy absolute path',

@@ -259,6 +259,11 @@ const messages = {
       retryUnavailable: '按原路径重试',
       locateUnavailable: '重新定位仓库目录',
       unavailableActionFailed: '恢复仓库失败：{detail}',
+      activateFailed: '切换仓库失败：{detail}',
+      dropFailed: '{count} 个拖入目录未能打开：{detail}',
+      removeFailed: '移除仓库失败：{detail}',
+      reorderFailed: '保存仓库顺序失败：{detail}',
+      menuActionFailed: '仓库操作失败：{detail}',
       menu: {
         copyName: '复制名称',
         copyAbsolutePath: '复制绝对路径',

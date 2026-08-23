@@ -136,9 +136,15 @@ function onRepoSearchKeydown(event: KeyboardEvent) {
   event.preventDefault()
   event.stopPropagation()
   repoSearchControlRef.value?.closeSearch()
-  void repoStore.setActive(selected.repo.id).catch((e: unknown) => {
-    console.error('[repo-search] failed to activate repository:', e)
-  })
+  void activateRepo(selected.repo.id)
+}
+
+async function activateRepo(repoId: string) {
+  try {
+    await repoStore.setActive(repoId)
+  } catch (caught: unknown) {
+    showActionError(caught, t('sidebar.repo.activateFailed', { detail: String(caught) }))
+  }
 }
 
 function onRepoSearchMouseEnter(repoId: string) {
@@ -214,9 +220,19 @@ async function openDroppedRepos(paths: string[]) {
   if (isDropOpening.value || paths.length === 0) return
   isDropOpening.value = true
   try {
-    await repoStore.openRepos(paths)
-  } catch (e) {
-    console.error('[repo-drop] failed to open dropped repositories:', e)
+    const result = await repoStore.openRepos(paths)
+    if (result.failed.length > 0) {
+      const failure = result.failed[result.failed.length - 1]
+      showActionError(failure?.error, t('sidebar.repo.dropFailed', {
+        count: result.failed.length,
+        detail: String(failure?.error),
+      }))
+    }
+  } catch (caught: unknown) {
+    showActionError(caught, t('sidebar.repo.dropFailed', {
+      count: paths.length,
+      detail: String(caught),
+    }))
   } finally {
     isDropOpening.value = false
   }
@@ -317,8 +333,8 @@ watch(
 async function removeRepo(repoId: string) {
   try {
     await repoStore.closeRepo(repoId)
-  } catch (e) {
-    console.error(e)
+  } catch (caught: unknown) {
+    showActionError(caught, t('sidebar.repo.removeFailed', { detail: String(caught) }))
   }
 }
 
@@ -462,7 +478,11 @@ async function onPointerUp(_e: PointerEvent) {
   if (target < 0) target = 0
   if (target >= repoStore.repos.length) target = repoStore.repos.length - 1
   if (target === fromIndex) return
-  await repoStore.reorderRepos(fromIndex, target)
+  try {
+    await repoStore.reorderRepos(fromIndex, target)
+  } catch (caught: unknown) {
+    showActionError(caught, t('sidebar.repo.reorderFailed', { detail: String(caught) }))
+  }
 }
 
 function onRepoClick(e: MouseEvent, repoId: string) {
@@ -472,9 +492,7 @@ function onRepoClick(e: MouseEvent, repoId: string) {
     return
   }
   if (isRepoSearchOpen.value) repoSearchControlRef.value?.closeSearch()
-  void repoStore.setActive(repoId).catch((caught: unknown) => {
-    console.error('[repo-list] failed to activate repository:', caught)
-  })
+  void activateRepo(repoId)
 }
 
 function onReposListWheel(e: WheelEvent) {
@@ -540,8 +558,8 @@ async function onRepoMenuAction(action: string) {
         await git.openTerminal(r.id, resolveExternalTerminalApp(settingsStore))
         break
     }
-  } catch (err) {
-    console.error(err)
+  } catch (caught: unknown) {
+    showActionError(caught, t('sidebar.repo.menuActionFailed', { detail: String(caught) }))
   }
 }
 
