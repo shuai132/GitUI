@@ -272,8 +272,21 @@ impl GitEngine {
         Ok(tags)
     }
 
-    pub fn delete_tag(path: &str, name: &str) -> GitResult<()> {
+    pub fn delete_tag(path: &str, name: &str, expected_oid: Option<&str>) -> GitResult<()> {
         let repo = Self::open(path)?;
+        if let Some(expected) = expected_oid {
+            let reference = repo.find_reference(&format!("refs/tags/{name}"))?;
+            let current = reference.target().ok_or_else(|| {
+                GitError::OperationFailed(format!(
+                    "Tag target changed: refs/tags/{name} is not a direct reference"
+                ))
+            })?;
+            if current.to_string() != expected {
+                return Err(GitError::OperationFailed(format!(
+                    "Tag target changed: expected {expected}, current {current}"
+                )));
+            }
+        }
         repo.tag_delete(name)?;
         Ok(())
     }

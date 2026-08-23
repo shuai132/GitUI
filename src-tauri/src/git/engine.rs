@@ -352,6 +352,91 @@ mod tests {
     }
 
     #[test]
+    fn guarded_tag_delete_rejects_changed_local_or_remote_targets() {
+        let test_repo = TestRepo::new();
+        let remote_dir = tempfile::tempdir().unwrap();
+        let remote_repo = Repository::init_bare(remote_dir.path()).unwrap();
+        test_repo
+            .repo
+            .remote("origin", remote_dir.path().to_str().unwrap())
+            .unwrap();
+        let initial_oid = test_repo.repo.head().unwrap().target().unwrap();
+        GitEngine::create_tag(test_repo.path_str(), "v1", &initial_oid.to_string(), None).unwrap();
+        let initial_tag_oid = test_repo
+            .repo
+            .find_reference("refs/tags/v1")
+            .unwrap()
+            .target()
+            .unwrap();
+
+        let next_oid = commit_file(&test_repo, "next", "next-delete.txt", "next\n");
+        test_repo.repo.tag_delete("v1").unwrap();
+        let next_object = test_repo.repo.find_object(next_oid, None).unwrap();
+        test_repo
+            .repo
+            .tag_lightweight("v1", &next_object, false)
+            .unwrap();
+        drop(next_object);
+
+        let local_error = GitEngine::delete_tag(
+            test_repo.path_str(),
+            "v1",
+            Some(&initial_tag_oid.to_string()),
+        )
+        .unwrap_err();
+        assert!(local_error.to_string().contains("Tag target changed"));
+        assert_eq!(
+            test_repo
+                .repo
+                .find_reference("refs/tags/v1")
+                .unwrap()
+                .target(),
+            Some(next_oid)
+        );
+
+        GitEngine::push_tag(
+            test_repo.path_str(),
+            "origin",
+            "v1",
+            false,
+            Some(&next_oid.to_string()),
+            None,
+            false,
+        )
+        .unwrap();
+        remote_repo
+            .reference("refs/tags/v1", initial_oid, true, "move remote tag")
+            .unwrap();
+
+        let remote_error = GitEngine::delete_remote_tag(
+            test_repo.path_str(),
+            "origin",
+            "v1",
+            Some(&next_oid.to_string()),
+        )
+        .unwrap_err();
+        assert!(remote_error
+            .to_string()
+            .contains("Remote tag target changed"));
+        assert_eq!(
+            remote_repo.find_reference("refs/tags/v1").unwrap().target(),
+            Some(initial_oid)
+        );
+
+        GitEngine::delete_remote_tag(
+            test_repo.path_str(),
+            "origin",
+            "v1",
+            Some(&initial_oid.to_string()),
+        )
+        .unwrap();
+        assert!(remote_repo.find_reference("refs/tags/v1").is_err());
+
+        GitEngine::delete_tag(test_repo.path_str(), "v1", Some(&next_oid.to_string())).unwrap();
+        assert!(test_repo.repo.find_reference("refs/tags/v1").is_err());
+    }
+
+    #[test]
     fn push_keeps_an_existing_upstream_when_using_another_remote() {
         let test_repo = TestRepo::new();
         let origin_dir = tempfile::tempdir().unwrap();

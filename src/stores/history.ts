@@ -611,10 +611,10 @@ export const useHistoryStore = defineStore('history', () => {
     await loadTags()
   }
 
-  async function deleteTag(name: string) {
+  async function deleteTag(name: string, expectedOid?: string) {
     const repoStore = useRepoStore()
     if (!repoStore.activeRepoId) return
-    await git.deleteTag(repoStore.activeRepoId, name)
+    await git.deleteTag(repoStore.activeRepoId, name, expectedOid)
     // 删了就不应再被视为"已同步到远程"——即便远端仍存在也无法对应
     if (remoteTagNames.value.has(name)) {
       const next = new Set(remoteTagNames.value)
@@ -624,10 +624,10 @@ export const useHistoryStore = defineStore('history', () => {
     await loadTags()
   }
 
-  async function deleteRemoteTag(tagName: string, remoteName: string) {
+  async function deleteRemoteTag(tagName: string, remoteName: string, expectedOid?: string) {
     const repoStore = useRepoStore()
     if (!repoStore.activeRepoId) return
-    await git.deleteRemoteTag(repoStore.activeRepoId, remoteName, tagName)
+    await git.deleteRemoteTag(repoStore.activeRepoId, remoteName, tagName, expectedOid)
     // 重新加载远程标签列表以更新 UI 状态（是否已同步）
     await loadRemoteTags()
   }

@@ -404,8 +404,8 @@ export function useGitCommands() {
   const listTags = (repoId: string) =>
     call<TagInfo[]>('list_tags', { repoId })
 
-  const deleteTag = (repoId: string, name: string) =>
-    call<void>('delete_tag', { repoId, name })
+  const deleteTag = (repoId: string, name: string, expectedOid?: string) =>
+    call<void>('delete_tag', { repoId, name, expectedOid: expectedOid ?? null })
 
   const listRemoteTags = (repoId: string, remoteName: string) =>
     call<TagInfo[]>('list_remote_tags', { repoId, remoteName })
@@ -442,8 +442,17 @@ export function useGitCommands() {
     verifyRemoteTarget,
   })
 
-  const deleteRemoteTag = (repoId: string, remoteName: string, tagName: string) =>
-    call<void>('delete_remote_tag', { repoId, remoteName, tagName })
+  const deleteRemoteTag = (
+    repoId: string,
+    remoteName: string,
+    tagName: string,
+    expectedOid?: string,
+  ) => call<void>('delete_remote_tag', {
+    repoId,
+    remoteName,
+    tagName,
+    expectedOid: expectedOid ?? null,
+  })
 
   const pullBranch = (
     repoId: string,

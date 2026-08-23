@@ -20,13 +20,14 @@ pub async fn list_tags(
 pub async fn delete_tag(
     repo_id: String,
     name: String,
+    expected_oid: Option<String>,
     repo_manager: State<'_, RepoManager>,
 ) -> Result<(), GitError> {
     log::debug!("[delete_tag] name={name}");
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    GitEngine::delete_tag(&meta.path, &name)
+    GitEngine::delete_tag(&meta.path, &name, expected_oid.as_deref())
 }
 
 #[tauri::command]

@@ -185,9 +185,27 @@ impl GitEngine {
     }
 
     /// 删除远程 tag。使用系统 git 以简化 auth 和 ssh 处理。
-    pub fn delete_remote_tag(path: &str, remote_name: &str, tag_name: &str) -> GitResult<()> {
+    pub fn delete_remote_tag(
+        path: &str,
+        remote_name: &str,
+        tag_name: &str,
+        expected_oid: Option<&str>,
+    ) -> GitResult<()> {
         log::debug!("[engine::delete_remote_tag] remote={remote_name} tag={tag_name}");
-        run_git(path, &["push", remote_name, "--delete", tag_name])?;
+        if let Some(expected) = expected_oid {
+            let current = Self::list_remote_tags(path, remote_name)?
+                .into_iter()
+                .find(|tag| tag.name == tag_name)
+                .map(|tag| tag.ref_oid);
+            if current.as_deref() != Some(expected) {
+                return Err(GitError::OperationFailed(format!(
+                    "Remote tag target changed: expected {expected}, current {}",
+                    current.as_deref().unwrap_or("missing")
+                )));
+            }
+        }
+        let reference = format!("refs/tags/{tag_name}");
+        run_git(path, &["push", remote_name, "--delete", &reference])?;
         Ok(())
     }
 

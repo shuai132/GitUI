@@ -21,7 +21,7 @@ const repoStore = useRepoStore()
 const sectionState = useSidebarSectionState()
 const { pickRemote } = usePickRemote()
 const git = useGitCommands()
-const { showError } = useGlobalToast()
+const { showError, showToast } = useGlobalToast()
 
 const tags = computed(() => historyStore.tags)
 const searchQuery = ref('')
@@ -259,24 +259,48 @@ async function onTagMenuAction(action: string) {
         break
       }
       case 'delete': {
+        const id = repoStore.activeRepoId
+        if (!id) break
         const isSynced = historyStore.remoteTagNames.has(tag.name)
         openConfirm(
           t('sidebar.tag.menu.delete'),
           isSynced
-            ? t('sidebar.tag.confirmDeleteWithRemote', { name: tag.name })
-            : t('sidebar.tag.confirmDelete', { name: tag.name }),
+            ? t('sidebar.tag.confirmDeleteWithRemote', {
+                name: tag.name,
+                oid: shortOid(tag.ref_oid),
+              })
+            : t('sidebar.tag.confirmDelete', {
+                name: tag.name,
+                oid: shortOid(tag.ref_oid),
+              }),
           async () => {
-            const deleteRemote = confirmDlg.checkboxValue
-            await historyStore.deleteTag(tag.name)
-
-            if (deleteRemote) {
-              const id = repoStore.activeRepoId
-              if (!id) return
-              const remote = await pickRemote(id)
-              if (remote) {
-                await historyStore.deleteRemoteTag(tag.name, remote)
-              }
+            if (!isCurrentTag(id, tag)) {
+              throw new Error(t('sidebar.tag.contextChanged'))
             }
+            const deleteRemote = confirmDlg.checkboxValue
+            if (deleteRemote) {
+              const remote = await pickRemote(id)
+              if (!remote) {
+                showToast('warning', t('sidebar.tag.deleteCancelled'))
+                return
+              }
+              const remoteTag = (await git.listRemoteTags(id, remote))
+                .find((candidate) => candidate.name === tag.name)
+              if (!isCurrentTag(id, tag)) {
+                throw new Error(t('sidebar.tag.contextChanged'))
+              }
+              if (!remoteTag) {
+                throw new Error(t('sidebar.tag.remoteTagMissing', {
+                  name: tag.name,
+                  remote,
+                }))
+              }
+              await historyStore.deleteRemoteTag(tag.name, remote, remoteTag.ref_oid)
+            }
+            if (!isCurrentTag(id, tag)) {
+              throw new Error(t('sidebar.tag.contextChanged'))
+            }
+            await historyStore.deleteTag(tag.name, tag.ref_oid)
           },
           {
             checkboxLabel: isSynced ? t('sidebar.tag.deleteLocalAndRemote') : undefined,
@@ -287,16 +311,32 @@ async function onTagMenuAction(action: string) {
         break
       }
       case 'delete-remote': {
+        const id = repoStore.activeRepoId
+        if (!id) break
+        const remote = await pickRemote(id)
+        if (!remote) break
+        const remoteTag = (await git.listRemoteTags(id, remote))
+          .find((candidate) => candidate.name === tag.name)
+        if (!isCurrentTag(id, tag)) {
+          showError(t('sidebar.tag.contextChanged'))
+          break
+        }
+        if (!remoteTag) {
+          showError(t('sidebar.tag.remoteTagMissing', { name: tag.name, remote }))
+          break
+        }
         openConfirm(
           t('sidebar.tag.menu.deleteRemote'),
-          t('sidebar.tag.confirmDeleteRemote', { name: tag.name }),
+          t('sidebar.tag.confirmDeleteRemote', {
+            name: tag.name,
+            remote,
+            oid: shortOid(remoteTag.ref_oid),
+          }),
           async () => {
-            const id = repoStore.activeRepoId
-            if (!id) return
-            const remote = await pickRemote(id)
-            if (remote) {
-              await historyStore.deleteRemoteTag(tag.name, remote)
+            if (!isCurrentTag(id, tag)) {
+              throw new Error(t('sidebar.tag.contextChanged'))
             }
+            await historyStore.deleteRemoteTag(tag.name, remote, remoteTag.ref_oid)
           },
           {
             confirmLabel: t('sidebar.tag.menu.deleteRemote'),
