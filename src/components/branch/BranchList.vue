@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, reactive } from 'vue'
+import { ref, computed, nextTick, reactive } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useHistoryStore } from '@/stores/history'
 import { useWorkspaceStore } from '@/stores/workspace'
@@ -16,6 +16,7 @@ const repoStore = useRepoStore()
 const branchSwitch = reactive(useBranchSwitch())
 
 const newBranchName = ref('')
+const newBranchInput = ref<HTMLInputElement | null>(null)
 const showNewBranch = ref(false)
 const newBranchRepoId = ref<string | null>(null)
 const newBranchFromOid = ref<string | undefined>()
@@ -83,7 +84,7 @@ async function createBranch() {
   }
 }
 
-function toggleNewBranch() {
+async function toggleNewBranch() {
   if (showNewBranch.value) {
     showNewBranch.value = false
     return
@@ -92,6 +93,12 @@ function toggleNewBranch() {
   newBranchFromOid.value = workspaceStore.status?.head_commit
   error.value = null
   showNewBranch.value = true
+  await nextTick()
+  newBranchInput.value?.focus()
+}
+
+function cancelNewBranch() {
+  showNewBranch.value = false
 }
 
 function requestDeleteBranch(branch: BranchInfo) {
@@ -140,17 +147,20 @@ function cancelDeleteBranch() {
       </button>
     </div>
 
-    <div v-if="showNewBranch" class="new-branch-form">
+    <form v-if="showNewBranch" class="new-branch-form" @submit.prevent="createBranch">
       <input
+        ref="newBranchInput"
         v-model="newBranchName"
         class="branch-input"
         :placeholder="t('branchList.namePlaceholder')"
         spellcheck="false"
         autocomplete="off"
-        @keydown.enter="createBranch"
+        @keydown.escape.stop="cancelNewBranch"
       />
-      <button class="btn-create" @click="createBranch">{{ t('branchList.create') }}</button>
-    </div>
+      <button type="submit" class="btn-create" :disabled="!newBranchName.trim()">
+        {{ t('branchList.create') }}
+      </button>
+    </form>
 
     <div v-if="error" class="error-msg">{{ error }}</div>
 
@@ -163,10 +173,15 @@ function cancelDeleteBranch() {
         :class="{ current: branch.is_head }"
       >
         <span class="branch-indicator" v-if="branch.is_head">*</span>
-        <span class="branch-name" @click="!branch.is_head && switchBranch(branch.name)">
+        <button
+          type="button"
+          class="branch-name"
+          :disabled="branch.is_head"
+          @click="switchBranch(branch.name)"
+        >
           {{ branch.name }}
           <span v-if="switchingTo === branch.name" class="switching">{{ t('branchList.switching') }}</span>
-        </span>
+        </button>
         <button
           v-if="!branch.is_head && branch.commit_oid"
           class="btn-delete"
@@ -286,6 +301,11 @@ function cancelDeleteBranch() {
   font-weight: 600;
 }
 
+.btn-create:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
 .error-msg {
   padding: 8px 12px;
   color: var(--accent-red);
@@ -328,16 +348,29 @@ function cancelDeleteBranch() {
 
 .branch-name {
   flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
   font-size: var(--font-md);
   cursor: pointer;
+  text-align: left;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+.branch-name:focus-visible {
+  outline: 1px solid var(--accent-blue);
+  outline-offset: 2px;
+}
+
 .branch-item.current .branch-name {
   color: var(--accent-green);
   cursor: default;
+  opacity: 1;
 }
 
 .branch-item.upstream {

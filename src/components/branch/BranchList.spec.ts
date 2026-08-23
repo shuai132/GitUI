@@ -19,19 +19,7 @@ const mocks = vi.hoisted(() => ({
     createBranch: vi.fn(),
   },
   workspace: { status: null as WorkspaceStatus | null },
-}))
-
-vi.mock('vue-i18n', () => ({
-  useI18n: () => ({
-    t: (key: string, params?: Record<string, unknown>) =>
-      `${key} ${Object.values(params ?? {}).join(' ')}`.trim(),
-  }),
-}))
-vi.mock('@/stores/repos', () => ({ useRepoStore: () => mocks.repo }))
-vi.mock('@/stores/history', () => ({ useHistoryStore: () => mocks.history }))
-vi.mock('@/stores/workspace', () => ({ useWorkspaceStore: () => mocks.workspace }))
-vi.mock('@/composables/useBranchSwitch', () => ({
-  useBranchSwitch: () => ({
+  branchSwitch: {
     requestSwitch: vi.fn(),
     dialogVisible: false,
     sourceBranch: '',
@@ -44,7 +32,20 @@ vi.mock('@/composables/useBranchSwitch', () => ({
     error: null,
     confirmSwitch: vi.fn(),
     cancelSwitch: vi.fn(),
+  },
+}))
+
+vi.mock('vue-i18n', () => ({
+  useI18n: () => ({
+    t: (key: string, params?: Record<string, unknown>) =>
+      `${key} ${Object.values(params ?? {}).join(' ')}`.trim(),
   }),
+}))
+vi.mock('@/stores/repos', () => ({ useRepoStore: () => mocks.repo }))
+vi.mock('@/stores/history', () => ({ useHistoryStore: () => mocks.history }))
+vi.mock('@/stores/workspace', () => ({ useWorkspaceStore: () => mocks.workspace }))
+vi.mock('@/composables/useBranchSwitch', () => ({
+  useBranchSwitch: () => mocks.branchSwitch,
 }))
 
 describe('BranchList guarded actions', () => {
@@ -53,6 +54,7 @@ describe('BranchList guarded actions', () => {
     mocks.history.branches = [{ ...branch }]
     mocks.history.deleteBranch.mockReset().mockResolvedValue(undefined)
     mocks.history.createBranch.mockReset().mockResolvedValue(undefined)
+    mocks.branchSwitch.requestSwitch.mockReset().mockResolvedValue(undefined)
     mocks.workspace.status = {
       staged: [],
       unstaged: [],
@@ -84,14 +86,14 @@ describe('BranchList guarded actions', () => {
     await input.setValue('feature/demo')
     mocks.repo.activeRepoId = 'repo-b'
 
-    await wrapper.find('.btn-create').trigger('click')
+    await wrapper.find('.new-branch-form').trigger('submit')
 
     expect(mocks.history.createBranch).not.toHaveBeenCalled()
     expect(wrapper.find('.error-msg').text()).toContain('branch.formContextChanged')
     expect(input.element.value).toBe('feature/demo')
 
     mocks.repo.activeRepoId = 'repo-a'
-    await wrapper.find('.btn-create').trigger('click')
+    await wrapper.find('.new-branch-form').trigger('submit')
     await flushPromises()
 
     expect(mocks.history.createBranch).toHaveBeenCalledWith(
@@ -99,5 +101,34 @@ describe('BranchList guarded actions', () => {
       'feature/demo',
       '2222222222222222222222222222222222222222',
     )
+  })
+
+  it('focuses the new branch form and lets Escape dismiss it', async () => {
+    const wrapper = shallowMount(BranchList, { attachTo: document.body })
+
+    await wrapper.find('.btn-new').trigger('click')
+    const input = wrapper.find<HTMLInputElement>('.branch-input')
+
+    expect(document.activeElement).toBe(input.element)
+    expect(wrapper.find<HTMLButtonElement>('.btn-create').element.disabled).toBe(true)
+
+    await input.setValue('feature/keyboard')
+    expect(wrapper.find<HTMLButtonElement>('.btn-create').element.disabled).toBe(false)
+    await input.trigger('keydown', { key: 'Escape' })
+
+    expect(wrapper.find('.new-branch-form').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('uses a native button for keyboard-accessible branch switching', async () => {
+    const wrapper = shallowMount(BranchList)
+    const branchButton = wrapper.find<HTMLButtonElement>('.branch-name')
+
+    expect(branchButton.element.tagName).toBe('BUTTON')
+    expect(branchButton.element.disabled).toBe(false)
+    await branchButton.trigger('click')
+    await flushPromises()
+
+    expect(mocks.branchSwitch.requestSwitch).toHaveBeenCalledWith('feature')
   })
 })
