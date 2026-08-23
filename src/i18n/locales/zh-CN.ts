@@ -1058,6 +1058,9 @@ const messages = {
     continue: '继续',
     skip: '跳过',
     abort: '中止',
+    aborting: '正在中止...',
+    confirmAbortTitle: '中止当前操作？',
+    abortContextChanged: '仓库或进行中的操作已变化，旧的中止请求已取消；请确认当前状态后重试。',
     conflicts: '冲突',
     resolveFirst: '请先解决所有冲突',
     generic: {

@@ -4,16 +4,23 @@ import { useI18n } from 'vue-i18n'
 import { storeToRefs } from 'pinia'
 import { useMergeRebaseStore } from '@/stores/mergeRebase'
 import { useWorkspaceStore } from '@/stores/workspace'
+import { useRepoStore } from '@/stores/repos'
+import { useGlobalToast } from '@/composables/useGlobalToast'
 import Modal from './Modal.vue'
+import ConfirmDialog from './ConfirmDialog.vue'
 
 const { t } = useI18n()
 const mr = useMergeRebaseStore()
 const workspaceStore = useWorkspaceStore()
+const repoStore = useRepoStore()
+const { showError } = useGlobalToast()
 const { repoState, isOngoing, isMerging, isRebasing, isCherryPicking, isReverting, busy } =
   storeToRefs(mr)
 
 const showContinueDialog = ref(false)
 const continueMessage = ref('')
+type AbortKind = 'merge' | 'rebase' | 'cherry_pick' | 'revert'
+const pendingAbort = ref<{ repoId: string; kind: AbortKind } | null>(null)
 
 const hasConflicts = computed(() => {
   const s = workspaceStore.status
@@ -95,21 +102,47 @@ async function onSkip() {
   }
 }
 
-async function onAbort() {
-  let msg = ''
-  if (isMerging.value) msg = t('ongoing.merge.confirmAbort')
-  else if (isRebasing.value) msg = t('ongoing.rebase.confirmAbort')
-  else if (isCherryPicking.value) msg = t('ongoing.cherryPick.confirmAbort')
-  else if (isReverting.value) msg = t('ongoing.revert.confirmAbort')
-  else return
-  if (!confirm(msg)) return
+function currentAbortKind(): AbortKind | null {
+  if (isMerging.value) return 'merge'
+  if (isRebasing.value) return 'rebase'
+  if (isCherryPicking.value) return 'cherry_pick'
+  if (isReverting.value) return 'revert'
+  return null
+}
+
+const abortMessage = computed(() => {
+  switch (pendingAbort.value?.kind) {
+    case 'merge': return t('ongoing.merge.confirmAbort')
+    case 'rebase': return t('ongoing.rebase.confirmAbort')
+    case 'cherry_pick': return t('ongoing.cherryPick.confirmAbort')
+    case 'revert': return t('ongoing.revert.confirmAbort')
+    default: return ''
+  }
+})
+
+function onAbort() {
+  const repoId = repoStore.activeRepoId
+  const kind = currentAbortKind()
+  if (!repoId || !kind) return
+  pendingAbort.value = { repoId, kind }
+}
+
+async function onConfirmAbort() {
+  const pending = pendingAbort.value
+  if (!pending || busy.value) return
+  if (repoStore.activeRepoId !== pending.repoId || currentAbortKind() !== pending.kind) {
+    pendingAbort.value = null
+    showError(t('ongoing.abortContextChanged'))
+    return
+  }
   try {
-    if (isMerging.value) await mr.abortMerge()
-    else if (isRebasing.value) await mr.abortRebase()
-    else if (isCherryPicking.value) await mr.abortCherryPick()
-    else if (isReverting.value) await mr.abortRevert()
+    if (pending.kind === 'merge') await mr.abortMerge()
+    else if (pending.kind === 'rebase') await mr.abortRebase()
+    else if (pending.kind === 'cherry_pick') await mr.abortCherryPick()
+    else await mr.abortRevert()
+    pendingAbort.value = null
   } catch {
-    /* ignore */
+    /* errorMap 已上屏；保留确认框以便重试或取消 */
   }
 }
 </script>
@@ -158,6 +191,18 @@ async function onAbort() {
         >{{ t('ongoing.merge.confirmContinue') }}</button>
       </template>
     </Modal>
+
+    <ConfirmDialog
+      :visible="pendingAbort !== null"
+      :title="t('ongoing.confirmAbortTitle')"
+      :message="abortMessage"
+      :confirm-label="t('ongoing.abort')"
+      :loading-label="t('ongoing.aborting')"
+      :danger="true"
+      :loading="busy"
+      @confirm="onConfirmAbort"
+      @cancel="pendingAbort = null"
+    />
   </div>
 </template>
 

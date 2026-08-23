@@ -1059,6 +1059,9 @@ const messages = {
     continue: 'Continue',
     skip: 'Skip',
     abort: 'Abort',
+    aborting: 'Aborting...',
+    confirmAbortTitle: 'Abort the current operation?',
+    abortContextChanged: 'The repository or operation changed, so the pending abort was cancelled. Review the current state and try again.',
     conflicts: 'Conflict',
     resolveFirst: 'Resolve all conflicts first',
     generic: {
