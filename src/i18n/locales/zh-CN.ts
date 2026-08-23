@@ -577,6 +577,7 @@ const messages = {
     },
     commit: {
       messagePlaceholder: '提交信息（Cmd+Enter 提交）',
+      summaryLengthHint: '首行是提交摘要：建议不超过 50 个字符，超过 72 个字符可能在历史列表中截断',
       amendLabel: '修补上次提交 (Amend)',
       amendUnbornHint: '（尚无历史提交）',
       stagedCount: '{count} 个文件已暂存',

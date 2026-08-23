@@ -27,6 +27,15 @@ const message = computed({
 const committing = ref(false)
 const commitError = ref<string | null>(null)
 const messageInputRef = ref<HTMLTextAreaElement | null>(null)
+const summaryLength = computed(() => {
+  const firstLine = message.value.split(/\r?\n/, 1)[0] ?? ''
+  return Array.from(firstLine).length
+})
+const summaryLengthState = computed(() => {
+  if (summaryLength.value > 72) return 'danger'
+  if (summaryLength.value > 50) return 'warning'
+  return 'normal'
+})
 
 watch(
   () => uiStore.focusCommitMessageSignal,
@@ -125,6 +134,14 @@ function autoResizeInput() {
         >
         <span>Amend</span>
       </label>
+      <span
+        class="summary-counter"
+        :class="`summary-counter--${summaryLengthState}`"
+        :title="t('workspace.commit.summaryLengthHint')"
+        :aria-label="t('workspace.commit.summaryLengthHint')"
+      >
+        {{ summaryLength }}/50
+      </span>
       <button
         class="btn-commit"
         :disabled="!canCommit"
@@ -154,7 +171,24 @@ function autoResizeInput() {
   display: flex;
   align-items: center;
   gap: 6px;
-  justify-content: space-between;
+}
+
+.summary-counter {
+  color: var(--text-secondary);
+  font-size: var(--font-sm);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.summary-counter--warning {
+  color: var(--accent-orange);
+}
+
+.summary-counter--danger {
+  color: var(--accent-red);
+  font-weight: 600;
 }
 
 .amend-row {
@@ -221,6 +255,7 @@ function autoResizeInput() {
   transition: opacity 0.15s;
   flex-shrink: 0;
   white-space: nowrap;
+  margin-left: auto;
 }
 
 .btn-commit:hover:not(:disabled) {

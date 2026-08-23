@@ -48,4 +48,33 @@ describe('WipCommitBox', () => {
     expect(input.element.selectionStart).toBe(input.element.value.length)
     wrapper.unmount()
   })
+
+  it('guides the first-line summary length without counting the body twice', async () => {
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    const wrapper = mount(WipCommitBox, {
+      props: { isUnborn: false, stagedCount: 1 },
+      global: { plugins: [pinia] },
+    })
+    const input = wrapper.find<HTMLTextAreaElement>('.message-input')
+    const counter = wrapper.find('.summary-counter')
+
+    await input.setValue('a'.repeat(50))
+    expect(counter.text()).toBe('50/50')
+    expect(counter.classes()).toContain('summary-counter--normal')
+
+    await input.setValue('a'.repeat(51))
+    expect(counter.text()).toBe('51/50')
+    expect(counter.classes()).toContain('summary-counter--warning')
+
+    await input.setValue('a'.repeat(72))
+    expect(counter.classes()).toContain('summary-counter--warning')
+
+    await input.setValue('a'.repeat(73))
+    expect(counter.classes()).toContain('summary-counter--danger')
+
+    await input.setValue(`😀中文\n\n${'body'.repeat(30)}`)
+    expect(counter.text()).toBe('3/50')
+    expect(counter.attributes('title')).toBe('workspace.commit.summaryLengthHint')
+  })
 })

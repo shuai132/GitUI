@@ -578,6 +578,7 @@ const messages = {
     },
     commit: {
       messagePlaceholder: 'Commit message (Cmd+Enter to commit)',
+      summaryLengthHint: 'The first line is the commit summary: aim for 50 characters or fewer; history views may truncate after 72',
       amendLabel: 'Amend previous commit',
       amendUnbornHint: ' (no previous commit)',
       stagedCount: '{count} file(s) staged',
