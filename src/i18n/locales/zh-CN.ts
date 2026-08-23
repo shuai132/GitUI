@@ -592,6 +592,7 @@ const messages = {
     },
   },
   remote: {
+    formContextChanged: '打开表单后当前仓库已变化；请切回原仓库继续，或关闭后重新打开表单。',
     edit: {
       title: '编辑 Remote',
     },

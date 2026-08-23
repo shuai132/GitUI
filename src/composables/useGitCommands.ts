@@ -477,8 +477,19 @@ export function useGitCommands() {
   const addRemote = (repoId: string, name: string, url: string) =>
     call<void>('add_remote', { repoId, name, url })
 
-  const editRemote = (repoId: string, oldName: string, newName: string, newUrl: string) =>
-    call<void>('edit_remote', { repoId, oldName, newName, newUrl })
+  const editRemote = (
+    repoId: string,
+    oldName: string,
+    newName: string,
+    newUrl: string,
+    expectedOldUrl: string | null,
+  ) => call<void>('edit_remote', {
+    repoId,
+    oldName,
+    newName,
+    newUrl,
+    expectedOldUrl,
+  })
 
   const removeRemote = (
     repoId: string,

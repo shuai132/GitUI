@@ -22,6 +22,7 @@ const name = ref('')
 const url = ref('')
 const submitting = ref(false)
 const error = ref<string | null>(null)
+const openedRepoId = ref<string | null>(null)
 
 watch(
   () => props.visible,
@@ -31,6 +32,7 @@ watch(
     url.value = ''
     submitting.value = false
     error.value = null
+    openedRepoId.value = repoStore.activeRepoId
   },
 )
 
@@ -40,8 +42,11 @@ const canSubmit = computed(
 
 async function onSubmit() {
   if (!canSubmit.value) return
-  const repoId = repoStore.activeRepoId
-  if (!repoId) return
+  const repoId = openedRepoId.value
+  if (!repoId || repoStore.activeRepoId !== repoId) {
+    error.value = t('remote.formContextChanged')
+    return
+  }
   submitting.value = true
   error.value = null
   try {

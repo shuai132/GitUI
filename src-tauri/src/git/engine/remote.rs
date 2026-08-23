@@ -718,8 +718,24 @@ impl GitEngine {
     }
 
     /// 修改 remote 的名称和/或 URL。
-    pub fn edit_remote(path: &str, old_name: &str, new_name: &str, new_url: &str) -> GitResult<()> {
+    pub fn edit_remote(
+        path: &str,
+        old_name: &str,
+        new_name: &str,
+        new_url: &str,
+        expected_old_url: Option<&str>,
+    ) -> GitResult<()> {
         let repo = Self::open(path)?;
+        let remote = repo.find_remote(old_name)?;
+        let current_url = remote.url();
+        if current_url != expected_old_url {
+            return Err(GitError::OperationFailed(format!(
+                "Remote target changed: {old_name} expected URL {}, current URL {}",
+                expected_old_url.unwrap_or("missing"),
+                current_url.unwrap_or("missing")
+            )));
+        }
+        drop(remote);
         if old_name != new_name {
             repo.remote_rename(old_name, new_name)?;
         }
@@ -767,5 +783,51 @@ mod tests {
         .unwrap();
 
         assert!(repo.find_remote("origin").is_err());
+    }
+
+    #[test]
+    fn edit_remote_rejects_a_changed_url() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let repo = Repository::init(temp_dir.path()).unwrap();
+        repo.remote("origin", "https://example.com/current.git")
+            .unwrap();
+
+        let result = GitEngine::edit_remote(
+            temp_dir.path().to_str().unwrap(),
+            "origin",
+            "upstream",
+            "https://example.com/new.git",
+            Some("https://example.com/expected.git"),
+        );
+
+        assert!(result.is_err());
+        assert_eq!(
+            repo.find_remote("origin").unwrap().url(),
+            Some("https://example.com/current.git")
+        );
+        assert!(repo.find_remote("upstream").is_err());
+    }
+
+    #[test]
+    fn edit_remote_accepts_the_exact_original_target() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let repo = Repository::init(temp_dir.path()).unwrap();
+        repo.remote("origin", "https://example.com/current.git")
+            .unwrap();
+
+        GitEngine::edit_remote(
+            temp_dir.path().to_str().unwrap(),
+            "origin",
+            "upstream",
+            "https://example.com/new.git",
+            Some("https://example.com/current.git"),
+        )
+        .unwrap();
+
+        assert!(repo.find_remote("origin").is_err());
+        assert_eq!(
+            repo.find_remote("upstream").unwrap().url(),
+            Some("https://example.com/new.git")
+        );
     }
 }

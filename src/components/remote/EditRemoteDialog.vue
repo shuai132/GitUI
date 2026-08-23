@@ -25,6 +25,8 @@ const name = ref('')
 const url = ref('')
 const submitting = ref(false)
 const error = ref<string | null>(null)
+const openedRepoId = ref<string | null>(null)
+const originalTarget = ref<RemoteInfo | null>(null)
 
 watch(
   () => props.visible,
@@ -34,6 +36,8 @@ watch(
     url.value = props.target?.url ?? ''
     submitting.value = false
     error.value = null
+    openedRepoId.value = repoStore.activeRepoId
+    originalTarget.value = props.target ? { ...props.target } : null
   },
 )
 
@@ -43,12 +47,23 @@ const canSubmit = computed(
 
 async function onSubmit() {
   if (!canSubmit.value) return
-  const repoId = repoStore.activeRepoId
-  if (!repoId || !props.target) return
+  const repoId = openedRepoId.value
+  const target = originalTarget.value
+  if (!repoId || repoStore.activeRepoId !== repoId) {
+    error.value = t('remote.formContextChanged')
+    return
+  }
+  if (!target) return
   submitting.value = true
   error.value = null
   try {
-    await editRemote(repoId, props.target.name, name.value.trim(), url.value.trim())
+    await editRemote(
+      repoId,
+      target.name,
+      name.value.trim(),
+      url.value.trim(),
+      target.url,
+    )
     emit('success')
     emit('close')
   } catch (e: unknown) {

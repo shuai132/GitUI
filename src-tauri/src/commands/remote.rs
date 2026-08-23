@@ -198,11 +198,18 @@ pub async fn edit_remote(
     old_name: String,
     new_name: String,
     new_url: String,
+    expected_old_url: Option<String>,
     repo_manager: State<'_, RepoManager>,
 ) -> Result<(), GitError> {
     log::debug!("[edit_remote] old={old_name} new={new_name} url={new_url}");
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    GitEngine::edit_remote(&meta.path, &old_name, &new_name, &new_url)
+    GitEngine::edit_remote(
+        &meta.path,
+        &old_name,
+        &new_name,
+        &new_url,
+        expected_old_url.as_deref(),
+    )
 }
