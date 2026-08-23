@@ -188,6 +188,7 @@ const messages = {
         urlRequired: '请填写远程地址',
         parentRequired: '请选择克隆到的父目录',
         nameInvalid: '目录名不能包含 / 或 \\',
+        depthInvalid: '深度必须是小于等于 2,147,483,647 的正整数',
       },
     },
     init: {

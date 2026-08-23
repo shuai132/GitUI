@@ -188,6 +188,7 @@ const messages = {
         urlRequired: 'Please enter a remote URL',
         parentRequired: 'Please pick a parent directory',
         nameInvalid: 'Directory name cannot contain / or \\',
+        depthInvalid: 'Depth must be a positive whole number no greater than 2,147,483,647',
       },
     },
     init: {

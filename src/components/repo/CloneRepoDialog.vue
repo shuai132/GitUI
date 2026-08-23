@@ -21,7 +21,7 @@ const repoStore = useRepoStore()
 const url = ref('')
 const parentDir = ref('')
 const customName = ref('')
-const depthStr = ref('')
+const depthStr = ref<string | number>('')
 const recurseSubmodules = ref(false)
 const submitting = ref(false)
 const error = ref<string | null>(null)
@@ -40,6 +40,7 @@ const progressStage = ref<string>('')
 const progressPct = ref<number>(0)
 const sidebandLines = ref<string[]>([])
 let unlistenProgress: UnlistenFn | null = null
+const MAX_CLONE_DEPTH = 2_147_483_647
 
 onMounted(async () => {
   unlistenProgress = await listen<ProgressPayload>(
@@ -82,12 +83,20 @@ const finalPath = computed(() => {
 })
 
 const nameInvalid = computed(() => /[\\/]/.test(customName.value))
+const depthInvalid = computed(() => {
+  const value = String(depthStr.value).trim()
+  if (!value) return false
+  if (!/^[1-9]\d*$/.test(value)) return true
+  const depth = Number(value)
+  return !Number.isSafeInteger(depth) || depth > MAX_CLONE_DEPTH
+})
 
 const canSubmit = computed(() => {
   return (
     !!url.value.trim() &&
     !!parentDir.value &&
     !nameInvalid.value &&
+    !depthInvalid.value &&
     !submitting.value
   )
 })
@@ -131,11 +140,9 @@ function onParentDirChange() {
 }
 
 function parseDepth(): number | undefined {
-  const s = depthStr.value.trim()
+  const s = String(depthStr.value).trim()
   if (!s) return undefined
-  const n = Number.parseInt(s, 10)
-  if (!Number.isFinite(n) || n <= 0) return undefined
-  return n
+  return Number(s)
 }
 
 async function onSubmit() {
@@ -152,6 +159,10 @@ async function onSubmit() {
   }
   if (nameInvalid.value) {
     error.value = t('repo.clone.errors.nameInvalid')
+    return
+  }
+  if (depthInvalid.value) {
+    error.value = t('repo.clone.errors.depthInvalid')
     return
   }
 
@@ -266,6 +277,7 @@ const stageLabel = computed(() => {
           class="form-control form-control--narrow"
           type="number"
           min="1"
+          :max="MAX_CLONE_DEPTH"
           step="1"
           :placeholder="t('repo.clone.depthPlaceholder')"
           :disabled="submitting"
@@ -303,6 +315,9 @@ const stageLabel = computed(() => {
 
     <div v-if="nameInvalid" class="form-error">
       {{ t('repo.clone.errors.nameInvalid') }}
+    </div>
+    <div v-if="depthInvalid" class="form-error">
+      {{ t('repo.clone.errors.depthInvalid') }}
     </div>
     <div v-if="error" class="form-error">{{ error }}</div>
 
