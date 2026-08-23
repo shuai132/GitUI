@@ -510,6 +510,7 @@ const messages = {
     noRepo: '请先打开一个 Git 仓库',
   },
   branch: {
+    formContextChanged: '打开表单后仓库或引用目标已变化；请切回原仓库继续，或关闭后重新打开表单。',
     create: {
       titleOnCommit: '在此提交上创建分支',
       titleFromHead: '基于 HEAD 创建分支',
@@ -546,6 +547,7 @@ const messages = {
     confirmDeleteRemote: '确认删除远程分支 "{name}"？',
   },
   tag: {
+    formContextChanged: '打开表单后仓库或提交目标已变化；请切回原仓库继续，或关闭后重新打开表单。',
     create: {
       title: '创建标签',
       titleAnnotated: '创建附注标签',

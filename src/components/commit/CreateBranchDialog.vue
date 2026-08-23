@@ -4,6 +4,8 @@ import { useI18n } from 'vue-i18n'
 import type { CommitInfo } from '@/types/git'
 import Modal from '@/components/common/Modal.vue'
 import { useHistoryStore } from '@/stores/history'
+import { useRepoStore } from '@/stores/repos'
+import { useWorkspaceStore } from '@/stores/workspace'
 
 const { t } = useI18n()
 
@@ -17,27 +19,28 @@ const emit = defineEmits<{
 }>()
 
 const historyStore = useHistoryStore()
+const repoStore = useRepoStore()
+const workspaceStore = useWorkspaceStore()
 
 const branchName = ref('')
 const switchAfterCreate = ref(true)
 const submitting = ref(false)
 const error = ref<string | null>(null)
 const inputEl = ref<HTMLInputElement | null>(null)
+const openedRepoId = ref<string | null>(null)
+const openedCommit = ref<CommitInfo | null>(null)
+const openedFromOid = ref<string | undefined>()
+const openedLocalNames = ref<Set<string>>(new Set())
 
 /** 已有本地分支名集合，用于冲突检测 */
-const existingLocalNames = computed(() => {
-  return new Set(
-    historyStore.branches.filter((b) => !b.is_remote).map((b) => b.name),
-  )
-})
-
 const nameConflict = computed(
-  () => !!branchName.value.trim() && existingLocalNames.value.has(branchName.value.trim()),
+  () => !!branchName.value.trim() && openedLocalNames.value.has(branchName.value.trim()),
 )
 
 const canSubmit = computed(
   () =>
     !!branchName.value.trim() &&
+    !!openedFromOid.value &&
     !nameConflict.value &&
     !submitting.value,
 )
@@ -51,6 +54,12 @@ watch(
     switchAfterCreate.value = true
     error.value = null
     submitting.value = false
+    openedRepoId.value = repoStore.activeRepoId
+    openedCommit.value = props.commit ? { ...props.commit } : null
+    openedFromOid.value = props.commit?.oid ?? workspaceStore.status?.head_commit
+    openedLocalNames.value = new Set(
+      historyStore.branches.filter((branch) => !branch.is_remote).map((branch) => branch.name),
+    )
     await nextTick()
     inputEl.value?.focus()
   },
@@ -60,13 +69,18 @@ watch(
 async function onSubmit() {
   if (!canSubmit.value) return
   const name = branchName.value.trim()
+  const repoId = openedRepoId.value
+  const fromOid = openedFromOid.value
+  if (!repoId || !fromOid || repoStore.activeRepoId !== repoId) {
+    error.value = t('branch.formContextChanged')
+    return
+  }
   submitting.value = true
   error.value = null
   try {
-    // commit=null → 基于当前 HEAD 创建分支
-    await historyStore.createBranch(name, props.commit?.oid)
+    await historyStore.createBranch(repoId, name, fromOid)
     if (switchAfterCreate.value) {
-      await historyStore.switchBranch(name)
+      await historyStore.switchBranchInRepo(repoId, name)
     }
     emit('close')
   } catch (e: unknown) {
@@ -84,14 +98,14 @@ function onCancel() {
 <template>
   <Modal
     :visible="visible"
-    :title="commit ? t('branch.create.titleOnCommit') : t('branch.create.titleFromHead')"
+    :title="openedCommit ? t('branch.create.titleOnCommit') : t('branch.create.titleFromHead')"
     width="460px"
     @close="onCancel"
   >
-    <div v-if="commit" class="commit-hint">
+    <div v-if="openedCommit" class="commit-hint">
       {{ t('branch.create.hintOnCommitPrefix') }}
-      <span class="hint-sha">{{ commit.short_oid }}</span>
-      <span class="hint-summary">{{ commit.summary }}</span>
+      <span class="hint-sha">{{ openedCommit.short_oid }}</span>
+      <span class="hint-summary">{{ openedCommit.summary }}</span>
       {{ t('branch.create.hintOnCommitSuffix') }}
     </div>
     <div v-else class="commit-hint">

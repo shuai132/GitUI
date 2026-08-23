@@ -17,6 +17,8 @@ const branchSwitch = reactive(useBranchSwitch())
 
 const newBranchName = ref('')
 const showNewBranch = ref(false)
+const newBranchRepoId = ref<string | null>(null)
+const newBranchFromOid = ref<string | undefined>()
 const switchingTo = ref<string | null>(null)
 const error = ref<string | null>(null)
 const pendingDelete = ref<{
@@ -65,14 +67,31 @@ async function switchBranch(name: string) {
 
 async function createBranch() {
   if (!newBranchName.value.trim()) return
+  const repoId = newBranchRepoId.value
+  const fromOid = newBranchFromOid.value
+  if (!repoId || !fromOid || repoStore.activeRepoId !== repoId) {
+    error.value = t('branch.formContextChanged')
+    return
+  }
   error.value = null
   try {
-    await historyStore.createBranch(newBranchName.value.trim())
+    await historyStore.createBranch(repoId, newBranchName.value.trim(), fromOid)
     newBranchName.value = ''
     showNewBranch.value = false
   } catch (e: unknown) {
     error.value = String(e)
   }
+}
+
+function toggleNewBranch() {
+  if (showNewBranch.value) {
+    showNewBranch.value = false
+    return
+  }
+  newBranchRepoId.value = repoStore.activeRepoId
+  newBranchFromOid.value = workspaceStore.status?.head_commit
+  error.value = null
+  showNewBranch.value = true
 }
 
 function requestDeleteBranch(branch: BranchInfo) {
@@ -116,7 +135,7 @@ function cancelDeleteBranch() {
 <template>
   <div class="branch-list">
     <div class="branch-actions">
-      <button class="btn-new" @click="showNewBranch = !showNewBranch">
+      <button class="btn-new" @click="toggleNewBranch">
         {{ t('branchList.newBranch') }}
       </button>
     </div>

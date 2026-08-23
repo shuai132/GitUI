@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import type { CommitInfo } from '@/types/git'
 import Modal from '@/components/common/Modal.vue'
 import { useHistoryStore } from '@/stores/history'
+import { useRepoStore } from '@/stores/repos'
 
 const { t } = useI18n()
 
@@ -18,21 +19,25 @@ const emit = defineEmits<{
 }>()
 
 const historyStore = useHistoryStore()
+const repoStore = useRepoStore()
 
 const tagName = ref('')
 const tagMessage = ref('')
 const submitting = ref(false)
 const error = ref<string | null>(null)
 const nameInputEl = ref<HTMLInputElement | null>(null)
+const openedRepoId = ref<string | null>(null)
+const openedCommit = ref<CommitInfo | null>(null)
+const openedAnnotated = ref(false)
 
 const title = computed(() =>
-  props.annotated ? t('tag.create.titleAnnotated') : t('tag.create.title'),
+  openedAnnotated.value ? t('tag.create.titleAnnotated') : t('tag.create.title'),
 )
 
 const canSubmit = computed(() => {
-  if (!props.commit || submitting.value) return false
+  if (!openedCommit.value || submitting.value) return false
   if (!tagName.value.trim()) return false
-  if (props.annotated && !tagMessage.value.trim()) return false
+  if (openedAnnotated.value && !tagMessage.value.trim()) return false
   return true
 })
 
@@ -44,6 +49,9 @@ watch(
     tagMessage.value = ''
     error.value = null
     submitting.value = false
+    openedRepoId.value = repoStore.activeRepoId
+    openedCommit.value = props.commit ? { ...props.commit } : null
+    openedAnnotated.value = props.annotated
     await nextTick()
     nameInputEl.value?.focus()
   },
@@ -51,13 +59,19 @@ watch(
 )
 
 async function onSubmit() {
-  if (!canSubmit.value || !props.commit) return
+  if (!canSubmit.value) return
+  const repoId = openedRepoId.value
+  const commit = openedCommit.value
+  if (!repoId || !commit || repoStore.activeRepoId !== repoId) {
+    error.value = t('tag.formContextChanged')
+    return
+  }
   const name = tagName.value.trim()
-  const message = props.annotated ? tagMessage.value.trim() : null
+  const message = openedAnnotated.value ? tagMessage.value.trim() : null
   submitting.value = true
   error.value = null
   try {
-    await historyStore.createTag(name, props.commit.oid, message)
+    await historyStore.createTag(repoId, name, commit.oid, message)
     emit('close')
   } catch (e: unknown) {
     error.value = String(e)
@@ -73,10 +87,10 @@ function onCancel() {
 
 <template>
   <Modal :visible="visible" :title="title" width="480px" @close="onCancel">
-    <div v-if="commit" class="commit-hint">
+    <div v-if="openedCommit" class="commit-hint">
       {{ t('tag.create.hintOnCommitPrefix') }}
-      <span class="hint-sha">{{ commit.short_oid }}</span>
-      <span class="hint-summary">{{ commit.summary }}</span>
+      <span class="hint-sha">{{ openedCommit.short_oid }}</span>
+      <span class="hint-summary">{{ openedCommit.summary }}</span>
       {{ t('tag.create.hintOnCommitSuffix') }}
     </div>
 
@@ -90,11 +104,11 @@ function onCancel() {
         :placeholder="t('tag.create.namePlaceholder')"
         spellcheck="false"
         autocomplete="off"
-        @keydown.enter="!annotated && onSubmit()"
+        @keydown.enter="!openedAnnotated && onSubmit()"
       />
     </div>
 
-    <div v-if="annotated" class="form-row form-row--top">
+    <div v-if="openedAnnotated" class="form-row form-row--top">
       <label class="form-label">{{ t('tag.create.messageLabel') }}</label>
       <textarea
         v-model="tagMessage"

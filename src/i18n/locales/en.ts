@@ -511,6 +511,7 @@ const messages = {
     noRepo: 'Open a Git repository first',
   },
   branch: {
+    formContextChanged: 'The repository or reference target changed after this form opened. Switch back to the original repository or reopen the form.',
     create: {
       titleOnCommit: 'Create branch at this commit',
       titleFromHead: 'Create branch from HEAD',
@@ -547,6 +548,7 @@ const messages = {
     confirmDeleteRemote: 'Delete remote branch "{name}"?',
   },
   tag: {
+    formContextChanged: 'The repository or commit target changed after this form opened. Switch back to the original repository or reopen the form.',
     create: {
       title: 'Create tag',
       titleAnnotated: 'Create annotated tag',

@@ -1,6 +1,6 @@
 import { flushPromises, shallowMount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { BranchInfo } from '@/types/git'
+import type { BranchInfo, WorkspaceStatus } from '@/types/git'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import BranchList from './BranchList.vue'
 
@@ -18,7 +18,7 @@ const mocks = vi.hoisted(() => ({
     deleteBranch: vi.fn(),
     createBranch: vi.fn(),
   },
-  workspace: { status: null },
+  workspace: { status: null as WorkspaceStatus | null },
 }))
 
 vi.mock('vue-i18n', () => ({
@@ -47,11 +47,21 @@ vi.mock('@/composables/useBranchSwitch', () => ({
   }),
 }))
 
-describe('BranchList guarded deletion', () => {
+describe('BranchList guarded actions', () => {
   beforeEach(() => {
     mocks.repo.activeRepoId = 'repo-a'
     mocks.history.branches = [{ ...branch }]
     mocks.history.deleteBranch.mockReset().mockResolvedValue(undefined)
+    mocks.history.createBranch.mockReset().mockResolvedValue(undefined)
+    mocks.workspace.status = {
+      staged: [],
+      unstaged: [],
+      untracked: [],
+      head_branch: 'main',
+      head_commit: '2222222222222222222222222222222222222222',
+      is_detached: false,
+      repo_state: { kind: 'clean' },
+    }
   })
 
   it('uses an in-app confirmation and the displayed branch target', async () => {
@@ -65,5 +75,29 @@ describe('BranchList guarded deletion', () => {
     await flushPromises()
 
     expect(mocks.history.deleteBranch).toHaveBeenCalledWith('feature', branch.commit_oid)
+  })
+
+  it('preserves an inline branch form instead of applying it to another repository', async () => {
+    const wrapper = shallowMount(BranchList)
+    await wrapper.find('.btn-new').trigger('click')
+    const input = wrapper.find<HTMLInputElement>('.branch-input')
+    await input.setValue('feature/demo')
+    mocks.repo.activeRepoId = 'repo-b'
+
+    await wrapper.find('.btn-create').trigger('click')
+
+    expect(mocks.history.createBranch).not.toHaveBeenCalled()
+    expect(wrapper.find('.error-msg').text()).toContain('branch.formContextChanged')
+    expect(input.element.value).toBe('feature/demo')
+
+    mocks.repo.activeRepoId = 'repo-a'
+    await wrapper.find('.btn-create').trigger('click')
+    await flushPromises()
+
+    expect(mocks.history.createBranch).toHaveBeenCalledWith(
+      'repo-a',
+      'feature/demo',
+      '2222222222222222222222222222222222222222',
+    )
   })
 })

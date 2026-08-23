@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import type { BranchInfo } from '@/types/git'
 import Modal from '@/components/common/Modal.vue'
 import { useHistoryStore } from '@/stores/history'
+import { useRepoStore } from '@/stores/repos'
 
 const { t } = useI18n()
 
@@ -19,21 +20,16 @@ const emit = defineEmits<{
 }>()
 
 const historyStore = useHistoryStore()
+const repoStore = useRepoStore()
 
 const selectedRemote = ref<string>('')
 const localName = ref<string>('')
 const track = ref<boolean>(true)
 const submitting = ref<boolean>(false)
 const error = ref<string | null>(null)
-
-/** 已有的本地分支名集合，用于本地名冲突检测 */
-const existingLocalNames = computed(() => {
-  return new Set(
-    historyStore.branches
-      .filter((b) => !b.is_remote)
-      .map((b) => b.name),
-  )
-})
+const openedRepoId = ref<string | null>(null)
+const openedRemoteBranches = ref<BranchInfo[]>([])
+const openedLocalNames = ref<Set<string>>(new Set())
 
 /** 从远程分支 origin/copilot/foo 去掉第一段得到 copilot/foo */
 function stripRemotePrefix(fullName: string): string {
@@ -48,9 +44,14 @@ watch(
     // 重置状态
     error.value = null
     submitting.value = false
+    openedRepoId.value = repoStore.activeRepoId
+    openedRemoteBranches.value = props.remoteBranches.map((branch) => ({ ...branch }))
+    openedLocalNames.value = new Set(
+      historyStore.branches.filter((branch) => !branch.is_remote).map((branch) => branch.name),
+    )
     const initial =
       props.initialRemote ??
-      props.remoteBranches.find((b) => !b.name.endsWith('/HEAD'))?.name ??
+      openedRemoteBranches.value.find((branch) => !branch.name.endsWith('/HEAD'))?.name ??
       ''
     selectedRemote.value = initial
   },
@@ -66,16 +67,22 @@ const canSubmit = computed(
   () =>
     !!selectedRemote.value &&
     !!localName.value.trim() &&
-    !existingLocalNames.value.has(localName.value.trim()) &&
+    !openedLocalNames.value.has(localName.value.trim()) &&
     !submitting.value,
 )
 
 async function onCheckout() {
   if (!canSubmit.value) return
+  const repoId = openedRepoId.value
+  if (!repoId || repoStore.activeRepoId !== repoId) {
+    error.value = t('branch.formContextChanged')
+    return
+  }
   submitting.value = true
   error.value = null
   try {
     await historyStore.checkoutRemoteBranch(
+      repoId,
       selectedRemote.value,
       localName.value.trim(),
       track.value,
@@ -100,7 +107,7 @@ function onCancel() {
       <label class="form-label">{{ t('branch.checkoutRemote.remoteLabel') }}</label>
       <select v-model="selectedRemote" class="form-control">
         <option
-          v-for="b in remoteBranches"
+          v-for="b in openedRemoteBranches"
           :key="b.name"
           :value="b.name"
           :disabled="b.name.endsWith('/HEAD')"
@@ -129,7 +136,7 @@ function onCancel() {
     </div>
 
     <div
-      v-if="localName && existingLocalNames.has(localName.trim())"
+      v-if="localName && openedLocalNames.has(localName.trim())"
       class="form-error"
     >
       {{ t('branch.checkoutRemote.errorNameConflict', { name: localName }) }}

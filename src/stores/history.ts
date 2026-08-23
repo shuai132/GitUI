@@ -496,18 +496,20 @@ export const useHistoryStore = defineStore('history', () => {
     await loadFileDiff(selectedFileDiffIndex.value, true)
   }
 
-  async function createBranch(name: string, fromOid?: string) {
-    const repoStore = useRepoStore()
-    if (!repoStore.activeRepoId) return
-    await git.createBranch(repoStore.activeRepoId, name, fromOid)
-    await loadBranches()
+  async function createBranch(repoId: string, name: string, fromOid?: string) {
+    await git.createBranch(repoId, name, fromOid)
+    if (isActiveRepo(repoId)) await loadBranches()
   }
 
   async function switchBranch(name: string, force = false) {
     const repoStore = useRepoStore()
     if (!repoStore.activeRepoId) return
-    await git.switchBranch(repoStore.activeRepoId, name, force)
-    await Promise.all([loadLog(), loadBranches()])
+    await switchBranchInRepo(repoStore.activeRepoId, name, force)
+  }
+
+  async function switchBranchInRepo(repoId: string, name: string, force = false) {
+    await git.switchBranch(repoId, name, force)
+    if (isActiveRepo(repoId)) await Promise.all([loadLog(), loadBranches()])
   }
 
   async function deleteBranch(name: string, expectedOid: string) {
@@ -525,19 +527,18 @@ export const useHistoryStore = defineStore('history', () => {
   }
 
   async function checkoutRemoteBranch(
+    repoId: string,
     remoteBranch: string,
     localName: string,
     track: boolean,
   ) {
-    const repoStore = useRepoStore()
-    if (!repoStore.activeRepoId) return
     await git.checkoutRemoteBranch(
-      repoStore.activeRepoId,
+      repoId,
       remoteBranch,
       localName,
       track,
     )
-    await Promise.all([loadLog(), loadBranches()])
+    if (isActiveRepo(repoId)) await Promise.all([loadLog(), loadBranches()])
   }
 
   // ── 提交级操作 ────────────────────────────────────────────────────
@@ -604,11 +605,9 @@ export const useHistoryStore = defineStore('history', () => {
     }
   }
 
-  async function createTag(name: string, oid: string, message: string | null) {
-    const repoStore = useRepoStore()
-    if (!repoStore.activeRepoId) return
-    await git.createTag(repoStore.activeRepoId, name, oid, message)
-    await loadTags()
+  async function createTag(repoId: string, name: string, oid: string, message: string | null) {
+    await git.createTag(repoId, name, oid, message)
+    if (isActiveRepo(repoId)) await loadTags()
   }
 
   async function deleteTag(name: string, expectedOid?: string) {
@@ -806,6 +805,7 @@ export const useHistoryStore = defineStore('history', () => {
     selectFirstOrderedFileDiff,
     createBranch,
     switchBranch,
+    switchBranchInRepo,
     deleteBranch,
     deleteRemoteBranch,
     checkoutRemoteBranch,
