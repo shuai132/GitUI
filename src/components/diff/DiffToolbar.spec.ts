@@ -54,6 +54,16 @@ describe('DiffToolbar whitespace toggle', () => {
     expect(wrapper.find('#diff-search-input').isVisible()).toBe(true)
   })
 
+  it('labels search result navigation with localized text', () => {
+    const wrapper = mountToolbar()
+    const buttons = wrapper.findAll('.search-nav-btn')
+
+    expect(buttons[0]?.attributes('title')).toBe('diff.toolbar.prevSearchResult')
+    expect(buttons[0]?.attributes('aria-label')).toBe('diff.toolbar.prevSearchResult')
+    expect(buttons[1]?.attributes('title')).toBe('diff.toolbar.nextSearchResult')
+    expect(buttons[1]?.attributes('aria-label')).toBe('diff.toolbar.nextSearchResult')
+  })
+
   it('toggles the persisted text-diff preference with a discoverable title', async () => {
     const wrapper = mountToolbar()
     const button = wrapper.find('.btn-ignore-whitespace')

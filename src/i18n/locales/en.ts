@@ -767,6 +767,8 @@ const messages = {
     toolbar: {
       prevChange: 'Previous change',
       nextChange: 'Next change',
+      prevSearchResult: 'Previous search result (Shift+Enter)',
+      nextSearchResult: 'Next search result (Enter)',
       ignoreWhitespace: 'Ignore all whitespace changes',
       showWhitespace: 'Show whitespace changes',
       syntaxHighlight: 'Syntax highlighting',

@@ -120,12 +120,24 @@ const canIgnoreWhitespace = computed(() =>
         </svg>
       </button>
       <div v-show="searchExpanded || uiStore.diffSearchQuery" class="search-nav">
-        <button class="search-nav-btn" title="Previous (Shift+Enter)" @click="findNext(true)">
+        <button
+          type="button"
+          class="search-nav-btn"
+          :title="t('diff.toolbar.prevSearchResult')"
+          :aria-label="t('diff.toolbar.prevSearchResult')"
+          @click="findNext(true)"
+        >
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <polyline points="18 15 12 9 6 15"/>
           </svg>
         </button>
-        <button class="search-nav-btn" title="Next (Enter)" @click="findNext(false)">
+        <button
+          type="button"
+          class="search-nav-btn"
+          :title="t('diff.toolbar.nextSearchResult')"
+          :aria-label="t('diff.toolbar.nextSearchResult')"
+          @click="findNext(false)"
+        >
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <polyline points="6 9 12 15 18 9"/>
           </svg>

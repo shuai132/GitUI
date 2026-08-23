@@ -766,6 +766,8 @@ const messages = {
     toolbar: {
       prevChange: '上一变更',
       nextChange: '下一变更',
+      prevSearchResult: '上一搜索结果（Shift+Enter）',
+      nextSearchResult: '下一搜索结果（Enter）',
       ignoreWhitespace: '忽略所有空白变更',
       showWhitespace: '显示空白变更',
       syntaxHighlight: '语法高亮',
