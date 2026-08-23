@@ -1067,6 +1067,122 @@ mod tests {
     }
 
     #[test]
+    fn stash_drop_rejects_a_changed_expected_target_without_deleting() {
+        let test_repo = TestRepo::new();
+        let path = test_repo.path_str();
+        fs::write(test_repo.dir.path().join("existing.txt"), "first stash\n").unwrap();
+        GitEngine::stash_push(path, Some("first stash")).unwrap();
+        fs::write(test_repo.dir.path().join("existing.txt"), "second stash\n").unwrap();
+        GitEngine::stash_push(path, Some("second stash")).unwrap();
+        let entries = GitEngine::stash_list(path).unwrap();
+        let older = entries.iter().find(|stash| stash.index == 1).unwrap();
+
+        let error = GitEngine::stash_drop(path, 0, Some(&older.commit_oid)).unwrap_err();
+
+        assert!(error.to_string().contains("Stash target changed"));
+        assert_eq!(GitEngine::stash_list(path).unwrap().len(), 2);
+
+        GitEngine::stash_drop(path, 1, Some(&older.commit_oid)).unwrap();
+        let remaining = GitEngine::stash_list(path).unwrap();
+        assert_eq!(remaining.len(), 1);
+        assert_ne!(remaining[0].commit_oid, older.commit_oid);
+    }
+
+    #[test]
+    fn confirmed_history_action_rejects_a_changed_head_without_resetting() {
+        let test_repo = TestRepo::new();
+        let path = test_repo.path_str();
+        let initial = test_repo
+            .repo
+            .head()
+            .unwrap()
+            .peel_to_commit()
+            .unwrap()
+            .id();
+        let current = commit_file(&test_repo, "current", "current.txt", "current\n");
+
+        let error = GitEngine::reset_to_commit(
+            path,
+            &initial.to_string(),
+            "soft",
+            Some(&initial.to_string()),
+            None,
+        )
+        .unwrap_err();
+
+        assert!(error
+            .to_string()
+            .contains("Confirmed Git action context changed"));
+        assert_eq!(
+            test_repo
+                .repo
+                .head()
+                .unwrap()
+                .peel_to_commit()
+                .unwrap()
+                .id(),
+            current
+        );
+
+        GitEngine::reset_to_commit(
+            path,
+            &initial.to_string(),
+            "soft",
+            Some(&current.to_string()),
+            None,
+        )
+        .unwrap();
+        assert_eq!(
+            test_repo
+                .repo
+                .head()
+                .unwrap()
+                .peel_to_commit()
+                .unwrap()
+                .id(),
+            initial
+        );
+    }
+
+    #[test]
+    fn confirmed_history_action_rejects_the_same_oid_on_another_branch() {
+        let test_repo = TestRepo::new();
+        let path = test_repo.path_str();
+        let initial = test_repo
+            .repo
+            .head()
+            .unwrap()
+            .peel_to_commit()
+            .unwrap()
+            .id();
+        let original_ref = test_repo.repo.head().unwrap().name().unwrap().to_string();
+        let initial_commit = test_repo.repo.find_commit(initial).unwrap();
+        test_repo
+            .repo
+            .branch("other", &initial_commit, false)
+            .unwrap();
+        drop(initial_commit);
+        test_repo.repo.set_head("refs/heads/other").unwrap();
+
+        let error = GitEngine::reset_to_commit(
+            path,
+            &initial.to_string(),
+            "soft",
+            Some(&initial.to_string()),
+            Some(&original_ref),
+        )
+        .unwrap_err();
+
+        assert!(error
+            .to_string()
+            .contains("Confirmed Git action context changed"));
+        assert_eq!(
+            test_repo.repo.head().unwrap().name(),
+            Some("refs/heads/other")
+        );
+    }
+
+    #[test]
     fn test_stash_diff_includes_untracked_and_staged_new_files() {
         let mut test_repo = TestRepo::new();
         let path = test_repo.path_str().to_string(); // clone to avoid lifetime issues if we mutably borrow repo

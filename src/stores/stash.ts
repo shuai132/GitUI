@@ -67,10 +67,10 @@ export const useStashStore = defineStore('stash', () => {
     await workspaceStore.refresh()
   }
 
-  async function drop(index: number) {
+  async function drop(index: number, expectedOid?: string) {
     const repoStore = useRepoStore()
     if (!repoStore.activeRepoId) return
-    await git.stashDrop(repoStore.activeRepoId, index)
+    await git.stashDrop(repoStore.activeRepoId, index, expectedOid)
     // drop 只删除 stash 条目，但历史图里若绘制了 stash 节点也要刷新
     const historyStore = useHistoryStore()
     await Promise.all([refresh(), historyStore.loadLog()])

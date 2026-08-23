@@ -542,32 +542,41 @@ export const useHistoryStore = defineStore('history', () => {
 
   // ── 提交级操作 ────────────────────────────────────────────────────
 
-  async function checkoutCommit(oid: string) {
+  async function checkoutCommit(oid: string, expectedHead?: string, expectedHeadRef?: string) {
     const repoStore = useRepoStore()
     if (!repoStore.activeRepoId) return
-    await git.checkoutCommit(repoStore.activeRepoId, oid)
+    await git.checkoutCommit(repoStore.activeRepoId, oid, expectedHead, expectedHeadRef)
     // HEAD detached 后需要刷新分支列表和日志
     await Promise.all([loadLog(), loadBranches()])
   }
 
-  async function cherryPickCommit(oid: string) {
+  async function cherryPickCommit(
+    oid: string,
+    expectedHead?: string,
+    expectedHeadRef?: string,
+  ) {
     const repoStore = useRepoStore()
     if (!repoStore.activeRepoId) return
-    await git.cherryPickCommit(repoStore.activeRepoId, oid)
+    await git.cherryPickCommit(repoStore.activeRepoId, oid, expectedHead, expectedHeadRef)
     await Promise.all([loadLog(), loadBranches()])
   }
 
-  async function revertCommit(oid: string) {
+  async function revertCommit(oid: string, expectedHead?: string, expectedHeadRef?: string) {
     const repoStore = useRepoStore()
     if (!repoStore.activeRepoId) return
-    await git.revertCommit(repoStore.activeRepoId, oid)
+    await git.revertCommit(repoStore.activeRepoId, oid, expectedHead, expectedHeadRef)
     await Promise.all([loadLog(), loadBranches()])
   }
 
-  async function resetToCommit(oid: string, mode: 'soft' | 'mixed' | 'hard') {
+  async function resetToCommit(
+    oid: string,
+    mode: 'soft' | 'mixed' | 'hard',
+    expectedHead?: string,
+    expectedHeadRef?: string,
+  ) {
     const repoStore = useRepoStore()
     if (!repoStore.activeRepoId) return
-    await git.resetToCommit(repoStore.activeRepoId, oid, mode)
+    await git.resetToCommit(repoStore.activeRepoId, oid, mode, expectedHead, expectedHeadRef)
     await Promise.all([loadLog(), loadBranches()])
   }
 

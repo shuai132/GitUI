@@ -148,6 +148,11 @@ const PATTERNS: Array<{ test: (msg: string) => boolean; build: (msg: string) => 
     test: (m) => /Stash target changed/i.test(m),
     build: () => ({ key: 'errors.stash.targetChanged' }),
   },
+  // 应用内确认打开后，仓库 HEAD 已被其他窗口或工具改变
+  {
+    test: (m) => /Confirmed Git action context changed/i.test(m),
+    build: () => ({ key: 'errors.history.contextChanged' }),
+  },
   // Rebase 冲突
   {
     test: (m) => /Rebase conflict|Rebase 出现冲突/i.test(m),

@@ -218,11 +218,29 @@ export function useGitCommands() {
     authorEmail?: string,
   ) => call<string>('amend_commit_message', { repoId, message, authorTime, committerTime, authorName, authorEmail })
 
-  const checkoutCommit = (repoId: string, oid: string) =>
-    call<void>('checkout_commit', { repoId, oid })
+  const checkoutCommit = (
+    repoId: string,
+    oid: string,
+    expectedHead?: string,
+    expectedHeadRef?: string,
+  ) => call<void>('checkout_commit', {
+    repoId,
+    oid,
+    expectedHead: expectedHead ?? null,
+    expectedHeadRef: expectedHeadRef ?? null,
+  })
 
-  const cherryPickCommit = (repoId: string, oid: string) =>
-    call<void>('cherry_pick_commit', { repoId, oid })
+  const cherryPickCommit = (
+    repoId: string,
+    oid: string,
+    expectedHead?: string,
+    expectedHeadRef?: string,
+  ) => call<void>('cherry_pick_commit', {
+    repoId,
+    oid,
+    expectedHead: expectedHead ?? null,
+    expectedHeadRef: expectedHeadRef ?? null,
+  })
 
   const cherryPickContinue = (repoId: string) =>
     call<void>('cherry_pick_continue', { repoId })
@@ -230,8 +248,17 @@ export function useGitCommands() {
   const cherryPickAbort = (repoId: string) =>
     call<void>('cherry_pick_abort', { repoId })
 
-  const revertCommit = (repoId: string, oid: string) =>
-    call<void>('revert_commit', { repoId, oid })
+  const revertCommit = (
+    repoId: string,
+    oid: string,
+    expectedHead?: string,
+    expectedHeadRef?: string,
+  ) => call<void>('revert_commit', {
+    repoId,
+    oid,
+    expectedHead: expectedHead ?? null,
+    expectedHeadRef: expectedHeadRef ?? null,
+  })
 
   const revertContinue = (repoId: string) =>
     call<void>('revert_continue', { repoId })
@@ -243,7 +270,15 @@ export function useGitCommands() {
     repoId: string,
     oid: string,
     mode: 'soft' | 'mixed' | 'hard',
-  ) => call<void>('reset_to_commit', { repoId, oid, mode })
+    expectedHead?: string,
+    expectedHeadRef?: string,
+  ) => call<void>('reset_to_commit', {
+    repoId,
+    oid,
+    mode,
+    expectedHead: expectedHead ?? null,
+    expectedHeadRef: expectedHeadRef ?? null,
+  })
 
   const undoLastCommit = (repoId: string, expectedHead: string) =>
     call<string>('undo_last_commit', { repoId, expectedHead })
@@ -446,8 +481,8 @@ export function useGitCommands() {
   const stashApply = (repoId: string, index: number) =>
     call<void>('stash_apply', { repoId, index })
 
-  const stashDrop = (repoId: string, index: number) =>
-    call<void>('stash_drop', { repoId, index })
+  const stashDrop = (repoId: string, index: number, expectedOid?: string) =>
+    call<void>('stash_drop', { repoId, index, expectedOid: expectedOid ?? null })
 
   const stashList = (repoId: string) =>
     call<StashEntry[]>('stash_list', { repoId })

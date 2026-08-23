@@ -16,6 +16,7 @@ const OP_LABELS: Record<string, () => string> = {
   fetch_remote: () => t('toolbar.opLabels.fetch'),
   stash_push: () => t('toolbar.opLabels.stash'),
   stash_pop: () => t('toolbar.opLabels.stashPop'),
+  stash_drop: () => t('toolbar.opLabels.stashDrop'),
   run_gc: () => t('toolbar.opLabels.gc'),
   open_repo: () => t('toolbar.opLabels.openRepo'),
   checkout_commit: () => t('toolbar.opLabels.checkoutCommit'),

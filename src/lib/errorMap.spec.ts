@@ -29,4 +29,11 @@ describe('mapGitError', () => {
       message: 'Stash target changed: expected old, current new',
     })).toMatchObject({ key: 'errors.stash.targetChanged' })
   })
+
+  it('maps a stale confirmed history action to a safe retry message', () => {
+    expect(mapGitError('reset_to_commit', {
+      kind: 'OperationFailed',
+      message: 'Confirmed Git action context changed: expected HEAD old, current new',
+    })).toMatchObject({ key: 'errors.history.contextChanged' })
+  })
 })

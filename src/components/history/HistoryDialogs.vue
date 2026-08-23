@@ -4,10 +4,12 @@ import FileHistoryModal from '@/components/file-history/FileHistoryModal.vue'
 import CreateBranchDialog from '@/components/commit/CreateBranchDialog.vue'
 import CreateTagDialog from '@/components/commit/CreateTagDialog.vue'
 import CheckoutRemoteDialog from '@/components/branch/CheckoutRemoteDialog.vue'
+import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import Modal from '@/components/common/Modal.vue'
 import MergeDialog from '@/components/merge/MergeDialog.vue'
 import RebasePlanDialog from '@/components/rebase/RebasePlanDialog.vue'
 import DragActionDialog from '@/components/history/DragActionDialog.vue'
+import type { HistoryActionConfirmation } from '@/composables/history/historyActionConfirmation'
 
 interface FileHistoryState {
   visible: boolean
@@ -49,6 +51,8 @@ defineProps<{
   editMessageAutoStash: boolean
   editMessageSubmitting: boolean
   isEditingHeadCommit: boolean
+  pendingActionConfirmation: HistoryActionConfirmation | null
+  actionConfirmationLoading: boolean
   dropUnreachableDialog: DropUnreachableDialogState
   fileHistoryModal: FileHistoryState
 }>()
@@ -71,6 +75,8 @@ const emit = defineEmits<{
   dragDialogMerge: []
   dragDialogRebase: []
   editMessageConfirm: []
+  actionConfirmationConfirm: []
+  actionConfirmationCancel: []
   dropUnreachableConfirm: []
   dropUnreachableCancel: []
 }>()
@@ -118,6 +124,18 @@ const emit = defineEmits<{
     @close="emit('update:showDragDialog', false)"
     @merge="emit('dragDialogMerge')"
     @rebase="emit('dragDialogRebase')"
+  />
+
+  <ConfirmDialog
+    :visible="pendingActionConfirmation !== null"
+    :title="pendingActionConfirmation?.title ?? ''"
+    :message="pendingActionConfirmation?.message ?? ''"
+    :confirm-label="pendingActionConfirmation?.confirmLabel"
+    :loading-label="pendingActionConfirmation?.loadingLabel"
+    :danger="pendingActionConfirmation?.danger"
+    :loading="actionConfirmationLoading"
+    @confirm="emit('actionConfirmationConfirm')"
+    @cancel="emit('actionConfirmationCancel')"
   />
 
   <Modal

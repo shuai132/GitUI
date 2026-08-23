@@ -1,12 +1,19 @@
 import { reactive, ref, computed, onMounted, type Ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useHistoryStore } from '@/stores/history'
+import { useRepoStore } from '@/stores/repos'
 import { useStashStore } from '@/stores/stash'
 import { useMergeRebaseStore } from '@/stores/mergeRebase'
 import { usePluginsStore } from '@/stores/plugins'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useUiStore } from '@/stores/ui'
 import { useGlobalToast } from '@/composables/useGlobalToast'
+import {
+  isHistoryActionContextCurrent,
+  type HistoryActionConfirmation,
+  type HistoryCommitAction,
+  type HistoryResetMode,
+} from '@/composables/history/historyActionConfirmation'
 import { mergeSourceNamesAtCommit } from '@/utils/mergeSources'
 import { remoteBranchTagsAtCommit } from '@/composables/history/useCommitTags'
 import type { ContextMenuItem } from '@/components/common/ContextMenu.vue'
@@ -14,6 +21,11 @@ import type { BranchInfo, CommitInfo } from '@/types/git'
 
 const CHECKOUT_REMOTE_ACTION_PREFIX = 'checkout-remote:'
 const COPY_BRANCH_NAME_ACTION_PREFIX = 'copy-branch-name:'
+const CONFIRM_DIALOG_KEY: Record<HistoryCommitAction, string> = {
+  checkout: 'confirmCheckout',
+  'cherry-pick': 'confirmCherryPick',
+  revert: 'confirmRevert',
+}
 
 type MenuLabel = (key: string, params?: Record<string, string>) => string
 
@@ -59,13 +71,14 @@ export function useCommitContextMenu(
   openRebaseDialog: (upstream: string, onto: string | null) => void,
 ) {
   const { t } = useI18n()
+  const repoStore = useRepoStore()
   const historyStore = useHistoryStore()
   const stashStore = useStashStore()
   const mergeRebaseStore = useMergeRebaseStore()
   const pluginsStore = usePluginsStore()
   const workspaceStore = useWorkspaceStore()
   const uiStore = useUiStore()
-  const { showToast } = useGlobalToast()
+  const { showToast, showError } = useGlobalToast()
 
   onMounted(() => {
     if (!pluginsStore.loaded) {
@@ -88,6 +101,8 @@ export function useCommitContextMenu(
   const showCheckoutRemoteDialog = ref(false)
   const checkoutInitialRemote = ref<string | null>(null)
   const dialogCommit = ref<CommitInfo | null>(null)
+  const pendingActionConfirmation = ref<HistoryActionConfirmation | null>(null)
+  const actionConfirmationLoading = ref(false)
 
   // Edit Message Dialog
   const showEditMessageDialog = ref(false)
@@ -114,6 +129,78 @@ export function useCommitContextMenu(
   // ── Helpers ──────────────────────────────────────────────────────────
   function stashEntryForCommit(oid: string) {
     return stashStore.entries.find((s) => s.commit_oid === oid) ?? null
+  }
+
+  function confirmationContext(repoId: string) {
+    return {
+      repoId,
+      expectedHeadOid: headCommitOid.value,
+      expectedHeadRef: currentBranchName.value === 'HEAD'
+        ? 'HEAD'
+        : `refs/heads/${currentBranchName.value}`,
+    }
+  }
+
+  function openCommitActionConfirmation(action: HistoryCommitAction, c: CommitInfo) {
+    const repoId = repoStore.activeRepoId
+    if (!repoId) return
+    const dialogKey = CONFIRM_DIALOG_KEY[action]
+    pendingActionConfirmation.value = {
+      ...confirmationContext(repoId),
+      kind: action,
+      commitOid: c.oid,
+      title: t(`history.dialog.${dialogKey}.title`),
+      message: t(`history.dialog.${dialogKey}.body`, {
+        shortOid: c.short_oid,
+        summary: c.summary,
+      }),
+      confirmLabel: t(`history.dialog.${dialogKey}.confirm`),
+      loadingLabel: t(`history.dialog.${dialogKey}.running`),
+      danger: false,
+    }
+  }
+
+  function openResetConfirmation(c: CommitInfo, mode: HistoryResetMode) {
+    const repoId = repoStore.activeRepoId
+    if (!repoId) return
+    const modeLabel = t(`history.dialog.confirmReset.mode.${mode}`)
+    pendingActionConfirmation.value = {
+      ...confirmationContext(repoId),
+      kind: 'reset',
+      commitOid: c.oid,
+      mode,
+      title: t('history.dialog.confirmReset.title', { branch: currentBranchName.value }),
+      message: t(
+        mode === 'hard'
+          ? 'history.dialog.confirmReset.hardBody'
+          : 'history.dialog.confirmReset.body',
+        {
+          branch: currentBranchName.value,
+          mode: modeLabel,
+          shortOid: c.short_oid,
+          summary: c.summary,
+        },
+      ),
+      confirmLabel: t('history.dialog.confirmReset.confirm', { mode: modeLabel }),
+      loadingLabel: t('history.dialog.confirmReset.running'),
+      danger: mode === 'hard',
+    }
+  }
+
+  function openStashDropConfirmation(c: CommitInfo, index: number, message: string) {
+    const repoId = repoStore.activeRepoId
+    if (!repoId) return
+    pendingActionConfirmation.value = {
+      kind: 'stash-drop',
+      repoId,
+      index,
+      commitOid: c.oid,
+      title: t('history.dialog.confirmStashDelete.title'),
+      message: t('history.dialog.confirmStashDelete.body', { index, message }),
+      confirmLabel: t('history.dialog.confirmStashDelete.confirm'),
+      loadingLabel: t('history.dialog.confirmStashDelete.running'),
+      danger: true,
+    }
   }
 
   function toDatetimeLocal(unixSecs: number): string {
@@ -359,15 +446,11 @@ export function useCommitContextMenu(
         case 'stash-delete': {
           const entry = stashEntryForCommit(c.oid)
           if (!entry) break
-          if (confirm(t('history.dialog.confirmStashDelete.body', { index: entry.index, message: entry.message }))) {
-            await stashStore.drop(entry.index)
-          }
+          openStashDropConfirmation(c, entry.index, entry.message)
           break
         }
         case 'checkout':
-          if (confirm(t('history.dialog.confirmCheckout.body', { shortOid: c.short_oid }))) {
-            await historyStore.checkoutCommit(c.oid)
-          }
+          openCommitActionConfirmation('checkout', c)
           break
         case 'edit-message':
           editMessageCommit.value = c
@@ -385,32 +468,16 @@ export function useCommitContextMenu(
           showCreateBranchDialog.value = true
           break
         case 'cherry-pick':
-          if (confirm(t('history.dialog.confirmCherryPick.body', { summary: c.summary }))) {
-            await historyStore.cherryPickCommit(c.oid)
-          }
+          openCommitActionConfirmation('cherry-pick', c)
           break
         case 'revert':
-          if (confirm(t('history.dialog.confirmRevert.body', { summary: c.summary }))) {
-            await historyStore.revertCommit(c.oid)
-          }
+          openCommitActionConfirmation('revert', c)
           break
         case 'reset-soft':
         case 'reset-mixed':
         case 'reset-hard': {
-          const mode = action.slice(6) as 'soft' | 'mixed' | 'hard'
-          const modeLabel = t(`history.dialog.confirmReset.mode.${mode}`)
-          const warn =
-            mode === 'hard'
-              ? t('history.dialog.confirmReset.hardBody', {
-                  branch: currentBranchName.value,
-                  shortOid: c.short_oid,
-                })
-              : t('history.dialog.confirmReset.body', {
-                  branch: currentBranchName.value,
-                  mode: modeLabel,
-                  shortOid: c.short_oid,
-                })
-          if (confirm(warn)) await historyStore.resetToCommit(c.oid, mode)
+          const mode = action.slice(6) as HistoryResetMode
+          openResetConfirmation(c, mode)
           break
         }
         case 'merge-into': {
@@ -439,8 +506,79 @@ export function useCommitContextMenu(
           break
       }
     } catch (err) {
-      alert(String(err))
+      showError(String(err))
     }
+  }
+
+  async function onActionConfirmationConfirm() {
+    const pending = pendingActionConfirmation.value
+    if (!pending || actionConfirmationLoading.value) return
+    if (!isHistoryActionContextCurrent(
+      pending,
+      repoStore.activeRepoId,
+      headCommitOid.value,
+      currentBranchName.value === 'HEAD' ? 'HEAD' : `refs/heads/${currentBranchName.value}`,
+    )) {
+      onActionConfirmationCancel()
+      showError(t('errors.history.contextChanged'))
+      return
+    }
+    if (pending.kind === 'stash-drop') {
+      const current = stashEntryForCommit(pending.commitOid)
+      if (!current || current.index !== pending.index) {
+        onActionConfirmationCancel()
+        showError(t('errors.stash.targetChanged'))
+        return
+      }
+    }
+
+    actionConfirmationLoading.value = true
+    try {
+      switch (pending.kind) {
+        case 'checkout':
+          await historyStore.checkoutCommit(
+            pending.commitOid,
+            pending.expectedHeadOid,
+            pending.expectedHeadRef,
+          )
+          break
+        case 'cherry-pick':
+          await historyStore.cherryPickCommit(
+            pending.commitOid,
+            pending.expectedHeadOid,
+            pending.expectedHeadRef,
+          )
+          break
+        case 'revert':
+          await historyStore.revertCommit(
+            pending.commitOid,
+            pending.expectedHeadOid,
+            pending.expectedHeadRef,
+          )
+          break
+        case 'reset':
+          await historyStore.resetToCommit(
+            pending.commitOid,
+            pending.mode,
+            pending.expectedHeadOid,
+            pending.expectedHeadRef,
+          )
+          break
+        case 'stash-drop':
+          await stashStore.drop(pending.index, pending.commitOid)
+          break
+      }
+    } catch {
+      // IPC 错误由 errors store 统一映射并通过 ToolbarToast 展示。
+    } finally {
+      actionConfirmationLoading.value = false
+      pendingActionConfirmation.value = null
+    }
+  }
+
+  function onActionConfirmationCancel() {
+    if (actionConfirmationLoading.value) return
+    pendingActionConfirmation.value = null
   }
 
   async function onEditMessageConfirm() {
@@ -527,6 +665,10 @@ export function useCommitContextMenu(
     showCheckoutRemoteDialog,
     checkoutInitialRemote,
     dialogCommit,
+    pendingActionConfirmation,
+    actionConfirmationLoading,
+    onActionConfirmationConfirm,
+    onActionConfirmationCancel,
 
     showEditMessageDialog,
     editMessageText,

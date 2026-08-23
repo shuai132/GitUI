@@ -499,6 +499,10 @@ const {
   showCheckoutRemoteDialog,
   checkoutInitialRemote,
   dialogCommit,
+  pendingActionConfirmation,
+  actionConfirmationLoading,
+  onActionConfirmationConfirm,
+  onActionConfirmationCancel,
 
   showEditMessageDialog,
   editMessageText,
@@ -1032,11 +1036,15 @@ onUnmounted(() => {
     :drag-target-oid="dragTargetOid"
     :edit-message-submitting="editMessageSubmitting"
     :is-editing-head-commit="isEditingHeadCommit"
+    :pending-action-confirmation="pendingActionConfirmation"
+    :action-confirmation-loading="actionConfirmationLoading"
     :drop-unreachable-dialog="dropUnreachableDialog"
     :file-history-modal="fileHistoryModal"
     @drag-dialog-merge="onDragDialogMerge"
     @drag-dialog-rebase="onDragDialogRebase"
     @edit-message-confirm="onEditMessageConfirm"
+    @action-confirmation-confirm="onActionConfirmationConfirm"
+    @action-confirmation-cancel="onActionConfirmationCancel"
     @drop-unreachable-confirm="onDropUnreachableConfirm"
     @drop-unreachable-cancel="onDropUnreachableCancel"
     @close-file-history="fileHistoryModal.visible = false"

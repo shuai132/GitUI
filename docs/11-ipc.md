@@ -29,8 +29,8 @@ GitUI 采用 Tauri v2 的 IPC 机制实现前后端通信，包括双向的请�
 ### 提交管理 (Commit)
 - `create_commit` / `amend_commit` / `amend_commit_message`：提交创建与修补。
 - `undo_last_commit(repo_id, expected_head)`：撤销当前分支刚创建的未发布单父提交；原子校验 HEAD 与 upstream 后执行 mixed reset，返回父提交 OID。
-- `checkout_commit` / `reset_to_commit`：版本回退与切换。
-- `cherry_pick_commit` / `revert_commit` / `create_tag`：高级版本操作。
+- `checkout_commit` / `reset_to_commit`：版本回退与切换。历史确认流程可传 `expected_head` 与 `expected_head_ref`，后端在写操作前校验 HEAD 提交和分支引用仍与用户打开确认框时一致。
+- `cherry_pick_commit` / `revert_commit` / `create_tag`：高级版本操作。Cherry-pick / Revert 同样支持 HEAD 提交与引用快照，防止执行过期确认请求。
 
 ### 历史与对比 (Log / Diff)
 - `get_log` / `get_commit_detail` / `get_file_log`：多维度的历史记录查询。`get_log` 接收分页、`include_unreachable`、`include_stashes`、`branch_scope` 和 `include_remote_branches`，其中 `branch_scope` 见 `git/types.rs::LogBranchScope`。
@@ -57,7 +57,7 @@ GitUI 采用 Tauri v2 的 IPC 机制实现前后端通信，包括双向的请�
 
 ### 贮藏 (Stash)
 
-- `stash_push` / `stash_list` / `stash_apply` / `stash_pop` / `stash_drop`：贮藏生命周期。`stash_pop` 可传 `expected_oid`，后端在 Pop 前原子校验当前 index 仍指向该 stash commit；不匹配则不修改工作区或 stash 栈。
+- `stash_push` / `stash_list` / `stash_apply` / `stash_pop` / `stash_drop`：贮藏生命周期。`stash_pop` 与 `stash_drop` 可传 `expected_oid`，后端在操作前校验当前 index 仍指向该 stash commit；不匹配则不修改工作区或 stash 栈。
 
 ### 系统集成 (System)
 - `open_terminal` / `open_in_new_window`：外部工具联动。

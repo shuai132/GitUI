@@ -82,9 +82,10 @@ impl GitEngine {
     }
 
     /// 删除指定 index 的 stash（不 apply）。
-    pub fn stash_drop(path: &str, index: usize) -> GitResult<()> {
+    pub fn stash_drop(path: &str, index: usize, expected_oid: Option<&str>) -> GitResult<()> {
         let mut repo = Self::open(path)?;
-        let count = Self::stash_count(&repo)?;
+        let stashes = Self::list_stashes(&repo)?;
+        let count = stashes.len();
         if count == 0 {
             return Err(GitError::OperationFailed("没有可删除的 stash".to_string()));
         }
@@ -93,6 +94,14 @@ impl GitEngine {
                 "stash@{{{}}} 不存在（共 {} 条）",
                 index, count
             )));
+        }
+        if let Some(expected) = expected_oid {
+            let current = stashes[index].2.to_string();
+            if current != expected {
+                return Err(GitError::OperationFailed(format!(
+                    "Stash target changed: expected {expected}, current {current}"
+                )));
+            }
         }
         repo.stash_drop(index)?;
         Ok(())

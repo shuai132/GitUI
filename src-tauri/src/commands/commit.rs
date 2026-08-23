@@ -29,36 +29,57 @@ pub async fn create_commit(
 pub async fn checkout_commit(
     repo_id: String,
     oid: String,
+    expected_head: Option<String>,
+    expected_head_ref: Option<String>,
     repo_manager: State<'_, RepoManager>,
 ) -> Result<(), GitError> {
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    GitEngine::checkout_commit(&meta.path, &oid)
+    GitEngine::checkout_commit(
+        &meta.path,
+        &oid,
+        expected_head.as_deref(),
+        expected_head_ref.as_deref(),
+    )
 }
 
 #[tauri::command]
 pub async fn cherry_pick_commit(
     repo_id: String,
     oid: String,
+    expected_head: Option<String>,
+    expected_head_ref: Option<String>,
     repo_manager: State<'_, RepoManager>,
 ) -> Result<(), GitError> {
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    GitEngine::cherry_pick_commit(&meta.path, &oid)
+    GitEngine::cherry_pick_commit(
+        &meta.path,
+        &oid,
+        expected_head.as_deref(),
+        expected_head_ref.as_deref(),
+    )
 }
 
 #[tauri::command]
 pub async fn revert_commit(
     repo_id: String,
     oid: String,
+    expected_head: Option<String>,
+    expected_head_ref: Option<String>,
     repo_manager: State<'_, RepoManager>,
 ) -> Result<(), GitError> {
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    GitEngine::revert_commit(&meta.path, &oid)
+    GitEngine::revert_commit(
+        &meta.path,
+        &oid,
+        expected_head.as_deref(),
+        expected_head_ref.as_deref(),
+    )
 }
 
 #[tauri::command]
@@ -110,12 +131,20 @@ pub async fn reset_to_commit(
     repo_id: String,
     oid: String,
     mode: String,
+    expected_head: Option<String>,
+    expected_head_ref: Option<String>,
     repo_manager: State<'_, RepoManager>,
 ) -> Result<(), GitError> {
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    GitEngine::reset_to_commit(&meta.path, &oid, &mode)
+    GitEngine::reset_to_commit(
+        &meta.path,
+        &oid,
+        &mode,
+        expected_head.as_deref(),
+        expected_head_ref.as_deref(),
+    )
 }
 
 #[tauri::command]

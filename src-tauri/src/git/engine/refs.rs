@@ -1,4 +1,4 @@
-use git2::{BranchType, RepositoryState, ResetType};
+use git2::{BranchType, Repository, RepositoryState, ResetType};
 
 use crate::git::{
     credentials::make_credentials_callback,
@@ -14,6 +14,29 @@ use super::{
 };
 
 impl GitEngine {
+    fn ensure_expected_head(
+        repo: &Repository,
+        expected_head: Option<&str>,
+        expected_head_ref: Option<&str>,
+    ) -> GitResult<()> {
+        if expected_head.is_none() && expected_head_ref.is_none() {
+            return Ok(());
+        }
+        let head = repo.head()?;
+        let current_ref = head.name().unwrap_or("HEAD");
+        let current = head.peel_to_commit()?.id().to_string();
+        let oid_changed = expected_head.is_some_and(|expected| current != expected);
+        let ref_changed = expected_head_ref.is_some_and(|expected| current_ref != expected);
+        if oid_changed || ref_changed {
+            return Err(GitError::OperationFailed(format!(
+                "Confirmed Git action context changed: expected HEAD {} at {}, current {current} at {current_ref}",
+                expected_head.unwrap_or("(any)"),
+                expected_head_ref.unwrap_or("(any)"),
+            )));
+        }
+        Ok(())
+    }
+
     pub fn list_branches(path: &str) -> GitResult<Vec<BranchInfo>> {
         let repo = Self::open(path)?;
         let head_ref = repo.head().ok();
@@ -364,8 +387,14 @@ impl GitEngine {
     // ── 提交级操作 ──────────────────────────────────────────────────────
 
     /// 检出指定提交（detached HEAD）
-    pub fn checkout_commit(path: &str, oid: &str) -> GitResult<()> {
+    pub fn checkout_commit(
+        path: &str,
+        oid: &str,
+        expected_head: Option<&str>,
+        expected_head_ref: Option<&str>,
+    ) -> GitResult<()> {
         let repo = Self::open(path)?;
+        Self::ensure_expected_head(&repo, expected_head, expected_head_ref)?;
         let commit_oid = git2::Oid::from_str(oid)
             .map_err(|e| GitError::OperationFailed(e.message().to_string()))?;
         let commit = repo.find_commit(commit_oid)?;
@@ -381,8 +410,14 @@ impl GitEngine {
     /// Cherry-pick 指定提交到当前 HEAD
     /// - 无冲突：基于 index 创建新提交（作者沿用原提交，committer 是当前用户）
     /// - 有冲突：保留 CHERRY_PICK_HEAD，返回错误提示用户手动解决
-    pub fn cherry_pick_commit(path: &str, oid: &str) -> GitResult<()> {
+    pub fn cherry_pick_commit(
+        path: &str,
+        oid: &str,
+        expected_head: Option<&str>,
+        expected_head_ref: Option<&str>,
+    ) -> GitResult<()> {
         let repo = Self::open(path)?;
+        Self::ensure_expected_head(&repo, expected_head, expected_head_ref)?;
         let commit_oid = git2::Oid::from_str(oid)
             .map_err(|e| GitError::OperationFailed(e.message().to_string()))?;
         let commit = repo.find_commit(commit_oid)?;
@@ -415,8 +450,14 @@ impl GitEngine {
     /// Revert 指定提交
     /// - 无冲突：自动创建 revert commit，message 为 'Revert "<original summary>"'
     /// - 有冲突：返回错误
-    pub fn revert_commit(path: &str, oid: &str) -> GitResult<()> {
+    pub fn revert_commit(
+        path: &str,
+        oid: &str,
+        expected_head: Option<&str>,
+        expected_head_ref: Option<&str>,
+    ) -> GitResult<()> {
         let repo = Self::open(path)?;
+        Self::ensure_expected_head(&repo, expected_head, expected_head_ref)?;
         let commit_oid = git2::Oid::from_str(oid)
             .map_err(|e| GitError::OperationFailed(e.message().to_string()))?;
         let commit = repo.find_commit(commit_oid)?;
@@ -562,8 +603,15 @@ impl GitEngine {
 
     /// Reset 当前 HEAD 到指定提交
     /// mode: "soft" | "mixed" | "hard"
-    pub fn reset_to_commit(path: &str, oid: &str, mode: &str) -> GitResult<()> {
+    pub fn reset_to_commit(
+        path: &str,
+        oid: &str,
+        mode: &str,
+        expected_head: Option<&str>,
+        expected_head_ref: Option<&str>,
+    ) -> GitResult<()> {
         let repo = Self::open(path)?;
+        Self::ensure_expected_head(&repo, expected_head, expected_head_ref)?;
         let commit_oid = git2::Oid::from_str(oid)
             .map_err(|e| GitError::OperationFailed(e.message().to_string()))?;
         let commit = repo.find_commit(commit_oid)?;
