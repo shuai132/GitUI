@@ -65,6 +65,13 @@ const messages = {
       confirm: 'Force Push anyway',
       running: 'Force pushing…',
     },
+    stashPopConfirm: {
+      title: 'Working tree already has changes',
+      message: 'There are changes in {count} files. Continuing will apply and remove stash #{index} “{message}” on top of them; overlapping changes may conflict.',
+      confirm: 'Pop anyway',
+      running: 'Popping stash…',
+      targetChanged: 'The stash stack changed, so Pop was cancelled. Select the target again.',
+    },
     remoteMenu: {
       setDefault: 'Set default',
       clearDefault: 'Clear default',
@@ -1108,6 +1115,7 @@ const messages = {
       planMismatch: 'Cannot find commit {shortOid} in the rebase plan; HEAD may have moved',
     },
     merge: { conflict: 'Merge conflict detected — resolve it in the working tree to continue' },
+    stash: { targetChanged: 'The stash stack changed, so Pop was cancelled. Select the target again.' },
     worktree: { dirty: 'Working tree has uncommitted changes, please commit / stash / discard first' },
     cherrypick: { conflict: '{type} conflict detected — resolve it to continue' },
     config: { missingUser: 'git config is missing user.name / user.email, please configure it in the terminal first' },

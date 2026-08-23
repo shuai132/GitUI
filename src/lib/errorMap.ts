@@ -143,6 +143,11 @@ const PATTERNS: Array<{ test: (msg: string) => boolean; build: (msg: string) => 
     test: (m) => /Cannot pull.*unfinished Git operation/i.test(m),
     build: () => ({ key: 'errors.pull.ongoingOperation' }),
   },
+  // 工具栏挂起确认期间 stash 栈被外部命令改动
+  {
+    test: (m) => /Stash target changed/i.test(m),
+    build: () => ({ key: 'errors.stash.targetChanged' }),
+  },
   // Rebase 冲突
   {
     test: (m) => /Rebase conflict|Rebase 出现冲突/i.test(m),

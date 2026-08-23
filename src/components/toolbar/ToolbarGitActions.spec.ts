@@ -10,10 +10,14 @@ const mocks = vi.hoisted(() => ({
   isPublishingBranch: false,
   forcePushVisible: false,
   forcePushTarget: '',
+  stashPopConfirmVisible: false,
+  stashPopTarget: null as { changeCount: number; index: number; message: string } | null,
   onUndoLastCommit: vi.fn(),
   confirmPullWithStash: vi.fn(),
   confirmForcePush: vi.fn(),
   cancelForcePush: vi.fn(),
+  confirmStashPop: vi.fn(),
+  cancelStashPop: vi.fn(),
 }))
 
 vi.mock('vue-i18n', () => ({
@@ -61,6 +65,9 @@ vi.mock('@/composables/toolbar/useToolbarGitActions', () => ({
     forcePushVisible: mocks.forcePushVisible,
     forcePushTarget: mocks.forcePushTarget,
     forcePushLoading: false,
+    stashPopConfirmVisible: mocks.stashPopConfirmVisible,
+    stashPopTarget: mocks.stashPopTarget,
+    stashPopLoading: false,
     canUndoLastCommit: mocks.canUndo,
     undoingCommit: false,
     withShortcut: (label: string) => label,
@@ -71,6 +78,8 @@ vi.mock('@/composables/toolbar/useToolbarGitActions', () => ({
     cancelPullWithStash: vi.fn(),
     confirmForcePush: mocks.confirmForcePush,
     cancelForcePush: mocks.cancelForcePush,
+    confirmStashPop: mocks.confirmStashPop,
+    cancelStashPop: mocks.cancelStashPop,
     onPush: vi.fn(),
     doPush: vi.fn(),
     onStash: vi.fn(),
@@ -90,10 +99,14 @@ describe('ToolbarGitActions', () => {
     mocks.isPublishingBranch = false
     mocks.forcePushVisible = false
     mocks.forcePushTarget = ''
+    mocks.stashPopConfirmVisible = false
+    mocks.stashPopTarget = null
     mocks.onUndoLastCommit.mockReset()
     mocks.confirmPullWithStash.mockReset()
     mocks.confirmForcePush.mockReset()
     mocks.cancelForcePush.mockReset()
+    mocks.confirmStashPop.mockReset()
+    mocks.cancelStashPop.mockReset()
   })
 
   it('shows and invokes Undo only while a recent commit candidate is available', async () => {
@@ -157,5 +170,27 @@ describe('ToolbarGitActions', () => {
     expect(mocks.confirmForcePush).toHaveBeenCalledOnce()
     dialog?.vm.$emit('cancel')
     expect(mocks.cancelForcePush).toHaveBeenCalledOnce()
+  })
+
+  it('shows the latest stash and dirty-file count before toolbar Pop', () => {
+    mocks.stashPopConfirmVisible = true
+    mocks.stashPopTarget = {
+      changeCount: 2,
+      index: 0,
+      message: 'WIP on feature/demo',
+    }
+    const wrapper = mount(ToolbarGitActions, {
+      global: { stubs: { ContextMenu: true } },
+    })
+
+    const dialog = wrapper
+      .findAllComponents(ConfirmDialog)
+      .find((item) => item.props('title') === 'toolbar.stashPopConfirm.title')
+    expect(dialog?.props('visible')).toBe(true)
+    expect(dialog?.props('message')).toBe('toolbar.stashPopConfirm.message')
+    dialog?.vm.$emit('confirm')
+    expect(mocks.confirmStashPop).toHaveBeenCalledOnce()
+    dialog?.vm.$emit('cancel')
+    expect(mocks.cancelStashPop).toHaveBeenCalledOnce()
   })
 })

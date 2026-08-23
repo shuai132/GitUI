@@ -22,4 +22,11 @@ describe('mapGitError', () => {
       message: 'Cannot pull: repository has an unfinished Git operation. Resolve or abort it first.',
     })).toMatchObject({ key: 'errors.pull.ongoingOperation' })
   })
+
+  it('maps a stale stash identity to a safe retry message', () => {
+    expect(mapGitError('stash_pop', {
+      kind: 'OperationFailed',
+      message: 'Stash target changed: expected old, current new',
+    })).toMatchObject({ key: 'errors.stash.targetChanged' })
+  })
 })

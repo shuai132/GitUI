@@ -32,7 +32,7 @@
 - [x] Submodule：init / update / edit URL / deinit，已克隆的可作为新仓库打开，并在所有仓库与工作区变更中作为特殊项导航
 - [x] Diff 查看器：inline / side-by-side 两种布局，均支持完整文件视图与按 hunk 分组、忽略空白变更、多语言语法高亮、行内字符级变化高亮、图片 / SVG 预览、PDF / DOCX / PPTX 文档预览与抽取文本高亮 diff
 - [x] 字符编码自适应：commit message 按 git `encoding` header 解码、文件内容按 `.gitattributes` 的 `working-tree-encoding` 或 chardetng 自动检测，混合 UTF-8 / GBK 仓库正常显示
-- [x] Stash：push / pop / apply / delete（含 untracked 文件），用提交信息作 stash message
+- [x] Stash：push / pop / apply / delete（含 untracked 文件），用提交信息作 stash message；脏工作区快捷 Pop 会显示目标与改动数后确认
 - [x] Reflog 查看、git gc 触发入口；右键丢失引用提交可从 HEAD reflog 中剥链移除
 - [x] 工作目录文件监控，状态自动刷新；支持手动重新加载当前仓库状态
 - [x] 内置终端：应用内（xterm.js + PTY）/ 调用外部终端

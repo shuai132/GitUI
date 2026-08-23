@@ -45,6 +45,9 @@ const {
   forcePushVisible,
   forcePushTarget,
   forcePushLoading,
+  stashPopConfirmVisible,
+  stashPopTarget,
+  stashPopLoading,
   canUndoLastCommit,
   undoingCommit,
   withShortcut,
@@ -59,6 +62,8 @@ const {
   cancelForcePush,
   onStash,
   onPop,
+  confirmStashPop,
+  cancelStashPop,
   onFetch,
   onRefreshRepository,
   onOpenSystemTerminal,
@@ -308,6 +313,21 @@ function onPushModeSelect(action: string) {
       danger
       @confirm="confirmForcePush"
       @cancel="cancelForcePush"
+    />
+
+    <ConfirmDialog
+      :visible="stashPopConfirmVisible"
+      :title="t('toolbar.stashPopConfirm.title')"
+      :message="t('toolbar.stashPopConfirm.message', {
+        count: stashPopTarget?.changeCount ?? 0,
+        index: stashPopTarget?.index ?? 0,
+        message: stashPopTarget?.message ?? '',
+      })"
+      :confirm-label="t('toolbar.stashPopConfirm.confirm')"
+      :loading-label="t('toolbar.stashPopConfirm.running')"
+      :loading="stashPopLoading"
+      @confirm="confirmStashPop"
+      @cancel="cancelStashPop"
     />
   </div>
 </template>

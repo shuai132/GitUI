@@ -1038,6 +1038,35 @@ mod tests {
     }
 
     #[test]
+    fn stash_pop_rejects_a_changed_expected_target_without_mutation() {
+        let test_repo = TestRepo::new();
+        let path = test_repo.path_str();
+        fs::write(test_repo.dir.path().join("existing.txt"), "stashed\n").unwrap();
+        GitEngine::stash_push(path, Some("guarded stash")).unwrap();
+        let entry = GitEngine::stash_list(path)
+            .unwrap()
+            .into_iter()
+            .find(|stash| stash.index == 0)
+            .unwrap();
+
+        let error = GitEngine::stash_pop(path, 0, Some(&Oid::zero().to_string())).unwrap_err();
+
+        assert!(error.to_string().contains("Stash target changed"));
+        assert_eq!(GitEngine::stash_list(path).unwrap().len(), 1);
+        assert_eq!(
+            fs::read_to_string(test_repo.dir.path().join("existing.txt")).unwrap(),
+            "hello\n"
+        );
+
+        GitEngine::stash_pop(path, 0, Some(&entry.commit_oid)).unwrap();
+        assert!(GitEngine::stash_list(path).unwrap().is_empty());
+        assert_eq!(
+            fs::read_to_string(test_repo.dir.path().join("existing.txt")).unwrap(),
+            "stashed\n"
+        );
+    }
+
+    #[test]
     fn test_stash_diff_includes_untracked_and_staged_new_files() {
         let mut test_repo = TestRepo::new();
         let path = test_repo.path_str().to_string(); // clone to avoid lifetime issues if we mutably borrow repo

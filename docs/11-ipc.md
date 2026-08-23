@@ -55,6 +55,10 @@ GitUI 采用 Tauri v2 的 IPC 机制实现前后端通信，包括双向的请�
 - `rebase_start` / `rebase_continue` / `rebase_abort` / `rebase_plan`：交互式变基流。
 - `get_conflict_file` / `mark_conflict_resolved`：冲突解决契约。
 
+### 贮藏 (Stash)
+
+- `stash_push` / `stash_list` / `stash_apply` / `stash_pop` / `stash_drop`：贮藏生命周期。`stash_pop` 可传 `expected_oid`，后端在 Pop 前原子校验当前 index 仍指向该 stash commit；不匹配则不修改工作区或 stash 栈。
+
 ### 系统集成 (System)
 - `open_terminal` / `open_in_new_window`：外部工具联动。
 - `discard_file` / `discard_files`：丢弃一个或多个文件的未暂存变更，参数路径为仓库相对路径；当前工作区原件先进入系统废纸篓，已跟踪文件再恢复到 Index。批量命令只执行一次 Checkout。

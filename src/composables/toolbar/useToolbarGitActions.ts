@@ -14,6 +14,10 @@ import { useRepositoryRefresh } from '@/composables/useRepositoryRefresh'
 import { useGlobalToast } from '@/composables/useGlobalToast'
 import { runPullWithAutoStash } from '@/composables/toolbar/pullAutoStash'
 import {
+  countChangedWorkspacePaths,
+  isSameStashTarget,
+} from '@/composables/toolbar/stashPopSafety'
+import {
   requiresForcePushConfirmation,
   type PullMode,
   type PushMode,
@@ -40,6 +44,14 @@ interface PushRequest {
   remote: string
   branch: string
   mode: PushMode
+}
+
+interface PendingStashPop {
+  repoId: string
+  index: number
+  commitOid: string
+  message: string
+  changeCount: number
 }
 
 export function useToolbarGitActions(options: UseToolbarGitActionsOptions) {
@@ -85,6 +97,10 @@ export function useToolbarGitActions(options: UseToolbarGitActionsOptions) {
     const request = pendingForcePush.value
     return request ? `${request.remote}/${request.branch}` : ''
   })
+  const pendingStashPop = ref<PendingStashPop | null>(null)
+  const stashPopLoading = ref(false)
+  const stashPopConfirmVisible = computed(() => pendingStashPop.value !== null)
+  const stashPopTarget = computed(() => pendingStashPop.value)
   const undoingCommit = ref(false)
   const canUndoLastCommit = computed(() => {
     const candidate = workspaceStore.undoCommitCandidate
@@ -310,14 +326,60 @@ export function useToolbarGitActions(options: UseToolbarGitActionsOptions) {
     if (!canStashPop.value) return
     const id = repoStore.activeRepoId
     if (!id) return
-    repoOpsStore.setBusy(id, 'pop', true)
+    const entry = stashStore.entries.find((stash) => stash.index === 0)
+    if (!entry) return
+    const changeCount = countChangedWorkspacePaths(workspaceStore.status)
+    if (changeCount > 0) {
+      pendingStashPop.value = {
+        repoId: id,
+        index: entry.index,
+        commitOid: entry.commit_oid,
+        message: entry.message,
+        changeCount,
+      }
+      return
+    }
+
+    await runStashPop(id, entry.index, entry.commit_oid)
+  }
+
+  async function runStashPop(repoId: string, index: number, expectedOid: string) {
+    if (repoStore.activeRepoId !== repoId) return
+    repoOpsStore.setBusy(repoId, 'pop', true)
     try {
-      await stashStore.pop()
+      await stashStore.pop(index, expectedOid)
     } catch {
       // 错误在 ToolbarToast 中拦截处理
     } finally {
-      repoOpsStore.setBusy(id, 'pop', false)
+      repoOpsStore.setBusy(repoId, 'pop', false)
     }
+  }
+
+  async function confirmStashPop() {
+    const pending = pendingStashPop.value
+    if (!pending || stashPopLoading.value) return
+    if (repoStore.activeRepoId !== pending.repoId) {
+      cancelStashPop()
+      return
+    }
+    if (!isSameStashTarget(stashStore.entries, pending.index, pending.commitOid)) {
+      cancelStashPop()
+      showError(t('toolbar.stashPopConfirm.targetChanged'))
+      return
+    }
+
+    stashPopLoading.value = true
+    try {
+      await runStashPop(pending.repoId, pending.index, pending.commitOid)
+    } finally {
+      stashPopLoading.value = false
+      pendingStashPop.value = null
+    }
+  }
+
+  function cancelStashPop() {
+    if (stashPopLoading.value) return
+    pendingStashPop.value = null
   }
 
   async function onFetch(e?: MouseEvent) {
@@ -404,6 +466,9 @@ export function useToolbarGitActions(options: UseToolbarGitActionsOptions) {
     forcePushVisible,
     forcePushTarget,
     forcePushLoading,
+    stashPopConfirmVisible,
+    stashPopTarget,
+    stashPopLoading,
     canUndoLastCommit,
     undoingCommit,
     withShortcut,
@@ -418,6 +483,8 @@ export function useToolbarGitActions(options: UseToolbarGitActionsOptions) {
     cancelForcePush,
     onStash,
     onPop,
+    confirmStashPop,
+    cancelStashPop,
     onFetch,
     onRefreshRepository,
     onOpenSystemTerminal,

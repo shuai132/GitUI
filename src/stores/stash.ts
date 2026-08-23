@@ -45,10 +45,10 @@ export const useStashStore = defineStore('stash', () => {
     await Promise.all([refresh(), workspaceStore.refresh()])
   }
 
-  async function pop(index = 0) {
+  async function pop(index = 0, expectedOid?: string) {
     const repoStore = useRepoStore()
     if (!repoStore.activeRepoId) return
-    await git.stashPop(repoStore.activeRepoId, index)
+    await git.stashPop(repoStore.activeRepoId, index, expectedOid)
     const workspaceStore = useWorkspaceStore()
     const historyStore = useHistoryStore()
     await Promise.all([

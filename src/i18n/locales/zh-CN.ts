@@ -65,6 +65,13 @@ const messages = {
       confirm: '仍然 Force Push',
       running: '正在 Force Push…',
     },
+    stashPopConfirm: {
+      title: '当前工作区已有改动',
+      message: '当前有 {count} 个改动文件。继续会把 stash #{index}「{message}」叠加到这些改动上，重叠内容可能产生冲突。',
+      confirm: '仍然 Pop',
+      running: '正在 Pop…',
+      targetChanged: 'Stash 栈已变化，已取消 Pop；请重新选择目标',
+    },
     remoteMenu: {
       setDefault: '设为默认',
       clearDefault: '取消默认',
@@ -1107,6 +1114,7 @@ const messages = {
       planMismatch: '找不到目标提交 {shortOid} 的 rebase 计划项，可能是 HEAD 已变动',
     },
     merge: { conflict: '发生冲突，请在工作区解决后继续' },
+    stash: { targetChanged: 'Stash 栈已变化，已取消 Pop；请重新选择目标' },
     worktree: { dirty: '工作区有未提交的变更，请先 commit / stash / discard' },
     cherrypick: { conflict: '{type} 出现冲突，请解决后继续' },
     config: { missingUser: '当前 git config 缺少 user.name / user.email，请先在终端设置' },
