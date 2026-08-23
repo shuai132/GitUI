@@ -48,6 +48,7 @@ const historyCommits = ref<CommitInfo[]>([])
 const historyLoading = ref(false)
 const historyHasMore = ref(false)
 const HISTORY_BATCH = 50
+let historyRequestSeq = 0
 
 const selectedCommit = ref<CommitInfo | null>(null)
 const selectedDiff = ref<FileDiff | null>(null)
@@ -57,15 +58,23 @@ let diffRequestSeq = 0
 async function loadHistory(reset = false) {
   const repoId = repoStore.activeRepoId
   if (!repoId) return
+  if (historyLoading.value && !reset) return
+  const filePath = props.filePath
+  const requestSeq = ++historyRequestSeq
   historyLoading.value = true
   try {
     const offset = reset ? 0 : historyCommits.value.length
-    const result = await gitCmd.getFileLog(repoId, props.filePath, offset, HISTORY_BATCH)
+    const result = await gitCmd.getFileLog(repoId, filePath, offset, HISTORY_BATCH)
+    if (
+      requestSeq !== historyRequestSeq ||
+      repoStore.activeRepoId !== repoId ||
+      props.filePath !== filePath
+    ) return
     if (reset) historyCommits.value = result
     else historyCommits.value.push(...result)
     historyHasMore.value = result.length >= HISTORY_BATCH
   } finally {
-    historyLoading.value = false
+    if (requestSeq === historyRequestSeq) historyLoading.value = false
   }
 }
 
@@ -78,18 +87,20 @@ async function selectCommit(commit: CommitInfo) {
 async function loadSelectedCommitDiff(commit: CommitInfo) {
   const repoId = repoStore.activeRepoId
   if (!repoId) return
+  const filePath = props.filePath
   const requestSeq = ++diffRequestSeq
   diffLoading.value = true
   try {
     const diff = await gitCmd.getFileDiffAtCommit(
       repoId,
-      props.filePath,
+      filePath,
       commit.oid,
       uiStore.diffIgnoreWhitespace,
     )
     if (
       requestSeq !== diffRequestSeq ||
       repoStore.activeRepoId !== repoId ||
+      props.filePath !== filePath ||
       selectedCommit.value?.oid !== commit.oid
     ) return
     selectedDiff.value = diff
@@ -101,17 +112,47 @@ async function loadSelectedCommitDiff(commit: CommitInfo) {
 // ── Blame ─────────────────────────────────────────────────────────────────
 const blame = ref<FileBlame | null>(null)
 const blameLoading = ref(false)
+let blameRequestSeq = 0
 
 async function loadBlame() {
   const repoId = repoStore.activeRepoId
-  if (!repoId || blame.value) return
+  if (!repoId || blame.value || blameLoading.value) return
+  const filePath = props.filePath
+  const requestSeq = ++blameRequestSeq
   blameLoading.value = true
   try {
-    blame.value = await gitCmd.getFileBlame(repoId, props.filePath)
+    const result = await gitCmd.getFileBlame(repoId, filePath)
+    if (
+      requestSeq !== blameRequestSeq ||
+      repoStore.activeRepoId !== repoId ||
+      props.filePath !== filePath
+    ) return
+    blame.value = result
   } finally {
-    blameLoading.value = false
+    if (requestSeq === blameRequestSeq) blameLoading.value = false
   }
 }
+
+watch(
+  [() => repoStore.activeRepoId, () => props.filePath],
+  ([repoId, filePath]) => {
+    historyRequestSeq++
+    blameRequestSeq++
+    diffRequestSeq++
+    historyCommits.value = []
+    historyHasMore.value = false
+    historyLoading.value = false
+    selectedCommit.value = null
+    selectedDiff.value = null
+    diffLoading.value = false
+    blame.value = null
+    blameLoading.value = false
+    if (!repoId || !filePath) return
+    if (activeTab.value === 'history') void loadHistory(true)
+    else void loadBlame()
+  },
+  { immediate: true },
+)
 
 // blame 中每一行对应的 hunk（预计算）
 const blameLineHunks = computed<BlameHunk[]>(() => {
@@ -174,8 +215,8 @@ function isFirstLineOfHunk(lineIdx: number): boolean {
 
 // ── Tab 切换时懒加载 ───────────────────────────────────────────────────────
 watch(activeTab, (tab) => {
-  if (tab === 'history' && historyCommits.value.length === 0) loadHistory(true)
-  if (tab === 'blame') loadBlame()
+  if (tab === 'history' && historyCommits.value.length === 0) void loadHistory(true)
+  if (tab === 'blame') void loadBlame()
 })
 
 watch(
@@ -186,11 +227,6 @@ watch(
     }
   },
 )
-
-onMounted(() => {
-  if (activeTab.value === 'history') loadHistory(true)
-  else loadBlame()
-})
 
 // ── commit 悬停 tooltip ───────────────────────────────────────────────────
 const tooltip = reactive({ visible: false, x: 0, y: 0, text: '' })
@@ -261,6 +297,8 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  historyRequestSeq++
+  blameRequestSeq++
   diffRequestSeq++
   document.removeEventListener('keydown', onKeydown, { capture: true })
 })
