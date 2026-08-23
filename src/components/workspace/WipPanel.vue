@@ -19,6 +19,7 @@ import {
 import type { FileEntry, SubmoduleInfo } from '@/types/git'
 import { sortByFileOrder, type FileOrderPlacement } from '@/utils/fileOrderPrefs'
 import { findSelectedWipIndex, findWipFileBySelection } from '@/utils/wipSelection'
+import { resizePercentageFromKey } from '@/utils/keyboardResize'
 import FileChangeList from '@/components/workspace/FileChangeList.vue'
 import WipCommitBox from '@/components/workspace/WipCommitBox.vue'
 import WorkspaceDiscardDialog from '@/components/workspace/WorkspaceDiscardDialog.vue'
@@ -452,6 +453,15 @@ function startSplitResize(e: PointerEvent) {
   document.body.style.userSelect = 'none'
 }
 
+function onSplitKeydown(e: KeyboardEvent) {
+  const next = resizePercentageFromKey(splitPct.value, e.key, 15, 85)
+  if (next === null) return
+  e.preventDefault()
+  e.stopPropagation()
+  splitPct.value = next
+  localStorage.setItem(WIP_SPLIT_KEY, String(next))
+}
+
 // ── 键盘上下键导航 ──────────────────────────────────────────────
 function onListKeydown(e: KeyboardEvent) {
   if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return
@@ -593,7 +603,18 @@ watch(
         </FileChangeList>
       </div>
 
-      <div class="split-resize" @pointerdown="startSplitResize" />
+      <div
+        class="split-resize"
+        role="separator"
+        :aria-label="t('workspace.wip.resizeSections')"
+        aria-orientation="horizontal"
+        aria-valuemin="15"
+        aria-valuemax="85"
+        :aria-valuenow="splitPct"
+        tabindex="0"
+        @pointerdown="startSplitResize"
+        @keydown="onSplitKeydown"
+      />
 
       <div class="split-bottom" :style="{ flex: `${100 - splitPct} 0 0%` }">
         <FileChangeList
@@ -804,6 +825,12 @@ watch(
 
 .split-resize:hover,
 .split-resize:active {
+  background: rgba(138, 173, 244, 0.3);
+}
+
+.split-resize:focus-visible {
+  outline: 1px solid var(--accent-blue);
+  outline-offset: -1px;
   background: rgba(138, 173, 244, 0.3);
 }
 

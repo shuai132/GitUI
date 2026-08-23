@@ -669,6 +669,7 @@ const messages = {
   workspace: {
     wip: {
       headerTitle: '{count} 个文件变更',
+      resizeSections: '调整未暂存与已暂存区域',
       onBranch: 'on {branch}',
       discardAllTitle: '丢弃所有变更',
       stageAll: '全部暂存',

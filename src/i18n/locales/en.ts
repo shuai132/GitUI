@@ -670,6 +670,7 @@ const messages = {
   workspace: {
     wip: {
       headerTitle: '{count} file(s) changed',
+      resizeSections: 'Resize unstaged and staged sections',
       onBranch: 'on {branch}',
       discardAllTitle: 'Discard all changes',
       stageAll: 'Stage all',
