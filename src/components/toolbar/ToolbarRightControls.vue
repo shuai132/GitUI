@@ -333,13 +333,22 @@ async function onActionsSelect(action: string) {
       class="search-box"
       :class="{ 'search-box--expanded': searchExpanded || uiStore.historySearchQuery }"
     >
-      <button class="search-icon-btn" tabindex="-1" :title="withShortcut(t('toolbar.title.search'), 'search')" @click="expandSearch">
+      <button
+        type="button"
+        class="search-icon-btn"
+        :title="withShortcut(t('toolbar.title.search'), 'search')"
+        :aria-label="withShortcut(t('toolbar.title.search'), 'search')"
+        :aria-expanded="searchExpanded || !!uiStore.historySearchQuery"
+        aria-controls="history-search-input"
+        @click="expandSearch"
+      >
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <circle cx="11" cy="11" r="8"/>
           <line x1="21" y1="21" x2="16.65" y2="16.65"/>
         </svg>
       </button>
       <input
+        id="history-search-input"
         v-show="searchExpanded || uiStore.historySearchQuery"
         ref="searchInputEl"
         v-model="uiStore.historySearchQuery"

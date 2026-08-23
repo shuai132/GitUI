@@ -38,7 +38,7 @@
 `get_commit_change_stats` 按提交 first parent 计算文件数、增删行、二进制文件数和大文件指标。Root commit 对空树统计；stash 沿用提交详情语义，额外补上 untracked parent。前端以 OID 为 key 缓存结果，切换仓库时清空缓存。
 
 ### 搜索与过滤
-系统在前端实现实时的文本过滤，支持匹配标题、作者及 OID。在搜索模式下，系统会动态调整视图（如隐藏提交图）以优化信息密度。
+系统在前端实现实时的文本过滤，支持匹配标题、作者及 OID。在搜索模式下，系统会动态调整视图（如隐藏提交图）以优化信息密度。工具栏搜索入口保留在键盘 Tab 顺序中，并向辅助技术暴露输入框的展开状态。
 
 历史日志还支持两个持久化的图过滤偏好：
 - **Solo 当前分支**：`ui` store 按仓库 path 保存 `HistoryBranchScope`；active repo 的 scope 为 `current_first_parent` 时，`get_log` 只从当前 HEAD 出发并按 first-parent 链构建日志，用于查看更干净的当前主线。

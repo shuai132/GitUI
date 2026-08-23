@@ -40,6 +40,20 @@ describe('DiffToolbar whitespace toggle', () => {
     setActivePinia(createPinia())
   })
 
+  it('keeps the diff search entry in the keyboard tab order', async () => {
+    const wrapper = mountToolbar()
+    const searchButton = wrapper.find<HTMLButtonElement>('.search-icon-btn')
+
+    expect(searchButton.attributes('tabindex')).toBeUndefined()
+    expect(searchButton.attributes('aria-expanded')).toBe('false')
+    expect(searchButton.attributes('aria-controls')).toBe('diff-search-input')
+
+    await searchButton.trigger('click')
+
+    expect(searchButton.attributes('aria-expanded')).toBe('true')
+    expect(wrapper.find('#diff-search-input').isVisible()).toBe(true)
+  })
+
   it('toggles the persisted text-diff preference with a discoverable title', async () => {
     const wrapper = mountToolbar()
     const button = wrapper.find('.btn-ignore-whitespace')

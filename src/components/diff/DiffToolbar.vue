@@ -81,13 +81,22 @@ const canIgnoreWhitespace = computed(() =>
       class="search-box"
       :class="{ 'search-box--expanded': searchExpanded || uiStore.diffSearchQuery }"
     >
-      <button class="search-icon-btn" tabindex="-1" :title="withShortcut(t('toolbar.title.search'), 'search')" @click="expandSearch">
+      <button
+        type="button"
+        class="search-icon-btn"
+        :title="withShortcut(t('toolbar.title.search'), 'search')"
+        :aria-label="withShortcut(t('toolbar.title.search'), 'search')"
+        :aria-expanded="searchExpanded || !!uiStore.diffSearchQuery"
+        aria-controls="diff-search-input"
+        @click="expandSearch"
+      >
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <circle cx="11" cy="11" r="8"/>
           <line x1="21" y1="21" x2="16.65" y2="16.65"/>
         </svg>
       </button>
       <input
+        id="diff-search-input"
         v-show="searchExpanded || uiStore.diffSearchQuery"
         ref="searchInputEl"
         v-model="uiStore.diffSearchQuery"

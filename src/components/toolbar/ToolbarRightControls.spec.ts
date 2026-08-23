@@ -183,6 +183,23 @@ describe('ToolbarRightControls', () => {
     mocks.git.runGc.mockResolvedValue('done')
   })
 
+  it('keeps the history search entry in the keyboard tab order', async () => {
+    const wrapper = mount(ToolbarRightControls, {
+      global: { stubs: { ContextMenu: ContextMenuStub } },
+    })
+    const searchButton = wrapper.find<HTMLButtonElement>('.search-icon-btn')
+
+    expect(searchButton.attributes('tabindex')).toBeUndefined()
+    expect(searchButton.attributes('aria-expanded')).toBe('false')
+    expect(searchButton.attributes('aria-controls')).toBe('history-search-input')
+
+    await searchButton.trigger('click')
+
+    expect(searchButton.attributes('aria-expanded')).toBe('true')
+    expect(wrapper.find('#history-search-input').isVisible()).toBe(true)
+    wrapper.unmount()
+  })
+
   it('toggles the changes column from the actions menu', async () => {
     const wrapper = mount(ToolbarRightControls, {
       global: {
