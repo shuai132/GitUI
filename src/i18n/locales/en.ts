@@ -11,6 +11,7 @@ const messages = {
     add: 'Add',
     adding: 'Adding...',
     edit: 'Edit',
+    close: 'Close',
     directoryPickerFailed: 'Could not open the directory picker',
   },
   clipboard: {

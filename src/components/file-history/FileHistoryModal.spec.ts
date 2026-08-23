@@ -90,13 +90,89 @@ function setupRepos() {
   return repoStore
 }
 
+function dispatchKey(key: string, shiftKey = false) {
+  const event = new KeyboardEvent('keydown', {
+    key,
+    shiftKey,
+    bubbles: true,
+    cancelable: true,
+  })
+  document.dispatchEvent(event)
+  return event
+}
+
 describe('FileHistoryModal repository context', () => {
   beforeEach(() => {
+    document.body.innerHTML = ''
     localStorage.clear()
     setActivePinia(createPinia())
     mocks.getFileLog.mockReset()
     mocks.getFileDiffAtCommit.mockReset()
     mocks.getFileBlame.mockReset()
+  })
+
+  it('uses the shared modal focus contract and restores the opener', async () => {
+    mocks.getFileLog.mockResolvedValue([])
+    setupRepos()
+    const opener = document.createElement('button')
+    document.body.appendChild(opener)
+    opener.focus()
+    const wrapper = mount(FileHistoryModal, {
+      props: { filePath: 'src/main.ts' },
+      global: { stubs: { DiffView: true } },
+    })
+    await nextTick()
+    await nextTick()
+
+    const dialog = document.querySelector<HTMLElement>('[role="dialog"]')
+    const tabs = Array.from(document.querySelectorAll<HTMLButtonElement>('[role="tab"]'))
+    const closeButton = document.querySelector<HTMLButtonElement>('.close-btn')
+    expect(dialog?.getAttribute('aria-modal')).toBe('true')
+    expect(dialog?.getAttribute('aria-label')).toContain('src/main.ts')
+    expect(document.querySelector('[role="tablist"]')).not.toBeNull()
+    expect(document.activeElement).toBe(tabs[0])
+
+    tabs[0]?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }))
+    await nextTick()
+    expect(document.activeElement).toBe(tabs[1])
+    expect(tabs[1]?.getAttribute('aria-selected')).toBe('true')
+    tabs[1]?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }))
+    await nextTick()
+    expect(document.activeElement).toBe(tabs[0])
+
+    const backward = dispatchKey('Tab', true)
+    expect(backward.defaultPrevented).toBe(true)
+    expect(document.activeElement).toBe(closeButton)
+    dispatchKey('Tab')
+    expect(document.activeElement).toBe(tabs[0])
+
+    const escape = dispatchKey('Escape')
+    expect(escape.defaultPrevented).toBe(true)
+    expect(wrapper.emitted('close')).toHaveLength(1)
+
+    wrapper.unmount()
+    expect(document.activeElement).toBe(opener)
+    opener.remove()
+  })
+
+  it('renders commit choices as native buttons with selection state', async () => {
+    mocks.getFileLog.mockResolvedValue([commit('a'.repeat(40), 'keyboard commit')])
+    mocks.getFileDiffAtCommit.mockResolvedValue(null)
+    setupRepos()
+    const wrapper = mount(FileHistoryModal, {
+      props: { filePath: 'src/main.ts' },
+      global: { stubs: { DiffView: true } },
+    })
+    await flushPromises()
+
+    const commitButton = document.querySelector<HTMLButtonElement>('.commit-row')
+    expect(commitButton?.tagName).toBe('BUTTON')
+    expect(commitButton?.getAttribute('aria-pressed')).toBe('false')
+    commitButton?.click()
+    await nextTick()
+
+    expect(commitButton?.getAttribute('aria-pressed')).toBe('true')
+    wrapper.unmount()
   })
 
   it('reloads file history and ignores the previous repository response', async () => {
@@ -116,13 +192,13 @@ describe('FileHistoryModal repository context', () => {
     await flushPromises()
 
     expect(mocks.getFileLog).toHaveBeenLastCalledWith('repo-b', 'src/main.ts', 0, 50)
-    expect(wrapper.text()).toContain('beta commit')
+    expect(document.body.textContent).toContain('beta commit')
 
     oldLoad.resolve([commit('a'.repeat(40), 'alpha commit')])
     await flushPromises()
 
-    expect(wrapper.text()).toContain('beta commit')
-    expect(wrapper.text()).not.toContain('alpha commit')
+    expect(document.body.textContent).toContain('beta commit')
+    expect(document.body.textContent).not.toContain('alpha commit')
     wrapper.unmount()
   })
 
@@ -142,13 +218,13 @@ describe('FileHistoryModal repository context', () => {
     await flushPromises()
 
     expect(mocks.getFileBlame).toHaveBeenLastCalledWith('repo-b', 'src/main.ts')
-    expect(wrapper.text()).toContain('beta line')
+    expect(document.body.textContent).toContain('beta line')
 
     oldLoad.resolve(blame('alpha line', 'a'.repeat(40)))
     await flushPromises()
 
-    expect(wrapper.text()).toContain('beta line')
-    expect(wrapper.text()).not.toContain('alpha line')
+    expect(document.body.textContent).toContain('beta line')
+    expect(document.body.textContent).not.toContain('alpha line')
     wrapper.unmount()
   })
 })

@@ -11,6 +11,7 @@ const messages = {
     add: '添加',
     adding: '添加中...',
     edit: '编辑',
+    close: '关闭',
     directoryPickerFailed: '无法打开目录选择器',
   },
   clipboard: {

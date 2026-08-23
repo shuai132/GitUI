@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { ref, reactive, computed, watch, onMounted, onBeforeUnmount } from 'vue'
+import { ref, reactive, computed, watch, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { CommitInfo, FileDiff, FileBlame, BlameHunk } from '@/types/git'
 import { useGitCommands } from '@/composables/useGitCommands'
 import { useRepoStore } from '@/stores/repos'
 import { useUiStore } from '@/stores/ui'
 import DiffView from '@/components/diff/DiffView.vue'
+import Modal from '@/components/common/Modal.vue'
 import { formatTime, formatAbsoluteTime } from '@/utils/format'
 import { EXT_TO_LANG } from '@/lib/highlight'
 import { highlightLine } from '@/lib/highlight'
@@ -23,25 +24,28 @@ const emit = defineEmits<{
   close: []
 }>()
 
-const overlayRef = ref<HTMLElement | null>(null)
-
-function isShortcutRecording() {
-  return document.querySelector('.shortcut-key.recording') !== null
-}
-
-function isTopmostModal() {
-  const overlay = overlayRef.value
-  if (!overlay) return false
-  const overlays = Array.from(document.querySelectorAll<HTMLElement>('[data-modal-overlay="true"]'))
-  return overlays[overlays.length - 1] === overlay
-}
-
 const repoStore = useRepoStore()
 const uiStore = useUiStore()
 const gitCmd = useGitCommands()
 
 // ── 标签页 ────────────────────────────────────────────────────────────────
 const activeTab = ref<'history' | 'blame'>(props.initialMode ?? 'history')
+
+function onTabKeydown(e: KeyboardEvent, tab: 'history' | 'blame') {
+  const tabOrder = ['history', 'blame'] as const
+  let nextIndex: number | null = null
+  if (e.key === 'ArrowRight') nextIndex = (tabOrder.indexOf(tab) + 1) % tabOrder.length
+  if (e.key === 'ArrowLeft') nextIndex = (tabOrder.indexOf(tab) - 1 + tabOrder.length) % tabOrder.length
+  if (e.key === 'Home') nextIndex = 0
+  if (e.key === 'End') nextIndex = tabOrder.length - 1
+  if (nextIndex === null) return
+
+  e.preventDefault()
+  const nextTab = tabOrder[nextIndex]
+  activeTab.value = nextTab
+  const tabBar = (e.currentTarget as HTMLElement).closest('[role="tablist"]')
+  tabBar?.querySelector<HTMLElement>(`[data-tab="${nextTab}"]`)?.focus()
+}
 
 // ── 文件历史 ──────────────────────────────────────────────────────────────
 const historyCommits = ref<CommitInfo[]>([])
@@ -282,66 +286,72 @@ function startListResize(e: PointerEvent) {
   document.body.style.userSelect = 'none'
 }
 
-function onKeydown(e: KeyboardEvent) {
-  if (e.key !== 'Escape') return
-  if (isShortcutRecording() || !isTopmostModal()) return
-
-  e.preventDefault()
-  e.stopPropagation()
-  e.stopImmediatePropagation()
-  emit('close')
-}
-
-onMounted(() => {
-  document.addEventListener('keydown', onKeydown, { capture: true })
-})
-
 onBeforeUnmount(() => {
   historyRequestSeq++
   blameRequestSeq++
   diffRequestSeq++
-  document.removeEventListener('keydown', onKeydown, { capture: true })
+  hideTooltip()
 })
 </script>
 
 <template>
-  <div
-    ref="overlayRef"
-    class="modal-overlay"
-    data-modal-overlay="true"
-    @click.self="emit('close')"
+  <Modal
+    :visible="true"
+    :width="'min(1100px, 94vw)'"
+    :height="'min(720px, 90vh)'"
+    body-class="file-history-modal-body"
+    :aria-label="`${t(`fileHistory.tabs.${activeTab}`)}: ${filePath}`"
+    @close="emit('close')"
   >
-    <div class="modal-box">
-      <!-- Header -->
-      <div class="modal-header">
-        <div class="tab-bar">
+    <template #header>
+      <div class="file-history-header">
+        <div class="tab-bar" role="tablist">
           <button
+            type="button"
             class="tab-btn"
             :class="{ active: activeTab === 'history' }"
+            role="tab"
+            data-tab="history"
+            :aria-selected="activeTab === 'history'"
             @click="activeTab = 'history'"
+            @keydown="onTabKeydown($event, 'history')"
           >{{ t('fileHistory.tabs.history') }}</button>
           <button
+            type="button"
             class="tab-btn"
             :class="{ active: activeTab === 'blame' }"
+            role="tab"
+            data-tab="blame"
+            :aria-selected="activeTab === 'blame'"
             @click="activeTab = 'blame'"
+            @keydown="onTabKeydown($event, 'blame')"
           >{{ t('fileHistory.tabs.blame') }}</button>
         </div>
         <span class="file-path-label" :title="filePath"><bdi>{{ filePath }}</bdi></span>
-        <button class="close-btn" @click="emit('close')">✕</button>
+        <button
+          type="button"
+          class="close-btn"
+          :title="t('common.close')"
+          :aria-label="t('common.close')"
+          @click="emit('close')"
+        >✕</button>
       </div>
+    </template>
 
-      <!-- History Tab -->
-      <div v-if="activeTab === 'history'" class="tab-content history-tab">
+    <!-- History Tab -->
+    <div v-if="activeTab === 'history'" class="tab-content history-tab" role="tabpanel">
         <!-- 左侧：commit 列表 -->
         <div class="commit-list" :style="{ width: listWidth + 'px' }">
           <div v-if="historyLoading && historyCommits.length === 0" class="loading-msg">
             {{ t('fileHistory.loading') }}
           </div>
-          <div
+          <button
             v-for="c in historyCommits"
             :key="c.oid"
+            type="button"
             class="commit-row"
             :class="{ selected: selectedCommit?.oid === c.oid }"
+            :aria-pressed="selectedCommit?.oid === c.oid"
             @click="selectCommit(c)"
             @mouseenter="showTooltip($event, c)"
             @mousemove="moveTooltip"
@@ -350,7 +360,7 @@ onBeforeUnmount(() => {
             <span class="c-oid">{{ c.short_oid }}</span>
             <span class="c-summary">{{ c.summary }}</span>
             <span class="c-meta">{{ c.author_name }} · {{ formatTime(c.time) }}</span>
-          </div>
+          </button>
           <div v-if="historyHasMore" class="load-more-row">
             <button class="btn-load-more" @click="loadHistory(false)" :disabled="historyLoading">
               {{ historyLoading ? t('fileHistory.loading') : t('fileHistory.loadMore') }}
@@ -371,10 +381,10 @@ onBeforeUnmount(() => {
           </div>
           <DiffView v-else :diff="selectedDiff" :loading="diffLoading" :repo-id="repoStore.activeRepoId ?? undefined" />
         </div>
-      </div>
+    </div>
 
-      <!-- Blame Tab -->
-      <div v-if="activeTab === 'blame'" class="tab-content blame-tab">
+    <!-- Blame Tab -->
+    <div v-if="activeTab === 'blame'" class="tab-content blame-tab" role="tabpanel">
         <div v-if="blameLoading" class="loading-msg">{{ t('fileHistory.blameLoading') }}</div>
         <div v-else-if="!blame" class="empty-msg">{{ t('fileHistory.noBlame') }}</div>
         <div v-else class="blame-content">
@@ -403,9 +413,8 @@ onBeforeUnmount(() => {
             <span class="blame-code" v-else>{{ line }}</span>
           </div>
         </div>
-      </div>
     </div>
-  </div>
+  </Modal>
 
   <!-- 悬停 tooltip -->
   <div
@@ -416,36 +425,19 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.55);
-  z-index: 200;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.modal-box {
-  background: var(--bg-primary);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  width: min(1100px, 94vw);
-  height: min(720px, 90vh);
-  display: flex;
-  flex-direction: column;
+:deep(.file-history-modal-body) {
+  padding: 0;
   overflow: hidden;
-  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.4);
+  display: flex;
+  min-height: 0;
 }
 
 /* Header */
-.modal-header {
+.file-history-header {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
+  width: 100%;
 }
 
 .tab-bar {
@@ -529,7 +521,13 @@ onBeforeUnmount(() => {
 }
 
 .commit-row {
+  width: 100%;
   padding: 7px 10px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
   cursor: pointer;
   border-bottom: 1px var(--row-separator-style) rgba(var(--row-separator-rgb), var(--row-separator-alpha));
   display: flex;
@@ -537,6 +535,10 @@ onBeforeUnmount(() => {
   gap: 2px;
 }
 .commit-row:hover { background: var(--bg-overlay); }
+.commit-row:focus-visible {
+  outline: 1px solid var(--accent-blue);
+  outline-offset: -1px;
+}
 .commit-row.selected {
   background: var(--row-selected-bg);
   color: var(--row-selected-fg);
