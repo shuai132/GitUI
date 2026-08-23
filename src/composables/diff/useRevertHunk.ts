@@ -1,6 +1,7 @@
 import { computed, toValue, type MaybeRefOrGetter } from 'vue'
 import type { FileDiff } from '@/types/git'
 import { useGitCommands } from '@/composables/useGitCommands'
+import { useGlobalToast } from '@/composables/useGlobalToast'
 import { buildHunkPatch } from '@/lib/hunkPatch'
 
 type UseRevertHunkOptions = {
@@ -11,6 +12,7 @@ type UseRevertHunkOptions = {
 
 export function useRevertHunk(options: UseRevertHunkOptions) {
   const { applyPatch } = useGitCommands()
+  const { showActionError } = useGlobalToast()
 
   const allowRevert = computed(() => !toValue(options.wip) && toValue(options.diff) != null)
 
@@ -25,7 +27,7 @@ export function useRevertHunk(options: UseRevertHunkOptions) {
     try {
       await applyPatch(repoId, patchText)
     } catch (err) {
-      console.error('Failed to revert hunk:', err)
+      showActionError(err)
     }
   }
 

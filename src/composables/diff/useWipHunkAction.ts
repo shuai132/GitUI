@@ -3,6 +3,7 @@ import type { FileDiff, FileStatusKind } from '@/types/git'
 import { useGitCommands } from '@/composables/useGitCommands'
 import { useDiffStore } from '@/stores/diff'
 import { useWorkspaceStore } from '@/stores/workspace'
+import { useGlobalToast } from '@/composables/useGlobalToast'
 import { buildHunkPatch } from '@/lib/hunkPatch'
 import { findWipFileBySelection } from '@/utils/wipSelection'
 
@@ -18,6 +19,7 @@ export function useWipHunkAction(options: UseWipHunkActionOptions) {
   const { applyPatch, applyPatchToIndex, applyPatchToWorkdirAndIndex, stageFile, unstageFile } = useGitCommands()
   const workspaceStore = useWorkspaceStore()
   const diffStore = useDiffStore()
+  const { showActionError } = useGlobalToast()
 
   const action = computed<WipHunkAction | null>(() => {
     const diff = toValue(options.diff)
@@ -50,7 +52,7 @@ export function useWipHunkAction(options: UseWipHunkActionOptions) {
         await workspaceStore.refresh(repoId)
         await refreshCurrentWipDiff()
       } catch (err) {
-        console.error('Failed to apply WIP hunk:', err)
+        showActionError(err)
       }
       return
     }
@@ -66,7 +68,7 @@ export function useWipHunkAction(options: UseWipHunkActionOptions) {
       await workspaceStore.refresh(repoId)
       await refreshCurrentWipDiff()
     } catch (err) {
-      console.error('Failed to apply WIP hunk:', err)
+      showActionError(err)
     }
   }
 
@@ -88,7 +90,7 @@ export function useWipHunkAction(options: UseWipHunkActionOptions) {
       await workspaceStore.refresh(repoId)
       await refreshCurrentWipDiff()
     } catch (err) {
-      console.error('Failed to discard WIP hunk:', err)
+      showActionError(err)
     }
   }
 
