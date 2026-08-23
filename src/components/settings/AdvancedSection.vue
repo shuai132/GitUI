@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
   DEFAULT_ADVANCED_VIEW_PREFS,
@@ -8,11 +8,14 @@ import {
 } from '@/stores/ui'
 import { useGitPrefsStore, FETCH_INTERVAL_OPTIONS } from '@/stores/gitPrefs'
 import { useGitCommands } from '@/composables/useGitCommands'
+import { useGlobalToast } from '@/composables/useGlobalToast'
 
 const uiStore = useUiStore()
 const gitPrefsStore = useGitPrefsStore()
 const git = useGitCommands()
 const { t } = useI18n()
+const { showActionError } = useGlobalToast()
+const fetchIntervalSaving = ref(false)
 
 const diffLayoutOptions = computed<Array<{ value: DiffLayoutMode; label: string }>>(() => [
   { value: 'inline', label: t('settings.advanced.diffLayoutInline') },
@@ -115,12 +118,20 @@ const fetchIntervalLabel = computed(() => {
 })
 
 async function onFetchIntervalChange(e: Event) {
+  if (fetchIntervalSaving.value) return
   const secs = Number((e.target as HTMLSelectElement).value)
+  const previousSecs = gitPrefsStore.autoFetchInterval
   gitPrefsStore.setAutoFetchInterval(secs)
+  fetchIntervalSaving.value = true
   try {
     await git.setAutoFetchInterval(secs)
-  } catch (err) {
-    console.error('[gitPrefs] set_auto_fetch_interval failed', err)
+  } catch (caught: unknown) {
+    gitPrefsStore.setAutoFetchInterval(previousSecs)
+    showActionError(caught, t('settings.gitPrefs.fetchIntervalUpdateFailed', {
+      detail: String(caught),
+    }))
+  } finally {
+    fetchIntervalSaving.value = false
   }
 }
 </script>
@@ -187,6 +198,7 @@ async function onFetchIntervalChange(e: Event) {
         <select
           class="pref-select"
           :value="gitPrefsStore.autoFetchInterval"
+          :disabled="fetchIntervalSaving"
           @change="onFetchIntervalChange"
         >
           <option

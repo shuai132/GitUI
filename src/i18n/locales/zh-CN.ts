@@ -991,6 +991,7 @@ const messages = {
       fetchIntervalHint: '定期从所有远端静默 fetch，更新 ahead/behind 计数',
       fetchIntervalDisabled: '禁用',
       fetchIntervalMinute: '{n} 分钟',
+      fetchIntervalUpdateFailed: '更新自动 Fetch 间隔失败，已恢复原设置：{detail}',
     },
     about: {
       authorLabel: '作者：',

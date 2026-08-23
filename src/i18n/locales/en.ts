@@ -992,6 +992,7 @@ const messages = {
       fetchIntervalHint: 'Silently fetch from all remotes on a schedule to update ahead/behind counts',
       fetchIntervalDisabled: 'Disabled',
       fetchIntervalMinute: '{n} minute(s)',
+      fetchIntervalUpdateFailed: 'Failed to update the auto-fetch interval; the previous setting was restored: {detail}',
     },
     about: {
       authorLabel: 'Author:',
