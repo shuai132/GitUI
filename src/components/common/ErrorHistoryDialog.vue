@@ -67,13 +67,23 @@ async function onCopy(entry: ErrorEntry) {
           :key="entry.id"
           class="err-item"
         >
-          <div class="err-head" @click="toggle(entry.id)">
-            <span class="err-time">{{ formatTime(entry.ts) }}</span>
-            <span class="err-op">{{ entry.op }}</span>
-            <span class="err-friendly">{{ entry.friendly }}</span>
+          <div class="err-head">
             <button
+              type="button"
+              class="err-toggle"
+              :aria-expanded="expanded.has(entry.id)"
+              :aria-controls="`error-detail-${entry.id}`"
+              @click="toggle(entry.id)"
+            >
+              <span class="err-time">{{ formatTime(entry.ts) }}</span>
+              <span class="err-op">{{ entry.op }}</span>
+              <span class="err-friendly">{{ entry.friendly }}</span>
+            </button>
+            <button
+              type="button"
               class="err-copy"
               :title="t('errorHistory.copyTitle')"
+              :aria-label="t('errorHistory.copyTitle')"
               @click.stop="onCopy(entry)"
             >
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -82,7 +92,11 @@ async function onCopy(entry: ErrorEntry) {
               </svg>
             </button>
           </div>
-          <pre v-if="expanded.has(entry.id)" class="err-raw">{{ entry.raw }}</pre>
+          <pre
+            v-if="expanded.has(entry.id)"
+            :id="`error-detail-${entry.id}`"
+            class="err-raw"
+          >{{ entry.raw }}</pre>
         </div>
       </div>
     </div>
@@ -137,15 +151,34 @@ async function onCopy(entry: ErrorEntry) {
 .err-head {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 10px;
-  cursor: pointer;
-  font-size: var(--font-md);
+  padding-right: 6px;
   transition: background 0.1s;
 }
 
 .err-head:hover {
   background: var(--bg-overlay);
+}
+
+.err-toggle {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  gap: 8px;
+  padding: 6px 4px 6px 10px;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: var(--font-md);
+  text-align: left;
+  cursor: pointer;
+}
+
+.err-toggle:focus-visible,
+.err-copy:focus-visible {
+  outline: 1px solid var(--accent-blue);
+  outline-offset: 1px;
 }
 
 .err-time {

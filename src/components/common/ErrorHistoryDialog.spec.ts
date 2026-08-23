@@ -79,6 +79,24 @@ describe('ErrorHistoryDialog clear confirmation', () => {
     expect(wrapper.find('.err-raw').exists()).toBe(false)
   })
 
+  it('exposes error details through a keyboard-accessible disclosure button', async () => {
+    const wrapper = mount(ErrorHistoryDialog, {
+      props: { visible: true },
+      global: { stubs: { Teleport: true } },
+    })
+    const toggle = wrapper.find<HTMLButtonElement>('.err-toggle')
+
+    expect(toggle.element.tagName).toBe('BUTTON')
+    expect(toggle.attributes('aria-expanded')).toBe('false')
+    expect(wrapper.find('.err-copy').attributes('aria-label')).toBe('errorHistory.copyTitle')
+
+    await toggle.trigger('click')
+
+    expect(toggle.attributes('aria-expanded')).toBe('true')
+    expect(toggle.attributes('aria-controls')).toBe('error-detail-1')
+    expect(wrapper.find('#error-detail-1').text()).toBe('network error')
+  })
+
   it('shows a non-blocking action error when clipboard access fails', async () => {
     const clipboardError = new Error('clipboard denied')
     mocks.writeText.mockRejectedValue(clipboardError)
