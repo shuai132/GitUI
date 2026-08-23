@@ -99,6 +99,19 @@ describe('SidebarTags guarded push', () => {
     mocks.pickRemote.mockReset().mockResolvedValue('origin')
     mocks.showError.mockReset()
     mocks.showToast.mockReset()
+    mocks.routerPush.mockReset()
+    mocks.history.pendingJumpOid = null
+  })
+
+  it('uses a native button to jump to a tag commit from the keyboard', async () => {
+    const wrapper = shallowMount(SidebarTags)
+    const tagButton = wrapper.find<HTMLButtonElement>('.tag-item')
+
+    expect(tagButton.element.tagName).toBe('BUTTON')
+    await tagButton.trigger('click')
+
+    expect(mocks.history.pendingJumpOid).toBe(localTag.commit_oid)
+    expect(mocks.routerPush).toHaveBeenCalledWith('/history')
   })
 
   it('guards a normal push with the selected local ref OID', async () => {

@@ -371,9 +371,10 @@ async function onTagMenuAction(action: string) {
       />
     </div>
     <template v-if="!sectionState.isCollapsed('tags')">
-      <div
+      <button
         v-for="tag in filteredTags"
         :key="tag.name"
+        type="button"
         class="branch-item tag-item"
         :class="{ 'tag-item--lightweight': !tag.is_annotated }"
         :title="tagItemTitle(tag)"
@@ -405,7 +406,7 @@ async function onTagMenuAction(action: string) {
           class="tag-status-icon tag-status-icon--local"
           aria-hidden="true"
         >↑</span>
-      </div>
+      </button>
       <div v-if="hasSearchQuery && filteredTags.length === 0" class="section-empty">
         {{ t('sidebar.search.noResults') }}
       </div>
@@ -442,6 +443,19 @@ async function onTagMenuAction(action: string) {
 .tag-icon {
   color: var(--accent-orange);
   flex-shrink: 0;
+}
+
+.tag-item {
+  width: 100%;
+  border: none;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+}
+
+.tag-item:focus-visible {
+  outline: 1px solid var(--accent-blue);
+  outline-offset: -1px;
 }
 
 .tag-item--lightweight .tag-icon {
