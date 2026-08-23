@@ -220,6 +220,17 @@ function startResize(e: PointerEvent) {
   document.body.style.cursor = 'row-resize'
   document.body.style.userSelect = 'none'
 }
+
+function onSplitKeydown(e: KeyboardEvent) {
+  let next = topPct.value
+  if (e.key === 'ArrowUp') next -= 5
+  else if (e.key === 'ArrowDown') next += 5
+  else if (e.key === 'Home') next = 15
+  else if (e.key === 'End') next = 85
+  else return
+  e.preventDefault()
+  topPct.value = Math.max(15, Math.min(85, next))
+}
 </script>
 
 <template>
@@ -285,7 +296,17 @@ function startResize(e: PointerEvent) {
     </div>
 
     <!-- Resize handle -->
-    <div class="debug-split" @pointerdown="startResize" />
+    <div
+      class="debug-split"
+      role="separator"
+      aria-orientation="horizontal"
+      aria-valuemin="15"
+      aria-valuemax="85"
+      :aria-valuenow="topPct"
+      tabindex="0"
+      @pointerdown="startResize"
+      @keydown="onSplitKeydown"
+    />
 
     <!-- Bottom: Logs -->
     <div class="debug-section debug-section--bottom">
@@ -409,6 +430,12 @@ function startResize(e: PointerEvent) {
 
 .debug-split:hover,
 .debug-split:active {
+  background: rgba(138, 173, 244, 0.4);
+}
+
+.debug-split:focus-visible {
+  outline: 1px solid var(--accent-blue);
+  outline-offset: -1px;
   background: rgba(138, 173, 244, 0.4);
 }
 

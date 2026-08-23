@@ -61,4 +61,18 @@ describe('DebugPanel command navigation', () => {
     expect(document.activeElement).toBe(rows[1]?.element)
     wrapper.unmount()
   })
+
+  it('resizes the command section from the keyboard', async () => {
+    const wrapper = mount(DebugPanel)
+    const separator = wrapper.find<HTMLElement>('[role="separator"]')
+
+    expect(separator.attributes('aria-orientation')).toBe('horizontal')
+    expect(separator.attributes('aria-valuenow')).toBe('50')
+
+    await separator.trigger('keydown', { key: 'ArrowDown' })
+    expect(separator.attributes('aria-valuenow')).toBe('55')
+
+    await separator.trigger('keydown', { key: 'End' })
+    expect(separator.attributes('aria-valuenow')).toBe('85')
+  })
 })
