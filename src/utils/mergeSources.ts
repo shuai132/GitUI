@@ -46,6 +46,12 @@ export function mergeSourceNamesAtCommit(
     .map((branch) => branch.name)
 }
 
+export function resolveReferenceOid(branches: BranchInfo[], spec: string): string | null {
+  const branchOid = branches.find((branch) => branch.name === spec)?.commit_oid
+  if (branchOid) return branchOid
+  return /^[0-9a-f]{40}$/i.test(spec) ? spec : null
+}
+
 export function branchNamesAtCommit(
   branches: BranchInfo[],
   commitOid: string | null,

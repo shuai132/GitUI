@@ -17,12 +17,23 @@ pub async fn merge_branch(
     source_branch: String,
     strategy: MergeStrategy,
     message: Option<String>,
+    expected_head: String,
+    expected_head_ref: String,
+    expected_source: String,
     repo_manager: State<'_, RepoManager>,
 ) -> Result<(), GitError> {
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    GitEngine::merge_branch(&meta.path, &source_branch, strategy, message.as_deref())
+    GitEngine::merge_branch(
+        &meta.path,
+        &source_branch,
+        strategy,
+        message.as_deref(),
+        &expected_head,
+        &expected_head_ref,
+        &expected_source,
+    )
 }
 
 #[tauri::command]
@@ -55,12 +66,24 @@ pub async fn rebase_plan(
     repo_id: String,
     upstream: String,
     onto: Option<String>,
+    expected_head: String,
+    expected_head_ref: String,
+    expected_upstream: String,
+    expected_onto: Option<String>,
     repo_manager: State<'_, RepoManager>,
 ) -> Result<Vec<RebaseTodoItem>, GitError> {
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    GitEngine::rebase_plan(&meta.path, &upstream, onto.as_deref())
+    GitEngine::rebase_plan(
+        &meta.path,
+        &upstream,
+        onto.as_deref(),
+        &expected_head,
+        &expected_head_ref,
+        &expected_upstream,
+        expected_onto.as_deref(),
+    )
 }
 
 #[tauri::command]
@@ -69,12 +92,25 @@ pub async fn rebase_start(
     upstream: String,
     onto: Option<String>,
     todo: Option<Vec<RebaseTodoItem>>,
+    expected_head: String,
+    expected_head_ref: String,
+    expected_upstream: String,
+    expected_onto: Option<String>,
     repo_manager: State<'_, RepoManager>,
 ) -> Result<(), GitError> {
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    GitEngine::rebase_start(&meta.path, &upstream, onto.as_deref(), todo)
+    GitEngine::rebase_start(
+        &meta.path,
+        &upstream,
+        onto.as_deref(),
+        todo,
+        &expected_head,
+        &expected_head_ref,
+        &expected_upstream,
+        expected_onto.as_deref(),
+    )
 }
 
 #[tauri::command]

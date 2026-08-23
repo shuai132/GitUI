@@ -3,6 +3,7 @@ import {
   buildDragActionState,
   mergeSourceNames,
   mergeSourceNamesAtCommit,
+  resolveReferenceOid,
 } from './mergeSources'
 import type { BranchInfo } from '@/types/git'
 
@@ -24,6 +25,15 @@ describe('mergeSources', () => {
 
     expect(mergeSourceNames(branches)).toEqual(['origin/dev'])
     expect(mergeSourceNamesAtCommit(branches, 'remote')).toEqual(['origin/dev'])
+  })
+
+  it('resolves loaded branch names and stable full commit ids', () => {
+    const oid = '1234567890abcdef1234567890abcdef12345678'
+    const branches = [branch({ name: 'feature', commit_oid: oid })]
+
+    expect(resolveReferenceOid(branches, 'feature')).toBe(oid)
+    expect(resolveReferenceOid([], oid)).toBe(oid)
+    expect(resolveReferenceOid([], 'missing')).toBeNull()
   })
 
   it('prefers pointed candidates while excluding the current branch', () => {

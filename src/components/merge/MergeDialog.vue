@@ -4,8 +4,10 @@ import { useI18n } from 'vue-i18n'
 import Modal from '@/components/common/Modal.vue'
 import { useMergeRebaseStore } from '@/stores/mergeRebase'
 import { useHistoryStore } from '@/stores/history'
-import { mergeSourceNames } from '@/utils/mergeSources'
-import type { MergeStrategy } from '@/types/git'
+import { mergeSourceNames, resolveReferenceOid } from '@/utils/mergeSources'
+import { useRepoStore } from '@/stores/repos'
+import { useWorkspaceStore } from '@/stores/workspace'
+import type { BranchInfo, MergeStrategy } from '@/types/git'
 
 const { t } = useI18n()
 
@@ -21,6 +23,8 @@ const emit = defineEmits<{ close: [] }>()
 
 const mr = useMergeRebaseStore()
 const historyStore = useHistoryStore()
+const repoStore = useRepoStore()
+const workspaceStore = useWorkspaceStore()
 
 const sourceBranch = ref('')
 const strategy = ref<MergeStrategy>('auto')
@@ -28,21 +32,33 @@ const message = ref('')
 const autoStash = ref(false)
 const submitting = ref(false)
 const errorMsg = ref<string | null>(null)
-
-const targetBranch = computed(
-  () =>
-    historyStore.branches.find((b) => b.is_head && !b.is_remote)?.name ?? 'HEAD',
-)
+const openedRepoId = ref<string | null>(null)
+const openedHeadOid = ref<string | null>(null)
+const openedHeadRef = ref('HEAD')
+const openedTargetBranch = ref('HEAD')
+const openedBranches = ref<BranchInfo[]>([])
+const openedCandidateSources = ref<string[]>([])
 
 const sourceOptions = computed(() =>
-  mergeSourceNames(historyStore.branches, props.candidateSources),
+  mergeSourceNames(openedBranches.value, openedCandidateSources.value),
 )
+const sourceOid = computed(() => resolveReferenceOid(openedBranches.value, sourceBranch.value))
 
 watch(
   () => props.visible,
   (v) => {
     if (!v) return
-    sourceBranch.value = props.candidateSources[0] ?? sourceOptions.value[0] ?? ''
+    openedRepoId.value = repoStore.activeRepoId
+    openedHeadOid.value = workspaceStore.status?.head_commit ?? null
+    openedHeadRef.value = workspaceStore.status?.head_branch
+      ? `refs/heads/${workspaceStore.status.head_branch}`
+      : 'HEAD'
+    openedBranches.value = historyStore.branches.map((branch) => ({ ...branch }))
+    openedCandidateSources.value = [...props.candidateSources]
+    openedTargetBranch.value = openedBranches.value.find(
+      (branch) => branch.is_head && !branch.is_remote,
+    )?.name ?? 'HEAD'
+    sourceBranch.value = openedCandidateSources.value[0] ?? sourceOptions.value[0] ?? ''
     strategy.value = 'auto'
     message.value = ''
     autoStash.value = false
@@ -55,15 +71,36 @@ watch(
 const needsMessage = computed(() => strategy.value === 'no_fast_forward')
 
 async function onSubmit() {
-  if (!sourceBranch.value) return
+  const repoId = openedRepoId.value
+  const expectedHead = openedHeadOid.value
+  const expectedSource = sourceOid.value
+  const currentSource = resolveReferenceOid(historyStore.branches, sourceBranch.value)
+  if (
+    !repoId ||
+    !expectedHead ||
+    !expectedSource ||
+    repoStore.activeRepoId !== repoId ||
+    workspaceStore.status?.head_commit !== expectedHead ||
+    (workspaceStore.status?.head_branch
+      ? `refs/heads/${workspaceStore.status.head_branch}`
+      : 'HEAD') !== openedHeadRef.value ||
+    currentSource !== expectedSource
+  ) {
+    errorMsg.value = t('merge.dialog.contextChanged')
+    return
+  }
   submitting.value = true
   errorMsg.value = null
   try {
     await mr.startMerge(
+      repoId,
       sourceBranch.value,
       strategy.value,
       needsMessage.value && message.value.trim() ? message.value.trim() : null,
       autoStash.value,
+      expectedHead,
+      openedHeadRef.value,
+      expectedSource,
     )
     emit('close')
   } catch (e) {
@@ -89,7 +126,7 @@ async function onSubmit() {
     </div>
     <div class="row">
       <label>{{ t('merge.dialog.target') }}</label>
-      <div class="static">{{ targetBranch }}</div>
+      <div class="static">{{ openedTargetBranch }}</div>
     </div>
     <div class="row">
       <label>{{ t('merge.dialog.strategy') }}</label>
@@ -124,7 +161,7 @@ async function onSubmit() {
       </button>
       <button
         class="btn btn-primary"
-        :disabled="!sourceBranch || submitting"
+        :disabled="!sourceBranch || !sourceOid || submitting"
         @click="onSubmit"
       >
         {{ submitting ? t('merge.dialog.submitting') : t('merge.dialog.submit') }}

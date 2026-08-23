@@ -142,12 +142,18 @@ export function useGitCommands() {
     sourceBranch: string,
     strategy: MergeStrategy,
     message: string | null,
+    expectedHead: string,
+    expectedHeadRef: string,
+    expectedSource: string,
   ) =>
     call<void>('merge_branch', {
       repoId,
       sourceBranch,
       strategy,
       message: message ?? null,
+      expectedHead,
+      expectedHeadRef,
+      expectedSource,
     })
 
   const mergeContinue = (repoId: string, message: string) =>
@@ -156,11 +162,23 @@ export function useGitCommands() {
   const mergeAbort = (repoId: string) =>
     call<void>('merge_abort', { repoId })
 
-  const rebasePlan = (repoId: string, upstream: string, onto: string | null) =>
+  const rebasePlan = (
+    repoId: string,
+    upstream: string,
+    onto: string | null,
+    expectedHead: string,
+    expectedHeadRef: string,
+    expectedUpstream: string,
+    expectedOnto: string | null,
+  ) =>
     call<RebaseTodoItem[]>('rebase_plan', {
       repoId,
       upstream,
       onto: onto ?? null,
+      expectedHead,
+      expectedHeadRef,
+      expectedUpstream,
+      expectedOnto,
     })
 
   const rebaseStart = (
@@ -168,12 +186,20 @@ export function useGitCommands() {
     upstream: string,
     onto: string | null,
     todo: RebaseTodoItem[] | null,
+    expectedHead: string,
+    expectedHeadRef: string,
+    expectedUpstream: string,
+    expectedOnto: string | null,
   ) =>
     call<void>('rebase_start', {
       repoId,
       upstream,
       onto: onto ?? null,
       todo: todo ?? null,
+      expectedHead,
+      expectedHeadRef,
+      expectedUpstream,
+      expectedOnto,
     })
 
   const rebaseContinue = (repoId: string, amendedMessage: string | null) =>

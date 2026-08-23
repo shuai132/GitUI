@@ -52,8 +52,8 @@ GitUI 采用 Tauri v2 的 IPC 机制实现前后端通信，包括双向的请�
 - `list_submodules` / `init_submodule` / `update_submodule` / `set_submodule_url` / `deinit_submodule` / `add_submodule`：完整的子模块工具链支持。`set_submodule_url` 必须传入预期旧 URL，目标变化时不修改 `.gitmodules`；`deinit_submodule` 先把工作目录与内部 Git 元数据移入系统废纸篓，任一步失败时不继续修改父仓库配置与 Index。
 
 ### 合并与变基 (Merge / Rebase)
-- `merge_branch` / `merge_continue` / `merge_abort`：合并流程控制。
-- `rebase_start` / `rebase_continue` / `rebase_abort` / `rebase_plan`：交互式变基流。
+- `merge_branch` / `merge_continue` / `merge_abort`：合并流程控制。`merge_branch` 必须传确认时的 HEAD OID / ref 与 source OID，后端在写入前解析并复核引用。
+- `rebase_start` / `rebase_continue` / `rebase_abort` / `rebase_plan`：交互式变基流。计划与启动请求都携带预期 HEAD OID / ref、upstream 和可选 onto OID，任一目标变化时拒绝旧计划。
 - `get_conflict_file` / `mark_conflict_resolved`：冲突解决契约。
 
 ### 贮藏 (Stash)

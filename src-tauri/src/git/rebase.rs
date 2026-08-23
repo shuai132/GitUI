@@ -45,14 +45,31 @@ impl GitEngine {
         path: &str,
         upstream: &str,
         onto: Option<&str>,
+        expected_head: &str,
+        expected_head_ref: &str,
+        expected_upstream: &str,
+        expected_onto: Option<&str>,
     ) -> GitResult<Vec<RebaseTodoItem>> {
         let repo = Self::open(path)?;
-        let head = repo.head()?.peel_to_commit()?;
+        let head_ref = repo.head()?;
+        let head = head_ref.peel_to_commit()?;
+        if head.id().to_string() != expected_head || head_ref.name() != Some(expected_head_ref) {
+            return Err(GitError::OperationFailed(
+                "Rebase HEAD changed after the dialog opened".to_string(),
+            ));
+        }
         let upstream_oid = resolve_oid(&repo, upstream)?;
-        let _onto_oid = match onto {
+        let onto_oid = match onto {
             Some(s) => Some(resolve_oid(&repo, s)?),
             None => None,
         };
+        if upstream_oid.to_string() != expected_upstream
+            || onto_oid.map(|oid| oid.to_string()).as_deref() != expected_onto
+        {
+            return Err(GitError::OperationFailed(
+                "Rebase target changed after the dialog opened".to_string(),
+            ));
+        }
 
         // revwalk: upstream..HEAD
         let mut walk = repo.revwalk()?;
@@ -89,11 +106,32 @@ impl GitEngine {
         upstream: &str,
         onto: Option<&str>,
         todo: Option<Vec<RebaseTodoItem>>,
+        expected_head: &str,
+        expected_head_ref: &str,
+        expected_upstream: &str,
+        expected_onto: Option<&str>,
     ) -> GitResult<()> {
         let repo = Self::open(path)?;
         if repo.state() != RepositoryState::Clean {
             return Err(GitError::OperationFailed(
                 "仓库处于进行中的 merge/rebase/cherry-pick 状态，请先继续或中止".to_string(),
+            ));
+        }
+
+        let head_ref = repo.head()?;
+        let current_head = head_ref.peel_to_commit()?.id();
+        let upstream_oid = resolve_oid(&repo, upstream)?;
+        let onto_oid = match onto {
+            Some(spec) => Some(resolve_oid(&repo, spec)?),
+            None => None,
+        };
+        if current_head.to_string() != expected_head
+            || head_ref.name() != Some(expected_head_ref)
+            || upstream_oid.to_string() != expected_upstream
+            || onto_oid.map(|oid| oid.to_string()).as_deref() != expected_onto
+        {
+            return Err(GitError::OperationFailed(
+                "Rebase target changed after the dialog opened".to_string(),
             ));
         }
 
@@ -111,7 +149,15 @@ impl GitEngine {
 
         let todo = match todo {
             Some(t) => t,
-            None => Self::rebase_plan(path, upstream, onto)?,
+            None => Self::rebase_plan(
+                path,
+                upstream,
+                onto,
+                expected_head,
+                expected_head_ref,
+                expected_upstream,
+                expected_onto,
+            )?,
         };
 
         // drop 在前端就该过滤掉也没关系；后端也兜底过滤一次

@@ -1007,6 +1007,7 @@ const messages = {
       autoStash: '自动 stash 本地修改，合并完成后恢复',
       submit: '开始合并',
       submitting: '合并中...',
+      contextChanged: '打开对话框后仓库、HEAD 或合入来源已变化；请关闭后重新选择来源。',
     },
     strategy: {
       auto: '自动（可 ff 则 ff）',
@@ -1045,6 +1046,7 @@ const messages = {
       editMessageTitle: '编辑提交信息',
       saveMessage: '保存',
       autoStash: '自动 stash 本地修改，变基完成后恢复',
+      contextChanged: '打开对话框后仓库、HEAD 或变基目标已变化；请关闭后重新生成计划。',
     },
   },
   drag: {

@@ -958,6 +958,63 @@ mod tests {
     }
 
     #[test]
+    fn merge_and_rebase_reject_changed_reference_context() {
+        let test_repo = TestRepo::new();
+        let path = test_repo.path_str();
+        let head_reference = test_repo.repo.head().unwrap();
+        let head_ref = head_reference.name().unwrap().to_string();
+        let head = head_reference.peel_to_commit().unwrap().id();
+        let wrong = "0000000000000000000000000000000000000000";
+
+        let merge_error = GitEngine::merge_branch(
+            path,
+            &head.to_string(),
+            MergeStrategy::Auto,
+            None,
+            &head.to_string(),
+            "refs/heads/not-current",
+            &head.to_string(),
+        )
+        .unwrap_err();
+        assert!(merge_error.to_string().contains("Merge target changed"));
+
+        let plan_error = GitEngine::rebase_plan(
+            path,
+            &head.to_string(),
+            None,
+            &head.to_string(),
+            "refs/heads/not-current",
+            &head.to_string(),
+            None,
+        )
+        .unwrap_err();
+        assert!(plan_error.to_string().contains("Rebase HEAD changed"));
+
+        let start_error = GitEngine::rebase_start(
+            path,
+            &head.to_string(),
+            None,
+            Some(Vec::new()),
+            &head.to_string(),
+            &head_ref,
+            wrong,
+            None,
+        )
+        .unwrap_err();
+        assert!(start_error.to_string().contains("Rebase target changed"));
+        assert_eq!(
+            test_repo
+                .repo
+                .head()
+                .unwrap()
+                .peel_to_commit()
+                .unwrap()
+                .id(),
+            head
+        );
+    }
+
+    #[test]
     fn test_discard_stops_before_checkout_when_trash_fails() {
         let test_repo = TestRepo::new();
         let path = test_repo.path_str();

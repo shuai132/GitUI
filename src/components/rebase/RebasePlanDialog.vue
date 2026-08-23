@@ -3,7 +3,11 @@ import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Modal from '@/components/common/Modal.vue'
 import { useMergeRebaseStore } from '@/stores/mergeRebase'
-import type { RebaseActionKind, RebaseTodoItem } from '@/types/git'
+import { useRepoStore } from '@/stores/repos'
+import { useWorkspaceStore } from '@/stores/workspace'
+import { useHistoryStore } from '@/stores/history'
+import { resolveReferenceOid } from '@/utils/mergeSources'
+import type { BranchInfo, RebaseActionKind, RebaseTodoItem } from '@/types/git'
 
 const { t } = useI18n()
 
@@ -17,6 +21,9 @@ const props = defineProps<{
 const emit = defineEmits<{ close: [] }>()
 
 const mr = useMergeRebaseStore()
+const repoStore = useRepoStore()
+const workspaceStore = useWorkspaceStore()
+const historyStore = useHistoryStore()
 
 const todo = ref<RebaseTodoItem[]>([])
 const loading = ref(false)
@@ -25,6 +32,15 @@ const autoStash = ref(false)
 const errorMsg = ref<string | null>(null)
 const editingIdx = ref<number | null>(null)
 const editingMessage = ref('')
+const openedRepoId = ref<string | null>(null)
+const openedHeadOid = ref<string | null>(null)
+const openedHeadRef = ref('HEAD')
+const openedUpstream = ref('')
+const openedOnto = ref<string | null>(null)
+const openedBranches = ref<BranchInfo[]>([])
+const expectedUpstreamOid = ref<string | null>(null)
+const expectedOntoOid = ref<string | null>(null)
+let planRequestSeq = 0
 
 const actions: Array<{ value: RebaseActionKind; label: string }> = [
   { value: 'pick', label: 'pick' },
@@ -35,23 +51,84 @@ const actions: Array<{ value: RebaseActionKind; label: string }> = [
 ]
 
 async function loadPlan() {
+  const requestSeq = ++planRequestSeq
+  const repoId = openedRepoId.value
+  const expectedHead = openedHeadOid.value
+  if (
+    !repoId ||
+    !expectedHead ||
+    !expectedUpstreamOid.value ||
+    (openedOnto.value !== null && !expectedOntoOid.value)
+  ) {
+    loading.value = false
+    errorMsg.value = t('rebase.dialog.contextChanged')
+    todo.value = []
+    return
+  }
   loading.value = true
   errorMsg.value = null
   try {
-    const items = await mr.planRebase(props.upstream, props.onto)
-    todo.value = items
+    const items = await mr.planRebase(
+      repoId,
+      openedUpstream.value,
+      openedOnto.value,
+      expectedHead,
+      openedHeadRef.value,
+      expectedUpstreamOid.value,
+      expectedOntoOid.value,
+    )
+    if (requestSeq !== planRequestSeq) return
+    if (!contextIsCurrent()) {
+      errorMsg.value = t('rebase.dialog.contextChanged')
+      todo.value = []
+      return
+    }
+    todo.value = items.map((item) => ({ ...item }))
   } catch (e) {
+    if (requestSeq !== planRequestSeq) return
     errorMsg.value = String(e)
     todo.value = []
   } finally {
-    loading.value = false
+    if (requestSeq === planRequestSeq) loading.value = false
   }
+}
+
+function contextIsCurrent(): boolean {
+  const currentUpstream = resolveReferenceOid(historyStore.branches, openedUpstream.value)
+  const currentOnto = openedOnto.value
+    ? resolveReferenceOid(historyStore.branches, openedOnto.value)
+    : null
+  return !!openedRepoId.value &&
+    repoStore.activeRepoId === openedRepoId.value &&
+    workspaceStore.status?.head_commit === openedHeadOid.value &&
+    (workspaceStore.status?.head_branch
+      ? `refs/heads/${workspaceStore.status.head_branch}`
+      : 'HEAD') === openedHeadRef.value &&
+    currentUpstream === expectedUpstreamOid.value &&
+    currentOnto === expectedOntoOid.value
 }
 
 watch(
   () => props.visible,
   (v) => {
-    if (!v) return
+    if (!v) {
+      planRequestSeq++
+      return
+    }
+    openedRepoId.value = repoStore.activeRepoId
+    openedHeadOid.value = workspaceStore.status?.head_commit ?? null
+    openedHeadRef.value = workspaceStore.status?.head_branch
+      ? `refs/heads/${workspaceStore.status.head_branch}`
+      : 'HEAD'
+    openedUpstream.value = props.upstream
+    openedOnto.value = props.onto
+    openedBranches.value = historyStore.branches.map((branch) => ({ ...branch }))
+    expectedUpstreamOid.value = resolveReferenceOid(openedBranches.value, openedUpstream.value)
+    expectedOntoOid.value = openedOnto.value
+      ? resolveReferenceOid(openedBranches.value, openedOnto.value)
+      : null
+    todo.value = []
+    loading.value = false
     submitting.value = false
     autoStash.value = false
     errorMsg.value = null
@@ -93,10 +170,27 @@ const canSubmit = computed(() =>
 )
 
 async function onSubmit() {
+  const repoId = openedRepoId.value
+  const expectedHead = openedHeadOid.value
+  const expectedUpstream = expectedUpstreamOid.value
+  if (!repoId || !expectedHead || !expectedUpstream || !contextIsCurrent()) {
+    errorMsg.value = t('rebase.dialog.contextChanged')
+    return
+  }
   submitting.value = true
   errorMsg.value = null
   try {
-    await mr.startRebase(props.upstream, props.onto, todo.value, autoStash.value)
+    await mr.startRebase(
+      repoId,
+      openedUpstream.value,
+      openedOnto.value,
+      todo.value,
+      autoStash.value,
+      expectedHead,
+      openedHeadRef.value,
+      expectedUpstream,
+      expectedOntoOid.value,
+    )
     emit('close')
   } catch (e) {
     errorMsg.value = String(e)
@@ -114,7 +208,7 @@ async function onSubmit() {
     @close="emit('close')"
   >
     <div class="hint">
-      {{ t('rebase.dialog.hint', { upstream }) }}
+      {{ t('rebase.dialog.hint', { upstream: openedUpstream }) }}
     </div>
 
     <div v-if="loading" class="loading">{{ t('rebase.dialog.loading') }}</div>

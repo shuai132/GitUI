@@ -1008,6 +1008,7 @@ const messages = {
       autoStash: 'Auto-stash local changes and restore after merge',
       submit: 'Merge',
       submitting: 'Merging…',
+      contextChanged: 'The repository, HEAD, or merge source changed after this dialog opened. Close it and select the source again.',
     },
     strategy: {
       auto: 'Auto (fast-forward if possible)',
@@ -1046,6 +1047,7 @@ const messages = {
       editMessageTitle: 'Edit commit message',
       saveMessage: 'Save',
       autoStash: 'Auto-stash local changes and restore after rebase',
+      contextChanged: 'The repository, HEAD, or rebase target changed after this dialog opened. Close it and create a new plan.',
     },
   },
   drag: {

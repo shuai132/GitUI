@@ -114,6 +114,9 @@ export function useCommitContextMenu(
   const editMessageAuthorEmail = ref('')
   const editMessageAutoStash = ref(false)
   const editMessageSubmitting = ref(false)
+  const editMessageRepoId = ref<string | null>(null)
+  const editMessageHeadOid = ref<string | null>(null)
+  const editMessageHeadRef = ref('HEAD')
 
   // Drop Unreachable Dialog
   const dropUnreachableDialog = reactive({
@@ -461,6 +464,11 @@ export function useCommitContextMenu(
           editMessageAuthorEmail.value = c.author_email
           editMessageAutoStash.value = false
           editMessageSubmitting.value = false
+          editMessageRepoId.value = repoStore.activeRepoId
+          editMessageHeadOid.value = headCommitOid.value
+          editMessageHeadRef.value = currentBranchName.value === 'HEAD'
+            ? 'HEAD'
+            : `refs/heads/${currentBranchName.value}`
           showEditMessageDialog.value = true
           break
         case 'create-branch':
@@ -585,6 +593,20 @@ export function useCommitContextMenu(
     const text = editMessageText.value.trim()
     const commit = editMessageCommit.value
     if (!text || !commit || editMessageSubmitting.value) return
+    const repoId = editMessageRepoId.value
+    const expectedHead = editMessageHeadOid.value
+    if (
+      !repoId ||
+      !expectedHead ||
+      repoStore.activeRepoId !== repoId ||
+      headCommitOid.value !== expectedHead ||
+      (currentBranchName.value === 'HEAD'
+        ? 'HEAD'
+        : `refs/heads/${currentBranchName.value}`) !== editMessageHeadRef.value
+    ) {
+      showError(t('errors.history.contextChanged'))
+      return
+    }
     editMessageSubmitting.value = true
     const authorTime = editMessageAuthorTime.value ? fromDatetimeLocal(editMessageAuthorTime.value) : undefined
     const committerTime = editMessageCommitterTime.value ? fromDatetimeLocal(editMessageCommitterTime.value) : undefined
@@ -596,7 +618,15 @@ export function useCommitContextMenu(
       } else {
         const parentOid = commit.parent_oids[0]
         if (!parentOid) return
-        const todo = await mergeRebaseStore.planRebase(parentOid, null)
+        const todo = await mergeRebaseStore.planRebase(
+          repoId,
+          parentOid,
+          null,
+          expectedHead,
+          editMessageHeadRef.value,
+          parentOid,
+          null,
+        )
         const idx = todo.findIndex((x) => x.oid === commit.oid)
         if (idx < 0) {
           showError(t('errors.rebase.planMismatch', { shortOid: commit.short_oid }))
@@ -611,7 +641,17 @@ export function useCommitContextMenu(
           new_author_name: authorName,
           new_author_email: authorEmail,
         }
-        await mergeRebaseStore.startRebase(parentOid, null, todo, editMessageAutoStash.value)
+        await mergeRebaseStore.startRebase(
+          repoId,
+          parentOid,
+          null,
+          todo,
+          editMessageAutoStash.value,
+          expectedHead,
+          editMessageHeadRef.value,
+          parentOid,
+          null,
+        )
       }
       showEditMessageDialog.value = false
     } catch (err) {

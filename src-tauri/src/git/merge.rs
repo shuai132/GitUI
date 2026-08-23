@@ -26,6 +26,9 @@ impl GitEngine {
         source_branch: &str,
         strategy: MergeStrategy,
         message: Option<&str>,
+        expected_head: &str,
+        expected_head_ref: &str,
+        expected_source: &str,
     ) -> GitResult<()> {
         let repo = Self::open(path)?;
 
@@ -37,6 +40,16 @@ impl GitEngine {
         }
 
         let source_commit = resolve_annotated(&repo, source_branch)?;
+        let head = repo.head()?;
+        let current_head = head.peel_to_commit()?.id();
+        if current_head.to_string() != expected_head
+            || head.name() != Some(expected_head_ref)
+            || source_commit.id().to_string() != expected_source
+        {
+            return Err(GitError::OperationFailed(
+                "Merge target changed after the dialog opened".to_string(),
+            ));
+        }
         let (analysis, _pref) = repo.merge_analysis(&[&source_commit])?;
 
         if analysis.is_up_to_date() {

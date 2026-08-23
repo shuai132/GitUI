@@ -55,50 +55,61 @@ export const useMergeRebaseStore = defineStore('mergeRebase', () => {
     }
   }
 
-  async function refreshAfterHeadChange() {
+  async function refreshAfterHeadChange(repoId: string) {
+    if (useRepoStore().activeRepoId !== repoId) return
     const historyStore = useHistoryStore()
     const workspaceStore = useWorkspaceStore()
     // workspace.refresh 内部会更新 repoState（通过 setRepoState 钩子）
     await Promise.all([
       historyStore.loadLog(),
       historyStore.loadBranches(),
-      workspaceStore.refresh(),
+      workspaceStore.refresh(repoId),
     ])
   }
 
   // ── Merge ────────────────────────────────────────────────────────────
 
   async function startMerge(
+    repoId: string,
     sourceBranch: string,
     strategy: MergeStrategy,
     message: string | null,
     autoStash = false,
+    expectedHead: string,
+    expectedHeadRef: string,
+    expectedSource: string,
   ) {
-    const repoStore = useRepoStore()
-    const id = repoStore.activeRepoId
-    if (!id) return
     busy.value = true
     let stashed = false
     try {
-      if (autoStash && hasWorktreeChanges()) {
-        await git.stashPush(id, 'gitui: auto-stash before merge')
+      if (autoStash && hasWorktreeChanges(repoId)) {
+        await git.stashPush(repoId, 'gitui: auto-stash before merge')
         stashed = true
       }
-      await git.mergeBranch(id, sourceBranch, strategy, message)
+      await git.mergeBranch(
+        repoId,
+        sourceBranch,
+        strategy,
+        message,
+        expectedHead,
+        expectedHeadRef,
+        expectedSource,
+      )
     } finally {
       busy.value = false
-      await refreshAfterHeadChange()
       if (stashed) {
         try {
-          await git.stashPop(id, 0)
+          await git.stashPop(repoId, 0)
         } catch (e) {
           lastError.value = t('errors.autoStash.popFailed', { detail: String(e) })
         }
       }
+      await refreshAfterHeadChange(repoId)
     }
   }
 
-  function hasWorktreeChanges(): boolean {
+  function hasWorktreeChanges(repoId: string): boolean {
+    if (useRepoStore().activeRepoId !== repoId) return false
     const s = useWorkspaceStore().status
     if (!s) return false
     return (s.staged?.length ?? 0) + (s.unstaged?.length ?? 0) + (s.untracked?.length ?? 0) > 0
@@ -106,99 +117,129 @@ export const useMergeRebaseStore = defineStore('mergeRebase', () => {
 
   async function continueMerge(message: string) {
     const repoStore = useRepoStore()
-    if (!repoStore.activeRepoId) return
+    const repoId = repoStore.activeRepoId
+    if (!repoId) return
     busy.value = true
     try {
-      await git.mergeContinue(repoStore.activeRepoId, message)
+      await git.mergeContinue(repoId, message)
     } finally {
       busy.value = false
-      await refreshAfterHeadChange()
+      await refreshAfterHeadChange(repoId)
     }
   }
 
   async function abortMerge() {
     const repoStore = useRepoStore()
-    if (!repoStore.activeRepoId) return
+    const repoId = repoStore.activeRepoId
+    if (!repoId) return
     busy.value = true
     try {
-      await git.mergeAbort(repoStore.activeRepoId)
+      await git.mergeAbort(repoId)
     } finally {
       busy.value = false
-      await refreshAfterHeadChange()
+      await refreshAfterHeadChange(repoId)
     }
   }
 
   // ── Rebase ───────────────────────────────────────────────────────────
 
-  async function planRebase(upstream: string, onto: string | null) {
-    const repoStore = useRepoStore()
-    if (!repoStore.activeRepoId) return []
-    return git.rebasePlan(repoStore.activeRepoId, upstream, onto)
+  async function planRebase(
+    repoId: string,
+    upstream: string,
+    onto: string | null,
+    expectedHead: string,
+    expectedHeadRef: string,
+    expectedUpstream: string,
+    expectedOnto: string | null,
+  ) {
+    return git.rebasePlan(
+      repoId,
+      upstream,
+      onto,
+      expectedHead,
+      expectedHeadRef,
+      expectedUpstream,
+      expectedOnto,
+    )
   }
 
   async function startRebase(
+    repoId: string,
     upstream: string,
     onto: string | null,
     todo: RebaseTodoItem[] | null,
     autoStash = false,
+    expectedHead: string,
+    expectedHeadRef: string,
+    expectedUpstream: string,
+    expectedOnto: string | null,
   ) {
-    const repoStore = useRepoStore()
-    const id = repoStore.activeRepoId
-    if (!id) return
     busy.value = true
     let stashed = false
     try {
-      if (autoStash && hasWorktreeChanges()) {
-        await git.stashPush(id, 'gitui: auto-stash before rebase')
+      if (autoStash && hasWorktreeChanges(repoId)) {
+        await git.stashPush(repoId, 'gitui: auto-stash before rebase')
         stashed = true
       }
-      await git.rebaseStart(id, upstream, onto, todo)
+      await git.rebaseStart(
+        repoId,
+        upstream,
+        onto,
+        todo,
+        expectedHead,
+        expectedHeadRef,
+        expectedUpstream,
+        expectedOnto,
+      )
     } finally {
       busy.value = false
-      await refreshAfterHeadChange()
       if (stashed) {
         try {
-          await git.stashPop(id, 0)
+          await git.stashPop(repoId, 0)
         } catch (e) {
           lastError.value = t('errors.autoStash.popFailed', { detail: String(e) })
         }
       }
+      await refreshAfterHeadChange(repoId)
     }
   }
 
   async function continueRebase(amendedMessage: string | null) {
     const repoStore = useRepoStore()
-    if (!repoStore.activeRepoId) return
+    const repoId = repoStore.activeRepoId
+    if (!repoId) return
     busy.value = true
     try {
-      await git.rebaseContinue(repoStore.activeRepoId, amendedMessage)
+      await git.rebaseContinue(repoId, amendedMessage)
     } finally {
       busy.value = false
-      await refreshAfterHeadChange()
+      await refreshAfterHeadChange(repoId)
     }
   }
 
   async function skipRebase() {
     const repoStore = useRepoStore()
-    if (!repoStore.activeRepoId) return
+    const repoId = repoStore.activeRepoId
+    if (!repoId) return
     busy.value = true
     try {
-      await git.rebaseSkip(repoStore.activeRepoId)
+      await git.rebaseSkip(repoId)
     } finally {
       busy.value = false
-      await refreshAfterHeadChange()
+      await refreshAfterHeadChange(repoId)
     }
   }
 
   async function abortRebase() {
     const repoStore = useRepoStore()
-    if (!repoStore.activeRepoId) return
+    const repoId = repoStore.activeRepoId
+    if (!repoId) return
     busy.value = true
     try {
-      await git.rebaseAbort(repoStore.activeRepoId)
+      await git.rebaseAbort(repoId)
     } finally {
       busy.value = false
-      await refreshAfterHeadChange()
+      await refreshAfterHeadChange(repoId)
     }
   }
 
@@ -206,49 +247,53 @@ export const useMergeRebaseStore = defineStore('mergeRebase', () => {
 
   async function continueCherryPick() {
     const repoStore = useRepoStore()
-    if (!repoStore.activeRepoId) return
+    const repoId = repoStore.activeRepoId
+    if (!repoId) return
     busy.value = true
     try {
-      await git.cherryPickContinue(repoStore.activeRepoId)
+      await git.cherryPickContinue(repoId)
     } finally {
       busy.value = false
-      await refreshAfterHeadChange()
+      await refreshAfterHeadChange(repoId)
     }
   }
 
   async function abortCherryPick() {
     const repoStore = useRepoStore()
-    if (!repoStore.activeRepoId) return
+    const repoId = repoStore.activeRepoId
+    if (!repoId) return
     busy.value = true
     try {
-      await git.cherryPickAbort(repoStore.activeRepoId)
+      await git.cherryPickAbort(repoId)
     } finally {
       busy.value = false
-      await refreshAfterHeadChange()
+      await refreshAfterHeadChange(repoId)
     }
   }
 
   async function continueRevert() {
     const repoStore = useRepoStore()
-    if (!repoStore.activeRepoId) return
+    const repoId = repoStore.activeRepoId
+    if (!repoId) return
     busy.value = true
     try {
-      await git.revertContinue(repoStore.activeRepoId)
+      await git.revertContinue(repoId)
     } finally {
       busy.value = false
-      await refreshAfterHeadChange()
+      await refreshAfterHeadChange(repoId)
     }
   }
 
   async function abortRevert() {
     const repoStore = useRepoStore()
-    if (!repoStore.activeRepoId) return
+    const repoId = repoStore.activeRepoId
+    if (!repoId) return
     busy.value = true
     try {
-      await git.revertAbort(repoStore.activeRepoId)
+      await git.revertAbort(repoId)
     } finally {
       busy.value = false
-      await refreshAfterHeadChange()
+      await refreshAfterHeadChange(repoId)
     }
   }
 
