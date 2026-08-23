@@ -104,12 +104,27 @@ describe('SidebarAllRepos action feedback', () => {
     const wrapper = shallowMount(SidebarAllRepos)
     await flushPromises()
 
-    await wrapper.find('.repo-item').trigger('click')
+    await wrapper.find('.repo-item-main').trigger('click')
     await flushPromises()
 
     expect(mocks.showError).toHaveBeenCalledWith(
       'sidebar.repo.activateFailed Error: watcher failed',
     )
+  })
+
+  it('uses separate labeled buttons for activation and removal', async () => {
+    const wrapper = shallowMount(SidebarAllRepos)
+    await flushPromises()
+    const activateButton = wrapper.find<HTMLButtonElement>('.repo-item-main')
+    const removeButton = wrapper.find<HTMLButtonElement>('.repo-item-remove')
+
+    expect(activateButton.element.tagName).toBe('BUTTON')
+    expect(activateButton.attributes('aria-current')).toBe('true')
+    expect(removeButton.attributes('aria-label')).toContain('alpha')
+
+    await activateButton.trigger('click')
+    await flushPromises()
+    expect(mocks.repoStore.setActive).toHaveBeenCalledWith('repo-a')
   })
 
   it('reports failed folders from a partial drop', async () => {

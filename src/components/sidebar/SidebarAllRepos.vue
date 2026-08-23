@@ -594,8 +594,10 @@ function closeWorktreeDialog() {
         @keydown="onRepoSearchKeydown"
       />
       <button
+        type="button"
         class="section-add-btn repos-add-btn"
         :title="t('repo.menu.title')"
+        :aria-label="t('repo.menu.title')"
         data-menu-anchor
         @click.stop="showAddRepoMenu($event)"
       >+</button>
@@ -621,49 +623,58 @@ function closeWorktreeDialog() {
         :title="row.repo.path"
         @pointerdown="onRepoPointerDown($event, idx, row.repo.id)"
         @mouseenter="onRepoSearchMouseEnter(row.repo.id)"
-        @click="onRepoClick($event, row.repo.id)"
         @contextmenu="openRepoMenu($event, row.repo)"
       >
-        <svg
-          v-if="row.depth === 0"
-          class="repo-item-icon"
-          width="11"
-          height="11"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-        >
-          <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
-        </svg>
-        <svg
-          v-else
-          class="repo-item-icon repo-item-icon--submodule"
-          width="11"
-          height="11"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
-          <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
-        </svg>
-        <span
-          class="repo-item-name"
-          :class="{ 'repo-item-name--disambiguated': repoDisambiguationLabels.has(row.repo.id) }"
-        >
-          <span class="repo-item-name-primary">{{ row.repo.name }}</span>
-          <span
-            v-if="repoDisambiguationLabels.get(row.repo.id)"
-            class="repo-item-disambiguator"
-          >· {{ repoDisambiguationLabels.get(row.repo.id) }}</span>
-        </span>
         <button
+          type="button"
+          class="repo-item-main"
+          :title="row.repo.path"
+          :aria-current="row.repo.id === repoStore.activeRepoId ? 'true' : undefined"
+          @click="onRepoClick($event, row.repo.id)"
+        >
+          <svg
+            v-if="row.depth === 0"
+            class="repo-item-icon"
+            width="11"
+            height="11"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+          </svg>
+          <svg
+            v-else
+            class="repo-item-icon repo-item-icon--submodule"
+            width="11"
+            height="11"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+            <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+          </svg>
+          <span
+            class="repo-item-name"
+            :class="{ 'repo-item-name--disambiguated': repoDisambiguationLabels.has(row.repo.id) }"
+          >
+            <span class="repo-item-name-primary">{{ row.repo.name }}</span>
+            <span
+              v-if="repoDisambiguationLabels.get(row.repo.id)"
+              class="repo-item-disambiguator"
+            >· {{ repoDisambiguationLabels.get(row.repo.id) }}</span>
+          </span>
+        </button>
+        <button
+          type="button"
           class="repo-item-remove"
           :title="t('sidebar.repo.removeRepo')"
+          :aria-label="`${t('sidebar.repo.removeRepo')}: ${row.repo.name}`"
           @click.stop="removeRepo(row.repo.id)"
         >
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
@@ -800,8 +811,10 @@ function closeWorktreeDialog() {
   gap: 6px;
 }
 
-.repos-footer:hover .repos-add-btn {
-  display: inline-block;
+.repos-footer:hover .repos-add-btn,
+.repos-footer:focus-within .repos-add-btn {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .repos-list {
@@ -856,11 +869,32 @@ function closeWorktreeDialog() {
   color: var(--text-secondary);
   cursor: pointer;
   transition: background 0.1s;
-  /* 阻止内部元素的指针事件，让 .repo-item 完全捕获 pointerdown */
 }
 
-.repo-item > * {
+.repo-item-main {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  gap: 8px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.repo-item-main > * {
   pointer-events: none;
+}
+
+.repo-item-main:focus-visible,
+.repo-item-remove:focus-visible {
+  outline: 1px solid var(--accent-blue);
+  outline-offset: 1px;
 }
 
 .repo-item--dragging {
@@ -947,7 +981,7 @@ function closeWorktreeDialog() {
 }
 
 .repo-item-remove {
-  display: none;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   background: none;
@@ -958,12 +992,13 @@ function closeWorktreeDialog() {
   cursor: pointer;
   flex-shrink: 0;
   transition: background 0.1s, color 0.1s;
-  /* 覆盖 .repo-item > * 的 pointer-events: none 让按钮仍可点击 */
   pointer-events: auto;
+  opacity: 0;
 }
 
-.repo-item:hover .repo-item-remove {
-  display: inline-flex;
+.repo-item:hover .repo-item-remove,
+.repo-item:focus-within .repo-item-remove {
+  opacity: 1;
 }
 
 .repo-item-remove:hover {
