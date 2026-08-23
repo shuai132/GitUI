@@ -133,14 +133,12 @@ export function useToolbarGitActions(options: UseToolbarGitActionsOptions) {
     const branch = currentBranch.value
     if (!id || !branch) return
     const remote = await options.pickRemote(anchorRect, false)
+    if (repoStore.activeRepoId !== id || currentBranch.value !== branch) return
     if (!remote) {
       const remotes = await git.listRemotes(id).catch(() => [])
       if (remotes.length === 0) showError(t('toolbar.noRemoteConfigured'))
       return
     }
-
-    // remote 选择期间用户可能已切换仓库或分支，不能把旧请求落到新上下文。
-    if (repoStore.activeRepoId !== id || currentBranch.value !== branch) return
 
     const request: PullRequest = { repoId: id, remote, branch, mode }
     const changedPaths = new Set([
@@ -246,14 +244,12 @@ export function useToolbarGitActions(options: UseToolbarGitActionsOptions) {
     const branch = currentBranch.value
     if (!id || !branch) return
     const remote = await options.pickRemote(anchorRect, false)
+    if (repoStore.activeRepoId !== id || currentBranch.value !== branch) return
     if (!remote) {
       const remotes = await git.listRemotes(id).catch(() => [])
       if (remotes.length === 0) showError(t('toolbar.noRemoteConfigured'))
       return
     }
-    // remote 菜单等待期间可能已切换仓库 / 分支，旧 Push 请求不再有效。
-    if (repoStore.activeRepoId !== id || currentBranch.value !== branch) return
-
     const request: PushRequest = { repoId: id, remote, branch, mode }
     if (requiresForcePushConfirmation(mode)) {
       pendingForcePush.value = request
@@ -394,6 +390,7 @@ export function useToolbarGitActions(options: UseToolbarGitActionsOptions) {
       remote = await options.pickRemote(rect, true)
     }
 
+    if (repoStore.activeRepoId !== id) return
     if (!remote) {
       const remotes = await git.listRemotes(id).catch(() => [])
       if (remotes.length === 0) showError(t('toolbar.noRemoteConfigured'))
@@ -402,6 +399,7 @@ export function useToolbarGitActions(options: UseToolbarGitActionsOptions) {
     repoOpsStore.setBusy(id, 'fetch', true)
     try {
       await git.fetchRemote(id, remote)
+      if (repoStore.activeRepoId !== id) return
       await Promise.all([historyStore.loadLog(), historyStore.loadBranches()])
       historyStore.loadRemoteTags(true).catch(() => {})
     } catch {

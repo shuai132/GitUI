@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => {
   return {
     listRemotes: vi.fn(),
     showToast: vi.fn(),
+    showError: vi.fn(),
     repoStore,
     uiStore,
   }
@@ -37,6 +38,7 @@ vi.mock('@/composables/useGitCommands', () => ({
 vi.mock('@/composables/useGlobalToast', () => ({
   useGlobalToast: () => ({
     showToast: mocks.showToast,
+    showError: mocks.showError,
   }),
 }))
 
@@ -67,6 +69,14 @@ function makeChevronClick(rect: DOMRect): MouseEvent {
       getBoundingClientRect: () => rect,
     },
   } as unknown as MouseEvent
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((done) => {
+    resolve = done
+  })
+  return { promise, resolve }
 }
 
 describe('useRemoteActionMenu', () => {
@@ -113,5 +123,36 @@ describe('useRemoteActionMenu', () => {
     expect(menu.remoteMenu.visible).toBe(false)
     expect(menu.pushModeMenu.visible).toBe(true)
     await expect(pendingRemote).resolves.toBeNull()
+  })
+
+  it('does not open a remote menu when the repository changes while loading', async () => {
+    const remotes = deferred<Array<{ name: string; url: string }>>()
+    mocks.listRemotes.mockReturnValueOnce(remotes.promise)
+    const menu = useRemoteActionMenu()
+    const pendingRemote = menu.pickRemote(makeRect(20, 40), false, { forceMenu: true })
+    mocks.repoStore.activeRepoId = 'repo-b'
+    mocks.repoStore.activeRepo.mockReturnValue({ path: '/repos/b' })
+
+    remotes.resolve([{ name: 'origin', url: 'https://example.com/repo.git' }])
+
+    await expect(pendingRemote).resolves.toBeNull()
+    expect(menu.remoteMenu.visible).toBe(false)
+  })
+
+  it('does not apply an old default-remote choice to a new repository', async () => {
+    const menu = useRemoteActionMenu()
+    const pendingRemote = menu.pickRemote(makeRect(20, 40), false, {
+      forceMenu: true,
+      resolveSelection: false,
+    })
+    await Promise.resolve()
+    mocks.repoStore.activeRepoId = 'repo-b'
+    mocks.repoStore.activeRepo.mockReturnValue({ path: '/repos/b' })
+
+    menu.onRemoteMenuSelect('default:set:origin')
+
+    await expect(pendingRemote).resolves.toBeNull()
+    expect(mocks.uiStore.setDefaultRemoteForRepo).not.toHaveBeenCalled()
+    expect(mocks.showError).toHaveBeenCalledWith('toolbar.remoteMenu.contextChanged')
   })
 })

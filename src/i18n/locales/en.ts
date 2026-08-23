@@ -83,6 +83,7 @@ const messages = {
       manageDefault: 'Default remote...',
       defaultUpdated: 'Default remote set to {remote}',
       defaultCleared: 'Default remote cleared',
+      contextChanged: 'The active repository changed, so the pending remote selection was cancelled. Select the remote again.',
     },
     pullWithChanges: {
       title: 'Uncommitted changes',

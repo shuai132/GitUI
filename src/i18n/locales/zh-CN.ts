@@ -83,6 +83,7 @@ const messages = {
       manageDefault: '默认远端...',
       defaultUpdated: '已设为默认远端：{remote}',
       defaultCleared: '已取消默认远端',
+      contextChanged: '当前仓库已变化，旧的远端选择已取消；请重新选择远端',
     },
     pullWithChanges: {
       title: '工作区有未提交改动',

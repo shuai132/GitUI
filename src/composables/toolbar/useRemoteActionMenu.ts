@@ -24,13 +24,15 @@ export function useRemoteActionMenu() {
   const uiStore = useUiStore()
   const git = useGitCommands()
   const { t } = useI18n()
-  const { showToast } = useGlobalToast()
+  const { showToast, showError } = useGlobalToast()
 
   const remoteMenu = reactive({
     visible: false,
     x: 0,
     y: 0,
     items: [] as ContextMenuItem[],
+    repoId: null as string | null,
+    repoPath: null as string | null,
     resolve: null as ((remote: string | null) => void) | null,
     resolveSelection: true,
   })
@@ -95,8 +97,11 @@ export function useRemoteActionMenu() {
     return null
   }
 
-  function buildRemoteMenuItems(remotes: RemoteInfo[], showFetchAll: boolean): ContextMenuItem[] {
-    const repoPath = activeRepoPath()
+  function buildRemoteMenuItems(
+    remotes: RemoteInfo[],
+    showFetchAll: boolean,
+    repoPath: string | null,
+  ): ContextMenuItem[] {
     const defaultRemote = uiStore.getDefaultRemote(repoPath)
     const items = remotes.map((r): ContextMenuItem => {
       const isDefault = r.name === defaultRemote
@@ -132,14 +137,15 @@ export function useRemoteActionMenu() {
 
     const id = repoStore.activeRepoId
     if (!id) return null
+    const repoPath = activeRepoPath()
     let remotes: RemoteInfo[]
     try {
       remotes = await git.listRemotes(id)
     } catch {
       return null
     }
+    if (repoStore.activeRepoId !== id) return null
     if (remotes.length === 0) return null
-    const repoPath = activeRepoPath()
     const defaultRemote = uiStore.getDefaultRemote(repoPath)
 
     if (!showFetchAll && !options.forceMenu && defaultRemote) {
@@ -152,7 +158,9 @@ export function useRemoteActionMenu() {
     if (!options.forceMenu && remotes.length === 1) return remotes[0].name
 
     return new Promise<string | null>((resolve) => {
-      remoteMenu.items = buildRemoteMenuItems(remotes, showFetchAll)
+      remoteMenu.items = buildRemoteMenuItems(remotes, showFetchAll, repoPath)
+      remoteMenu.repoId = id
+      remoteMenu.repoPath = repoPath
       if (anchorRect) {
         remoteMenu.x = anchorRect.left
         remoteMenu.y = anchorRect.bottom + 4
@@ -167,9 +175,17 @@ export function useRemoteActionMenu() {
   }
 
   function onRemoteMenuSelect(action: string) {
+    if (!remoteMenu.repoId || repoStore.activeRepoId !== remoteMenu.repoId) {
+      remoteMenu.visible = false
+      const fn = remoteMenu.resolve
+      remoteMenu.resolve = null
+      fn?.(null)
+      showError(t('toolbar.remoteMenu.contextChanged'))
+      return
+    }
     const defaultChange = defaultFromAction(action)
     if (defaultChange) {
-      const repoPath = activeRepoPath()
+      const repoPath = remoteMenu.repoPath
       if (defaultChange.kind === 'set') {
         uiStore.setDefaultRemoteForRepo(repoPath, defaultChange.remote)
         showToast('success', t('toolbar.remoteMenu.defaultUpdated', { remote: defaultChange.remote }))
