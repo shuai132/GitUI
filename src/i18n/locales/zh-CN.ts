@@ -284,6 +284,7 @@ const messages = {
         stashing: '保存并切换中…',
         discarding: '丢弃并切换中…',
         stashMessage: 'GitUI：从 {source} 切换到 {target} 前保存',
+        contextChanged: '仓库、HEAD、目标分支或本地改动已不再匹配当前确认框；请取消后重新选择分支。',
         carryFailed: '无法把本地改动带到目标分支：{detail}\n可改选“Stash 后切换”。',
         stashFailed: '无法把本地改动保存到 Stash：{detail}',
         discardFailed: '无法安全丢弃本地改动，因此未切换分支：{detail}',

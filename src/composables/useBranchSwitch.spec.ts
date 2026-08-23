@@ -1,10 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { WorkspaceStatus } from '@/types/git'
+import type { BranchInfo, WorkspaceStatus } from '@/types/git'
 import { useBranchSwitch } from './useBranchSwitch'
 
 const mocks = vi.hoisted(() => ({
   history: {
-    switchBranch: vi.fn(),
+    branches: [] as BranchInfo[],
+    switchBranchInRepo: vi.fn(),
   },
   workspace: {
     status: null as WorkspaceStatus | null,
@@ -14,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   stash: {
     push: vi.fn(),
   },
+  repo: { activeRepoId: 'repo-a' as string | null },
 }))
 
 vi.mock('@/stores/history', () => ({
@@ -26,6 +28,15 @@ vi.mock('@/stores/workspace', () => ({
 
 vi.mock('@/stores/stash', () => ({
   useStashStore: () => mocks.stash,
+}))
+
+vi.mock('@/stores/repos', () => ({
+  useRepoStore: () => mocks.repo,
+}))
+
+vi.mock('@/i18n', () => ({
+  t: (key: string, params?: Record<string, unknown>) =>
+    params?.detail ? `${key}: ${String(params.detail)}` : key,
 }))
 
 function workspaceStatus(changedPaths: string[] = []): WorkspaceStatus {
@@ -55,7 +66,14 @@ function workspaceStatus(changedPaths: string[] = []): WorkspaceStatus {
 
 describe('branch switch flow', () => {
   beforeEach(() => {
-    mocks.history.switchBranch.mockReset()
+    mocks.repo.activeRepoId = 'repo-a'
+    mocks.history.branches = [{
+      name: 'feature',
+      is_remote: false,
+      is_head: false,
+      commit_oid: 'target',
+    }]
+    mocks.history.switchBranchInRepo.mockReset()
     mocks.workspace.refresh.mockReset()
     mocks.workspace.discardAll.mockReset()
     mocks.stash.push.mockReset()
@@ -63,20 +81,35 @@ describe('branch switch flow', () => {
   })
 
   it('switches a clean worktree immediately and refreshes workspace', async () => {
-    mocks.history.switchBranch.mockResolvedValue(undefined)
+    mocks.history.switchBranchInRepo.mockResolvedValue(undefined)
     mocks.workspace.refresh.mockResolvedValue(undefined)
     const flow = useBranchSwitch()
 
     await flow.requestSwitch('feature')
 
     expect(flow.dialogVisible.value).toBe(false)
-    expect(mocks.history.switchBranch).toHaveBeenCalledWith('feature')
+    expect(mocks.history.switchBranchInRepo).toHaveBeenCalledWith('repo-a', 'feature')
     expect(mocks.workspace.refresh).toHaveBeenCalledTimes(1)
+  })
+
+  it('can switch from a detached HEAD while guarding its actual head context', async () => {
+    mocks.workspace.status = {
+      ...workspaceStatus(),
+      head_branch: undefined,
+      is_detached: true,
+    }
+    mocks.history.switchBranchInRepo.mockResolvedValue(undefined)
+    mocks.workspace.refresh.mockResolvedValue(undefined)
+    const flow = useBranchSwitch()
+
+    await flow.requestSwitch('feature')
+
+    expect(mocks.history.switchBranchInRepo).toHaveBeenCalledWith('repo-a', 'feature')
   })
 
   it('prompts for a dirty worktree and can carry changes', async () => {
     mocks.workspace.status = workspaceStatus(['one.txt', 'two.txt'])
-    mocks.history.switchBranch.mockResolvedValue(undefined)
+    mocks.history.switchBranchInRepo.mockResolvedValue(undefined)
     mocks.workspace.refresh.mockResolvedValue(undefined)
     const flow = useBranchSwitch()
 
@@ -84,20 +117,54 @@ describe('branch switch flow', () => {
 
     expect(flow.dialogVisible.value).toBe(true)
     expect(flow.changeCount.value).toBe(2)
-    expect(mocks.history.switchBranch).not.toHaveBeenCalled()
+    expect(mocks.history.switchBranchInRepo).not.toHaveBeenCalled()
 
     await flow.confirmSwitch('carry')
 
     expect(mocks.stash.push).not.toHaveBeenCalled()
-    expect(mocks.history.switchBranch).toHaveBeenCalledWith('feature')
+    expect(mocks.history.switchBranchInRepo).toHaveBeenCalledWith('repo-a', 'feature')
     expect(flow.dialogVisible.value).toBe(false)
+  })
+
+  it('rejects a pending switch after the repository or workspace paths change', async () => {
+    mocks.workspace.status = workspaceStatus(['one.txt'])
+    const flow = useBranchSwitch()
+    await flow.requestSwitch('feature')
+    mocks.workspace.status = workspaceStatus(['one.txt', 'new.txt'])
+
+    await flow.confirmSwitch('discard')
+
+    expect(mocks.workspace.discardAll).not.toHaveBeenCalled()
+    expect(mocks.history.switchBranchInRepo).not.toHaveBeenCalled()
+    expect(flow.error.value).toBe('sidebar.branch.switchDialog.contextChanged')
+
+    mocks.workspace.status = workspaceStatus(['one.txt'])
+    mocks.repo.activeRepoId = 'repo-b'
+    await flow.confirmSwitch('stash')
+
+    expect(mocks.stash.push).not.toHaveBeenCalled()
+  })
+
+  it('rejects a pending switch after the target branch moves', async () => {
+    mocks.workspace.status = workspaceStatus(['one.txt'])
+    const flow = useBranchSwitch()
+    await flow.requestSwitch('feature')
+    mocks.history.branches[0] = {
+      ...mocks.history.branches[0],
+      commit_oid: 'moved-target',
+    }
+
+    await flow.confirmSwitch('carry')
+
+    expect(mocks.history.switchBranchInRepo).not.toHaveBeenCalled()
+    expect(flow.error.value).toBe('sidebar.branch.switchDialog.contextChanged')
   })
 
   it('keeps the dialog actionable after carrying changes fails', async () => {
     mocks.workspace.status = workspaceStatus(['one.txt'])
-    mocks.history.switchBranch.mockRejectedValueOnce(new Error('checkout conflict'))
+    mocks.history.switchBranchInRepo.mockRejectedValueOnce(new Error('checkout conflict'))
     mocks.stash.push.mockResolvedValue(undefined)
-    mocks.history.switchBranch.mockResolvedValueOnce(undefined)
+    mocks.history.switchBranchInRepo.mockResolvedValueOnce(undefined)
     mocks.workspace.refresh.mockResolvedValue(undefined)
     const flow = useBranchSwitch()
     await flow.requestSwitch('feature')
@@ -110,14 +177,14 @@ describe('branch switch flow', () => {
     await flow.confirmSwitch('stash')
 
     expect(mocks.stash.push).toHaveBeenCalledTimes(1)
-    expect(mocks.history.switchBranch).toHaveBeenCalledTimes(2)
+    expect(mocks.history.switchBranchInRepo).toHaveBeenCalledTimes(2)
     expect(flow.dialogVisible.value).toBe(false)
   })
 
   it('retains a successful stash when switching fails and retries without stashing twice', async () => {
     mocks.workspace.status = workspaceStatus(['one.txt'])
     mocks.stash.push.mockResolvedValue(undefined)
-    mocks.history.switchBranch
+    mocks.history.switchBranchInRepo
       .mockRejectedValueOnce(new Error('branch locked'))
       .mockResolvedValueOnce(undefined)
     mocks.workspace.refresh.mockResolvedValue(undefined)
@@ -128,19 +195,23 @@ describe('branch switch flow', () => {
 
     expect(flow.dialogVisible.value).toBe(true)
     expect(flow.changesStashed.value).toBe(true)
+    expect(mocks.stash.push).toHaveBeenCalledWith(
+      'sidebar.branch.switchDialog.stashMessage',
+      'repo-a',
+    )
     expect(flow.error.value).toContain('branch locked')
 
     await flow.confirmSwitch('carry')
 
     expect(mocks.stash.push).toHaveBeenCalledTimes(1)
-    expect(mocks.history.switchBranch).toHaveBeenCalledTimes(2)
+    expect(mocks.history.switchBranchInRepo).toHaveBeenCalledTimes(2)
     expect(flow.dialogVisible.value).toBe(false)
   })
 
   it('discards changes through the recoverable workspace flow before switching safely', async () => {
     mocks.workspace.status = workspaceStatus(['one.txt', 'two.txt'])
     mocks.workspace.discardAll.mockResolvedValue(undefined)
-    mocks.history.switchBranch.mockResolvedValue(undefined)
+    mocks.history.switchBranchInRepo.mockResolvedValue(undefined)
     mocks.workspace.refresh.mockResolvedValue(undefined)
     const flow = useBranchSwitch()
     await flow.requestSwitch('feature')
@@ -148,7 +219,12 @@ describe('branch switch flow', () => {
     await flow.confirmSwitch('discard')
 
     expect(mocks.workspace.discardAll).toHaveBeenCalledTimes(1)
-    expect(mocks.history.switchBranch).toHaveBeenCalledWith('feature')
+    expect(mocks.workspace.discardAll).toHaveBeenCalledWith(
+      'repo-a',
+      'head',
+      ['one.txt', 'two.txt'],
+    )
+    expect(mocks.history.switchBranchInRepo).toHaveBeenCalledWith('repo-a', 'feature')
     expect(flow.dialogVisible.value).toBe(false)
   })
 
@@ -160,7 +236,7 @@ describe('branch switch flow', () => {
 
     await flow.confirmSwitch('discard')
 
-    expect(mocks.history.switchBranch).not.toHaveBeenCalled()
+    expect(mocks.history.switchBranchInRepo).not.toHaveBeenCalled()
     expect(flow.changesDiscarded.value).toBe(false)
     expect(flow.error.value).toContain('Trash unavailable')
     expect(flow.dialogVisible.value).toBe(true)
@@ -169,7 +245,7 @@ describe('branch switch flow', () => {
   it('retries switching without discarding twice after the worktree was restored', async () => {
     mocks.workspace.status = workspaceStatus(['one.txt'])
     mocks.workspace.discardAll.mockResolvedValue(undefined)
-    mocks.history.switchBranch
+    mocks.history.switchBranchInRepo
       .mockRejectedValueOnce(new Error('ignored file conflict'))
       .mockResolvedValueOnce(undefined)
     mocks.workspace.refresh.mockResolvedValue(undefined)
@@ -184,7 +260,7 @@ describe('branch switch flow', () => {
     await flow.confirmSwitch('carry')
 
     expect(mocks.workspace.discardAll).toHaveBeenCalledTimes(1)
-    expect(mocks.history.switchBranch).toHaveBeenCalledTimes(2)
+    expect(mocks.history.switchBranchInRepo).toHaveBeenCalledTimes(2)
     expect(flow.dialogVisible.value).toBe(false)
   })
 })

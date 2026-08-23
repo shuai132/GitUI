@@ -284,6 +284,7 @@ const messages = {
         stashing: 'Stashing and switching…',
         discarding: 'Discarding and switching…',
         stashMessage: 'GitUI: saved before switching from {source} to {target}',
+        contextChanged: 'The repository, HEAD, target branch, or local changes no longer match this dialog. Cancel and select the branch again.',
         carryFailed: 'Could not bring local changes to the target branch: {detail}\nChoose “Stash and switch” to continue safely.',
         stashFailed: 'Could not save local changes to Stash: {detail}',
         discardFailed: 'Could not discard local changes safely, so the branch was not switched: {detail}',

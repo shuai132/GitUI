@@ -328,11 +328,24 @@ async function onFileMenuAction(action: string) {
 const discardConfirmOpen = ref(false)
 const discardAllLoading = ref(false)
 const discardAllRepoId = ref<string | null>(null)
+const discardAllHead = ref<string | undefined>()
+const discardAllPaths = ref<string[]>([])
+const discardAllCounts = ref({ staged: 0, unstaged: 0, untracked: 0 })
 
 function openDiscardAllConfirmation() {
   const repoId = repoStore.activeRepoId
-  if (!repoId || totalCount.value === 0) return
+  const status = workspaceStore.status
+  if (!repoId || !status || totalCount.value === 0) return
   discardAllRepoId.value = repoId
+  discardAllHead.value = status.head_commit
+  discardAllPaths.value = Array.from(new Set(
+    [...status.staged, ...status.unstaged, ...status.untracked].map((file) => file.path),
+  ))
+  discardAllCounts.value = {
+    staged: status.staged.length,
+    unstaged: status.unstaged.length,
+    untracked: status.untracked.length,
+  }
   discardConfirmOpen.value = true
 }
 
@@ -351,7 +364,7 @@ async function onConfirmDiscardAll() {
 
   discardAllLoading.value = true
   try {
-    await workspaceStore.discardAll()
+    await workspaceStore.discardAll(repoId, discardAllHead.value, discardAllPaths.value)
     selectedPath.value = null
   } catch {
     // IPC 错误由 errors store 统一映射并通过 ToolbarToast 展示。
@@ -359,6 +372,9 @@ async function onConfirmDiscardAll() {
     discardAllLoading.value = false
     discardConfirmOpen.value = false
     discardAllRepoId.value = null
+    discardAllHead.value = undefined
+    discardAllPaths.value = []
+    discardAllCounts.value = { staged: 0, unstaged: 0, untracked: 0 }
   }
 }
 
@@ -366,6 +382,9 @@ function cancelDiscardAll() {
   if (discardAllLoading.value) return
   discardConfirmOpen.value = false
   discardAllRepoId.value = null
+  discardAllHead.value = undefined
+  discardAllPaths.value = []
+  discardAllCounts.value = { staged: 0, unstaged: 0, untracked: 0 }
 }
 
 // 响应外部（AppToolbar Actions / 其他调用方）对"丢弃全部"的粘性请求
@@ -624,9 +643,9 @@ watch(
       <div class="discard-body">
         <p>{{ t('workspace.confirmDiscard.intro') }}</p>
         <ul>
-          <li>{{ t('workspace.confirmDiscard.unstagedCount', { count: workspaceStore.status?.unstaged.length ?? 0 }) }}</li>
-          <li>{{ t('workspace.confirmDiscard.untrackedCount', { count: workspaceStore.status?.untracked.length ?? 0 }) }}</li>
-          <li>{{ t('workspace.confirmDiscard.stagedCount', { count: stagedAll.length }) }}</li>
+          <li>{{ t('workspace.confirmDiscard.unstagedCount', { count: discardAllCounts.unstaged }) }}</li>
+          <li>{{ t('workspace.confirmDiscard.untrackedCount', { count: discardAllCounts.untracked }) }}</li>
+          <li>{{ t('workspace.confirmDiscard.stagedCount', { count: discardAllCounts.staged }) }}</li>
         </ul>
         <p class="warn">
           {{ t('workspace.confirmDiscard.warnTrash') }}

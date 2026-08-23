@@ -234,12 +234,13 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     undoCommitCandidate.value = null
   }
 
-  async function discardAll() {
-    const repoStore = useRepoStore()
-    const id = repoStore.activeRepoId
-    if (!id) return
-    await git.discardAllChanges(id)
-    await refresh(id)
+  async function discardAll(
+    repoId: string,
+    expectedHead: string | undefined,
+    expectedPaths: string[],
+  ) {
+    await git.discardAllChanges(repoId, expectedHead ?? null, expectedPaths)
+    await refresh(repoId)
   }
 
   async function discardFile(filePath: string) {

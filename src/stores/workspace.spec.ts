@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   undoLastCommit: vi.fn(),
   stageFiles: vi.fn(),
   unstageFiles: vi.fn(),
+  discardAllChanges: vi.fn(),
   discardFiles: vi.fn(),
   setRepoState: vi.fn(),
 }))
@@ -27,6 +28,7 @@ vi.mock('@/composables/useGitCommands', () => ({
     undoLastCommit: mocks.undoLastCommit,
     stageFiles: mocks.stageFiles,
     unstageFiles: mocks.unstageFiles,
+    discardAllChanges: mocks.discardAllChanges,
     discardFiles: mocks.discardFiles,
   }),
 }))
@@ -79,6 +81,7 @@ describe('workspace commit undo candidate', () => {
     mocks.undoLastCommit.mockReset()
     mocks.stageFiles.mockReset()
     mocks.unstageFiles.mockReset()
+    mocks.discardAllChanges.mockReset()
     mocks.discardFiles.mockReset()
     mocks.setRepoState.mockReset()
   })
@@ -158,6 +161,21 @@ describe('workspace commit undo candidate', () => {
     expect(mocks.discardFiles).toHaveBeenCalledTimes(1)
     expect(mocks.discardFiles).toHaveBeenCalledWith('repo-1', ['one.txt', 'two.txt'])
     expect(mocks.getStatus).toHaveBeenCalledTimes(1)
+  })
+
+  it('passes the confirmed HEAD and path snapshot when discarding everything', async () => {
+    const store = useWorkspaceStore()
+    mocks.discardAllChanges.mockResolvedValue(undefined)
+    mocks.getStatus.mockResolvedValue(status('head'))
+
+    await store.discardAll('repo-1', 'head', ['one.txt', 'two.txt'])
+
+    expect(mocks.discardAllChanges).toHaveBeenCalledWith(
+      'repo-1',
+      'head',
+      ['one.txt', 'two.txt'],
+    )
+    expect(mocks.getStatus).toHaveBeenCalledWith('repo-1')
   })
 
   it('stages and unstages multiple files with one command and one refresh each', async () => {

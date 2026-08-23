@@ -557,8 +557,11 @@ export function useGitCommands() {
   const consumeStartupRepo = () =>
     call<string | null>('consume_startup_repo')
 
-  const discardAllChanges = (repoId: string) =>
-    call<void>('discard_all_changes', { repoId })
+  const discardAllChanges = (
+    repoId: string,
+    expectedHead: string | null,
+    expectedPaths: string[],
+  ) => call<void>('discard_all_changes', { repoId, expectedHead, expectedPaths })
 
   const discardFile = (repoId: string, filePath: string) =>
     call<void>('discard_file', { repoId, filePath })

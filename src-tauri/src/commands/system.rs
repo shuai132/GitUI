@@ -99,12 +99,14 @@ pub async fn open_terminal(
 #[tauri::command]
 pub async fn discard_all_changes(
     repo_id: String,
+    expected_head: Option<String>,
+    expected_paths: Vec<String>,
     repo_manager: State<'_, RepoManager>,
 ) -> Result<(), GitError> {
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    GitEngine::discard_all_changes(&meta.path)
+    GitEngine::discard_all_changes(&meta.path, expected_head.as_deref(), &expected_paths)
 }
 
 /// 读取 HEAD reflog，返回最新的 500 条记录

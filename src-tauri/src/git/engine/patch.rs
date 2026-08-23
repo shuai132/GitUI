@@ -185,11 +185,31 @@ impl GitEngine {
 
     /// 丢弃所有工作区变更 + untracked 文件。保持 HEAD 不动，且不处理 ignored 文件。
     /// 当前工作区原件会先移入系统废纸篓；失败时不会降级为永久删除。
-    pub fn discard_all_changes(path: &str) -> GitResult<()> {
-        Self::discard_all_changes_with(path, move_to_system_trash)
+    pub fn discard_all_changes(
+        path: &str,
+        expected_head: Option<&str>,
+        expected_paths: &[String],
+    ) -> GitResult<()> {
+        Self::discard_all_changes_guarded_with(
+            path,
+            Some((expected_head, expected_paths)),
+            move_to_system_trash,
+        )
     }
 
+    #[cfg(test)]
     pub(crate) fn discard_all_changes_with<F>(path: &str, mut move_to_trash: F) -> GitResult<()>
+    where
+        F: FnMut(&Path) -> GitResult<()>,
+    {
+        Self::discard_all_changes_guarded_with(path, None, &mut move_to_trash)
+    }
+
+    fn discard_all_changes_guarded_with<F>(
+        path: &str,
+        expected: Option<(Option<&str>, &[String])>,
+        mut move_to_trash: F,
+    ) -> GitResult<()>
     where
         F: FnMut(&Path) -> GitResult<()>,
     {
@@ -215,6 +235,22 @@ impl GitEngine {
             .iter()
             .filter_map(|entry| entry.path().map(ToOwned::to_owned))
             .collect::<Vec<_>>();
+        if let Some((expected_head, expected_paths)) = expected {
+            let current_head = head_oid.map(|oid| oid.to_string());
+            let current_paths = file_paths
+                .iter()
+                .map(String::as_str)
+                .collect::<HashSet<_>>();
+            let expected_paths = expected_paths
+                .iter()
+                .map(String::as_str)
+                .collect::<HashSet<_>>();
+            if current_head.as_deref() != expected_head || current_paths != expected_paths {
+                return Err(GitError::OperationFailed(
+                    "Workspace changed after discard confirmation opened".to_string(),
+                ));
+            }
+        }
         let mut index = repo.index()?;
         move_worktree_originals(&repo, &index, &file_paths, &mut move_to_trash)?;
 

@@ -924,6 +924,40 @@ mod tests {
     }
 
     #[test]
+    fn test_discard_all_rejects_changed_confirmation_target_before_trash() {
+        let test_repo = TestRepo::new();
+        let path = test_repo.path_str();
+        commit_file(&test_repo, "base", "existing.txt", "base\n");
+        fs::write(test_repo.dir.path().join("existing.txt"), "keep changed\n").unwrap();
+        let expected_head = git2::Repository::open(path)
+            .unwrap()
+            .head()
+            .unwrap()
+            .peel_to_commit()
+            .unwrap()
+            .id()
+            .to_string();
+        fs::write(test_repo.dir.path().join("unexpected.txt"), "keep new\n").unwrap();
+
+        let error = GitEngine::discard_all_changes(
+            path,
+            Some(&expected_head),
+            &["existing.txt".to_string()],
+        )
+        .unwrap_err();
+
+        assert!(error.to_string().contains("Workspace changed"));
+        assert_eq!(
+            fs::read_to_string(test_repo.dir.path().join("existing.txt")).unwrap(),
+            "keep changed\n"
+        );
+        assert_eq!(
+            fs::read_to_string(test_repo.dir.path().join("unexpected.txt")).unwrap(),
+            "keep new\n"
+        );
+    }
+
+    #[test]
     fn test_discard_stops_before_checkout_when_trash_fails() {
         let test_repo = TestRepo::new();
         let path = test_repo.path_str();
