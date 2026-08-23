@@ -32,10 +32,10 @@ type WipMenuOptions = {
   toggleFile: (fileOrPath: FileEntry | string, isDir: boolean) => Promise<void>
   batchStage: () => Promise<void>
   batchUnstage: () => Promise<void>
-  batchDiscard: () => Promise<void>
+  batchDiscard: () => void
   orderedBatchPaths: (source: 'unstaged' | 'staged') => string[]
   moveFileOrder: (paths: readonly string[], placement: FileOrderPlacement) => void
-  confirmDiscardFile: (filePath: string) => boolean
+  requestDiscardFile: (filePath: string) => void
   openSubmodule: (submodule: SubmoduleInfo) => Promise<void>
   initSubmodule: (submodule: SubmoduleInfo) => Promise<void>
   updateSubmodule: (submodule: SubmoduleInfo) => Promise<void>
@@ -61,7 +61,7 @@ export function useWipMenus(options: WipMenuOptions) {
     batchDiscard,
     orderedBatchPaths,
     moveFileOrder,
-    confirmDiscardFile,
+    requestDiscardFile,
     openSubmodule,
     initSubmodule,
     updateSubmodule,
@@ -318,11 +318,7 @@ export function useWipMenus(options: WipMenuOptions) {
           await workspaceStore.refresh(repoId)
         }
       } else if (action === 'discard') {
-        if (!confirmDiscardFile(targetPath)) return
-        await workspaceStore.discardFile(targetPath)
-        if (selectedPath.value === targetPath) {
-          selectedPath.value = null
-        }
+        requestDiscardFile(targetPath)
       } else if (action === 'file-history') {
         showFileHistory({ filePath: targetPath, mode: 'history' })
       } else if (action === 'file-blame') {

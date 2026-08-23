@@ -9,13 +9,19 @@ import { useRepoStore } from '@/stores/repos'
 import { useSettingsStore } from '@/stores/settings'
 import { useSubmodulesStore } from '@/stores/submodules'
 import { useGitCommands } from '@/composables/useGitCommands'
+import { useGlobalToast } from '@/composables/useGlobalToast'
 import { useWipFileActions } from '@/composables/workspace/useWipFileActions'
 import { useWipMenus } from '@/composables/workspace/useWipMenus'
+import {
+  isWorkspaceDiscardContextCurrent,
+  type PendingWorkspaceDiscard,
+} from '@/composables/workspace/workspaceDiscardConfirmation'
 import type { FileEntry, SubmoduleInfo } from '@/types/git'
 import { sortByFileOrder, type FileOrderPlacement } from '@/utils/fileOrderPrefs'
 import { findSelectedWipIndex, findWipFileBySelection } from '@/utils/wipSelection'
 import FileChangeList from '@/components/workspace/FileChangeList.vue'
 import WipCommitBox from '@/components/workspace/WipCommitBox.vue'
+import WorkspaceDiscardDialog from '@/components/workspace/WorkspaceDiscardDialog.vue'
 import Modal from '@/components/common/Modal.vue'
 import ContextMenu from '@/components/common/ContextMenu.vue'
 import { useMergeRebaseStore } from '@/stores/mergeRebase'
@@ -39,6 +45,7 @@ const settingsStore = useSettingsStore()
 const submodulesStore = useSubmodulesStore()
 const git = useGitCommands()
 const mergeRebaseStore = useMergeRebaseStore()
+const { showError } = useGlobalToast()
 const activeRepoPath = computed(() => repoStore.activeRepo()?.path)
 
 const emit = defineEmits<{
@@ -185,7 +192,7 @@ const {
   unstageAll,
   batchStage: stageSelected,
   batchUnstage: unstageSelected,
-  batchDiscard: discardSelected,
+  discardSelectedPaths,
 } = useWipFileActions({
   workspaceStore,
   selectedPath,
@@ -195,8 +202,56 @@ const {
   stagedMultiPaths,
   unstagedListRef,
   stagedListRef,
-  confirmDiscardSelected: (count) => confirm(t('workspace.confirmDiscard.selected', { count })),
 })
+
+const pendingWorkspaceDiscard = ref<PendingWorkspaceDiscard | null>(null)
+const workspaceDiscardLoading = ref(false)
+
+function requestWorkspaceDiscard(kind: PendingWorkspaceDiscard['kind'], paths: readonly string[]) {
+  const repoId = repoStore.activeRepoId
+  if (!repoId || paths.length === 0) return
+  pendingWorkspaceDiscard.value = {
+    repoId,
+    kind,
+    paths: [...paths],
+  }
+}
+
+function requestDiscardFile(filePath: string) {
+  requestWorkspaceDiscard('file', [filePath])
+}
+
+async function confirmWorkspaceDiscard() {
+  const request = pendingWorkspaceDiscard.value
+  if (!request || workspaceDiscardLoading.value) return
+  if (!isWorkspaceDiscardContextCurrent(request, repoStore.activeRepoId)) {
+    cancelWorkspaceDiscard()
+    showError(t('workspace.confirmDiscard.contextChanged'))
+    return
+  }
+
+  workspaceDiscardLoading.value = true
+  try {
+    if (request.kind === 'file') {
+      const filePath = request.paths[0]
+      if (!filePath) return
+      await workspaceStore.discardFile(filePath)
+      if (selectedPath.value === filePath) selectedPath.value = null
+    } else {
+      await discardSelectedPaths(request.paths)
+    }
+  } catch {
+    // IPC 错误由 errors store 统一映射并通过 ToolbarToast 展示。
+  } finally {
+    workspaceDiscardLoading.value = false
+    pendingWorkspaceDiscard.value = null
+  }
+}
+
+function cancelWorkspaceDiscard() {
+  if (workspaceDiscardLoading.value) return
+  pendingWorkspaceDiscard.value = null
+}
 
 async function batchStage() {
   await stageSelected()
@@ -206,8 +261,8 @@ async function batchUnstage() {
   await unstageSelected()
 }
 
-async function batchDiscard() {
-  await discardSelected()
+function batchDiscard() {
+  requestWorkspaceDiscard('selected', orderedBatchPaths('unstaged'))
 }
 
 function orderedBatchPaths(source: 'unstaged' | 'staged'): string[] {
@@ -250,7 +305,7 @@ const {
   batchDiscard,
   orderedBatchPaths,
   moveFileOrder,
-  confirmDiscardFile: (filePath) => confirm(t('workspace.confirmDiscard.file', { file: filePath })),
+  requestDiscardFile,
   openSubmodule: openSubmoduleFromWip,
   initSubmodule: initSubmoduleFromWip,
   updateSubmodule: updateSubmoduleFromWip,
@@ -271,26 +326,52 @@ async function onFileMenuAction(action: string) {
 
 // ── 丢弃全部变更（trash 按钮） ─────────────────────────────────────
 const discardConfirmOpen = ref(false)
+const discardAllLoading = ref(false)
+const discardAllRepoId = ref<string | null>(null)
 
-function onTrashClick() {
-  if (totalCount.value === 0) return
+function openDiscardAllConfirmation() {
+  const repoId = repoStore.activeRepoId
+  if (!repoId || totalCount.value === 0) return
+  discardAllRepoId.value = repoId
   discardConfirmOpen.value = true
 }
 
+function onTrashClick() {
+  openDiscardAllConfirmation()
+}
+
 async function onConfirmDiscardAll() {
-  discardConfirmOpen.value = false
+  const repoId = discardAllRepoId.value
+  if (!repoId || discardAllLoading.value) return
+  if (repoStore.activeRepoId !== repoId) {
+    cancelDiscardAll()
+    showError(t('workspace.confirmDiscard.contextChanged'))
+    return
+  }
+
+  discardAllLoading.value = true
   try {
     await workspaceStore.discardAll()
     selectedPath.value = null
-  } catch (e) {
-    alert(String(e))
+  } catch {
+    // IPC 错误由 errors store 统一映射并通过 ToolbarToast 展示。
+  } finally {
+    discardAllLoading.value = false
+    discardConfirmOpen.value = false
+    discardAllRepoId.value = null
   }
+}
+
+function cancelDiscardAll() {
+  if (discardAllLoading.value) return
+  discardConfirmOpen.value = false
+  discardAllRepoId.value = null
 }
 
 // 响应外部（AppToolbar Actions / 其他调用方）对"丢弃全部"的粘性请求
 function checkDiscardAllRequest() {
   if (uiStore.shouldOpenDiscardAll && totalCount.value > 0) {
-    discardConfirmOpen.value = true
+    openDiscardAllConfirmation()
     uiStore.consumeDiscardAllRequest()
   } else if (uiStore.shouldOpenDiscardAll) {
     // 没有可丢弃的变更也要消费标志，避免悬空
@@ -526,12 +607,19 @@ watch(
 
     <WipCommitBox :is-unborn="isUnborn" :staged-count="stagedAll.length" />
 
+    <WorkspaceDiscardDialog
+      :request="pendingWorkspaceDiscard"
+      :loading="workspaceDiscardLoading"
+      @confirm="confirmWorkspaceDiscard"
+      @cancel="cancelWorkspaceDiscard"
+    />
+
     <!-- 丢弃全部变更确认框 -->
     <Modal
       :visible="discardConfirmOpen"
       :title="t('workspace.confirmDiscard.allTitle')"
       width="400px"
-      @close="discardConfirmOpen = false"
+      @close="cancelDiscardAll"
     >
       <div class="discard-body">
         <p>{{ t('workspace.confirmDiscard.intro') }}</p>
@@ -547,8 +635,12 @@ watch(
         </p>
       </div>
       <template #footer>
-        <button class="btn btn-secondary" @click="discardConfirmOpen = false">{{ t('common.cancel') }}</button>
-        <button class="btn btn-danger" @click="onConfirmDiscardAll">{{ t('workspace.confirmDiscard.confirmAll') }}</button>
+        <button class="btn btn-secondary" :disabled="discardAllLoading" @click="cancelDiscardAll">
+          {{ t('common.cancel') }}
+        </button>
+        <button class="btn btn-danger" :disabled="discardAllLoading" @click="onConfirmDiscardAll">
+          {{ discardAllLoading ? t('workspace.confirmDiscard.runningAll') : t('workspace.confirmDiscard.confirmAll') }}
+        </button>
       </template>
     </Modal>
 

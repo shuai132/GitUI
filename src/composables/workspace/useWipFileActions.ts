@@ -14,7 +14,6 @@ type WipFileActionsOptions = {
   stagedMultiPaths: Ref<string[]>
   unstagedListRef: Ref<InstanceType<typeof FileChangeList> | null>
   stagedListRef: Ref<InstanceType<typeof FileChangeList> | null>
-  confirmDiscardSelected: (count: number) => boolean
 }
 
 export function useWipFileActions(options: WipFileActionsOptions) {
@@ -27,7 +26,6 @@ export function useWipFileActions(options: WipFileActionsOptions) {
     stagedMultiPaths,
     unstagedListRef,
     stagedListRef,
-    confirmDiscardSelected,
   } = options
 
   async function toggleFile(fileOrPath: FileEntry | string, isDir: boolean) {
@@ -74,11 +72,11 @@ export function useWipFileActions(options: WipFileActionsOptions) {
     stagedMultiPaths.value = []
   }
 
-  async function batchDiscard() {
-    const paths = [...unstagedMultiPaths.value]
-    if (!confirmDiscardSelected(paths.length)) return
-    await workspaceStore.discardFiles(paths)
-    if (paths.includes(selectedPath.value ?? '')) {
+  async function discardSelectedPaths(paths: readonly string[]) {
+    const capturedPaths = [...paths]
+    if (capturedPaths.length === 0) return
+    await workspaceStore.discardFiles(capturedPaths)
+    if (capturedPaths.includes(selectedPath.value ?? '')) {
       selectedPath.value = null
     }
     unstagedListRef.value?.clearMultiSelect()
@@ -91,6 +89,6 @@ export function useWipFileActions(options: WipFileActionsOptions) {
     unstageAll,
     batchStage,
     batchUnstage,
-    batchDiscard,
+    discardSelectedPaths,
   }
 }

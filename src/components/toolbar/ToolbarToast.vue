@@ -33,6 +33,7 @@ const OP_LABELS: Record<string, () => string> = {
   create_tag: () => t('toolbar.opLabels.createTag'),
   discard_all_changes: () => t('toolbar.opLabels.discardAll'),
   discard_file: () => t('toolbar.opLabels.discardFile'),
+  discard_files: () => t('toolbar.opLabels.discardFiles'),
   open_terminal: () => t('toolbar.opLabels.openTerminal'),
   init_submodule: () => t('toolbar.opLabels.initSubmodule'),
   update_submodule: () => t('toolbar.opLabels.updateSubmodule'),
