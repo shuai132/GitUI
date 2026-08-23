@@ -32,6 +32,7 @@ export type ContextMenuPayload = {
 
 const emit = defineEmits<{
   select: [file: FileEntry]
+  open: [file: FileEntry]
   toggle: [pathOrFile: FileEntry | string, isDir: boolean]
   toggleAll: []
   contextMenu: [event: MouseEvent, payload: ContextMenuPayload]
@@ -94,8 +95,15 @@ function isDisplayedSubmodulePath(path: string): boolean {
 }
 
 function fileTitle(file: FileEntry): string {
+  if (canOpenFileInEditor(file)) {
+    return `${file.path}\n${t('workspace.fileList.doubleClickOpen')}`
+  }
   if (!isDisplayedSubmodulePath(file.path)) return file.path
   return `${file.path}\n${t('workspace.fileList.submoduleTitle')}`
+}
+
+function canOpenFileInEditor(file: FileEntry): boolean {
+  return file.status !== 'deleted' && !isDisplayedSubmodulePath(file.path)
 }
 
 // ── 多选状态 ──────────────────────────────────────────────────────
@@ -194,6 +202,12 @@ function onRowContext(e: MouseEvent, item: DisplayItem) {
   })
 }
 
+function onRowDoubleClick(item: DisplayItem) {
+  if (item.type === 'file' && canOpenFileInEditor(item.file)) {
+    emit('open', item.file)
+  }
+}
+
 function getFile(item: DisplayItem): FileEntry {
   if (item.type !== 'file') throw new Error('Expected file item')
   return item.file
@@ -278,6 +292,7 @@ defineExpose({ scrollToIndex, clearMultiSelect, expandAll, collapseAll })
             width: '100%',
           }"
           @click="onRowClick($event, displayItems[vRow.index], vRow.index)"
+          @dblclick="onRowDoubleClick(displayItems[vRow.index])"
           @contextmenu="onRowContext($event, displayItems[vRow.index])"
         >
           <!-- Indent for tree view -->
@@ -307,6 +322,7 @@ defineExpose({ scrollToIndex, clearMultiSelect, expandAll, collapseAll })
               class="row-action"
               :title="variant === 'staged' ? t('workspace.fileList.rowAction.unstageTitle') : t('workspace.fileList.rowAction.stageTitle')"
               @click.stop="emit('toggle', displayItems[vRow.index].path, true)"
+              @dblclick.stop
             >
               {{ variant === 'staged' ? t('workspace.fileList.rowAction.unstage') : t('workspace.fileList.rowAction.stage') }}
             </button>
@@ -360,6 +376,7 @@ defineExpose({ scrollToIndex, clearMultiSelect, expandAll, collapseAll })
               class="row-action"
               :title="getFile(displayItems[vRow.index]).staged ? t('workspace.fileList.rowAction.unstageTitle') : t('workspace.fileList.rowAction.stageTitle')"
               @click.stop="emit('toggle', getFile(displayItems[vRow.index]), false)"
+              @dblclick.stop
             >
               {{ getFile(displayItems[vRow.index]).staged ? t('workspace.fileList.rowAction.unstage') : t('workspace.fileList.rowAction.stage') }}
             </button>

@@ -589,6 +589,8 @@ const messages = {
     fileList: {
       emptyDefault: '无变更',
       submoduleTitle: 'Submodule',
+      doubleClickOpen: '双击在编辑器中打开',
+      openFailed: '打开文件失败：{detail}',
       rowAction: {
         stage: '暂存',
         unstage: '取消暂存',

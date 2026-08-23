@@ -590,6 +590,8 @@ const messages = {
     fileList: {
       emptyDefault: 'No changes',
       submoduleTitle: 'Submodule',
+      doubleClickOpen: 'Double-click to open in editor',
+      openFailed: 'Failed to open file: {detail}',
       rowAction: {
         stage: 'Stage',
         unstage: 'Unstage',

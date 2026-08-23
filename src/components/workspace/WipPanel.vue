@@ -115,6 +115,16 @@ function onSelectFile(file: FileEntry) {
   panelListsRef.value?.focus()
 }
 
+async function onOpenFileInEditor(file: FileEntry) {
+  const repoPath = activeRepoPath.value
+  if (!repoPath) return
+  try {
+    await git.openFileInEditor(`${repoPath}/${file.path}`)
+  } catch (caught: unknown) {
+    alert(t('workspace.fileList.openFailed', { detail: String(caught) }))
+  }
+}
+
 async function onToggleFile(fileOrPath: FileEntry | string, isDir: boolean) {
   await toggleFile(fileOrPath, isDir)
 }
@@ -449,6 +459,7 @@ watch(
           :view-mode="viewMode"
           :submodule-paths="submodulePaths"
           @select="onSelectFile"
+          @open="onOpenFileInEditor"
           @toggle="onToggleFile"
           @context-menu="onFileContext"
           @multi-select-change="onUnstagedMultiSelect"
@@ -488,6 +499,7 @@ watch(
           :view-mode="viewMode"
           :submodule-paths="submodulePaths"
           @select="onSelectFile"
+          @open="onOpenFileInEditor"
           @toggle="onToggleFile"
           @context-menu="onFileContext"
           @multi-select-change="onStagedMultiSelect"
