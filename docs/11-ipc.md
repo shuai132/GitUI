@@ -70,7 +70,7 @@ GitUI 采用 Tauri v2 的 IPC 机制实现前后端通信，包括双向的请�
 
 ### 插件 (Plugins)
 - `list_plugins`：扫描应用数据目录下的本地插件，返回 manifest、启用状态与安装路径。
-- `install_plugin_from_path`：从本地目录安装插件，要求目录内存在 `plugin.json`。
+- `install_plugin_from_path`：从本地目录安装插件，要求目录内存在 `plugin.json`。复制完成并重新验证 manifest 后才原子切换正式目录；覆盖失败时恢复旧版本，成功后返回实际安装副本的 manifest。
 - `enable_plugin` / `disable_plugin` / `uninstall_plugin`：管理本地插件生命周期。`uninstall_plugin` 先把应用数据目录中的插件副本移入系统废纸篓，失败时保留插件与启用状态。
 - `execute_plugin_command`：执行插件贡献的命令，传入当前仓库上下文与可选选择信息，返回消息与刷新域。
 

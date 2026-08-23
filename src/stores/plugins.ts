@@ -69,13 +69,14 @@ export const usePluginsStore = defineStore('plugins', () => {
     }
   }
 
-  async function installFromPath(path: string) {
+  async function installFromPath(path: string): Promise<boolean> {
     const installed = await git.installPluginFromPath(path)
     const idx = plugins.value.findIndex(
       (plugin) => plugin.manifest.id === installed.manifest.id,
     )
     if (idx >= 0) plugins.value[idx] = installed
     else plugins.value.push(installed)
+    return idx >= 0
   }
 
   async function enable(pluginId: string) {

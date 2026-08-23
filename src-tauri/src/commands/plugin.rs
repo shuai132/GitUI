@@ -179,16 +179,25 @@ pub async fn install_plugin_from_path(
             path: target.to_string_lossy().to_string(),
         });
     }
-    if target.exists() {
-        fs::remove_dir_all(&target)?;
-    }
-    copy_dir(&source, &target)?;
+
+    let transaction_root = plugin_install_transaction_root(&app)?;
+    let installed = install_plugin_dir_with(
+        &source,
+        &target,
+        &transaction_root,
+        &manifest.id,
+        copy_dir,
+        |from, to| {
+            fs::rename(from, to)?;
+            Ok(())
+        },
+        move_plugin_to_system_trash,
+    )?;
 
     let mut state = read_state(&app)?;
     state.insert(manifest.id.clone(), true);
     write_state(&app, &state)?;
 
-    let installed = read_manifest(&target)?;
     Ok(PluginInfo {
         manifest: installed,
         enabled: true,
@@ -331,6 +340,16 @@ fn plugins_root(app: &AppHandle) -> Result<PathBuf, GitError> {
         .map_err(|e| GitError::OperationFailed(format!("无法读取应用数据目录: {e}")))
 }
 
+fn plugin_install_transaction_root(app: &AppHandle) -> Result<PathBuf, GitError> {
+    app.path()
+        .app_data_dir()
+        .map(|path| {
+            path.join("plugin-install-transactions")
+                .join(uuid::Uuid::new_v4().to_string())
+        })
+        .map_err(|e| GitError::OperationFailed(format!("无法读取应用数据目录: {e}")))
+}
+
 fn plugin_dir(app: &AppHandle, plugin_id: &str) -> Result<PathBuf, GitError> {
     if !is_valid_plugin_id(plugin_id) {
         return Err(GitError::InvalidPath(format!(
@@ -414,6 +433,117 @@ fn copy_dir(source: &Path, target: &Path) -> Result<(), GitError> {
         }
     }
     Ok(())
+}
+
+fn cleanup_install_transaction(transaction_root: &Path) {
+    if transaction_root.exists() {
+        let _ = fs::remove_dir_all(transaction_root);
+    }
+}
+
+fn install_plugin_dir_with<C, R, T>(
+    source: &Path,
+    target: &Path,
+    transaction_root: &Path,
+    expected_id: &str,
+    mut copy: C,
+    mut rename: R,
+    mut move_to_trash: T,
+) -> Result<PluginManifest, GitError>
+where
+    C: FnMut(&Path, &Path) -> Result<(), GitError>,
+    R: FnMut(&Path, &Path) -> Result<(), GitError>,
+    T: FnMut(&Path) -> Result<(), GitError>,
+{
+    fs::create_dir_all(transaction_root)?;
+    let staged = transaction_root.join("new");
+    let backup = transaction_root.join(expected_id);
+
+    if let Err(error) = copy(source, &staged) {
+        cleanup_install_transaction(transaction_root);
+        return Err(error);
+    }
+
+    let staged_manifest = match read_manifest(&staged).and_then(|manifest| {
+        validate_manifest(&manifest)?;
+        if manifest.id != expected_id {
+            return Err(GitError::OperationFailed(format!(
+                "插件复制期间 ID 发生变化: 预期 {expected_id}，实际 {}",
+                manifest.id
+            )));
+        }
+        Ok(manifest)
+    }) {
+        Ok(manifest) => manifest,
+        Err(error) => {
+            cleanup_install_transaction(transaction_root);
+            return Err(error);
+        }
+    };
+
+    if !target.exists() {
+        if let Err(error) = rename(&staged, target) {
+            cleanup_install_transaction(transaction_root);
+            return Err(GitError::OperationFailed(format!(
+                "无法启用新插件目录: {error}"
+            )));
+        }
+        cleanup_install_transaction(transaction_root);
+        return Ok(staged_manifest);
+    }
+
+    if let Err(error) = rename(target, &backup) {
+        cleanup_install_transaction(transaction_root);
+        return Err(GitError::OperationFailed(format!(
+            "无法暂存现有插件版本: {error}"
+        )));
+    }
+
+    if let Err(error) = rename(&staged, target) {
+        let rollback = rename(&backup, target);
+        if rollback.is_ok() {
+            cleanup_install_transaction(transaction_root);
+            return Err(GitError::OperationFailed(format!(
+                "无法切换到新插件版本，已恢复旧版本: {error}"
+            )));
+        }
+        return Err(GitError::OperationFailed(format!(
+            "无法切换到新插件版本，且自动恢复失败；旧版本保留在 {}: {error}; {}",
+            backup.display(),
+            rollback.unwrap_err()
+        )));
+    }
+
+    if let Err(error) = move_to_trash(&backup) {
+        let rejected = transaction_root.join("rejected-new");
+        let move_new = rename(target, &rejected);
+        if let Err(move_error) = move_new {
+            return Err(GitError::OperationFailed(format!(
+                "无法回收旧插件版本，且无法开始回滚；旧版本保留在 {}: {error}; {move_error}",
+                backup.display()
+            )));
+        }
+
+        match rename(&backup, target) {
+            Ok(()) => {
+                cleanup_install_transaction(transaction_root);
+                return Err(GitError::OperationFailed(format!(
+                    "无法回收旧插件版本，已恢复旧版本: {error}"
+                )));
+            }
+            Err(restore_error) => {
+                let preserve_new = rename(&rejected, target);
+                return Err(GitError::OperationFailed(format!(
+                    "无法回收旧插件版本，且自动恢复失败；旧版本保留在 {}: {error}; {restore_error}; 新版本恢复结果: {}",
+                    backup.display(),
+                    if preserve_new.is_ok() { "已保留" } else { "失败" }
+                )));
+            }
+        }
+    }
+
+    cleanup_install_transaction(transaction_root);
+    Ok(staged_manifest)
 }
 
 fn run_backend_command(
@@ -641,7 +771,7 @@ fn forget_backend_command(command: &str) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::{env, ffi::OsString, fs};
+    use std::{cell::Cell, env, ffi::OsString, fs};
 
     fn base_manifest() -> PluginManifest {
         PluginManifest {
@@ -655,6 +785,18 @@ mod tests {
             permissions: Vec::new(),
             contributes: PluginContributes::default(),
         }
+    }
+
+    fn write_plugin_fixture(path: &Path, version: &str, marker: &str) {
+        fs::create_dir_all(path).unwrap();
+        let mut manifest = base_manifest();
+        manifest.version = version.to_string();
+        fs::write(
+            path.join(MANIFEST_FILE),
+            serde_json::to_string_pretty(&manifest).unwrap(),
+        )
+        .unwrap();
+        fs::write(path.join("marker.txt"), marker).unwrap();
     }
 
     #[test]
@@ -776,6 +918,174 @@ mod tests {
         let result = response.result.unwrap();
         assert_eq!(result.message.as_deref(), Some("done"));
         assert_eq!(result.refresh, vec!["workspace", "history"]);
+    }
+
+    #[test]
+    fn replacement_installs_staged_plugin_and_retires_old_copy() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let source = temp_dir.path().join("source");
+        let target = temp_dir.path().join("plugins/com.example.demo");
+        let transaction = temp_dir.path().join("transactions/install");
+        let recovery = temp_dir.path().join("recovery");
+        write_plugin_fixture(&source, "2.0.0", "new");
+        write_plugin_fixture(&target, "1.0.0", "old");
+
+        let installed = install_plugin_dir_with(
+            &source,
+            &target,
+            &transaction,
+            "com.example.demo",
+            copy_dir,
+            |from, to| {
+                fs::rename(from, to)?;
+                Ok(())
+            },
+            |backup| {
+                fs::rename(backup, &recovery)?;
+                Ok(())
+            },
+        )
+        .unwrap();
+
+        assert_eq!(installed.version, "2.0.0");
+        assert_eq!(
+            fs::read_to_string(target.join("marker.txt")).unwrap(),
+            "new"
+        );
+        assert_eq!(
+            fs::read_to_string(recovery.join("marker.txt")).unwrap(),
+            "old"
+        );
+        assert!(!transaction.exists());
+    }
+
+    #[test]
+    fn replacement_keeps_old_plugin_when_copy_fails() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let source = temp_dir.path().join("source");
+        let target = temp_dir.path().join("plugins/com.example.demo");
+        let transaction = temp_dir.path().join("transactions/install");
+        write_plugin_fixture(&source, "2.0.0", "new");
+        write_plugin_fixture(&target, "1.0.0", "old");
+
+        let result = install_plugin_dir_with(
+            &source,
+            &target,
+            &transaction,
+            "com.example.demo",
+            |_, staged| {
+                fs::create_dir_all(staged)?;
+                fs::write(staged.join("partial"), "partial")?;
+                Err(GitError::OperationFailed("copy failed".to_string()))
+            },
+            |from, to| {
+                fs::rename(from, to)?;
+                Ok(())
+            },
+            |_| Ok(()),
+        );
+
+        assert!(result.is_err());
+        assert_eq!(
+            fs::read_to_string(target.join("marker.txt")).unwrap(),
+            "old"
+        );
+        assert!(!transaction.exists());
+    }
+
+    #[test]
+    fn replacement_restores_old_plugin_when_switch_fails() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let source = temp_dir.path().join("source");
+        let target = temp_dir.path().join("plugins/com.example.demo");
+        let transaction = temp_dir.path().join("transactions/install");
+        write_plugin_fixture(&source, "2.0.0", "new");
+        write_plugin_fixture(&target, "1.0.0", "old");
+        let rename_count = Cell::new(0);
+
+        let result = install_plugin_dir_with(
+            &source,
+            &target,
+            &transaction,
+            "com.example.demo",
+            copy_dir,
+            |from, to| {
+                rename_count.set(rename_count.get() + 1);
+                if rename_count.get() == 2 {
+                    return Err(GitError::OperationFailed("switch failed".to_string()));
+                }
+                fs::rename(from, to)?;
+                Ok(())
+            },
+            |_| Ok(()),
+        );
+
+        assert!(result.is_err());
+        assert_eq!(
+            fs::read_to_string(target.join("marker.txt")).unwrap(),
+            "old"
+        );
+        assert!(!transaction.exists());
+    }
+
+    #[test]
+    fn replacement_restores_old_plugin_when_trash_fails() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let source = temp_dir.path().join("source");
+        let target = temp_dir.path().join("plugins/com.example.demo");
+        let transaction = temp_dir.path().join("transactions/install");
+        write_plugin_fixture(&source, "2.0.0", "new");
+        write_plugin_fixture(&target, "1.0.0", "old");
+
+        let result = install_plugin_dir_with(
+            &source,
+            &target,
+            &transaction,
+            "com.example.demo",
+            copy_dir,
+            |from, to| {
+                fs::rename(from, to)?;
+                Ok(())
+            },
+            |_| Err(GitError::OperationFailed("trash failed".to_string())),
+        );
+
+        assert!(result.is_err());
+        assert_eq!(
+            fs::read_to_string(target.join("marker.txt")).unwrap(),
+            "old"
+        );
+        assert!(!transaction.exists());
+    }
+
+    #[test]
+    fn replacement_rejects_manifest_id_changed_during_copy() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let source = temp_dir.path().join("source");
+        let target = temp_dir.path().join("plugins/com.example.demo");
+        let transaction = temp_dir.path().join("transactions/install");
+        write_plugin_fixture(&source, "2.0.0", "new");
+        write_plugin_fixture(&target, "1.0.0", "old");
+
+        let result = install_plugin_dir_with(
+            &source,
+            &target,
+            &transaction,
+            "com.example.changed",
+            copy_dir,
+            |from, to| {
+                fs::rename(from, to)?;
+                Ok(())
+            },
+            |_| Ok(()),
+        );
+
+        assert!(result.is_err());
+        assert_eq!(
+            fs::read_to_string(target.join("marker.txt")).unwrap(),
+            "old"
+        );
+        assert!(!transaction.exists());
     }
 
     #[test]

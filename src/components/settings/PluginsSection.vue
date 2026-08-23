@@ -17,6 +17,7 @@ const pendingUninstall = ref<{
   path: string
 } | null>(null)
 const uninstalling = ref(false)
+const installing = ref(false)
 
 const sortedPlugins = computed(() =>
   [...pluginsStore.plugins].sort((a, b) =>
@@ -31,14 +32,29 @@ onMounted(() => {
 })
 
 async function onInstall() {
-  const selected = await open({
-    directory: true,
-    multiple: false,
-    title: t('settings.plugins.installTitle'),
-  })
-  if (typeof selected !== 'string') return
-  await pluginsStore.installFromPath(selected)
-  showToast('success', t('settings.plugins.installSuccess'))
+  if (installing.value) return
+  installing.value = true
+  try {
+    const selected = await open({
+      directory: true,
+      multiple: false,
+      title: t('settings.plugins.installTitle'),
+    })
+    if (typeof selected !== 'string') return
+    const replaced = await pluginsStore.installFromPath(selected)
+    showToast(
+      'success',
+      t(
+        replaced
+          ? 'settings.plugins.updateSuccess'
+          : 'settings.plugins.installSuccess',
+      ),
+    )
+  } catch (error) {
+    showActionError(error)
+  } finally {
+    installing.value = false
+  }
 }
 
 async function onToggle(plugin: PluginInfo) {
@@ -114,7 +130,7 @@ function permissionReason(permission: PluginPermission): string | undefined {
         <button
           type="button"
           class="btn btn-secondary"
-          :disabled="pluginsStore.loading || uninstalling"
+          :disabled="pluginsStore.loading || installing || uninstalling"
           @click="pluginsStore.load()"
         >
           {{ t('settings.plugins.refresh') }}
@@ -122,10 +138,14 @@ function permissionReason(permission: PluginPermission): string | undefined {
         <button
           type="button"
           class="btn btn-primary"
-          :disabled="pluginsStore.loading || uninstalling"
+          :disabled="pluginsStore.loading || installing || uninstalling"
           @click="onInstall"
         >
-          {{ t('settings.plugins.install') }}
+          {{
+            installing
+              ? t('settings.plugins.installing')
+              : t('settings.plugins.install')
+          }}
         </button>
       </div>
     </div>

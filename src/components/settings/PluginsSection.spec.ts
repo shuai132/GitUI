@@ -18,6 +18,7 @@ const plugin: PluginInfo = {
 }
 
 const mocks = vi.hoisted(() => ({
+  open: vi.fn(),
   store: {
     plugins: [] as PluginInfo[],
     loading: false,
@@ -40,6 +41,7 @@ vi.mock('vue-i18n', () => ({
       `${key} ${Object.values(params ?? {}).join(' ')}`.trim(),
   }),
 }))
+vi.mock('@tauri-apps/plugin-dialog', () => ({ open: mocks.open }))
 vi.mock('@/stores/plugins', () => ({ usePluginsStore: () => mocks.store }))
 vi.mock('@/composables/useGlobalToast', () => ({
   useGlobalToast: () => ({
@@ -52,10 +54,40 @@ vi.mock('@/composables/useGlobalToast', () => ({
 describe('PluginsSection guarded uninstall', () => {
   beforeEach(() => {
     mocks.store.plugins = [{ ...plugin }]
+    mocks.open.mockReset()
+    mocks.store.installFromPath.mockReset()
     mocks.store.uninstall.mockReset().mockResolvedValue(undefined)
     mocks.showToast.mockReset()
     mocks.showError.mockReset()
     mocks.showActionError.mockReset()
+  })
+
+  it.each([
+    [false, 'settings.plugins.installSuccess'],
+    [true, 'settings.plugins.updateSuccess'],
+  ])('reports whether install replaced an existing plugin', async (replaced, message) => {
+    mocks.open.mockResolvedValue('/source/demo')
+    mocks.store.installFromPath.mockResolvedValue(replaced)
+    const wrapper = shallowMount(PluginsSection)
+
+    await wrapper.find('.btn-primary').trigger('click')
+    await flushPromises()
+
+    expect(mocks.store.installFromPath).toHaveBeenCalledWith('/source/demo')
+    expect(mocks.showToast).toHaveBeenCalledWith('success', message)
+  })
+
+  it('reports install failures without changing the list', async () => {
+    mocks.open.mockResolvedValue('/source/demo')
+    const error = new Error('copy failed')
+    mocks.store.installFromPath.mockRejectedValue(error)
+    const wrapper = shallowMount(PluginsSection)
+
+    await wrapper.find('.btn-primary').trigger('click')
+    await flushPromises()
+
+    expect(mocks.showToast).not.toHaveBeenCalled()
+    expect(mocks.showActionError).toHaveBeenCalledWith(error)
   })
 
   it('previews the exact plugin and uninstalls only after confirmation', async () => {
