@@ -168,7 +168,8 @@ function onFileTabsWheel(e: WheelEvent) {
         <button
           v-if="viewMode === 'tree'"
           class="btn-icon"
-          :title="isAllExpanded ? t('workspace.wip.collapseAllTitle', 'Collapse All') : t('workspace.wip.expandAllTitle', 'Expand All')"
+          :title="isAllExpanded ? t('workspace.wip.collapseAllTitle') : t('workspace.wip.expandAllTitle')"
+          :aria-label="isAllExpanded ? t('workspace.wip.collapseAllTitle') : t('workspace.wip.expandAllTitle')"
           @click="toggleExpandCollapseAll"
         >
           <svg v-if="isAllExpanded" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -183,7 +184,8 @@ function onFileTabsWheel(e: WheelEvent) {
         <button
           class="btn-icon"
           :class="{ active: viewMode === 'tree' }"
-          title="Toggle Tree View"
+          :title="viewMode === 'list' ? t('workspace.wip.switchToTreeView') : t('workspace.wip.switchToListView')"
+          :aria-label="viewMode === 'list' ? t('workspace.wip.switchToTreeView') : t('workspace.wip.switchToListView')"
           @click="toggleViewMode"
         >
           <svg v-if="viewMode === 'list'" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">

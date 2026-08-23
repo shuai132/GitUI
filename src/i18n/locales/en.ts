@@ -671,6 +671,10 @@ const messages = {
     wip: {
       headerTitle: '{count} file(s) changed',
       resizeSections: 'Resize unstaged and staged sections',
+      expandAllTitle: 'Expand all folders',
+      collapseAllTitle: 'Collapse all folders',
+      switchToTreeView: 'Switch to tree view',
+      switchToListView: 'Switch to list view',
       onBranch: 'on {branch}',
       discardAllTitle: 'Discard all changes',
       stageAll: 'Stage all',

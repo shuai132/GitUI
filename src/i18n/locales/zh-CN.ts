@@ -670,6 +670,10 @@ const messages = {
     wip: {
       headerTitle: '{count} 个文件变更',
       resizeSections: '调整未暂存与已暂存区域',
+      expandAllTitle: '展开所有文件夹',
+      collapseAllTitle: '折叠所有文件夹',
+      switchToTreeView: '切换到树形视图',
+      switchToListView: '切换到列表视图',
       onBranch: 'on {branch}',
       discardAllTitle: '丢弃所有变更',
       stageAll: '全部暂存',
