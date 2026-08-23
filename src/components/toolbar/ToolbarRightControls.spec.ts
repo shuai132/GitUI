@@ -1,7 +1,8 @@
 import { defineComponent, nextTick, type PropType } from 'vue'
-import { mount } from '@vue/test-utils'
+import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import ToolbarRightControls from './ToolbarRightControls.vue'
+import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import type { ContextMenuItem } from '@/components/common/ContextMenu.vue'
 
 interface MockUiStore {
@@ -60,7 +61,10 @@ const mocks = vi.hoisted(() => {
     },
     uiStore,
     errorsStore: { entries: [] },
-    repoOpsStore: { getBusy: vi.fn(() => ({ gc: false })) },
+    repoOpsStore: {
+      getBusy: vi.fn(() => ({ gc: false })),
+      setBusy: vi.fn(),
+    },
     terminalStore: {
       activeRepoVisible: false,
       toggleActiveRepoVisible: vi.fn(),
@@ -176,6 +180,7 @@ describe('ToolbarRightControls', () => {
     mocks.repoStore.activeRepoId = 'repo-a'
     mocks.uiStore.showChangeStatsColumn = false
     vi.clearAllMocks()
+    mocks.git.runGc.mockResolvedValue('done')
   })
 
   it('toggles the changes column from the actions menu', async () => {
@@ -201,6 +206,57 @@ describe('ToolbarRightControls', () => {
     expect(mocks.uiStore.toggleShowChangeStatsColumn).toHaveBeenCalledTimes(1)
     expect(mocks.uiStore.showChangeStatsColumn).toBe(true)
 
+    wrapper.unmount()
+  })
+
+  it('confirms repository maintenance before running git gc', async () => {
+    const wrapper = mount(ToolbarRightControls, {
+      global: { stubs: { ContextMenu: ContextMenuStub } },
+    })
+    await wrapper.find('[data-menu-anchor]').trigger('click')
+    await nextTick()
+    const gcItem = wrapper
+      .findAll('[data-test="actions-menu"] button')
+      .find((button) => button.text() === 'toolbar.actionsMenu.gc')
+
+    await gcItem!.trigger('click')
+
+    expect(mocks.git.runGc).not.toHaveBeenCalled()
+    const dialog = wrapper.findComponent(ConfirmDialog)
+    expect(dialog.props()).toMatchObject({
+      visible: true,
+      danger: true,
+      title: 'toolbar.gcConfirm.title',
+      message: 'toolbar.gcConfirm.message',
+    })
+
+    dialog.vm.$emit('confirm')
+    await flushPromises()
+
+    expect(mocks.git.runGc).toHaveBeenCalledWith('repo-a')
+    expect(mocks.repoOpsStore.setBusy).toHaveBeenNthCalledWith(1, 'repo-a', 'gc', true)
+    expect(mocks.repoOpsStore.setBusy).toHaveBeenNthCalledWith(2, 'repo-a', 'gc', false)
+    expect(mocks.showToast).toHaveBeenCalledWith('success', 'toolbar.gcConfirm.success')
+    wrapper.unmount()
+  })
+
+  it('cancels an old maintenance confirmation after switching repositories', async () => {
+    const wrapper = mount(ToolbarRightControls, {
+      global: { stubs: { ContextMenu: ContextMenuStub } },
+    })
+    await wrapper.find('[data-menu-anchor]').trigger('click')
+    await nextTick()
+    const gcItem = wrapper
+      .findAll('[data-test="actions-menu"] button')
+      .find((button) => button.text() === 'toolbar.actionsMenu.gc')
+    await gcItem!.trigger('click')
+    mocks.repoStore.activeRepoId = 'repo-b'
+
+    wrapper.findComponent(ConfirmDialog).vm.$emit('confirm')
+    await flushPromises()
+
+    expect(mocks.git.runGc).not.toHaveBeenCalled()
+    expect(mocks.showToast).toHaveBeenCalledWith('error', 'toolbar.gcConfirm.contextChanged')
     wrapper.unmount()
   })
 })

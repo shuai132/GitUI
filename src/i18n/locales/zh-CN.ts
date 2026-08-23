@@ -105,6 +105,14 @@ const messages = {
       discardAll: '丢弃所有变更',
       about: '关于 GitUI',
     },
+    gcConfirm: {
+      title: '清理仓库',
+      message: '要对“{repo}”运行 git gc 吗？Git 会优化仓库数据，并可能按该仓库配置过期 Reflog 条目或移除不可达对象；较旧的丢失提交之后可能无法恢复。',
+      confirm: '运行 git gc',
+      running: '清理中...',
+      success: '“{repo}”仓库维护已完成。',
+      contextChanged: '活动仓库已变化，已取消旧的维护请求。',
+    },
     opLabels: {
       pull: 'Pull',
       push: 'Push',

@@ -105,6 +105,14 @@ const messages = {
       discardAll: 'Discard all changes',
       about: 'About GitUI',
     },
+    gcConfirm: {
+      title: 'Clean repository',
+      message: 'Run git gc for “{repo}”? Git will optimize repository data and may expire reflog entries or remove unreachable objects according to this repository’s configuration. Older dangling commits may no longer be recoverable.',
+      confirm: 'Run git gc',
+      running: 'Cleaning...',
+      success: 'Repository maintenance completed for “{repo}”.',
+      contextChanged: 'The active repository changed, so the pending maintenance request was cancelled.',
+    },
     opLabels: {
       pull: 'Pull',
       push: 'Push',

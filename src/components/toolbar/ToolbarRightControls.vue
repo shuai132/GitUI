@@ -14,6 +14,7 @@ import { useShortcutsStore, bindingToLabel, type ShortcutActionId } from '@/stor
 import { useGitCommands } from '@/composables/useGitCommands'
 import { useGlobalToast } from '@/composables/useGlobalToast'
 import { useBlurOnOutsidePointerDown } from '@/composables/useBlurOnOutsidePointerDown'
+import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import ContextMenu, { type ContextMenuItem } from '@/components/common/ContextMenu.vue'
 
 const emit = defineEmits<{
@@ -116,6 +117,36 @@ const actionsMenu = reactive({
   y: 0,
 })
 const actionsBtnRef = ref<HTMLButtonElement | null>(null)
+const pendingGc = ref<{ repoId: string; repoName: string } | null>(null)
+const gcConfirmLoading = computed(() => {
+  const repoId = pendingGc.value?.repoId
+  return repoId ? repoOpsStore.getBusy(repoId).gc : false
+})
+
+function cancelGc() {
+  if (gcConfirmLoading.value) return
+  pendingGc.value = null
+}
+
+async function confirmGc() {
+  const pending = pendingGc.value
+  if (!pending || gcConfirmLoading.value) return
+  if (repoStore.activeRepoId !== pending.repoId) {
+    pendingGc.value = null
+    showToast('error', t('toolbar.gcConfirm.contextChanged'))
+    return
+  }
+  repoOpsStore.setBusy(pending.repoId, 'gc', true)
+  try {
+    await git.runGc(pending.repoId)
+    showToast('success', t('toolbar.gcConfirm.success', { repo: pending.repoName }))
+    pendingGc.value = null
+  } catch {
+    // error toast handled globally
+  } finally {
+    repoOpsStore.setBusy(pending.repoId, 'gc', false)
+  }
+}
 
 const actionsMenuItems = computed<ContextMenuItem[]>(() => {
   const items: ContextMenuItem[] = [
@@ -256,15 +287,8 @@ async function onActionsSelect(action: string) {
       emit('show-reflog')
       break
     case 'gc': {
-      repoOpsStore.setBusy(id, 'gc', true)
-      try {
-        const msg = await git.runGc(id)
-        showToast('success', msg)
-      } catch {
-        // error toast handled globally
-      } finally {
-        repoOpsStore.setBusy(id, 'gc', false)
-      }
+      const repo = repoStore.activeRepo()
+      pendingGc.value = { repoId: id, repoName: repo?.name ?? id }
       break
     }
     case 'error-history':
@@ -434,6 +458,18 @@ async function onActionsSelect(action: string) {
       :items="actionsMenuItems"
       @close="actionsMenu.visible = false"
       @select="onActionsSelect"
+    />
+
+    <ConfirmDialog
+      :visible="pendingGc !== null"
+      :title="t('toolbar.gcConfirm.title')"
+      :message="t('toolbar.gcConfirm.message', { repo: pendingGc?.repoName ?? '' })"
+      :confirm-label="t('toolbar.gcConfirm.confirm')"
+      :loading-label="t('toolbar.gcConfirm.running')"
+      :loading="gcConfirmLoading"
+      danger
+      @confirm="confirmGc"
+      @cancel="cancelGc"
     />
   </div>
 </template>
