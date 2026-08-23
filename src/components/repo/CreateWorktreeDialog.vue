@@ -3,6 +3,7 @@ import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Modal from '@/components/common/Modal.vue'
 import { useGitCommands } from '@/composables/useGitCommands'
+import { useGlobalToast } from '@/composables/useGlobalToast'
 import { useRepoStore } from '@/stores/repos'
 import type { BranchInfo, RepoMeta } from '@/types/git'
 import { isInvalidDirectoryLeafName } from '@/utils/pathName'
@@ -30,6 +31,7 @@ interface WorktreeStartPoint {
 type ResolvedBranch = BranchInfo & { commit_oid: string }
 
 const git = useGitCommands()
+const { showActionError } = useGlobalToast()
 const repoStore = useRepoStore()
 
 const parentDir = ref('')
@@ -172,8 +174,8 @@ async function onPickParentDir() {
     if (typeof selected === 'string') {
       parentDir.value = selected
     }
-  } catch (e) {
-    console.error(e)
+  } catch (error: unknown) {
+    showActionError(error, t('common.directoryPickerFailed'))
   }
 }
 

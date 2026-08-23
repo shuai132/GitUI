@@ -3,6 +3,7 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 import Modal from '@/components/common/Modal.vue'
+import { useGlobalToast } from '@/composables/useGlobalToast'
 import { useRepoStore } from '@/stores/repos'
 import { loadCloneParentDir, saveCloneParentDir } from '@/utils/clonePreferences'
 import { isInvalidDirectoryLeafName } from '@/utils/pathName'
@@ -18,6 +19,7 @@ const emit = defineEmits<{
 }>()
 
 const repoStore = useRepoStore()
+const { showActionError } = useGlobalToast()
 
 const url = ref('')
 const parentDir = ref('')
@@ -131,8 +133,8 @@ async function onPickParentDir() {
       parentDir.value = selected
       saveCloneParentDir(selected)
     }
-  } catch (e) {
-    console.error(e)
+  } catch (error: unknown) {
+    showActionError(error, t('common.directoryPickerFailed'))
   }
 }
 

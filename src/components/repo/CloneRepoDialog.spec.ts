@@ -7,6 +7,8 @@ import { CLONE_PARENT_DIR_KEY } from '@/utils/clonePreferences'
 const cloneMocks = vi.hoisted(() => ({
   cloneRepo: vi.fn(async () => {}),
   unlisten: vi.fn(),
+  openDialog: vi.fn(),
+  showActionError: vi.fn(),
 }))
 
 vi.mock('vue-i18n', () => ({
@@ -16,9 +18,13 @@ vi.mock('vue-i18n', () => ({
 vi.mock('@tauri-apps/api/event', () => ({
   listen: vi.fn(async () => cloneMocks.unlisten),
 }))
+vi.mock('@tauri-apps/plugin-dialog', () => ({ open: cloneMocks.openDialog }))
 
 vi.mock('@/stores/repos', () => ({
   useRepoStore: () => ({ cloneRepo: cloneMocks.cloneRepo }),
+}))
+vi.mock('@/composables/useGlobalToast', () => ({
+  useGlobalToast: () => ({ showActionError: cloneMocks.showActionError }),
 }))
 
 const ModalStub = defineComponent({
@@ -30,6 +36,7 @@ describe('CloneRepoDialog', () => {
   beforeEach(() => {
     localStorage.clear()
     vi.clearAllMocks()
+    cloneMocks.openDialog.mockResolvedValue(null)
   })
 
   it('reuses changes to the most recent parent directory when reopened', async () => {
@@ -129,6 +136,24 @@ describe('CloneRepoDialog', () => {
     expect(wrapper.find('.form-error').text()).toBe('repo.clone.errors.nameInvalid')
     expect(wrapper.find<HTMLButtonElement>('.btn-primary').attributes('disabled')).toBeDefined()
     expect(cloneMocks.cloneRepo).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
+  it('shows a non-blocking error when the directory picker fails', async () => {
+    const pickerError = new Error('dialog unavailable')
+    cloneMocks.openDialog.mockRejectedValue(pickerError)
+    const wrapper = mount(CloneRepoDialog, {
+      props: { visible: true },
+      global: { stubs: { Modal: ModalStub } },
+    })
+
+    await wrapper.find('.btn-pick').trigger('click')
+    await flushPromises()
+
+    expect(cloneMocks.showActionError).toHaveBeenCalledWith(
+      pickerError,
+      'common.directoryPickerFailed',
+    )
     wrapper.unmount()
   })
 })

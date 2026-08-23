@@ -2,6 +2,7 @@
 import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Modal from '@/components/common/Modal.vue'
+import { useGlobalToast } from '@/composables/useGlobalToast'
 import { useRepoStore } from '@/stores/repos'
 import { isInvalidDirectoryLeafName } from '@/utils/pathName'
 
@@ -16,6 +17,7 @@ const emit = defineEmits<{
 }>()
 
 const repoStore = useRepoStore()
+const { showActionError } = useGlobalToast()
 
 const parentDir = ref('')
 const dirName = ref('')
@@ -62,8 +64,8 @@ async function onPickParentDir() {
     if (typeof selected === 'string') {
       parentDir.value = selected
     }
-  } catch (e) {
-    console.error(e)
+  } catch (error: unknown) {
+    showActionError(error, t('common.directoryPickerFailed'))
   }
 }
 
