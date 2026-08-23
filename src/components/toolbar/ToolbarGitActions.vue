@@ -42,6 +42,9 @@ const {
   pullWithChangesVisible,
   pendingPullChangeCount,
   pullWithChangesLoading,
+  forcePushVisible,
+  forcePushTarget,
+  forcePushLoading,
   canUndoLastCommit,
   undoingCommit,
   withShortcut,
@@ -52,6 +55,8 @@ const {
   cancelPullWithStash,
   onPush,
   doPush,
+  confirmForcePush,
+  cancelForcePush,
   onStash,
   onPop,
   onFetch,
@@ -291,6 +296,18 @@ function onPushModeSelect(action: string) {
       :loading="pullWithChangesLoading"
       @confirm="confirmPullWithStash"
       @cancel="cancelPullWithStash"
+    />
+
+    <ConfirmDialog
+      :visible="forcePushVisible"
+      :title="t('toolbar.forcePushConfirm.title')"
+      :message="t('toolbar.forcePushConfirm.message', { target: forcePushTarget })"
+      :confirm-label="t('toolbar.forcePushConfirm.confirm')"
+      :loading-label="t('toolbar.forcePushConfirm.running')"
+      :loading="forcePushLoading"
+      danger
+      @confirm="confirmForcePush"
+      @cancel="cancelForcePush"
     />
   </div>
 </template>

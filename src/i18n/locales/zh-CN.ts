@@ -59,6 +59,12 @@ const messages = {
       forceWithLease: 'Push --force-with-lease（安全强推）',
       force: 'Push --force（强制覆盖）',
     },
+    forcePushConfirm: {
+      title: '确认原始 Force Push',
+      message: '即将强制覆盖 {target}。\n\n原始 --force 会绕过远端状态校验，可能让其他人已经推送的提交丢失。除非你明确需要忽略 lease 保护，否则请取消并使用 --force-with-lease。',
+      confirm: '仍然 Force Push',
+      running: '正在 Force Push…',
+    },
     remoteMenu: {
       setDefault: '设为默认',
       clearDefault: '取消默认',

@@ -8,8 +8,12 @@ const mocks = vi.hoisted(() => ({
   pullWithChangesVisible: false,
   pendingPullChangeCount: 0,
   isPublishingBranch: false,
+  forcePushVisible: false,
+  forcePushTarget: '',
   onUndoLastCommit: vi.fn(),
   confirmPullWithStash: vi.fn(),
+  confirmForcePush: vi.fn(),
+  cancelForcePush: vi.fn(),
 }))
 
 vi.mock('vue-i18n', () => ({
@@ -54,6 +58,9 @@ vi.mock('@/composables/toolbar/useToolbarGitActions', () => ({
     pullWithChangesVisible: mocks.pullWithChangesVisible,
     pendingPullChangeCount: mocks.pendingPullChangeCount,
     pullWithChangesLoading: false,
+    forcePushVisible: mocks.forcePushVisible,
+    forcePushTarget: mocks.forcePushTarget,
+    forcePushLoading: false,
     canUndoLastCommit: mocks.canUndo,
     undoingCommit: false,
     withShortcut: (label: string) => label,
@@ -62,6 +69,8 @@ vi.mock('@/composables/toolbar/useToolbarGitActions', () => ({
     doPull: vi.fn(),
     confirmPullWithStash: mocks.confirmPullWithStash,
     cancelPullWithStash: vi.fn(),
+    confirmForcePush: mocks.confirmForcePush,
+    cancelForcePush: mocks.cancelForcePush,
     onPush: vi.fn(),
     doPush: vi.fn(),
     onStash: vi.fn(),
@@ -79,8 +88,12 @@ describe('ToolbarGitActions', () => {
     mocks.pullWithChangesVisible = false
     mocks.pendingPullChangeCount = 0
     mocks.isPublishingBranch = false
+    mocks.forcePushVisible = false
+    mocks.forcePushTarget = ''
     mocks.onUndoLastCommit.mockReset()
     mocks.confirmPullWithStash.mockReset()
+    mocks.confirmForcePush.mockReset()
+    mocks.cancelForcePush.mockReset()
   })
 
   it('shows and invokes Undo only while a recent commit candidate is available', async () => {
@@ -125,5 +138,24 @@ describe('ToolbarGitActions', () => {
     const pushButton = wrapper.findAll('.btn-tool--main')[1]
     expect(pushButton?.attributes('title')).toBe('toolbar.title.publishBranch')
     expect(pushButton?.text()).toContain('toolbar.opLabels.publishBranch')
+  })
+
+  it('shows the raw Force Push target behind a danger confirmation', () => {
+    mocks.forcePushVisible = true
+    mocks.forcePushTarget = 'origin/feature/demo'
+    const wrapper = mount(ToolbarGitActions, {
+      global: { stubs: { ContextMenu: true } },
+    })
+
+    const dialog = wrapper
+      .findAllComponents(ConfirmDialog)
+      .find((item) => item.props('title') === 'toolbar.forcePushConfirm.title')
+    expect(dialog?.props('visible')).toBe(true)
+    expect(dialog?.props('danger')).toBe(true)
+    expect(dialog?.props('message')).toBe('toolbar.forcePushConfirm.message')
+    dialog?.vm.$emit('confirm')
+    expect(mocks.confirmForcePush).toHaveBeenCalledOnce()
+    dialog?.vm.$emit('cancel')
+    expect(mocks.cancelForcePush).toHaveBeenCalledOnce()
   })
 })

@@ -10,6 +10,10 @@ import type { ContextMenuItem } from '@/components/common/ContextMenu.vue'
 export type PullMode = 'ff' | 'ff_only' | 'rebase'
 export type PushMode = 'normal' | 'force_with_lease' | 'force'
 
+export function requiresForcePushConfirmation(mode: PushMode): boolean {
+  return mode === 'force'
+}
+
 interface PickRemoteOptions {
   forceMenu?: boolean
   resolveSelection?: boolean

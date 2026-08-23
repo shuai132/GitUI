@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { useRemoteActionMenu } from './useRemoteActionMenu'
+import { requiresForcePushConfirmation, useRemoteActionMenu } from './useRemoteActionMenu'
 
 const mocks = vi.hoisted(() => {
   const repoStore = {
@@ -93,6 +93,12 @@ describe('useRemoteActionMenu', () => {
 
     expect(menu.pullModeMenu.visible).toBe(false)
     expect(menu.pushModeMenu.visible).toBe(true)
+  })
+
+  it('requires confirmation only for raw force push', () => {
+    expect(requiresForcePushConfirmation('normal')).toBe(false)
+    expect(requiresForcePushConfirmation('force_with_lease')).toBe(false)
+    expect(requiresForcePushConfirmation('force')).toBe(true)
   })
 
   it('closes an open remote menu before opening a mode menu', async () => {

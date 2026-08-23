@@ -13,7 +13,11 @@ import { useRepoCreation } from '@/composables/useRepoCreation'
 import { useRepositoryRefresh } from '@/composables/useRepositoryRefresh'
 import { useGlobalToast } from '@/composables/useGlobalToast'
 import { runPullWithAutoStash } from '@/composables/toolbar/pullAutoStash'
-import type { PullMode, PushMode } from '@/composables/toolbar/useRemoteActionMenu'
+import {
+  requiresForcePushConfirmation,
+  type PullMode,
+  type PushMode,
+} from '@/composables/toolbar/useRemoteActionMenu'
 
 interface UseToolbarGitActionsOptions {
   fetchBtnRef: Ref<HTMLButtonElement | null>
@@ -29,6 +33,13 @@ interface PullRequest {
   remote: string
   branch: string
   mode: PullMode
+}
+
+interface PushRequest {
+  repoId: string
+  remote: string
+  branch: string
+  mode: PushMode
 }
 
 export function useToolbarGitActions(options: UseToolbarGitActionsOptions) {
@@ -67,6 +78,13 @@ export function useToolbarGitActions(options: UseToolbarGitActionsOptions) {
   const pendingPullChangeCount = ref(0)
   const pullWithChangesLoading = ref(false)
   const pullWithChangesVisible = computed(() => pendingPull.value !== null)
+  const pendingForcePush = ref<PushRequest | null>(null)
+  const forcePushLoading = ref(false)
+  const forcePushVisible = computed(() => pendingForcePush.value !== null)
+  const forcePushTarget = computed(() => {
+    const request = pendingForcePush.value
+    return request ? `${request.remote}/${request.branch}` : ''
+  })
   const undoingCommit = ref(false)
   const canUndoLastCommit = computed(() => {
     const candidate = workspaceStore.undoCommitCandidate
@@ -220,20 +238,54 @@ export function useToolbarGitActions(options: UseToolbarGitActionsOptions) {
     // remote 菜单等待期间可能已切换仓库 / 分支，旧 Push 请求不再有效。
     if (repoStore.activeRepoId !== id || currentBranch.value !== branch) return
 
+    const request: PushRequest = { repoId: id, remote, branch, mode }
+    if (requiresForcePushConfirmation(mode)) {
+      pendingForcePush.value = request
+      return
+    }
+
+    await runPush(request)
+  }
+
+  async function runPush(request: PushRequest) {
+    const { repoId, remote, branch, mode } = request
+    if (repoStore.activeRepoId !== repoId || currentBranch.value !== branch) return
     const publishing = !currentBranchInfo.value?.upstream
-    repoOpsStore.setBusy(id, 'push', true)
+    repoOpsStore.setBusy(repoId, 'push', true)
     try {
-      await git.pushBranch(id, remote, branch, mode)
+      await git.pushBranch(repoId, remote, branch, mode)
       await historyStore.loadBranches()
-      workspaceStore.clearUndoCommitCandidate(id)
+      workspaceStore.clearUndoCommitCandidate(repoId)
       showToast('success', t('toolbar.opSuccess', {
         label: t(publishing ? 'toolbar.opLabels.publishBranch' : 'toolbar.opLabels.push'),
       }))
     } catch {
       // 错误在 ToolbarToast 中拦截处理
     } finally {
-      repoOpsStore.setBusy(id, 'push', false)
+      repoOpsStore.setBusy(repoId, 'push', false)
     }
+  }
+
+  async function confirmForcePush() {
+    const request = pendingForcePush.value
+    if (!request || forcePushLoading.value) return
+    if (repoStore.activeRepoId !== request.repoId || currentBranch.value !== request.branch) {
+      cancelForcePush()
+      return
+    }
+
+    forcePushLoading.value = true
+    try {
+      await runPush(request)
+    } finally {
+      forcePushLoading.value = false
+      pendingForcePush.value = null
+    }
+  }
+
+  function cancelForcePush() {
+    if (forcePushLoading.value) return
+    pendingForcePush.value = null
   }
 
   async function onStash() {
@@ -349,6 +401,9 @@ export function useToolbarGitActions(options: UseToolbarGitActionsOptions) {
     pullWithChangesVisible,
     pendingPullChangeCount,
     pullWithChangesLoading,
+    forcePushVisible,
+    forcePushTarget,
+    forcePushLoading,
     canUndoLastCommit,
     undoingCommit,
     withShortcut,
@@ -359,6 +414,8 @@ export function useToolbarGitActions(options: UseToolbarGitActionsOptions) {
     cancelPullWithStash,
     onPush,
     doPush,
+    confirmForcePush,
+    cancelForcePush,
     onStash,
     onPop,
     onFetch,

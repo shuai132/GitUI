@@ -59,6 +59,12 @@ const messages = {
       forceWithLease: 'Push --force-with-lease (safe force)',
       force: 'Push --force (overwrite remote)',
     },
+    forcePushConfirm: {
+      title: 'Confirm raw Force Push',
+      message: 'You are about to force-overwrite {target}.\n\nRaw --force bypasses remote-state checks and can discard commits pushed by other people. Unless you intentionally need to bypass lease protection, cancel and use --force-with-lease instead.',
+      confirm: 'Force Push anyway',
+      running: 'Force pushing…',
+    },
     remoteMenu: {
       setDefault: 'Set default',
       clearDefault: 'Clear default',
