@@ -224,7 +224,6 @@ export function useShortcuts() {
 
       try {
         const oid = await workspaceStore.commit(message)
-        workspaceStore.commitDraft = ''
         await Promise.all([historyStore.loadLog(), historyStore.loadBranches()])
         if (oid) historyStore.selectCommit(oid)
       } catch (err) {

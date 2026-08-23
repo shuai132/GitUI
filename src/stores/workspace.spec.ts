@@ -1,19 +1,15 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useWorkspaceStore } from './workspace'
-import type { WorkspaceStatus } from '@/types/git'
+import { useRepoStore } from './repos'
+import type { RepoMeta, WorkspaceStatus } from '@/types/git'
 
 const mocks = vi.hoisted(() => ({
-  repo: { activeRepoId: 'repo-1' as string | null },
   getStatus: vi.fn(),
   createCommit: vi.fn(),
   amendCommit: vi.fn(),
   undoLastCommit: vi.fn(),
   setRepoState: vi.fn(),
-}))
-
-vi.mock('./repos', () => ({
-  useRepoStore: () => mocks.repo,
 }))
 
 vi.mock('./mergeRebase', () => ({
@@ -28,6 +24,26 @@ vi.mock('@/composables/useGitCommands', () => ({
     undoLastCommit: mocks.undoLastCommit,
   }),
 }))
+
+vi.mock('@tauri-apps/plugin-store', () => ({
+  LazyStore: class {
+    async get() { return null }
+    async set() {}
+    async save() {}
+  },
+}))
+
+function repo(id: string, name: string): RepoMeta {
+  return { id, name, path: `/repos/${name}` }
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((res) => {
+    resolve = res
+  })
+  return { promise, resolve }
+}
 
 function status(headCommit: string | undefined, unstaged = false): WorkspaceStatus {
   return {
@@ -46,8 +62,11 @@ function status(headCommit: string | undefined, unstaged = false): WorkspaceStat
 
 describe('workspace commit undo candidate', () => {
   beforeEach(() => {
+    localStorage.clear()
     setActivePinia(createPinia())
-    mocks.repo.activeRepoId = 'repo-1'
+    const repoStore = useRepoStore()
+    repoStore.repos = [repo('repo-1', 'alpha'), repo('repo-2', 'beta')]
+    repoStore.activeRepoId = 'repo-1'
     mocks.getStatus.mockReset()
     mocks.createCommit.mockReset()
     mocks.amendCommit.mockReset()
@@ -118,5 +137,96 @@ describe('workspace commit undo candidate', () => {
 
     store.clearUndoCommitCandidate('repo-1')
     expect(store.undoCommitCandidate).toBeNull()
+  })
+
+  it('keeps independent drafts per repository and restores them after store recreation', () => {
+    const repoStore = useRepoStore()
+    const store = useWorkspaceStore()
+    store.commitDraft = 'alpha draft'
+
+    repoStore.activeRepoId = 'repo-2'
+    expect(store.commitDraft).toBe('')
+    store.commitDraft = 'beta draft'
+
+    repoStore.activeRepoId = 'repo-1'
+    expect(store.commitDraft).toBe('alpha draft')
+
+    setActivePinia(createPinia())
+    const restoredRepoStore = useRepoStore()
+    restoredRepoStore.repos = [repo('repo-new-1', 'alpha'), repo('repo-new-2', 'beta')]
+    restoredRepoStore.activeRepoId = 'repo-new-1'
+    const restoredStore = useWorkspaceStore()
+
+    expect(restoredStore.commitDraft).toBe('alpha draft')
+    restoredRepoStore.activeRepoId = 'repo-new-2'
+    expect(restoredStore.commitDraft).toBe('beta draft')
+  })
+
+  it('removes the consumed draft after commit and amend succeed', async () => {
+    const store = useWorkspaceStore()
+    store.status = status('parent')
+    store.commitDraft = 'normal message'
+    mocks.createCommit.mockResolvedValue('child')
+    mocks.getStatus.mockResolvedValueOnce(status('child'))
+
+    await store.commit('normal message')
+    expect(store.commitDraft).toBe('')
+
+    store.commitDraft = 'amended message'
+    mocks.amendCommit.mockResolvedValue('amended')
+    mocks.getStatus.mockResolvedValueOnce(status('amended'))
+
+    await store.amend('amended message')
+    expect(store.commitDraft).toBe('')
+    expect(localStorage.length).toBe(0)
+  })
+
+  it('does not clear a newer draft while an earlier commit is running', async () => {
+    const store = useWorkspaceStore()
+    store.status = status('parent')
+    store.commitDraft = 'submitted message'
+    const pendingCommit = deferred<string>()
+    mocks.createCommit.mockReturnValueOnce(pendingCommit.promise)
+    mocks.getStatus.mockResolvedValueOnce(status('child'))
+
+    const commitPromise = store.commit('submitted message')
+    store.commitDraft = 'newer message'
+    pendingCommit.resolve('child')
+    await commitPromise
+
+    expect(store.commitDraft).toBe('newer message')
+  })
+
+  it('retains the draft when commit fails or a consumer has a stale snapshot', async () => {
+    const store = useWorkspaceStore()
+    store.commitDraft = 'keep this message'
+    mocks.createCommit.mockRejectedValueOnce(new Error('commit failed'))
+
+    await expect(store.commit('keep this message')).rejects.toThrow('commit failed')
+    store.clearCommitDraftIfUnchanged('/repos/alpha', 'older message')
+
+    expect(store.commitDraft).toBe('keep this message')
+  })
+
+  it('clears only the submitted repository draft after switching during commit', async () => {
+    const repoStore = useRepoStore()
+    const store = useWorkspaceStore()
+    store.status = status('parent')
+    store.commitDraft = 'alpha message'
+    const pendingCommit = deferred<string>()
+    mocks.createCommit.mockReturnValueOnce(pendingCommit.promise)
+    mocks.getStatus.mockResolvedValueOnce(status('child'))
+
+    const commitPromise = store.commit('alpha message')
+    repoStore.activeRepoId = 'repo-2'
+    store.commitDraft = 'beta message'
+    pendingCommit.resolve('child')
+    await commitPromise
+
+    expect(store.commitDraft).toBe('beta message')
+    repoStore.activeRepoId = 'repo-1'
+    expect(store.commitDraft).toBe('')
+    repoStore.activeRepoId = 'repo-2'
+    expect(store.commitDraft).toBe('beta message')
   })
 })

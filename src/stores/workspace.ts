@@ -5,6 +5,30 @@ import { useGitCommands } from '@/composables/useGitCommands'
 import { useRepoStore } from './repos'
 import { useMergeRebaseStore } from './mergeRebase'
 
+const COMMIT_DRAFT_KEY_PREFIX = 'gitui.workspace.commitDraft:'
+
+function loadCommitDraft(repoPath: string): string {
+  try {
+    const draft = localStorage.getItem(`${COMMIT_DRAFT_KEY_PREFIX}${repoPath}`) ?? ''
+    return draft.trim().length > 0 ? draft : ''
+  } catch {
+    return ''
+  }
+}
+
+function persistCommitDraft(repoPath: string, draft: string) {
+  try {
+    const key = `${COMMIT_DRAFT_KEY_PREFIX}${repoPath}`
+    if (draft.trim().length === 0) {
+      localStorage.removeItem(key)
+    } else {
+      localStorage.setItem(key, draft)
+    }
+  } catch {
+    // 草稿仍保留在当前 Pinia store；存储不可用时不阻断输入和提交。
+  }
+}
+
 export interface UndoCommitCandidate {
   repoId: string
   oid: string
@@ -12,26 +36,67 @@ export interface UndoCommitCandidate {
 }
 
 export const useWorkspaceStore = defineStore('workspace', () => {
+  const repoStore = useRepoStore()
+  const commitDrafts = new Map<string, string>()
+
+  function getCommitDraft(repoPath: string): string {
+    const cached = commitDrafts.get(repoPath)
+    if (cached !== undefined) return cached
+    const stored = loadCommitDraft(repoPath)
+    if (stored) commitDrafts.set(repoPath, stored)
+    return stored
+  }
+
   const status = ref<WorkspaceStatus | null>(null)
   const selectedFile = ref<FileEntry | null>(null)
   const wipSelectedPath = ref<string | null>(null)
   const loading = ref(false)
   const error = ref<string | null>(null)
 
-  // 当前提交信息草稿（WipPanel 输入框 ↔ 工具栏 Stash 共享）
-  const commitDraft = ref('')
+  // 当前提交信息草稿（WipPanel 输入框 ↔ 工具栏 Stash 共享），按仓库路径隔离。
+  const initialRepoPath = repoStore.activeRepo()?.path
+  const commitDraft = ref(initialRepoPath ? getCommitDraft(initialRepoPath) : '')
   const undoCommitCandidate = ref<UndoCommitCandidate | null>(null)
 
   const git = useGitCommands()
   let refreshSeq = 0
 
-  // 切仓库时清空草稿，避免上一个仓库的提交信息泄漏到下一个仓库
-  watch(
-    () => useRepoStore().activeRepoId,
-    () => {
+  function saveCommitDraft(repoPath: string, draft: string) {
+    if (draft.trim().length > 0) {
+      commitDrafts.set(repoPath, draft)
+    } else {
+      commitDrafts.delete(repoPath)
+    }
+    persistCommitDraft(repoPath, draft)
+  }
+
+  function clearCommitDraftIfUnchanged(repoPath: string, expectedDraft: string) {
+    if (getCommitDraft(repoPath) !== expectedDraft) return
+    commitDrafts.delete(repoPath)
+    persistCommitDraft(repoPath, '')
+    if (repoStore.activeRepo()?.path === repoPath && commitDraft.value === expectedDraft) {
       commitDraft.value = ''
+    }
+  }
+
+  watch(
+    commitDraft,
+    (draft) => {
+      const repoPath = repoStore.activeRepo()?.path
+      if (repoPath) saveCommitDraft(repoPath, draft)
+    },
+    { flush: 'sync' },
+  )
+
+  // 切仓库时先落盘旧仓库草稿，再恢复新仓库自己的输入。
+  watch(
+    () => repoStore.activeRepo()?.path ?? null,
+    (repoPath, previousRepoPath) => {
+      if (previousRepoPath) saveCommitDraft(previousRepoPath, commitDraft.value)
+      commitDraft.value = repoPath ? getCommitDraft(repoPath) : ''
       undoCommitCandidate.value = null
     },
+    { flush: 'sync' },
   )
 
   async function refresh(repoId?: string) {
@@ -113,8 +178,13 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     const repoStore = useRepoStore()
     const id = repoStore.activeRepoId
     if (!id) return
+    const repoPath = repoStore.activeRepo()?.path
+    const submittedDraft = commitDraft.value
     const previousHead = status.value?.head_commit
     const oid = await git.createCommit(id, message)
+    if (repoPath && submittedDraft.trim() === message.trim()) {
+      clearCommitDraftIfUnchanged(repoPath, submittedDraft)
+    }
     await refresh(id)
     undoCommitCandidate.value = previousHead && repoStore.activeRepoId === id
       ? { repoId: id, oid, message }
@@ -126,7 +196,12 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     const repoStore = useRepoStore()
     const id = repoStore.activeRepoId
     if (!id) return
+    const repoPath = repoStore.activeRepo()?.path
+    const submittedDraft = commitDraft.value
     const oid = await git.amendCommit(id, message)
+    if (repoPath && submittedDraft.trim() === message.trim()) {
+      clearCommitDraftIfUnchanged(repoPath, submittedDraft)
+    }
     await refresh(id)
     undoCommitCandidate.value = null
     return oid
@@ -188,6 +263,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     error,
     commitDraft,
     undoCommitCandidate,
+    clearCommitDraftIfUnchanged,
     refresh,
     stageFile,
     unstageFile,

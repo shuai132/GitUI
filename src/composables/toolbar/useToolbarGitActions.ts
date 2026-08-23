@@ -134,9 +134,11 @@ export function useToolbarGitActions(options: UseToolbarGitActionsOptions) {
     if (!id) return
     repoOpsStore.setBusy(id, 'stash', true)
     try {
-      const draft = workspaceStore.commitDraft.trim()
-      await stashStore.push(draft || undefined)
-      if (draft) workspaceStore.commitDraft = ''
+      const repoPath = repoStore.activeRepo()?.path
+      const draft = workspaceStore.commitDraft
+      const message = draft.trim()
+      await stashStore.push(message || undefined)
+      if (repoPath && message) workspaceStore.clearCommitDraftIfUnchanged(repoPath, draft)
     } catch {
       // 错误在 ToolbarToast 中拦截处理
     } finally {

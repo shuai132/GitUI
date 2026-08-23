@@ -74,7 +74,6 @@ async function onCommit() {
     const oid = amendChecked.value
       ? await workspaceStore.amend(msg)
       : await workspaceStore.commit(msg)
-    message.value = ''
     amendChecked.value = false
     await historyStore.loadLog()
     await historyStore.loadBranches()
