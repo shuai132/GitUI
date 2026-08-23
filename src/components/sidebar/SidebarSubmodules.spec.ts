@@ -168,7 +168,7 @@ describe('SidebarSubmodules guarded removal', () => {
     }))
     const wrapper = shallowMount(SidebarSubmodules)
 
-    await wrapper.find('.submodule-item').trigger('click')
+    await wrapper.find('.submodule-main').trigger('click')
     expect(mocks.submodules.workdir).toHaveBeenCalledWith('repo-a', 'vendor/demo')
     mocks.repo.activeRepoId = 'repo-b'
     resolveWorkdir('/repos/demo')
@@ -176,5 +176,19 @@ describe('SidebarSubmodules guarded removal', () => {
 
     expect(mocks.repo.openRepo).not.toHaveBeenCalled()
     expect(mocks.showError).toHaveBeenCalled()
+  })
+
+  it('separates keyboard opening from the labeled menu button', async () => {
+    const wrapper = shallowMount(SidebarSubmodules)
+    const openButton = wrapper.find<HTMLButtonElement>('.submodule-main')
+    const menuButton = wrapper.find<HTMLButtonElement>('.submodule-kebab')
+
+    expect(openButton.element.tagName).toBe('BUTTON')
+    expect(openButton.element.disabled).toBe(false)
+    expect(menuButton.attributes('aria-label')).toContain('sidebar.submodule.menuTitle')
+
+    await openButton.trigger('click')
+    await flushPromises()
+    expect(mocks.repo.openRepo).toHaveBeenCalledWith('/repos/demo')
   })
 })

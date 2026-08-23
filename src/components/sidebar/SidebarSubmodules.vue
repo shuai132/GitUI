@@ -254,46 +254,54 @@ async function onSubmoduleClick(s: SubmoduleInfo) {
             s.state === 'uninitialized' || s.state === 'not_cloned' || s.state === 'not_found',
         }"
         :title="`${s.path}${s.url ? '\n' + s.url : ''}`"
-        @click="onSubmoduleClick(s)"
         @contextmenu="openSubmoduleMenu($event, s)"
       >
-        <svg
-          v-if="s.state === 'uninitialized' || s.state === 'not_cloned' || s.state === 'not_found'"
-          class="sub-warn"
-          width="12"
-          height="12"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
-          <line x1="12" y1="9" x2="12" y2="13"/>
-          <line x1="12" y1="17" x2="12.01" y2="17"/>
-        </svg>
-        <svg
-          v-else
-          class="sub-icon"
-          width="12"
-          height="12"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
-          <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
-          <line x1="12" y1="22.08" x2="12" y2="12"/>
-        </svg>
-        <span class="submodule-label">{{ s.path }}</span>
-        <span v-if="s.has_workdir_modifications" class="sub-dot" :title="t('sidebar.submodule.hasChanges')" />
         <button
+          type="button"
+          class="submodule-main"
+          :disabled="s.state === 'uninitialized' || s.state === 'not_cloned' || s.state === 'not_found'"
+          @click="onSubmoduleClick(s)"
+        >
+          <svg
+            v-if="s.state === 'uninitialized' || s.state === 'not_cloned' || s.state === 'not_found'"
+            class="sub-warn"
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+            <line x1="12" y1="9" x2="12" y2="13"/>
+            <line x1="12" y1="17" x2="12.01" y2="17"/>
+          </svg>
+          <svg
+            v-else
+            class="sub-icon"
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+            <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+            <line x1="12" y1="22.08" x2="12" y2="12"/>
+          </svg>
+          <span class="submodule-label">{{ s.path }}</span>
+          <span v-if="s.has_workdir_modifications" class="sub-dot" :title="t('sidebar.submodule.hasChanges')" />
+        </button>
+        <button
+          type="button"
           class="submodule-kebab"
           :title="t('sidebar.submodule.menuTitle')"
+          :aria-label="t('sidebar.submodule.menuTitle')"
           @click="openSubmoduleMenu($event, s)"
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
@@ -353,7 +361,6 @@ async function onSubmoduleClick(s: SubmoduleInfo) {
   padding: 3px 6px 3px 16px;
   font-size: var(--font-md);
   color: var(--text-secondary);
-  cursor: pointer;
   transition: background 0.1s;
 }
 
@@ -363,6 +370,32 @@ async function onSubmoduleClick(s: SubmoduleInfo) {
 
 .submodule-item--dim {
   color: var(--text-muted);
+}
+
+.submodule-main {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  gap: 7px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.submodule-main:disabled {
+  cursor: default;
+  opacity: 1;
+}
+
+.submodule-main:focus-visible,
+.submodule-kebab:focus-visible {
+  outline: 1px solid var(--accent-blue);
+  outline-offset: -1px;
 }
 
 .sub-icon {
@@ -392,13 +425,15 @@ async function onSubmoduleClick(s: SubmoduleInfo) {
 }
 
 .submodule-kebab {
-  display: none;
+  display: flex;
   background: none;
   border: none;
   padding: 2px;
   border-radius: 3px;
   color: var(--text-muted);
   cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
 }
 
 .submodule-kebab:hover {
@@ -406,8 +441,10 @@ async function onSubmoduleClick(s: SubmoduleInfo) {
   color: var(--text-primary);
 }
 
-.submodule-item:hover .submodule-kebab {
-  display: flex;
+.submodule-item:hover .submodule-kebab,
+.submodule-item:focus-within .submodule-kebab {
+  opacity: 1;
+  pointer-events: auto;
   align-items: center;
   justify-content: center;
 }
