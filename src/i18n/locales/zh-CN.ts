@@ -696,6 +696,7 @@ const messages = {
         useOurs: '使用 ours（HEAD 侧）',
         useTheirs: '使用 theirs',
         markResolved: '标记为已解决',
+        contextChanged: '当前仓库已变化，旧的文件菜单操作已取消；请重新选择文件',
       },
     },
     commit: {

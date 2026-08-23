@@ -32,9 +32,9 @@ type WipMenuOptions = {
   unstagedMultiPaths: Ref<string[]>
   stagedMultiPaths: Ref<string[]>
   toggleFile: (fileOrPath: FileEntry | string, isDir: boolean) => Promise<void>
-  batchStage: () => Promise<void>
-  batchUnstage: () => Promise<void>
-  batchDiscard: () => void
+  batchStage: (paths?: readonly string[]) => Promise<void>
+  batchUnstage: (paths?: readonly string[]) => Promise<void>
+  batchDiscard: (paths?: readonly string[]) => void
   orderedBatchPaths: (source: 'unstaged' | 'staged') => string[]
   moveFileOrder: (paths: readonly string[], placement: FileOrderPlacement) => void
   requestDiscardFile: (filePath: string) => void
@@ -76,6 +76,8 @@ export function useWipMenus(options: WipMenuOptions) {
     visible: false,
     x: 0,
     y: 0,
+    repoId: null as string | null,
+    paths: [] as string[],
     source: '' as 'unstaged' | 'staged',
   })
 
@@ -83,13 +85,13 @@ export function useWipMenus(options: WipMenuOptions) {
     const orderItems = viewMode.value === 'list'
       ? [
           { separator: true },
-          { label: t('workspace.wip.menu.moveSelectedToFront', { count: batchMenu.source === 'unstaged' ? unstagedMultiPaths.value.length : stagedMultiPaths.value.length }), action: 'batch-move-front' },
-          { label: t('workspace.wip.menu.moveSelectedToBack', { count: batchMenu.source === 'unstaged' ? unstagedMultiPaths.value.length : stagedMultiPaths.value.length }), action: 'batch-move-back' },
-          { label: t('workspace.wip.menu.restoreSelectedOrder', { count: batchMenu.source === 'unstaged' ? unstagedMultiPaths.value.length : stagedMultiPaths.value.length }), action: 'batch-restore-order' },
+          { label: t('workspace.wip.menu.moveSelectedToFront', { count: batchMenu.paths.length }), action: 'batch-move-front' },
+          { label: t('workspace.wip.menu.moveSelectedToBack', { count: batchMenu.paths.length }), action: 'batch-move-back' },
+          { label: t('workspace.wip.menu.restoreSelectedOrder', { count: batchMenu.paths.length }), action: 'batch-restore-order' },
         ] satisfies ContextMenuItem[]
       : []
     if (batchMenu.source === 'unstaged') {
-      const n = unstagedMultiPaths.value.length
+      const n = batchMenu.paths.length
       return [
         { label: t('workspace.wip.menu.stageSelected', { count: n }), action: 'batch-stage' },
         { separator: true },
@@ -97,7 +99,7 @@ export function useWipMenus(options: WipMenuOptions) {
         ...orderItems,
       ]
     }
-    const n = stagedMultiPaths.value.length
+    const n = batchMenu.paths.length
     return [
       { label: t('workspace.wip.menu.unstageSelected', { count: n }), action: 'batch-unstage' },
       ...orderItems,
@@ -109,6 +111,7 @@ export function useWipMenus(options: WipMenuOptions) {
     x: 0,
     y: 0,
     repoId: null as string | null,
+    repoPath: '',
     file: null as FileEntry | null,
     path: '',
     isDir: false,
@@ -231,6 +234,8 @@ export function useWipMenus(options: WipMenuOptions) {
       stagedMultiPaths.value.includes(payload.path)
     if (inUnstagedMulti || inStagedMulti) {
       batchMenu.source = inUnstagedMulti ? 'unstaged' : 'staged'
+      batchMenu.repoId = repoStore.activeRepoId
+      batchMenu.paths = orderedBatchPaths(batchMenu.source)
       batchMenu.x = e.clientX
       batchMenu.y = e.clientY
       batchMenu.visible = true
@@ -241,6 +246,7 @@ export function useWipMenus(options: WipMenuOptions) {
     fileMenu.path = payload.path
     fileMenu.isDir = payload.isDir
     fileMenu.repoId = repoStore.activeRepoId
+    fileMenu.repoPath = repoStore.activeRepo()?.path ?? ''
     fileMenu.x = e.clientX
     fileMenu.y = e.clientY
     fileMenu.visible = true
@@ -248,12 +254,18 @@ export function useWipMenus(options: WipMenuOptions) {
 
   async function handleBatchMenuAction(action: string) {
     batchMenu.visible = false
-    if (action === 'batch-stage') await batchStage()
-    else if (action === 'batch-unstage') await batchUnstage()
-    else if (action === 'batch-discard') await batchDiscard()
-    else if (action === 'batch-move-front') moveFileOrder(orderedBatchPaths(batchMenu.source), 'front')
-    else if (action === 'batch-move-back') moveFileOrder(orderedBatchPaths(batchMenu.source), 'back')
-    else if (action === 'batch-restore-order') moveFileOrder(orderedBatchPaths(batchMenu.source), 'default')
+    const repoId = batchMenu.repoId
+    const paths = [...batchMenu.paths]
+    if (!repoId || repoStore.activeRepoId !== repoId) {
+      showActionError(new Error(t('workspace.wip.menu.contextChanged')))
+      return
+    }
+    if (action === 'batch-stage') await batchStage(paths)
+    else if (action === 'batch-unstage') await batchUnstage(paths)
+    else if (action === 'batch-discard') batchDiscard(paths)
+    else if (action === 'batch-move-front') moveFileOrder(paths, 'front')
+    else if (action === 'batch-move-back') moveFileOrder(paths, 'back')
+    else if (action === 'batch-restore-order') moveFileOrder(paths, 'default')
   }
 
   async function handleFileMenuAction(action: string) {
@@ -263,16 +275,17 @@ export function useWipMenus(options: WipMenuOptions) {
     if (!f && !isDir) return
     fileMenu.visible = false
 
-    const repoPath = repoStore.activeRepo()?.path ?? ''
+    const repoId = fileMenu.repoId
+    if (!repoId || repoStore.activeRepoId !== repoId) {
+      showActionError(new Error(t('workspace.wip.menu.contextChanged')))
+      return
+    }
+    const repoPath = fileMenu.repoPath
     const absPath = repoPath ? `${repoPath}/${targetPath}` : targetPath
     const dirPath = isDir ? absPath : (absPath.substring(0, absPath.lastIndexOf('/')) || repoPath)
 
     try {
       if (action === 'use-ours' || action === 'use-theirs' || action === 'mark-resolved') {
-        const repoId = fileMenu.repoId
-        if (!repoId || repoStore.activeRepoId !== repoId) {
-          throw new Error(t('conflict.view.contextChanged'))
-        }
         const conflict = await mergeRebaseStore.loadConflictFile(repoId, targetPath)
         if (repoStore.activeRepoId !== repoId) {
           throw new Error(t('conflict.view.contextChanged'))
@@ -332,11 +345,8 @@ export function useWipMenus(options: WipMenuOptions) {
       } else if (action === 'open-terminal') {
         await git.openTerminalHere(dirPath, resolveExternalTerminalApp(settingsStore))
       } else if (action === 'add-gitignore') {
-        const repoId = repoStore.activeRepoId
-        if (repoId) {
-          await git.addToGitignore(repoId, targetPath)
-          await workspaceStore.refresh(repoId)
-        }
+        await git.addToGitignore(repoId, targetPath)
+        await workspaceStore.refresh(repoId)
       } else if (action === 'discard') {
         requestDiscardFile(targetPath)
       } else if (action === 'file-history') {

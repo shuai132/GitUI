@@ -260,16 +260,18 @@ function cancelWorkspaceDiscard() {
   pendingWorkspaceDiscard.value = null
 }
 
-async function batchStage() {
-  await stageSelected()
+async function batchStage(paths?: readonly string[]) {
+  if (paths) await workspaceStore.stageFiles([...paths])
+  else await stageSelected()
 }
 
-async function batchUnstage() {
-  await unstageSelected()
+async function batchUnstage(paths?: readonly string[]) {
+  if (paths) await workspaceStore.unstageFiles([...paths])
+  else await unstageSelected()
 }
 
-function batchDiscard() {
-  requestWorkspaceDiscard('selected', orderedBatchPaths('unstaged'))
+function batchDiscard(paths?: readonly string[]) {
+  requestWorkspaceDiscard('selected', paths ?? orderedBatchPaths('unstaged'))
 }
 
 function orderedBatchPaths(source: 'unstaged' | 'staged'): string[] {
@@ -573,10 +575,10 @@ watch(
         >
           <template #header-actions>
             <template v-if="unstagedMultiPaths.length > 1">
-              <button class="btn-section" @click="batchStage">
+              <button class="btn-section" @click="batchStage()">
                 {{ t('workspace.wip.stageSelected', { count: unstagedMultiPaths.length }) }}
               </button>
-              <button class="btn-section btn-section--danger" @click="batchDiscard">
+              <button class="btn-section btn-section--danger" @click="batchDiscard()">
                 {{ t('workspace.wip.discardSelected', { count: unstagedMultiPaths.length }) }}
               </button>
             </template>
@@ -615,7 +617,7 @@ watch(
             <button
               v-if="stagedMultiPaths.length > 1"
               class="btn-section"
-              @click="batchUnstage"
+              @click="batchUnstage()"
             >
               {{ t('workspace.wip.unstageSelected', { count: stagedMultiPaths.length }) }}
             </button>

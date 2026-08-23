@@ -40,12 +40,16 @@ function createMenu() {
   }
   const git = {
     readWorktreeFile: vi.fn(),
+    openFileInEditor: vi.fn(),
   }
   const mergeRebase = {
     loadConflictFile: vi.fn().mockResolvedValue(conflict),
     resolveConflict: vi.fn().mockResolvedValue(undefined),
     useConflictSide: vi.fn().mockResolvedValue(undefined),
   }
+  const unstagedMultiPaths = ref<string[]>([])
+  const stagedMultiPaths = ref<string[]>([])
+  const batchStage = vi.fn().mockResolvedValue(undefined)
   const options = {
     t: (key: string) => key,
     git,
@@ -56,13 +60,15 @@ function createMenu() {
     submodules: computed(() => []),
     viewMode: ref<'list' | 'tree'>('list'),
     selectedPath: ref<string | null>(null),
-    unstagedMultiPaths: ref<string[]>([]),
-    stagedMultiPaths: ref<string[]>([]),
+    unstagedMultiPaths,
+    stagedMultiPaths,
     toggleFile: vi.fn(),
-    batchStage: vi.fn(),
+    batchStage,
     batchUnstage: vi.fn(),
     batchDiscard: vi.fn(),
-    orderedBatchPaths: vi.fn(() => []),
+    orderedBatchPaths: vi.fn((source: 'unstaged' | 'staged') =>
+      source === 'unstaged' ? [...unstagedMultiPaths.value] : [...stagedMultiPaths.value]
+    ),
     moveFileOrder: vi.fn(),
     requestDiscardFile: vi.fn(),
     openSubmodule: vi.fn(),
@@ -70,7 +76,14 @@ function createMenu() {
     updateSubmodule: vi.fn(),
     showFileHistory: vi.fn(),
   } as unknown as Parameters<typeof useWipMenus>[0]
-  return { menu: useWipMenus(options), repo, git, mergeRebase }
+  return {
+    menu: useWipMenus(options),
+    repo,
+    git,
+    mergeRebase,
+    unstagedMultiPaths,
+    batchStage,
+  }
 }
 
 function openConflictMenu(menu: ReturnType<typeof useWipMenus>) {
@@ -134,5 +147,69 @@ describe('useWipMenus conflict context', () => {
 
     expect(toastMocks.writeText).toHaveBeenCalledWith('src/main.ts')
     expect(toastMocks.showToast).toHaveBeenCalledWith('success', 'clipboard.copySuccess')
+  })
+
+  it('cancels regular file actions after switching repositories', async () => {
+    const { menu, repo, git } = createMenu()
+    menu.openFileContextMenu(new MouseEvent('contextmenu'), {
+      file: {
+        path: 'src/main.ts',
+        status: 'modified',
+        staged: false,
+        additions: 1,
+        deletions: 0,
+      },
+      path: 'src/main.ts',
+      isDir: false,
+    })
+    repo.activeRepoId = 'repo-2'
+
+    await menu.handleFileMenuAction('open-editor')
+
+    expect(git.openFileInEditor).not.toHaveBeenCalled()
+    expect(toastMocks.showActionError).toHaveBeenCalledOnce()
+  })
+
+  it('uses the batch path snapshot captured when the menu opened', async () => {
+    const { menu, unstagedMultiPaths, batchStage } = createMenu()
+    unstagedMultiPaths.value = ['src/a.ts', 'src/b.ts']
+    menu.openFileContextMenu(new MouseEvent('contextmenu'), {
+      file: {
+        path: 'src/a.ts',
+        status: 'modified',
+        staged: false,
+        additions: 1,
+        deletions: 0,
+      },
+      path: 'src/a.ts',
+      isDir: false,
+    })
+    unstagedMultiPaths.value = ['src/c.ts']
+
+    await menu.handleBatchMenuAction('batch-stage')
+
+    expect(batchStage).toHaveBeenCalledWith(['src/a.ts', 'src/b.ts'])
+  })
+
+  it('cancels batch actions after switching repositories', async () => {
+    const { menu, repo, unstagedMultiPaths, batchStage } = createMenu()
+    unstagedMultiPaths.value = ['src/a.ts', 'src/b.ts']
+    menu.openFileContextMenu(new MouseEvent('contextmenu'), {
+      file: {
+        path: 'src/a.ts',
+        status: 'modified',
+        staged: false,
+        additions: 1,
+        deletions: 0,
+      },
+      path: 'src/a.ts',
+      isDir: false,
+    })
+    repo.activeRepoId = 'repo-2'
+
+    await menu.handleBatchMenuAction('batch-stage')
+
+    expect(batchStage).not.toHaveBeenCalled()
+    expect(toastMocks.showActionError).toHaveBeenCalledOnce()
   })
 })

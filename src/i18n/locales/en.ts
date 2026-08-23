@@ -697,6 +697,7 @@ const messages = {
         useOurs: 'Use ours (HEAD)',
         useTheirs: 'Use theirs',
         markResolved: 'Mark as resolved',
+        contextChanged: 'The active repository changed, so the pending file-menu action was cancelled. Select the files again.',
       },
     },
     commit: {
