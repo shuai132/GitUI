@@ -5,16 +5,16 @@ describe('runPullWithAutoStash', () => {
   it('stashes, pulls, checks the repository, then restores', async () => {
     const order: string[] = []
     const result = await runPullWithAutoStash({
-      stash: async () => { order.push('stash') },
+      stash: async () => { order.push('stash'); return 'stash-oid' },
       pull: async () => { order.push('pull') },
       getRepoState: async () => {
         order.push('state')
         return { kind: 'clean' }
       },
-      restore: async () => { order.push('restore') },
+      restore: async (stashOid) => { order.push(`restore:${stashOid}`) },
     })
 
-    expect(order).toEqual(['stash', 'pull', 'state', 'restore'])
+    expect(order).toEqual(['stash', 'pull', 'state', 'restore:stash-oid'])
     expect(result).toEqual({
       pullSucceeded: true,
       pullError: null,
@@ -26,7 +26,7 @@ describe('runPullWithAutoStash', () => {
     const pullError = new Error('network failed')
     const restore = vi.fn(async () => {})
     const result = await runPullWithAutoStash({
-      stash: async () => {},
+      stash: async () => 'stash-oid',
       pull: async () => { throw pullError },
       getRepoState: async () => ({ kind: 'clean' }),
       restore,
@@ -41,7 +41,7 @@ describe('runPullWithAutoStash', () => {
   it('keeps the stash when pull leaves a merge in progress', async () => {
     const restore = vi.fn(async () => {})
     const result = await runPullWithAutoStash({
-      stash: async () => {},
+      stash: async () => 'stash-oid',
       pull: async () => { throw new Error('merge conflict') },
       getRepoState: async () => ({ kind: 'merge' }),
       restore,
@@ -55,7 +55,7 @@ describe('runPullWithAutoStash', () => {
     const stateError = new Error('state unavailable')
     const restore = vi.fn(async () => {})
     const result = await runPullWithAutoStash({
-      stash: async () => {},
+      stash: async () => 'stash-oid',
       pull: async () => {},
       getRepoState: async () => { throw stateError },
       restore,
@@ -72,7 +72,7 @@ describe('runPullWithAutoStash', () => {
   it('reports a restore failure without hiding the successful pull', async () => {
     const restoreError = new Error('stash conflict')
     const result = await runPullWithAutoStash({
-      stash: async () => {},
+      stash: async () => 'stash-oid',
       pull: async () => {},
       getRepoState: async () => ({ kind: 'clean' }),
       restore: async () => { throw restoreError },

@@ -58,7 +58,7 @@ GitUI 采用 Tauri v2 的 IPC 机制实现前后端通信，包括双向的请�
 
 ### 贮藏 (Stash)
 
-- `stash_push` / `stash_list` / `stash_apply` / `stash_pop` / `stash_drop`：贮藏生命周期。`stash_pop` 与 `stash_drop` 可传 `expected_oid`，后端在操作前校验当前 index 仍指向该 stash commit；不匹配则不修改工作区或 stash 栈。
+- `stash_push` / `stash_list` / `stash_apply` / `stash_pop` / `stash_drop`：贮藏生命周期。`stash_push` 返回新建 stash commit OID；自动恢复将该 OID 传给 `stash_pop`。`stash_pop` 与 `stash_drop` 可传 `expected_oid`，后端在操作前校验当前 index 仍指向该 stash commit；不匹配则不修改工作区或 stash 栈。
 
 ### 系统集成 (System)
 - `open_terminal` / `open_in_new_window`：外部工具联动。

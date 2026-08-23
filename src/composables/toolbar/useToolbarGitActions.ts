@@ -183,7 +183,7 @@ export function useToolbarGitActions(options: UseToolbarGitActionsOptions) {
           ),
           pull: () => git.pullBranch(repoId, remote, branch, mode),
           getRepoState: () => git.getRepoState(repoId),
-          restore: () => git.stashPop(repoId, 0),
+          restore: (stashOid) => git.stashPop(repoId, 0, stashOid),
         })
         pullSucceeded = result.pullSucceeded
         restoreCompleted = result.restore.kind === 'restored'

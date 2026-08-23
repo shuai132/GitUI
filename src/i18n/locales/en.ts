@@ -1198,7 +1198,11 @@ const messages = {
     repo: { invalid: 'Not a Git repository, or the repository is no longer valid' },
     network: { failed: 'Network error: cannot reach the remote' },
     autoFetch: { failed: 'Auto-fetch failed ({remote}), check network or credentials' },
-    autoStash: { popFailed: 'Auto stash pop failed, please resolve manually: {detail}' },
+    autoStash: {
+      popFailed: 'Auto stash pop failed. Your original changes remain in Stash; restore them manually after checking the worktree: {detail}',
+      restoreDeferred: 'The Git operation is still in progress. Your original changes remain safely in Stash; restore them after resolving or aborting the operation.',
+      restoreDeferredUnknown: 'GitUI could not confirm the repository state. Your original changes remain safely in Stash; check the repository before restoring them.',
+    },
   },
 } as const
 

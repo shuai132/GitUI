@@ -9,8 +9,10 @@ import type {
 import { useGitCommands } from '@/composables/useGitCommands'
 import { useRepoStore } from './repos'
 import { useHistoryStore } from './history'
+import { useStashStore } from './stash'
 import { useWorkspaceStore } from './workspace'
 import { t } from '@/i18n'
+import { runWithAutoStash, type AutoStashRestore } from '@/utils/autoStash'
 
 /**
  * Merge / Rebase 相关状态与操作。
@@ -55,16 +57,48 @@ export const useMergeRebaseStore = defineStore('mergeRebase', () => {
     }
   }
 
-  async function refreshAfterHeadChange(repoId: string) {
+  async function refreshAfterHeadChange(repoId: string, includeStashes = false) {
     if (useRepoStore().activeRepoId !== repoId) return
     const historyStore = useHistoryStore()
     const workspaceStore = useWorkspaceStore()
     // workspace.refresh 内部会更新 repoState（通过 setRepoState 钩子）
-    await Promise.all([
+    const tasks: Promise<unknown>[] = [
       historyStore.loadLog(),
       historyStore.loadBranches(),
       workspaceStore.refresh(repoId),
-    ])
+    ]
+    if (includeStashes) tasks.push(useStashStore().refresh())
+    await Promise.all(tasks)
+  }
+
+  function restoreNotice(restore: AutoStashRestore): string | null {
+    if (restore.kind === 'restored') return null
+    if (restore.kind === 'failed') {
+      return t('errors.autoStash.popFailed', { detail: String(restore.cause) })
+    }
+    return restore.repoState === 'unknown'
+      ? t('errors.autoStash.restoreDeferredUnknown')
+      : t('errors.autoStash.restoreDeferred')
+  }
+
+  async function runIntegrationWithAutoStash(
+    repoId: string,
+    stashMessage: string,
+    operation: () => Promise<void>,
+  ) {
+    const result = await runWithAutoStash({
+      stash: () => git.stashPush(repoId, stashMessage),
+      operation,
+      getRepoState: () => git.getRepoState(repoId),
+      restore: (stashOid) => git.stashPop(repoId, 0, stashOid),
+    })
+    const notice = restoreNotice(result.restore)
+    if (notice) lastError.value = notice
+    if (result.operationError !== null) {
+      if (notice) throw new Error(`${String(result.operationError)}\n\n${notice}`)
+      throw result.operationError
+    }
+    if (notice) throw new Error(notice)
   }
 
   // ── Merge ────────────────────────────────────────────────────────────
@@ -80,13 +114,10 @@ export const useMergeRebaseStore = defineStore('mergeRebase', () => {
     expectedSource: string,
   ) {
     busy.value = true
-    let stashed = false
+    lastError.value = null
+    const shouldAutoStash = autoStash && hasWorktreeChanges(repoId)
     try {
-      if (autoStash && hasWorktreeChanges(repoId)) {
-        await git.stashPush(repoId, 'gitui: auto-stash before merge')
-        stashed = true
-      }
-      await git.mergeBranch(
+      const operation = () => git.mergeBranch(
         repoId,
         sourceBranch,
         strategy,
@@ -95,16 +126,18 @@ export const useMergeRebaseStore = defineStore('mergeRebase', () => {
         expectedHeadRef,
         expectedSource,
       )
+      if (shouldAutoStash) {
+        await runIntegrationWithAutoStash(
+          repoId,
+          'gitui: auto-stash before merge',
+          operation,
+        )
+      } else {
+        await operation()
+      }
     } finally {
       busy.value = false
-      if (stashed) {
-        try {
-          await git.stashPop(repoId, 0)
-        } catch (e) {
-          lastError.value = t('errors.autoStash.popFailed', { detail: String(e) })
-        }
-      }
-      await refreshAfterHeadChange(repoId)
+      await refreshAfterHeadChange(repoId, shouldAutoStash)
     }
   }
 
@@ -175,13 +208,10 @@ export const useMergeRebaseStore = defineStore('mergeRebase', () => {
     expectedOnto: string | null,
   ) {
     busy.value = true
-    let stashed = false
+    lastError.value = null
+    const shouldAutoStash = autoStash && hasWorktreeChanges(repoId)
     try {
-      if (autoStash && hasWorktreeChanges(repoId)) {
-        await git.stashPush(repoId, 'gitui: auto-stash before rebase')
-        stashed = true
-      }
-      await git.rebaseStart(
+      const operation = () => git.rebaseStart(
         repoId,
         upstream,
         onto,
@@ -191,16 +221,18 @@ export const useMergeRebaseStore = defineStore('mergeRebase', () => {
         expectedUpstream,
         expectedOnto,
       )
+      if (shouldAutoStash) {
+        await runIntegrationWithAutoStash(
+          repoId,
+          'gitui: auto-stash before rebase',
+          operation,
+        )
+      } else {
+        await operation()
+      }
     } finally {
       busy.value = false
-      if (stashed) {
-        try {
-          await git.stashPop(repoId, 0)
-        } catch (e) {
-          lastError.value = t('errors.autoStash.popFailed', { detail: String(e) })
-        }
-      }
-      await refreshAfterHeadChange(repoId)
+      await refreshAfterHeadChange(repoId, shouldAutoStash)
     }
   }
 

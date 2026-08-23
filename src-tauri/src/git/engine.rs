@@ -1405,12 +1405,13 @@ mod tests {
         let test_repo = TestRepo::new();
         let path = test_repo.path_str();
         fs::write(test_repo.dir.path().join("existing.txt"), "stashed\n").unwrap();
-        GitEngine::stash_push(path, Some("guarded stash")).unwrap();
+        let created_oid = GitEngine::stash_push(path, Some("guarded stash")).unwrap();
         let entry = GitEngine::stash_list(path)
             .unwrap()
             .into_iter()
             .find(|stash| stash.index == 0)
             .unwrap();
+        assert_eq!(created_oid, entry.commit_oid);
 
         let error = GitEngine::stash_pop(path, 0, Some(&Oid::zero().to_string())).unwrap_err();
 

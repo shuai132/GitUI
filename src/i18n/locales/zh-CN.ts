@@ -1197,7 +1197,11 @@ const messages = {
     repo: { invalid: '不是 Git 仓库，或仓库已失效' },
     network: { failed: '网络错误：无法连接到远端' },
     autoFetch: { failed: '自动 fetch 失败（{remote}），请检查网络或认证' },
-    autoStash: { popFailed: '自动 stash pop 失败，请手动处理：{detail}' },
+    autoStash: {
+      popFailed: '自动 stash pop 失败；原始改动仍保留在 Stash 中，请检查工作区后手动恢复：{detail}',
+      restoreDeferred: 'Git 操作仍在进行中；原始改动已安全保留在 Stash 中，请在解决冲突或中止操作后恢复。',
+      restoreDeferredUnknown: 'GitUI 无法确认仓库状态；原始改动已安全保留在 Stash 中，请检查仓库后再恢复。',
+    },
   },
 } as const
 

@@ -14,7 +14,7 @@ impl GitEngine {
     // ── Stash ──────────────────────────────────────────────────────────
 
     /// Stash 当前工作区（包含未暂存的变更和 untracked 文件）
-    pub fn stash_push(path: &str, message: Option<&str>) -> GitResult<()> {
+    pub fn stash_push(path: &str, message: Option<&str>) -> GitResult<String> {
         let mut repo = Self::open(path)?;
         let sig = repo.signature()?;
         let flags = StashFlags::INCLUDE_UNTRACKED;
@@ -32,8 +32,8 @@ impl GitEngine {
         };
 
         let msg = message.or(default_msg.as_deref());
-        repo.stash_save2(&sig, msg, Some(flags))?;
-        Ok(())
+        let oid = repo.stash_save2(&sig, msg, Some(flags))?;
+        Ok(oid.to_string())
     }
 
     /// Pop 指定 index 的 stash（默认 0 即最新一条）；成功后该 stash 被移除。

@@ -10,7 +10,7 @@ pub async fn stash_push(
     repo_id: String,
     message: Option<String>,
     repo_manager: State<'_, RepoManager>,
-) -> Result<(), GitError> {
+) -> Result<String, GitError> {
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;

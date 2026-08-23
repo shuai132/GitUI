@@ -552,7 +552,7 @@ export function useGitCommands() {
 
   // ---- Stash ----
   const stashPush = (repoId: string, message?: string) =>
-    call<void>('stash_push', { repoId, message: message ?? null })
+    call<string>('stash_push', { repoId, message: message ?? null })
 
   const stashPop = (repoId: string, index = 0, expectedOid?: string) =>
     call<void>('stash_pop', { repoId, index, expectedOid: expectedOid ?? null })

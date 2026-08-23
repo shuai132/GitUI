@@ -1,9 +1,7 @@
 import type { RepoStateKind } from '@/types/git'
+import { runWithAutoStash, type AutoStashRestore } from '@/utils/autoStash'
 
-export type PullAutoStashRestore =
-  | { kind: 'restored' }
-  | { kind: 'deferred'; repoState: RepoStateKind | 'unknown'; cause?: unknown }
-  | { kind: 'failed'; cause: unknown }
+export type PullAutoStashRestore = AutoStashRestore
 
 export interface PullAutoStashResult {
   pullSucceeded: boolean
@@ -12,10 +10,10 @@ export interface PullAutoStashResult {
 }
 
 interface PullAutoStashOptions {
-  stash: () => Promise<void>
+  stash: () => Promise<string>
   pull: () => Promise<void>
   getRepoState: () => Promise<{ kind: RepoStateKind }>
-  restore: () => Promise<void>
+  restore: (stashOid: string) => Promise<void>
 }
 
 /**
@@ -25,44 +23,15 @@ interface PullAutoStashOptions {
 export async function runPullWithAutoStash(
   options: PullAutoStashOptions,
 ): Promise<PullAutoStashResult> {
-  await options.stash()
-
-  let pullSucceeded = false
-  let pullError: unknown | null = null
-  try {
-    await options.pull()
-    pullSucceeded = true
-  } catch (cause: unknown) {
-    pullError = cause
-  }
-
-  let repoState: RepoStateKind | 'unknown'
-  try {
-    repoState = (await options.getRepoState()).kind
-  } catch (cause: unknown) {
-    return {
-      pullSucceeded,
-      pullError,
-      restore: { kind: 'deferred', repoState: 'unknown', cause },
-    }
-  }
-
-  if (repoState !== 'clean') {
-    return {
-      pullSucceeded,
-      pullError,
-      restore: { kind: 'deferred', repoState },
-    }
-  }
-
-  try {
-    await options.restore()
-    return { pullSucceeded, pullError, restore: { kind: 'restored' } }
-  } catch (cause: unknown) {
-    return {
-      pullSucceeded,
-      pullError,
-      restore: { kind: 'failed', cause },
-    }
+  const result = await runWithAutoStash({
+    stash: options.stash,
+    operation: options.pull,
+    getRepoState: options.getRepoState,
+    restore: options.restore,
+  })
+  return {
+    pullSucceeded: result.operationSucceeded,
+    pullError: result.operationError,
+    restore: result.restore,
   }
 }
