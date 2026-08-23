@@ -78,7 +78,7 @@ export function useCommitContextMenu(
   const pluginsStore = usePluginsStore()
   const workspaceStore = useWorkspaceStore()
   const uiStore = useUiStore()
-  const { showToast, showError } = useGlobalToast()
+  const { showToast, showError, showActionError } = useGlobalToast()
 
   onMounted(() => {
     if (!pluginsStore.loaded) {
@@ -506,7 +506,7 @@ export function useCommitContextMenu(
           break
       }
     } catch (err) {
-      showError(String(err))
+      showActionError(err)
     }
   }
 
@@ -599,7 +599,7 @@ export function useCommitContextMenu(
         const todo = await mergeRebaseStore.planRebase(parentOid, null)
         const idx = todo.findIndex((x) => x.oid === commit.oid)
         if (idx < 0) {
-          alert(t('errors.rebase.planMismatch', { shortOid: commit.short_oid }))
+          showError(t('errors.rebase.planMismatch', { shortOid: commit.short_oid }))
           return
         }
         todo[idx] = {
@@ -615,7 +615,7 @@ export function useCommitContextMenu(
       }
       showEditMessageDialog.value = false
     } catch (err) {
-      alert(String(err))
+      showActionError(err)
     } finally {
       editMessageSubmitting.value = false
     }
@@ -638,7 +638,7 @@ export function useCommitContextMenu(
       dropUnreachableDialog.visible = false
       dropUnreachableDialog.commit = null
     } catch (err) {
-      alert(String(err))
+      showActionError(err)
     } finally {
       dropUnreachableDialog.submitting = false
     }

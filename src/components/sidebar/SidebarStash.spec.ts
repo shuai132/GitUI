@@ -42,7 +42,11 @@ vi.mock('@/stores/stash', () => ({ useStashStore: () => mocks.stash }))
 vi.mock('@/stores/workspace', () => ({ useWorkspaceStore: () => mocks.workspace }))
 vi.mock('@/stores/history', () => ({ useHistoryStore: () => mocks.history }))
 vi.mock('@/composables/useGlobalToast', () => ({
-  useGlobalToast: () => ({ showError: mocks.showError }),
+  useGlobalToast: () => ({
+    showError: mocks.showError,
+    showActionError: (error: unknown, fallback?: string) =>
+      mocks.showError(fallback ?? String(error)),
+  }),
 }))
 vi.mock('@/composables/useSidebarSectionState', () => ({
   useSidebarSectionState: () => ({

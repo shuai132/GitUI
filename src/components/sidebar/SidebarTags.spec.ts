@@ -64,7 +64,12 @@ vi.mock('@/composables/useGitCommands', () => ({
   useGitCommands: () => mocks.git,
 }))
 vi.mock('@/composables/useGlobalToast', () => ({
-  useGlobalToast: () => ({ showError: mocks.showError, showToast: mocks.showToast }),
+  useGlobalToast: () => ({
+    showError: mocks.showError,
+    showToast: mocks.showToast,
+    showActionError: (error: unknown, fallback?: string) =>
+      mocks.showError(fallback ?? String(error)),
+  }),
 }))
 vi.mock('@/composables/useSidebarSectionState', () => ({
   useSidebarSectionState: () => ({

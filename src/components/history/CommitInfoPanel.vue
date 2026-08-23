@@ -11,6 +11,7 @@ import { useSubmodulesStore } from '@/stores/submodules'
 import { useGitCommands } from '@/composables/useGitCommands'
 import { useHistoryStore } from '@/stores/history'
 import { useCommitFileMenu } from '@/composables/history/useCommitFileMenu'
+import { useGlobalToast } from '@/composables/useGlobalToast'
 import ContextMenu from '@/components/common/ContextMenu.vue'
 import CommitFileList from '@/components/history/CommitFileList.vue'
 import type { SubmoduleInfo } from '@/types/git'
@@ -20,6 +21,7 @@ import type { FileOrderPlacement } from '@/utils/fileOrderPrefs'
 const { t } = useI18n()
 const historyStore = useHistoryStore()
 const uiStore = useUiStore()
+const { showActionError } = useGlobalToast()
 
 const props = defineProps<{
   commit: CommitDetail | null
@@ -119,7 +121,7 @@ async function openSubmoduleFromHistory(submodule: SubmoduleInfo) {
     await repoStore.openRepo(absPath)
   } catch (err) {
     console.error(err)
-    alert(t('sidebar.submodule.openFailed', { detail: String(err) }))
+    showActionError(err, t('sidebar.submodule.openFailed', { detail: String(err) }))
   }
 }
 
@@ -135,7 +137,7 @@ async function initSubmoduleFromHistory(submodule: SubmoduleInfo) {
     }
   } catch (err) {
     console.error(err)
-    alert(t('common.operationFailed', { detail: String(err) }))
+    showActionError(err, t('common.operationFailed', { detail: String(err) }))
   }
 }
 
@@ -147,7 +149,7 @@ async function updateSubmoduleFromHistory(submodule: SubmoduleInfo) {
     }
   } catch (err) {
     console.error(err)
-    alert(t('common.operationFailed', { detail: String(err) }))
+    showActionError(err, t('common.operationFailed', { detail: String(err) }))
   }
 }
 

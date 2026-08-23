@@ -26,7 +26,7 @@ const repoStore = useRepoStore()
 const uiStore = useUiStore()
 const sectionState = useSidebarSectionState()
 const git = useGitCommands()
-const { showError } = useGlobalToast()
+const { showActionError } = useGlobalToast()
 
 const localBranches = computed(() => historyStore.branches.filter((b) => !b.is_remote))
 const currentUpstream = computed(() => localBranches.value.find((b) => b.is_head)?.upstream)
@@ -288,7 +288,7 @@ async function onConfirmDialogConfirm() {
     await confirmDlg._resolve()
   } catch (err) {
     console.error(err)
-    showError(t('common.operationFailed', { detail: String(err) }))
+    showActionError(err, t('common.operationFailed', { detail: String(err) }))
   } finally {
     confirmDlg.loading = false
     confirmDlg.visible = false

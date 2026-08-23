@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { useRepoStore } from '@/stores/repos'
 import { useSubmodulesStore } from '@/stores/submodules'
 import { useSidebarSectionState } from '@/composables/useSidebarSectionState'
+import { useGlobalToast } from '@/composables/useGlobalToast'
 import ContextMenu, { type ContextMenuItem } from '@/components/common/ContextMenu.vue'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import EditSubmoduleDialog from '@/components/submodule/EditSubmoduleDialog.vue'
@@ -16,6 +17,7 @@ const { t } = useI18n()
 const repoStore = useRepoStore()
 const submodulesStore = useSubmodulesStore()
 const sectionState = useSidebarSectionState()
+const { showActionError } = useGlobalToast()
 
 const submodules = computed(() => submodulesStore.submodules)
 const searchQuery = ref('')
@@ -124,7 +126,7 @@ async function onConfirmDialogConfirm() {
     await confirmDlg._resolve()
   } catch (err) {
     console.error(err)
-    alert(t('common.operationFailed', { detail: String(err) }))
+    showActionError(err, t('common.operationFailed', { detail: String(err) }))
   } finally {
     confirmDlg.loading = false
     confirmDlg.visible = false
@@ -165,7 +167,7 @@ async function onSubmoduleMenuAction(action: string) {
     }
   } catch (err) {
     console.error(err)
-    alert(t('common.operationFailed', { detail: String(err) }))
+    showActionError(err, t('common.operationFailed', { detail: String(err) }))
   }
 }
 
@@ -178,7 +180,7 @@ async function onSubmoduleClick(s: SubmoduleInfo) {
     await repoStore.openRepo(absPath)
   } catch (err) {
     console.error(err)
-    alert(t('sidebar.submodule.openFailed', { detail: String(err) }))
+    showActionError(err, t('sidebar.submodule.openFailed', { detail: String(err) }))
   }
 }
 </script>

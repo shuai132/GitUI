@@ -32,6 +32,7 @@ import type {
 } from '@/types/plugin'
 import { useErrorsStore } from '@/stores/errors'
 import { useDebugStore } from '@/stores/debug'
+import { GitCommandError } from '@/lib/gitCommandError'
 
 export function useGitCommands() {
   const errorsStore = useErrorsStore()
@@ -56,7 +57,7 @@ export function useGitCommands() {
       debugStore.reject(dbg.id, performance.now() - start, rawStr)
       if (opts?.silent) throw raw
       const entry = errorsStore.push(op, raw)
-      throw new Error(entry.friendly)
+      throw new GitCommandError(entry.friendly)
     }
   }
 

@@ -1,4 +1,5 @@
 import { ref } from 'vue'
+import { GitCommandError } from '@/lib/gitCommandError'
 
 export type ToastType = 'success' | 'error' | 'warning'
 
@@ -19,9 +20,16 @@ export function useGlobalToast() {
     showToast('error', msg)
   }
 
+  function showActionError(error: unknown, fallbackMessage?: string): boolean {
+    if (error instanceof GitCommandError) return false
+    showError(fallbackMessage ?? String(error))
+    return true
+  }
+
   return {
     toast,
     showToast,
     showError,
+    showActionError,
   }
 }

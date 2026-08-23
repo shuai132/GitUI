@@ -20,7 +20,7 @@ const historyStore = useHistoryStore()
 const repoStore = useRepoStore()
 const stashStore = useStashStore()
 const workspaceStore = useWorkspaceStore()
-const { showError } = useGlobalToast()
+const { showError, showActionError } = useGlobalToast()
 const sectionState = useSidebarSectionState()
 const searchQuery = ref('')
 const filteredEntries = computed(() =>
@@ -152,7 +152,7 @@ async function onStashMenuAction(action: string) {
     }
   } catch (err) {
     console.error(err)
-    showError(t('common.operationFailed', { detail: String(err) }))
+    showActionError(err, t('common.operationFailed', { detail: String(err) }))
   }
 }
 
@@ -176,7 +176,7 @@ async function confirmStashAction() {
   } catch (err) {
     console.error(err)
     pendingAction.value = null
-    showError(t('common.operationFailed', { detail: String(err) }))
+    showActionError(err, t('common.operationFailed', { detail: String(err) }))
   } finally {
     confirmationLoading.value = false
   }

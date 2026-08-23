@@ -67,7 +67,7 @@ export function useToolbarGitActions(options: UseToolbarGitActionsOptions) {
   const repoCreation = useRepoCreation()
   const { refreshActiveRepository } = useRepositoryRefresh()
   const { t } = useI18n()
-  const { showToast, showError } = useGlobalToast()
+  const { showToast, showError, showActionError } = useGlobalToast()
 
   const busy = computed(() => repoOpsStore.getBusy(repoStore.activeRepoId))
   const hasRepo = computed(() => !!repoStore.activeRepoId)
@@ -415,7 +415,7 @@ export function useToolbarGitActions(options: UseToolbarGitActionsOptions) {
     try {
       await refreshActiveRepository()
     } catch (e: unknown) {
-      showError(String(e))
+      showActionError(e)
     }
   }
 

@@ -7,6 +7,7 @@ import type { useWorkspaceStore } from '@/stores/workspace'
 import type { FileDiff, SubmoduleInfo } from '@/types/git'
 import type { FileOrderPlacement } from '@/utils/fileOrderPrefs'
 import { canOpenSubmodule, findSubmoduleForDiff, submoduleSetupAction } from '@/utils/submodules'
+import { useGlobalToast } from '@/composables/useGlobalToast'
 
 type GitCommands = ReturnType<typeof useGitCommands>
 type RepoStore = ReturnType<typeof useRepoStore>
@@ -32,6 +33,7 @@ function diffPath(diff: FileDiff): string {
 }
 
 export function useCommitFileMenu(options: CommitFileMenuOptions) {
+  const { showActionError } = useGlobalToast()
   const {
     t,
     git,
@@ -175,7 +177,7 @@ export function useCommitFileMenu(options: CommitFileMenuOptions) {
         showFileHistory({ filePath, mode: 'blame' })
       }
     } catch (error) {
-      alert(String(error))
+      showActionError(error)
     }
   }
 

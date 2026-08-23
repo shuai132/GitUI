@@ -10,6 +10,7 @@ import type { useWorkspaceStore } from '@/stores/workspace'
 import type { FileEntry, SubmoduleInfo } from '@/types/git'
 import type { FileOrderPlacement } from '@/utils/fileOrderPrefs'
 import { canOpenSubmodule, findSubmoduleByPath, submoduleSetupAction } from '@/utils/submodules'
+import { useGlobalToast } from '@/composables/useGlobalToast'
 
 type GitCommands = ReturnType<typeof useGitCommands>
 type MergeRebaseStore = ReturnType<typeof useMergeRebaseStore>
@@ -43,6 +44,7 @@ type WipMenuOptions = {
 }
 
 export function useWipMenus(options: WipMenuOptions) {
+  const { showActionError } = useGlobalToast()
   const {
     t,
     git,
@@ -325,7 +327,7 @@ export function useWipMenus(options: WipMenuOptions) {
         showFileHistory({ filePath: targetPath, mode: 'blame' })
       }
     } catch (e) {
-      alert(String(e))
+      showActionError(e)
     }
   }
 

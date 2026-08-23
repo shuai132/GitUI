@@ -69,7 +69,9 @@ vi.mock('@/stores/diff', () => ({
 }))
 
 vi.mock('@/composables/useGlobalToast', () => ({
-  useGlobalToast: () => ({ showError: shortcutMocks.showError }),
+  useGlobalToast: () => ({
+    showActionError: (error: unknown) => shortcutMocks.showError(String(error)),
+  }),
 }))
 
 vi.mock('@/composables/useRepositoryRefresh', () => ({

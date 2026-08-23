@@ -45,7 +45,7 @@ const settingsStore = useSettingsStore()
 const submodulesStore = useSubmodulesStore()
 const git = useGitCommands()
 const mergeRebaseStore = useMergeRebaseStore()
-const { showError } = useGlobalToast()
+const { showError, showActionError } = useGlobalToast()
 const activeRepoPath = computed(() => repoStore.activeRepo()?.path)
 
 const emit = defineEmits<{
@@ -128,7 +128,7 @@ async function onOpenFileInEditor(file: FileEntry) {
   try {
     await git.openFileInEditor(`${repoPath}/${file.path}`)
   } catch (caught: unknown) {
-    alert(t('workspace.fileList.openFailed', { detail: String(caught) }))
+    showActionError(caught, t('workspace.fileList.openFailed', { detail: String(caught) }))
   }
 }
 
@@ -158,7 +158,7 @@ async function openSubmoduleFromWip(submodule: SubmoduleInfo) {
     await repoStore.openRepo(absPath)
   } catch (err) {
     console.error(err)
-    alert(t('sidebar.submodule.openFailed', { detail: String(err) }))
+    showActionError(err, t('sidebar.submodule.openFailed', { detail: String(err) }))
   }
 }
 
@@ -170,7 +170,7 @@ async function initSubmoduleFromWip(submodule: SubmoduleInfo) {
     }
   } catch (err) {
     console.error(err)
-    alert(t('common.operationFailed', { detail: String(err) }))
+    showActionError(err, t('common.operationFailed', { detail: String(err) }))
   }
 }
 
@@ -182,7 +182,7 @@ async function updateSubmoduleFromWip(submodule: SubmoduleInfo) {
     }
   } catch (err) {
     console.error(err)
-    alert(t('common.operationFailed', { detail: String(err) }))
+    showActionError(err, t('common.operationFailed', { detail: String(err) }))
   }
 }
 

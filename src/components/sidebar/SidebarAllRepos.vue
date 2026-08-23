@@ -10,6 +10,7 @@ import { useUiStore } from '@/stores/ui'
 import { resolveExternalTerminalApp, useSettingsStore } from '@/stores/settings'
 import { useGitCommands } from '@/composables/useGitCommands'
 import { useRepoCreation } from '@/composables/useRepoCreation'
+import { useGlobalToast } from '@/composables/useGlobalToast'
 import { scrollElementByWheel } from '@/utils/wheelScroll'
 import { revealItemInDir } from '@tauri-apps/plugin-opener'
 import ContextMenu, { type ContextMenuItem } from '@/components/common/ContextMenu.vue'
@@ -34,6 +35,7 @@ const uiStore = useUiStore()
 const settingsStore = useSettingsStore()
 const git = useGitCommands()
 const repoCreation = useRepoCreation()
+const { showActionError } = useGlobalToast()
 
 const submodulesByRepoId = ref<SubmodulesByRepoId>({})
 let submoduleRelationSeq = 0
@@ -150,7 +152,7 @@ async function retryUnavailableRepo(path: string) {
     await repoStore.recoverUnavailableRepo(path)
     repoSearchControlRef.value?.closeSearch()
   } catch (caught: unknown) {
-    alert(t('sidebar.repo.unavailableActionFailed', { detail: String(caught) }))
+    showActionError(caught, t('sidebar.repo.unavailableActionFailed', { detail: String(caught) }))
   } finally {
     retryingUnavailablePath.value = null
   }
@@ -166,7 +168,7 @@ async function locateUnavailableRepo(path: string) {
     await repoStore.recoverUnavailableRepo(path, selected)
     repoSearchControlRef.value?.closeSearch()
   } catch (caught: unknown) {
-    alert(t('sidebar.repo.unavailableActionFailed', { detail: String(caught) }))
+    showActionError(caught, t('sidebar.repo.unavailableActionFailed', { detail: String(caught) }))
   } finally {
     retryingUnavailablePath.value = null
   }
@@ -174,7 +176,7 @@ async function locateUnavailableRepo(path: string) {
 
 function removeUnavailableRepo(path: string) {
   void repoStore.removeUnavailableRepo(path).catch((caught: unknown) => {
-    alert(t('sidebar.repo.unavailableActionFailed', { detail: String(caught) }))
+    showActionError(caught, t('sidebar.repo.unavailableActionFailed', { detail: String(caught) }))
   })
 }
 

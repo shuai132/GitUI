@@ -26,7 +26,7 @@ const repoStore = useRepoStore()
 const uiStore = useUiStore()
 const sectionState = useSidebarSectionState()
 const branchSwitch = reactive(useBranchSwitch())
-const { showError } = useGlobalToast()
+const { showActionError } = useGlobalToast()
 const activeRepoPath = computed(() => repoStore.activeRepo()?.path)
 const activeRepoBranchScope = computed(() =>
   uiStore.getHistoryBranchScope(activeRepoPath.value),
@@ -167,7 +167,7 @@ async function onConfirmDialogConfirm() {
     await confirmDlg._resolve()
   } catch (err) {
     console.error(err)
-    showError(t('common.operationFailed', { detail: String(err) }))
+    showActionError(err, t('common.operationFailed', { detail: String(err) }))
   } finally {
     confirmDlg.loading = false
     confirmDlg.visible = false

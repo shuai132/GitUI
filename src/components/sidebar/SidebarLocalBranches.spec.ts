@@ -71,7 +71,11 @@ vi.mock('@/composables/useBranchSwitch', () => ({
   }),
 }))
 vi.mock('@/composables/useGlobalToast', () => ({
-  useGlobalToast: () => ({ showError: mocks.showError }),
+  useGlobalToast: () => ({
+    showError: mocks.showError,
+    showActionError: (error: unknown, fallback?: string) =>
+      mocks.showError(fallback ?? String(error)),
+  }),
 }))
 
 async function requestDelete(branch: BranchInfo = localBranch) {

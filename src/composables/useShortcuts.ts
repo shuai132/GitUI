@@ -30,7 +30,7 @@ export function useShortcuts() {
   const terminalStore = useTerminalStore()
   const workspaceStore = useWorkspaceStore()
   const diffStore = useDiffStore()
-  const { showError } = useGlobalToast()
+  const { showActionError } = useGlobalToast()
   const { refreshActiveRepository } = useRepositoryRefresh()
 
   function shouldIgnore(): boolean {
@@ -85,7 +85,7 @@ export function useShortcuts() {
           await diffStore.loadFileDiff(file.path, targetStaged)
         }
       } catch (err) {
-        showError(String(err))
+        showActionError(err)
       }
       return true
     }
@@ -117,7 +117,7 @@ export function useShortcuts() {
           await diffStore.loadFileDiff(selected.path, targetStaged)
         }
       } catch (err) {
-        showError(String(err))
+        showActionError(err)
       }
       return true
     }
@@ -127,7 +127,7 @@ export function useShortcuts() {
       const id = repoStore.activeRepoId
       if (id) {
         refreshActiveRepository().catch((err: unknown) => {
-          showError(String(err))
+          showActionError(err)
         })
       }
       return
@@ -159,7 +159,7 @@ export function useShortcuts() {
     if (matchesBinding(e, b.toggleTerminal)) {
       consume()
       terminalStore.toggleActiveRepoVisible().catch((err: unknown) => {
-        showError(String(err))
+        showActionError(err)
       })
       return
     }
@@ -227,7 +227,7 @@ export function useShortcuts() {
         await Promise.all([historyStore.loadLog(), historyStore.loadBranches()])
         if (oid) historyStore.selectCommit(oid)
       } catch (err) {
-        showError(String(err))
+        showActionError(err)
       }
     }
   }

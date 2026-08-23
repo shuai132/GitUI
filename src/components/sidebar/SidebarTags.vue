@@ -21,7 +21,7 @@ const repoStore = useRepoStore()
 const sectionState = useSidebarSectionState()
 const { pickRemote } = usePickRemote()
 const git = useGitCommands()
-const { showError, showToast } = useGlobalToast()
+const { showError, showToast, showActionError } = useGlobalToast()
 
 const tags = computed(() => historyStore.tags)
 const searchQuery = ref('')
@@ -165,7 +165,7 @@ async function onConfirmDialogConfirm() {
     await confirmDlg._resolve()
   } catch (err) {
     console.error(err)
-    showError(t('common.operationFailed', { detail: String(err) }))
+    showActionError(err, t('common.operationFailed', { detail: String(err) }))
   } finally {
     confirmDlg.loading = false
     confirmDlg.visible = false
@@ -348,7 +348,7 @@ async function onTagMenuAction(action: string) {
     }
   } catch (err) {
     console.error(err)
-    showError(t('common.operationFailed', { detail: String(err) }))
+    showActionError(err, t('common.operationFailed', { detail: String(err) }))
   }
 }
 </script>
