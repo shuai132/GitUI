@@ -115,4 +115,20 @@ describe('CloneRepoDialog', () => {
     expect(wrapper.emitted('close')).toHaveLength(1)
     wrapper.unmount()
   })
+
+  it('rejects a parent-directory alias as the custom target name', async () => {
+    const wrapper = mount(CloneRepoDialog, {
+      props: { visible: true },
+      global: { stubs: { Modal: ModalStub } },
+    })
+    const textInputs = wrapper.findAll<HTMLInputElement>('input[type="text"]')
+    await textInputs[0].setValue('https://example.com/repo.git')
+    await wrapper.find<HTMLInputElement>('.path-picker input').setValue('/repos')
+    await textInputs[2].setValue(' .. ')
+
+    expect(wrapper.find('.form-error').text()).toBe('repo.clone.errors.nameInvalid')
+    expect(wrapper.find<HTMLButtonElement>('.btn-primary').attributes('disabled')).toBeDefined()
+    expect(cloneMocks.cloneRepo).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
 })

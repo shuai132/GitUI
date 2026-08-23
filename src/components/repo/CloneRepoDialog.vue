@@ -5,6 +5,7 @@ import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 import Modal from '@/components/common/Modal.vue'
 import { useRepoStore } from '@/stores/repos'
 import { loadCloneParentDir, saveCloneParentDir } from '@/utils/clonePreferences'
+import { isInvalidDirectoryLeafName } from '@/utils/pathName'
 
 const { t } = useI18n()
 
@@ -82,7 +83,7 @@ const finalPath = computed(() => {
   return parentDir.value.replace(/[\/\\]+$/, '') + sep + finalName.value
 })
 
-const nameInvalid = computed(() => /[\\/]/.test(customName.value))
+const nameInvalid = computed(() => isInvalidDirectoryLeafName(customName.value))
 const depthInvalid = computed(() => {
   const value = String(depthStr.value).trim()
   if (!value) return false

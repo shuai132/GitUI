@@ -187,7 +187,7 @@ const messages = {
       errors: {
         urlRequired: '请填写远程地址',
         parentRequired: '请选择克隆到的父目录',
-        nameInvalid: '目录名不能包含 / 或 \\',
+        nameInvalid: '目录名不能是 . 或 ..，也不能包含 / 或 \\',
         depthInvalid: '深度必须是小于等于 2,147,483,647 的正整数',
       },
     },
@@ -205,7 +205,7 @@ const messages = {
       errors: {
         parentRequired: '请选择父目录',
         nameRequired: '请输入目录名',
-        nameInvalid: '目录名不能包含 / 或 \\',
+        nameInvalid: '目录名不能是 . 或 ..，也不能包含 / 或 \\',
       },
     },
     worktree: {
@@ -229,7 +229,7 @@ const messages = {
         parentRequired: '请选择父目录',
         branchRequired: '请输入新分支名',
         startPointRequired: '请选择起点分支',
-        dirNameInvalid: '目录名不能包含 / 或 \\',
+        dirNameInvalid: '目录名不能是 . 或 ..，也不能包含 / 或 \\',
       },
     },
   },

@@ -83,4 +83,25 @@ describe('CreateWorktreeDialog', () => {
     })
     expect(wrapper.emitted('close')).toHaveLength(1)
   })
+
+  it('rejects a current-directory alias as the worktree directory name', async () => {
+    const wrapper = mount(CreateWorktreeDialog, {
+      props: { visible: true, repo },
+      global: {
+        stubs: {
+          Modal: { template: '<div><slot /><slot name="footer" /></div>' },
+        },
+      },
+    })
+    await flushPromises()
+    await wrapper
+      .find<HTMLInputElement>('input[placeholder="repo.worktree.branchPlaceholder"]')
+      .setValue('feature/safe')
+    const textInputs = wrapper.findAll<HTMLInputElement>('input[type="text"]')
+    await textInputs[textInputs.length - 1].setValue('.')
+
+    expect(wrapper.find('.form-error').text()).toBe('repo.worktree.errors.dirNameInvalid')
+    expect(wrapper.find<HTMLButtonElement>('.btn-primary').attributes('disabled')).toBeDefined()
+    expect(mocks.createWorktree).not.toHaveBeenCalled()
+  })
 })

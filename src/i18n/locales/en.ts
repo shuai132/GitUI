@@ -187,7 +187,7 @@ const messages = {
       errors: {
         urlRequired: 'Please enter a remote URL',
         parentRequired: 'Please pick a parent directory',
-        nameInvalid: 'Directory name cannot contain / or \\',
+        nameInvalid: 'Directory name cannot be . or .., or contain / or \\',
         depthInvalid: 'Depth must be a positive whole number no greater than 2,147,483,647',
       },
     },
@@ -205,7 +205,7 @@ const messages = {
       errors: {
         parentRequired: 'Please pick a parent directory',
         nameRequired: 'Please enter a directory name',
-        nameInvalid: 'Directory name cannot contain / or \\',
+        nameInvalid: 'Directory name cannot be . or .., or contain / or \\',
       },
     },
     worktree: {
@@ -229,7 +229,7 @@ const messages = {
         parentRequired: 'Please pick a parent directory',
         branchRequired: 'Please enter a new branch name',
         startPointRequired: 'Please choose a start point',
-        dirNameInvalid: 'Directory name cannot contain / or \\',
+        dirNameInvalid: 'Directory name cannot be . or .., or contain / or \\',
       },
     },
   },

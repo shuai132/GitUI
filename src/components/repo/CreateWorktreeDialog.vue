@@ -5,6 +5,7 @@ import Modal from '@/components/common/Modal.vue'
 import { useGitCommands } from '@/composables/useGitCommands'
 import { useRepoStore } from '@/stores/repos'
 import type { BranchInfo, RepoMeta } from '@/types/git'
+import { isInvalidDirectoryLeafName } from '@/utils/pathName'
 
 const { t } = useI18n()
 
@@ -56,7 +57,7 @@ const inferredDirName = computed(() => {
 })
 
 const finalDirName = computed(() => dirName.value.trim() || inferredDirName.value)
-const dirNameInvalid = computed(() => /[\\/]/.test(dirName.value))
+const dirNameInvalid = computed(() => isInvalidDirectoryLeafName(dirName.value))
 
 const finalPath = computed(() => {
   if (!parentDir.value || !finalDirName.value) return ''

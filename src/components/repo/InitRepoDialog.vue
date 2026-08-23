@@ -3,6 +3,7 @@ import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Modal from '@/components/common/Modal.vue'
 import { useRepoStore } from '@/stores/repos'
+import { isInvalidDirectoryLeafName } from '@/utils/pathName'
 
 const { t } = useI18n()
 
@@ -22,7 +23,7 @@ const submitting = ref(false)
 const error = ref<string | null>(null)
 const nameInputEl = ref<HTMLInputElement | null>(null)
 
-const nameInvalid = computed(() => /[\\/]/.test(dirName.value))
+const nameInvalid = computed(() => isInvalidDirectoryLeafName(dirName.value))
 
 const finalPath = computed(() => {
   const name = dirName.value.trim()
