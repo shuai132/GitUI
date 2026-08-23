@@ -311,7 +311,15 @@ const messages = {
         pop: 'Pop Stash',
         delete: 'Delete Stash',
       },
-      confirmDelete: "确认删除 stash{'@'}{index} \"{message}\"？此操作不可撤销。",
+      confirmPopTitle: '将 Stash 叠加到已有本地改动？',
+      confirmPop: "工作区已有 {count} 个文件包含改动。是否应用并移除 stash{'@'}{index} \"{message}\"？\n\n重叠改动可能产生冲突；Pop 未完成时 Stash 会保留。",
+      popConfirm: '确认 Pop',
+      popping: '正在 Pop…',
+      confirmDropTitle: '永久删除这个 Stash？',
+      confirmDrop: "确认删除 stash{'@'}{index} \"{message}\"？\n\n删除后无法通过 Git 的常规安全机制恢复。",
+      dropConfirm: '删除 Stash',
+      dropping: '正在删除…',
+      contextChanged: '当前仓库已变化，旧的 Stash 操作已取消；请重新选择目标',
     },
     submodule: {
       menu: {

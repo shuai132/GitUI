@@ -311,7 +311,15 @@ const messages = {
         pop: 'Pop Stash',
         delete: 'Delete Stash',
       },
-      confirmDelete: "Delete stash{'@'}{index} \"{message}\"? This cannot be undone.",
+      confirmPopTitle: 'Pop into a worktree with local changes?',
+      confirmPop: "There are {count} changed file(s) in the worktree. Apply and remove stash{'@'}{index} \"{message}\"?\n\nOverlapping changes may cause conflicts. The Stash is kept if Pop cannot complete.",
+      popConfirm: 'Pop Stash',
+      popping: 'Popping…',
+      confirmDropTitle: 'Permanently delete this Stash?',
+      confirmDrop: "Delete stash{'@'}{index} \"{message}\"?\n\nA dropped Stash cannot be recovered through Git's normal safety mechanisms.",
+      dropConfirm: 'Delete Stash',
+      dropping: 'Deleting…',
+      contextChanged: 'The active repository changed, so the pending Stash action was cancelled. Select the Stash again.',
     },
     submodule: {
       menu: {

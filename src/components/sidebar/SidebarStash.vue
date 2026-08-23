@@ -5,7 +5,10 @@ import { useRouter } from 'vue-router'
 import { useHistoryStore } from '@/stores/history'
 import { useRepoStore } from '@/stores/repos'
 import { useStashStore } from '@/stores/stash'
+import { useWorkspaceStore } from '@/stores/workspace'
+import { useGlobalToast } from '@/composables/useGlobalToast'
 import { useSidebarSectionState } from '@/composables/useSidebarSectionState'
+import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import ContextMenu, { type ContextMenuItem } from '@/components/common/ContextMenu.vue'
 import SidebarSearchControl from './SidebarSearchControl.vue'
 import { matchesSidebarSearch, normalizeSidebarSearchQuery } from '@/utils/sidebarSearch'
@@ -16,6 +19,8 @@ const router = useRouter()
 const historyStore = useHistoryStore()
 const repoStore = useRepoStore()
 const stashStore = useStashStore()
+const workspaceStore = useWorkspaceStore()
+const { showError } = useGlobalToast()
 const sectionState = useSidebarSectionState()
 const searchQuery = ref('')
 const filteredEntries = computed(() =>
@@ -25,9 +30,67 @@ const filteredEntries = computed(() =>
 )
 const hasSearchQuery = computed(() => !!normalizeSidebarSearchQuery(searchQuery.value))
 
-watch(() => repoStore.activeRepoId, () => {
-  searchQuery.value = ''
+interface PendingStashAction {
+  kind: 'pop' | 'drop'
+  repoId: string
+  index: number
+  message: string
+  commitOid: string
+  changeCount: number
+}
+
+const pendingAction = ref<PendingStashAction | null>(null)
+const confirmationLoading = ref(false)
+
+const confirmationTitle = computed(() => pendingAction.value?.kind === 'drop'
+  ? t('sidebar.stash.confirmDropTitle')
+  : t('sidebar.stash.confirmPopTitle'))
+
+const confirmationMessage = computed(() => {
+  const pending = pendingAction.value
+  if (!pending) return ''
+  const key = pending.kind === 'drop'
+    ? 'sidebar.stash.confirmDrop'
+    : 'sidebar.stash.confirmPop'
+  return t(key, {
+    index: pending.index,
+    message: pending.message,
+    count: pending.changeCount,
+  })
 })
+
+function currentChangeCount(): number {
+  const status = workspaceStore.status
+  return new Set([
+    ...(status?.staged ?? []),
+    ...(status?.unstaged ?? []),
+    ...(status?.untracked ?? []),
+  ].map((file) => file.path)).size
+}
+
+function captureAction(kind: PendingStashAction['kind'], stash: StashEntry) {
+  const repoId = repoStore.activeRepoId
+  if (!repoId) return
+  pendingAction.value = {
+    kind,
+    repoId,
+    index: stash.index,
+    message: stash.message,
+    commitOid: stash.commit_oid,
+    changeCount: currentChangeCount(),
+  }
+}
+
+watch(
+  () => repoStore.activeRepoId,
+  (repoId) => {
+    searchQuery.value = ''
+    const pending = pendingAction.value
+    if (!pending || pending.repoId === repoId || confirmationLoading.value) return
+    pendingAction.value = null
+    showError(t('sidebar.stash.contextChanged'))
+  },
+)
 
 function jumpToBranchCommit(commitOid: string) {
   historyStore.pendingJumpOid = commitOid
@@ -77,18 +140,51 @@ async function onStashMenuAction(action: string) {
         await stashStore.apply(s.index)
         break
       case 'pop':
-        await stashStore.pop(s.index)
+        if (currentChangeCount() > 0) {
+          captureAction('pop', s)
+        } else {
+          await stashStore.pop(s.index, s.commit_oid)
+        }
         break
       case 'delete':
-        if (confirm(t('sidebar.stash.confirmDelete', { index: s.index, message: s.message }))) {
-          await stashStore.drop(s.index)
-        }
+        captureAction('drop', s)
         break
     }
   } catch (err) {
     console.error(err)
-    alert(t('common.operationFailed', { detail: String(err) }))
+    showError(t('common.operationFailed', { detail: String(err) }))
   }
+}
+
+async function confirmStashAction() {
+  const pending = pendingAction.value
+  if (!pending || confirmationLoading.value) return
+  if (repoStore.activeRepoId !== pending.repoId) {
+    pendingAction.value = null
+    showError(t('sidebar.stash.contextChanged'))
+    return
+  }
+
+  confirmationLoading.value = true
+  try {
+    if (pending.kind === 'pop') {
+      await stashStore.pop(pending.index, pending.commitOid)
+    } else {
+      await stashStore.drop(pending.index, pending.commitOid)
+    }
+    pendingAction.value = null
+  } catch (err) {
+    console.error(err)
+    pendingAction.value = null
+    showError(t('common.operationFailed', { detail: String(err) }))
+  } finally {
+    confirmationLoading.value = false
+  }
+}
+
+function cancelStashAction() {
+  if (confirmationLoading.value) return
+  pendingAction.value = null
 }
 </script>
 
@@ -135,6 +231,22 @@ async function onStashMenuAction(action: string) {
       :items="stashMenuItems"
       @close="closeStashMenu"
       @select="onStashMenuAction"
+    />
+
+    <ConfirmDialog
+      :visible="pendingAction !== null"
+      :title="confirmationTitle"
+      :message="confirmationMessage"
+      :confirm-label="pendingAction?.kind === 'drop'
+        ? t('sidebar.stash.dropConfirm')
+        : t('sidebar.stash.popConfirm')"
+      :loading-label="pendingAction?.kind === 'drop'
+        ? t('sidebar.stash.dropping')
+        : t('sidebar.stash.popping')"
+      :danger="pendingAction?.kind === 'drop'"
+      :loading="confirmationLoading"
+      @confirm="confirmStashAction"
+      @cancel="cancelStashAction"
     />
   </div>
 </template>
