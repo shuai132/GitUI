@@ -283,6 +283,7 @@ const messages = {
       deleteLocalOnly: '仅删除本地',
       deleteLocalAndRemote: '同时删除远程分支 "{upstream}"（{oid}）',
       deleteContextChanged: '仓库或分支目标已变化，旧的删除请求已取消；请重新选择分支',
+      switchFailed: '切换分支失败：{detail}',
       switchDialog: {
         title: '切换分支时处理本地改动',
         intro: '当前有 {count} 个文件包含未提交改动。请选择这些改动在切换后的位置。',

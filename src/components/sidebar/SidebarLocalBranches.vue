@@ -78,8 +78,8 @@ function onDblclickLocalBranch(branch: BranchInfo) {
 async function switchBranch(name: string) {
   try {
     await branchSwitch.requestSwitch(name)
-  } catch (e) {
-    console.error(e)
+  } catch (caught: unknown) {
+    showActionError(caught, t('sidebar.branch.switchFailed', { detail: String(caught) }))
   }
 }
 
@@ -200,7 +200,7 @@ async function onContextAction(action: string) {
   try {
     switch (action) {
       case 'switch': {
-        await branchSwitch.requestSwitch(b.name)
+        await switchBranch(b.name)
         break
       }
       case 'copy-name':

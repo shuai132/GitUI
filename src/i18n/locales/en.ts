@@ -283,6 +283,7 @@ const messages = {
       deleteLocalOnly: 'Delete local only',
       deleteLocalAndRemote: 'Also delete remote branch "{upstream}" ({oid})',
       deleteContextChanged: 'The repository or branch target changed, so the pending deletion was cancelled. Select the branch again.',
+      switchFailed: 'Could not switch branches: {detail}',
       switchDialog: {
         title: 'Switch branches with local changes',
         intro: '{count} file(s) have uncommitted changes. Choose where those changes should remain after switching.',

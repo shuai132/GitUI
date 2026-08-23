@@ -38,6 +38,7 @@ const mocks = vi.hoisted(() => ({
     toggleHistoryBranchScopeForRepo: vi.fn(),
   },
   showError: vi.fn(),
+  requestSwitch: vi.fn(),
 }))
 
 vi.mock('vue-i18n', () => ({
@@ -56,7 +57,7 @@ vi.mock('@/composables/useSidebarSectionState', () => ({
 }))
 vi.mock('@/composables/useBranchSwitch', () => ({
   useBranchSwitch: () => ({
-    requestSwitch: vi.fn(),
+    requestSwitch: mocks.requestSwitch,
     dialogVisible: false,
     sourceBranch: '',
     targetBranch: '',
@@ -98,6 +99,7 @@ describe('SidebarLocalBranches guarded deletion', () => {
     mocks.history.deleteBranch.mockReset().mockResolvedValue(undefined)
     mocks.history.deleteRemoteBranch.mockReset().mockResolvedValue(undefined)
     mocks.showError.mockReset()
+    mocks.requestSwitch.mockReset().mockResolvedValue(undefined)
   })
 
   it('deletes the confirmed remote target before the confirmed local target', async () => {
@@ -153,5 +155,39 @@ describe('SidebarLocalBranches guarded deletion', () => {
     expect(mocks.history.deleteRemoteBranch).not.toHaveBeenCalled()
     expect(mocks.history.deleteBranch).not.toHaveBeenCalled()
     expect(mocks.showError).toHaveBeenCalled()
+  })
+
+  it('reports a failed double-click branch switch', async () => {
+    const switchError = new Error('checkout failed')
+    mocks.requestSwitch.mockRejectedValue(switchError)
+    const wrapper = shallowMount(SidebarLocalBranches)
+
+    wrapper.findComponent(BranchTreeNode).vm.$emit('dblclick-branch', localBranch)
+    await flushPromises()
+
+    expect(mocks.requestSwitch).toHaveBeenCalledWith('feature')
+    expect(mocks.showError).toHaveBeenCalledWith(
+      'sidebar.branch.switchFailed Error: checkout failed',
+    )
+  })
+
+  it('reports a failed context-menu branch switch', async () => {
+    const switchError = new Error('checkout failed')
+    mocks.requestSwitch.mockRejectedValue(switchError)
+    const wrapper = shallowMount(SidebarLocalBranches)
+    wrapper.findComponent(BranchTreeNode).vm.$emit(
+      'branch-context-menu',
+      new MouseEvent('contextmenu'),
+      localBranch,
+    )
+    await flushPromises()
+
+    wrapper.findComponent(ContextMenu).vm.$emit('select', 'switch')
+    await flushPromises()
+
+    expect(mocks.requestSwitch).toHaveBeenCalledWith('feature')
+    expect(mocks.showError).toHaveBeenCalledWith(
+      'sidebar.branch.switchFailed Error: checkout failed',
+    )
   })
 })
