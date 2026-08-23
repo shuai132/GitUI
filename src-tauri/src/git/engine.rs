@@ -238,6 +238,79 @@ mod tests {
     }
 
     #[test]
+    fn guarded_branch_delete_rejects_changed_local_and_remote_targets() {
+        let test_repo = TestRepo::new();
+        let initial_oid = test_repo.repo.head().unwrap().target().unwrap();
+        let initial_commit = test_repo.repo.find_commit(initial_oid).unwrap();
+        test_repo
+            .repo
+            .branch("feature", &initial_commit, false)
+            .unwrap();
+        drop(initial_commit);
+        let current_oid = commit_file(&test_repo, "current", "current.txt", "current\n");
+        test_repo
+            .repo
+            .find_reference("refs/heads/feature")
+            .unwrap()
+            .set_target(current_oid, "advance feature")
+            .unwrap();
+
+        let local_error =
+            GitEngine::delete_branch(test_repo.path_str(), "feature", &initial_oid.to_string())
+                .unwrap_err();
+        assert!(local_error.to_string().contains("Branch target changed"));
+        assert_eq!(
+            test_repo
+                .repo
+                .find_reference("refs/heads/feature")
+                .unwrap()
+                .target(),
+            Some(current_oid)
+        );
+
+        let remote_dir = tempfile::tempdir().unwrap();
+        let remote_repo = Repository::init_bare(remote_dir.path()).unwrap();
+        test_repo
+            .repo
+            .remote("origin", remote_dir.path().to_str().unwrap())
+            .unwrap();
+        GitEngine::push(test_repo.path_str(), "origin", "feature", "normal").unwrap();
+        remote_repo
+            .find_reference("refs/heads/feature")
+            .unwrap()
+            .set_target(initial_oid, "simulate concurrent remote update")
+            .unwrap();
+
+        assert!(GitEngine::delete_remote_branch(
+            test_repo.path_str(),
+            "origin",
+            "feature",
+            &current_oid.to_string(),
+        )
+        .is_err());
+        assert_eq!(
+            remote_repo
+                .find_reference("refs/heads/feature")
+                .unwrap()
+                .target(),
+            Some(initial_oid)
+        );
+
+        GitEngine::delete_remote_branch(
+            test_repo.path_str(),
+            "origin",
+            "feature",
+            &initial_oid.to_string(),
+        )
+        .unwrap();
+        assert!(remote_repo.find_reference("refs/heads/feature").is_err());
+
+        GitEngine::delete_branch(test_repo.path_str(), "feature", &current_oid.to_string())
+            .unwrap();
+        assert!(test_repo.repo.find_reference("refs/heads/feature").is_err());
+    }
+
+    #[test]
     fn tag_info_keeps_exact_ref_oid_separate_from_peeled_commit() {
         let test_repo = TestRepo::new();
         let head_oid = test_repo.repo.head().unwrap().target().unwrap();

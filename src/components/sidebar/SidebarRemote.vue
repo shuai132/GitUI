@@ -7,6 +7,7 @@ import { useRepoStore } from '@/stores/repos'
 import { useUiStore } from '@/stores/ui'
 import { useSidebarSectionState } from '@/composables/useSidebarSectionState'
 import { useGitCommands } from '@/composables/useGitCommands'
+import { useGlobalToast } from '@/composables/useGlobalToast'
 import { buildBranchTree } from '@/utils/branchTree'
 import ContextMenu, { type ContextMenuItem } from '@/components/common/ContextMenu.vue'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
@@ -25,6 +26,7 @@ const repoStore = useRepoStore()
 const uiStore = useUiStore()
 const sectionState = useSidebarSectionState()
 const git = useGitCommands()
+const { showError } = useGlobalToast()
 
 const localBranches = computed(() => historyStore.branches.filter((b) => !b.is_remote))
 const currentUpstream = computed(() => localBranches.value.find((b) => b.is_head)?.upstream)
@@ -179,8 +181,10 @@ const branchMenuItems = computed<ContextMenuItem[]>(() => {
 
   items.push({ label: t('sidebar.branch.menu.checkoutRemote'), action: 'checkout-remote' })
   items.push({ label: t('sidebar.branch.menu.copyName'), action: 'copy-name' })
-  items.push({ separator: true })
-  items.push({ label: t('sidebar.branch.menu.delete'), action: 'delete', danger: true })
+  if (branchMenu.branch?.commit_oid) {
+    items.push({ separator: true })
+    items.push({ label: t('sidebar.branch.menu.delete'), action: 'delete', danger: true })
+  }
 
   return items
 })
@@ -197,6 +201,19 @@ function closeBranchContextMenu() {
   branchMenu.visible = false
 }
 
+function shortOid(oid: string): string {
+  return oid.slice(0, 7)
+}
+
+function isCurrentRemoteBranch(repoId: string, name: string, expectedOid: string): boolean {
+  if (repoStore.activeRepoId !== repoId) return false
+  return historyStore.branches.some(
+    (current) => current.is_remote &&
+      current.name === name &&
+      current.commit_oid === expectedOid,
+  )
+}
+
 async function onBranchMenuAction(action: string) {
   const b = branchMenu.branch
   if (!b) return
@@ -209,21 +226,31 @@ async function onBranchMenuAction(action: string) {
       case 'copy-name':
         await navigator.clipboard.writeText(b.name)
         break
-      case 'delete':
+      case 'delete': {
+        const repoId = repoStore.activeRepoId
+        const remoteOid = b.commit_oid
+        if (!repoId || !remoteOid) break
         openConfirm(
           t('sidebar.branch.menu.delete'),
-          t('sidebar.branch.confirmDeleteRemote', { name: b.name }),
+          t('sidebar.branch.confirmDeleteRemote', {
+            name: b.name,
+            oid: shortOid(remoteOid),
+          }),
           async () => {
+            if (!isCurrentRemoteBranch(repoId, b.name, remoteOid)) {
+              throw new Error(t('sidebar.branch.deleteContextChanged'))
+            }
             const slashIdx = b.name.indexOf('/')
             if (slashIdx > 0) {
               const remote = b.name.substring(0, slashIdx)
               const branch = b.name.substring(slashIdx + 1)
-              await historyStore.deleteRemoteBranch(remote, branch)
+              await historyStore.deleteRemoteBranch(remote, branch, remoteOid)
             }
           },
-          { loadingLabel: t('common.deleting', '删除中...') }
+          { loadingLabel: t('common.deleting', '删除中...') },
         )
         break
+      }
     }
   } catch (err) {
     console.error(err)
@@ -261,7 +288,7 @@ async function onConfirmDialogConfirm() {
     await confirmDlg._resolve()
   } catch (err) {
     console.error(err)
-    alert(t('common.operationFailed', { detail: String(err) }))
+    showError(t('common.operationFailed', { detail: String(err) }))
   } finally {
     confirmDlg.loading = false
     confirmDlg.visible = false

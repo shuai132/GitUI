@@ -510,17 +510,17 @@ export const useHistoryStore = defineStore('history', () => {
     await Promise.all([loadLog(), loadBranches()])
   }
 
-  async function deleteBranch(name: string) {
+  async function deleteBranch(name: string, expectedOid: string) {
     const repoStore = useRepoStore()
     if (!repoStore.activeRepoId) return
-    await git.deleteBranch(repoStore.activeRepoId, name)
+    await git.deleteBranch(repoStore.activeRepoId, name, expectedOid)
     await loadBranches()
   }
 
-  async function deleteRemoteBranch(remoteName: string, branchName: string) {
+  async function deleteRemoteBranch(remoteName: string, branchName: string, expectedOid: string) {
     const repoStore = useRepoStore()
     if (!repoStore.activeRepoId) return
-    await git.deleteRemoteBranch(repoStore.activeRepoId, remoteName, branchName)
+    await git.deleteRemoteBranch(repoStore.activeRepoId, remoteName, branchName, expectedOid)
     await loadBranches()
   }
 

@@ -14,6 +14,7 @@ import BranchSwitchDialog from '@/components/branch/BranchSwitchDialog.vue'
 import BranchTreeNode from './BranchTreeNode.vue'
 import SidebarSearchControl from './SidebarSearchControl.vue'
 import { useBranchSwitch } from '@/composables/useBranchSwitch'
+import { useGlobalToast } from '@/composables/useGlobalToast'
 import { matchesSidebarSearch, normalizeSidebarSearchQuery } from '@/utils/sidebarSearch'
 import type { BranchInfo } from '@/types/git'
 
@@ -25,6 +26,7 @@ const repoStore = useRepoStore()
 const uiStore = useUiStore()
 const sectionState = useSidebarSectionState()
 const branchSwitch = reactive(useBranchSwitch())
+const { showError } = useGlobalToast()
 const activeRepoPath = computed(() => repoStore.activeRepo()?.path)
 const activeRepoBranchScope = computed(() =>
   uiStore.getHistoryBranchScope(activeRepoPath.value),
@@ -106,7 +108,7 @@ const contextMenuItems = computed<ContextMenuItem[]>(() => {
 
   items.push({ label: t('sidebar.branch.menu.copyName'), action: 'copy-name' })
 
-  if (!b.is_head) {
+  if (!b.is_head && b.commit_oid) {
     items.push({ separator: true })
     items.push({ label: t('sidebar.branch.menu.delete'), action: 'delete', danger: true })
   }
@@ -165,7 +167,7 @@ async function onConfirmDialogConfirm() {
     await confirmDlg._resolve()
   } catch (err) {
     console.error(err)
-    alert(t('common.operationFailed', { detail: String(err) }))
+    showError(t('common.operationFailed', { detail: String(err) }))
   } finally {
     confirmDlg.loading = false
     confirmDlg.visible = false
@@ -174,6 +176,19 @@ async function onConfirmDialogConfirm() {
 
 function onConfirmDialogCancel() {
   confirmDlg.visible = false
+}
+
+function shortOid(oid: string): string {
+  return oid.slice(0, 7)
+}
+
+function isCurrentBranch(repoId: string, name: string, expectedOid: string): boolean {
+  if (repoStore.activeRepoId !== repoId) return false
+  return historyStore.branches.some(
+    (current) => !current.is_remote &&
+      current.name === name &&
+      current.commit_oid === expectedOid,
+  )
 }
 
 async function onContextAction(action: string) {
@@ -195,30 +210,62 @@ async function onContextAction(action: string) {
         }
         break
       case 'delete': {
-        const hasUpstream = !!b.upstream
-        
+        const repoId = repoStore.activeRepoId
+        const localOid = b.commit_oid
+        if (!repoId || !localOid) break
+        const upstreamBranch = b.upstream
+          ? historyStore.branches.find(
+              (branch) => branch.is_remote && branch.name === b.upstream && branch.commit_oid,
+            )
+          : undefined
+        const upstreamOid = upstreamBranch?.commit_oid
+
         openConfirm(
           t('sidebar.branch.menu.delete'),
-          hasUpstream
-            ? t('sidebar.branch.confirmDeleteWithRemote', { name: b.name, upstream: b.upstream })
-            : t('sidebar.branch.confirmDelete', { name: b.name }),
+          upstreamBranch && upstreamOid
+            ? t('sidebar.branch.confirmDeleteWithRemote', {
+                name: b.name,
+                oid: shortOid(localOid),
+                upstream: upstreamBranch.name,
+                upstreamOid: shortOid(upstreamOid),
+              })
+            : b.upstream
+              ? t('sidebar.branch.confirmDeleteGoneUpstream', {
+                  name: b.name,
+                  oid: shortOid(localOid),
+                  upstream: b.upstream,
+                })
+              : t('sidebar.branch.confirmDelete', {
+                  name: b.name,
+                  oid: shortOid(localOid),
+                }),
           async () => {
-            // 1. 删除本地
-            await historyStore.deleteBranch(b.name)
-            
-            // 2. (可选) 删除远程
-            if (confirmDlg.checkboxValue && b.upstream) {
-              const slashIdx = b.upstream.indexOf('/')
+            if (!isCurrentBranch(repoId, b.name, localOid)) {
+              throw new Error(t('sidebar.branch.deleteContextChanged'))
+            }
+            if (confirmDlg.checkboxValue && upstreamBranch && upstreamOid) {
+              const slashIdx = upstreamBranch.name.indexOf('/')
               if (slashIdx > 0) {
-                const remote = b.upstream.substring(0, slashIdx)
-                const branch = b.upstream.substring(slashIdx + 1)
-                await historyStore.deleteRemoteBranch(remote, branch)
+                const remote = upstreamBranch.name.substring(0, slashIdx)
+                const branch = upstreamBranch.name.substring(slashIdx + 1)
+                await historyStore.deleteRemoteBranch(
+                  remote,
+                  branch,
+                  upstreamOid,
+                )
               }
             }
+            if (!isCurrentBranch(repoId, b.name, localOid)) {
+              throw new Error(t('sidebar.branch.deleteContextChanged'))
+            }
+            await historyStore.deleteBranch(b.name, localOid)
           },
           {
-            checkboxLabel: hasUpstream
-              ? t('sidebar.branch.deleteLocalAndRemote', { upstream: b.upstream })
+            checkboxLabel: upstreamBranch && upstreamOid
+              ? t('sidebar.branch.deleteLocalAndRemote', {
+                  upstream: upstreamBranch.name,
+                  oid: shortOid(upstreamOid),
+                })
               : undefined,
             checkboxValue: false,
             loadingLabel: t('common.deleting', '删除中...'),

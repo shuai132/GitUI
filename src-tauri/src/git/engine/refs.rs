@@ -183,9 +183,19 @@ impl GitEngine {
         Ok(())
     }
 
-    pub fn delete_branch(path: &str, name: &str) -> GitResult<()> {
+    pub fn delete_branch(path: &str, name: &str, expected_oid: &str) -> GitResult<()> {
         let repo = Self::open(path)?;
         let mut branch = repo.find_branch(name, BranchType::Local)?;
+        let current = branch.get().target().ok_or_else(|| {
+            GitError::OperationFailed(format!(
+                "Branch target changed: refs/heads/{name} is not a direct reference"
+            ))
+        })?;
+        if current.to_string() != expected_oid {
+            return Err(GitError::OperationFailed(format!(
+                "Branch target changed: expected {expected_oid}, current {current}"
+            )));
+        }
         branch.delete()?;
         Ok(())
     }

@@ -3,23 +3,33 @@ import { ref, computed, reactive } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useHistoryStore } from '@/stores/history'
 import { useWorkspaceStore } from '@/stores/workspace'
+import { useRepoStore } from '@/stores/repos'
+import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import BranchSwitchDialog from './BranchSwitchDialog.vue'
 import { useBranchSwitch } from '@/composables/useBranchSwitch'
+import type { BranchInfo } from '@/types/git'
 
 const { t } = useI18n()
 const historyStore = useHistoryStore()
 const workspaceStore = useWorkspaceStore()
+const repoStore = useRepoStore()
 const branchSwitch = reactive(useBranchSwitch())
 
 const newBranchName = ref('')
 const showNewBranch = ref(false)
 const switchingTo = ref<string | null>(null)
 const error = ref<string | null>(null)
+const pendingDelete = ref<{
+  repoId: string
+  name: string
+  expectedOid: string
+} | null>(null)
+const deleteLoading = ref(false)
 
 const localBranches = computed(() => {
   const branches = historyStore.branches.filter((b) => !b.is_remote)
   if (workspaceStore.status?.is_detached) {
-    const detachedBranch = {
+    const detachedBranch: BranchInfo = {
       name: 'HEAD',
       is_remote: false,
       is_head: true,
@@ -65,10 +75,41 @@ async function createBranch() {
   }
 }
 
-async function deleteBranch(name: string) {
-  if (confirm(t('branchList.confirmDelete', { name }))) {
-    await historyStore.deleteBranch(name)
+function requestDeleteBranch(branch: BranchInfo) {
+  const repoId = repoStore.activeRepoId
+  if (!repoId || !branch.commit_oid) return
+  pendingDelete.value = {
+    repoId,
+    name: branch.name,
+    expectedOid: branch.commit_oid,
   }
+}
+
+async function confirmDeleteBranch() {
+  const pending = pendingDelete.value
+  if (!pending || deleteLoading.value) return
+  deleteLoading.value = true
+  error.value = null
+  try {
+    const current = historyStore.branches.find((branch) =>
+      !branch.is_remote && branch.name === pending.name)
+    if (repoStore.activeRepoId !== pending.repoId ||
+      current?.commit_oid !== pending.expectedOid) {
+      throw new Error(t('branchList.deleteContextChanged'))
+    }
+    await historyStore.deleteBranch(pending.name, pending.expectedOid)
+    pendingDelete.value = null
+  } catch (caught) {
+    error.value = String(caught)
+    pendingDelete.value = null
+  } finally {
+    deleteLoading.value = false
+  }
+}
+
+function cancelDeleteBranch() {
+  if (deleteLoading.value) return
+  pendingDelete.value = null
 }
 </script>
 
@@ -108,9 +149,9 @@ async function deleteBranch(name: string) {
           <span v-if="switchingTo === branch.name" class="switching">{{ t('branchList.switching') }}</span>
         </span>
         <button
-          v-if="!branch.is_head"
+          v-if="!branch.is_head && branch.commit_oid"
           class="btn-delete"
-          @click.stop="deleteBranch(branch.name)"
+          @click.stop="requestDeleteBranch(branch)"
           :title="t('branchList.deleteTitle')"
         >×</button>
       </div>
@@ -140,6 +181,23 @@ async function deleteBranch(name: string) {
       :error="branchSwitch.error"
       @confirm="branchSwitch.confirmSwitch"
       @cancel="branchSwitch.cancelSwitch"
+    />
+
+    <ConfirmDialog
+      :visible="pendingDelete !== null"
+      :title="t('branchList.deleteTitle')"
+      :message="pendingDelete
+        ? t('branchList.confirmDelete', {
+            name: pendingDelete.name,
+            oid: pendingDelete.expectedOid.slice(0, 7),
+          })
+        : ''"
+      :confirm-label="t('branchList.deleteTitle')"
+      :loading-label="t('common.deleting')"
+      :danger="true"
+      :loading="deleteLoading"
+      @confirm="confirmDeleteBranch"
+      @cancel="cancelDeleteBranch"
     />
   </div>
 </template>
