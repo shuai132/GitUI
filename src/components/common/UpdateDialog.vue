@@ -2,12 +2,14 @@
 import { ref, watch, toRaw } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { marked } from 'marked'
+import DOMPurify from 'dompurify'
 import Modal from './Modal.vue'
 import type { DownloadEvent, Update } from '@tauri-apps/plugin-updater'
 import { relaunch } from '@tauri-apps/plugin-process'
+import { useGlobalToast } from '@/composables/useGlobalToast'
 import { useSettingsStore } from '@/stores/settings'
 
-// Configure marked: open links in new tab (no XSS risk for known GitHub content)
+// Configure marked links before sanitizing the final HTML with DOMPurify.
 marked.use({
   renderer: {
     link({ href, title, text }) {
@@ -26,6 +28,7 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+const { showActionError } = useGlobalToast()
 const settings = useSettingsStore()
 const isDownloading = ref(false)
 const downloadProgress = ref(0)
@@ -36,12 +39,14 @@ const error = ref<string | null>(null)
 const releaseNotesHtml = ref<string | null>(null)
 const notesLoading = ref(false)
 const RELEASES_URL = 'https://github.com/shuai132/GitUI/releases'
+let notesRequestSeq = 0
 
 function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err)
 }
 
 async function fetchReleaseNotes(version: string) {
+  const requestSeq = ++notesRequestSeq
   notesLoading.value = true
   releaseNotesHtml.value = null
   try {
@@ -50,26 +55,53 @@ async function fetchReleaseNotes(version: string) {
       { headers: { Accept: 'application/vnd.github+json' } }
     )
     if (res.ok) {
-      const data = await res.json()
-      const body: string = data.body || ''
-      releaseNotesHtml.value = body ? (await marked.parse(body)) : null
+      const data: unknown = await res.json()
+      const body = typeof data === 'object' && data !== null &&
+        'body' in data && typeof data.body === 'string'
+        ? data.body
+        : ''
+      const parsed = body ? await marked.parse(body) : ''
+      if (
+        requestSeq !== notesRequestSeq ||
+        !props.visible ||
+        props.update?.version !== version
+      ) return
+      releaseNotesHtml.value = parsed
+        ? DOMPurify.sanitize(parsed, { ADD_ATTR: ['target'] })
+        : null
     }
   } catch {
     // network failed; the dialog falls back to the GitHub Releases page link.
   } finally {
-    notesLoading.value = false
+    if (requestSeq === notesRequestSeq) notesLoading.value = false
   }
 }
 
 watch(
-  () => props.update,
-  (u) => { if (u) fetchReleaseNotes(u.version) },
-  { immediate: true }
+  () => [props.visible, props.update?.version ?? null] as const,
+  ([visible, version], previous) => {
+    notesRequestSeq++
+    notesLoading.value = false
+    releaseNotesHtml.value = null
+    const previousVersion = previous?.[1] ?? null
+    if (version !== previousVersion && !isDownloading.value) {
+      resetDownloadState()
+    }
+    if (visible && version) void fetchReleaseNotes(version)
+  },
+  { immediate: true },
 )
+
+function resetDownloadState() {
+  downloadProgress.value = 0
+  isDownloaded.value = false
+  error.value = null
+}
 
 async function handleDownload() {
   if (!props.update || isDownloading.value) return
-  
+
+  const version = props.update.version
   isDownloading.value = true
   error.value = null
   downloadProgress.value = 0
@@ -79,6 +111,7 @@ async function handleDownload() {
   try {
     const update = toRaw(props.update)
     await update.downloadAndInstall((event: DownloadEvent) => {
+      if (props.update?.version !== version) return
       if (event.event === 'Started') {
         contentLength = event.data.contentLength
         downloadedBytes = 0
@@ -92,14 +125,15 @@ async function handleDownload() {
         downloadProgress.value = 100
       }
     })
-    isDownloaded.value = true
+    if (props.update?.version === version) isDownloaded.value = true
     // If successfully downloaded, clear skipped version
     settings.skippedVersion = null
   } catch (err: unknown) {
     console.error('Download failed', err)
-    error.value = errorMessage(err)
+    if (props.update?.version === version) error.value = errorMessage(err)
   } finally {
     isDownloading.value = false
+    if (props.update?.version !== version) resetDownloadState()
   }
 }
 
@@ -110,13 +144,21 @@ function handleSkip() {
   handleClose()
 }
 
-function handleRestart() {
-  void relaunch()
+async function handleRestart() {
+  try {
+    await relaunch()
+  } catch (caught: unknown) {
+    showActionError(caught, t('settings.about.restartFailed'))
+  }
 }
 
 async function openReleases() {
-  const { openUrl } = await import('@tauri-apps/plugin-opener')
-  await openUrl(RELEASES_URL)
+  try {
+    const { openUrl } = await import('@tauri-apps/plugin-opener')
+    await openUrl(RELEASES_URL)
+  } catch (caught: unknown) {
+    showActionError(caught, t('settings.about.openReleasesFailed'))
+  }
 }
 
 function handleClose() {

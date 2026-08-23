@@ -24,6 +24,7 @@
     "@vueuse/core": "^13.0.0",
     "@xterm/addon-fit": "^0.10.0",
     "@xterm/xterm": "^5.5.0",
+    "dompurify": "^3.4.14",
     "highlight.js": "^11.11.1",
     "marked": "^18.0.2",
     "pinia": "^2.3.1",
