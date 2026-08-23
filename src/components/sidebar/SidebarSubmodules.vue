@@ -47,6 +47,7 @@ const submoduleMenu = reactive({
   visible: false,
   x: 0,
   y: 0,
+  repoId: null as string | null,
   target: null as SubmoduleInfo | null,
 })
 
@@ -77,6 +78,7 @@ function openSubmoduleMenu(e: MouseEvent, s: SubmoduleInfo) {
   e.preventDefault()
   e.stopPropagation()
   submoduleMenu.target = s
+  submoduleMenu.repoId = repoStore.activeRepoId
   const isRightClick = e.type === 'contextmenu'
   const el = e.currentTarget as HTMLElement | null
   if (el && !isRightClick) {
@@ -155,22 +157,25 @@ function isCurrentSubmoduleTarget(
 
 async function onSubmoduleMenuAction(action: string) {
   const s = submoduleMenu.target
-  if (!s) return
+  const repoId = submoduleMenu.repoId
+  if (!s || !repoId) return
+  if (!isCurrentSubmoduleTarget(repoId, s)) {
+    showError(t('submodule.confirmDelete.contextChanged'))
+    return
+  }
   try {
     switch (action) {
       case 'init':
-        await submodulesStore.init(s.name)
+        await submodulesStore.init(repoId, s.name)
         break
       case 'update':
-        await submodulesStore.update(s.name)
+        await submodulesStore.update(repoId, s.name)
         break
       case 'edit':
         editDialog.target = s
         editDialog.visible = true
         break
       case 'delete': {
-        const repoId = repoStore.activeRepoId
-        if (!repoId) break
         const expected = { ...s }
         const messageKey = s.has_workdir_modifications
           ? 'submodule.confirmDelete.dirtyMessage'
@@ -202,8 +207,15 @@ async function onSubmoduleClick(s: SubmoduleInfo) {
   if (s.state === 'uninitialized' || s.state === 'not_cloned' || s.state === 'not_found') {
     return
   }
+  const repoId = repoStore.activeRepoId
+  if (!repoId) return
+  const expected = { ...s }
   try {
-    const absPath = await submodulesStore.workdir(s.name)
+    const absPath = await submodulesStore.workdir(repoId, s.name)
+    if (!isCurrentSubmoduleTarget(repoId, expected)) {
+      showError(t('submodule.confirmDelete.contextChanged'))
+      return
+    }
     await repoStore.openRepo(absPath)
   } catch (err) {
     console.error(err)

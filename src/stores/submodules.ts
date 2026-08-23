@@ -36,18 +36,16 @@ export const useSubmodulesStore = defineStore('submodules', () => {
     }
   }
 
-  async function init(name: string) {
+  async function init(repoId: string, name: string) {
     const repoStore = useRepoStore()
-    if (!repoStore.activeRepoId) return
-    await git.initSubmodule(repoStore.activeRepoId, name)
-    await loadSubmodules()
+    await git.initSubmodule(repoId, name)
+    if (repoStore.activeRepoId === repoId) await loadSubmodules()
   }
 
-  async function update(name: string) {
+  async function update(repoId: string, name: string) {
     const repoStore = useRepoStore()
-    if (!repoStore.activeRepoId) return
-    await git.updateSubmodule(repoStore.activeRepoId, name)
-    await loadSubmodules()
+    await git.updateSubmodule(repoId, name)
+    if (repoStore.activeRepoId === repoId) await loadSubmodules()
   }
 
   async function setUrl(
@@ -63,10 +61,8 @@ export const useSubmodulesStore = defineStore('submodules', () => {
     }
   }
 
-  async function workdir(name: string): Promise<string> {
-    const repoStore = useRepoStore()
-    if (!repoStore.activeRepoId) throw new Error('No active repo')
-    return await git.submoduleWorkdir(repoStore.activeRepoId, name)
+  async function workdir(repoId: string, name: string): Promise<string> {
+    return await git.submoduleWorkdir(repoId, name)
   }
 
   async function deinit(repoId: string, name: string) {

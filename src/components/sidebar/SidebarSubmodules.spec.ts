@@ -74,6 +74,10 @@ describe('SidebarSubmodules guarded removal', () => {
     mocks.repo.activeRepoId = 'repo-a'
     mocks.submodules.submodules = [{ ...submodule }]
     mocks.submodules.deinit.mockReset().mockResolvedValue(undefined)
+    mocks.submodules.init.mockReset().mockResolvedValue(undefined)
+    mocks.submodules.update.mockReset().mockResolvedValue(undefined)
+    mocks.submodules.workdir.mockReset().mockResolvedValue('/repos/demo')
+    mocks.repo.openRepo.mockReset().mockResolvedValue(undefined)
     mocks.showError.mockReset()
     mocks.showActionError.mockReset()
   })
@@ -132,6 +136,45 @@ describe('SidebarSubmodules guarded removal', () => {
     await flushPromises()
 
     expect(mocks.submodules.deinit).not.toHaveBeenCalled()
+    expect(mocks.showError).toHaveBeenCalled()
+  })
+
+  it('runs Update against the repository that opened the menu', async () => {
+    const wrapper = shallowMount(SidebarSubmodules)
+    await wrapper.find('.submodule-item').trigger('contextmenu')
+
+    wrapper.findComponent(ContextMenu).vm.$emit('select', 'update')
+    await flushPromises()
+
+    expect(mocks.submodules.update).toHaveBeenCalledWith('repo-a', 'vendor/demo')
+  })
+
+  it('cancels a menu action after switching repositories', async () => {
+    const wrapper = shallowMount(SidebarSubmodules)
+    await wrapper.find('.submodule-item').trigger('contextmenu')
+    mocks.repo.activeRepoId = 'repo-b'
+
+    wrapper.findComponent(ContextMenu).vm.$emit('select', 'update')
+    await flushPromises()
+
+    expect(mocks.submodules.update).not.toHaveBeenCalled()
+    expect(mocks.showError).toHaveBeenCalled()
+  })
+
+  it('does not activate a submodule after its parent repository changes', async () => {
+    let resolveWorkdir!: (path: string) => void
+    mocks.submodules.workdir.mockReturnValue(new Promise((resolve) => {
+      resolveWorkdir = resolve
+    }))
+    const wrapper = shallowMount(SidebarSubmodules)
+
+    await wrapper.find('.submodule-item').trigger('click')
+    expect(mocks.submodules.workdir).toHaveBeenCalledWith('repo-a', 'vendor/demo')
+    mocks.repo.activeRepoId = 'repo-b'
+    resolveWorkdir('/repos/demo')
+    await flushPromises()
+
+    expect(mocks.repo.openRepo).not.toHaveBeenCalled()
     expect(mocks.showError).toHaveBeenCalled()
   })
 })

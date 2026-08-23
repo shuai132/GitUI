@@ -116,8 +116,11 @@ const submodulePaths = computed(() => {
 })
 
 async function openSubmoduleFromHistory(submodule: SubmoduleInfo) {
+  const repoId = repoStore.activeRepoId
+  if (!repoId) return
   try {
-    const absPath = await submodulesStore.workdir(submodule.name)
+    const absPath = await submodulesStore.workdir(repoId, submodule.name)
+    if (repoStore.activeRepoId !== repoId) return
     await repoStore.openRepo(absPath)
   } catch (err) {
     console.error(err)
@@ -130,10 +133,12 @@ function moveFileOrder(paths: readonly string[], placement: FileOrderPlacement) 
 }
 
 async function initSubmoduleFromHistory(submodule: SubmoduleInfo) {
+  const repoId = repoStore.activeRepoId
+  if (!repoId) return
   try {
-    await submodulesStore.init(submodule.name)
-    if (repoStore.activeRepoId) {
-      await workspaceStore.refresh(repoStore.activeRepoId)
+    await submodulesStore.init(repoId, submodule.name)
+    if (repoStore.activeRepoId === repoId) {
+      await workspaceStore.refresh(repoId)
     }
   } catch (err) {
     console.error(err)
@@ -142,10 +147,12 @@ async function initSubmoduleFromHistory(submodule: SubmoduleInfo) {
 }
 
 async function updateSubmoduleFromHistory(submodule: SubmoduleInfo) {
+  const repoId = repoStore.activeRepoId
+  if (!repoId) return
   try {
-    await submodulesStore.update(submodule.name)
-    if (repoStore.activeRepoId) {
-      await workspaceStore.refresh(repoStore.activeRepoId)
+    await submodulesStore.update(repoId, submodule.name)
+    if (repoStore.activeRepoId === repoId) {
+      await workspaceStore.refresh(repoId)
     }
   } catch (err) {
     console.error(err)

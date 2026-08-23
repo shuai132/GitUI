@@ -36,6 +36,7 @@ GitUI 对子模块的管理目标是实现父仓库与子仓库的无缝联动�
 - **便捷编辑**：支持直接通过对话框修改子模块的远程 URL 并自动执行同步（Sync）。
 - **表单上下文保护**：Add / Edit 表单绑定打开时的仓库，切仓后保留输入但拒绝应用到新仓库；Edit 还冻结原目标与 URL，后端写 `.gitmodules` 前再次校验预期旧 URL。
 - **精确删除确认**：确认框绑定仓库与 Submodule 状态快照；带未提交修改时单独警告并说明废纸篓恢复方式，确认期间仓库或目标变化会取消旧请求。
+- **动作上下文保护**：侧边栏菜单的 Init、Update、Edit、打开与删除均绑定菜单打开时的仓库和 Submodule 状态；切仓或状态变化会取消旧动作。各入口调用 Submodule store 时显式传递 repoId，异步打开子仓库前也会复核父仓库上下文。
 - **仓库树归属**：当 direct submodule 已被加入“所有仓库”名册时，它会在父仓库下方以子层级展示，帮助用户识别父子关系；该层级不改变子模块作为独立仓库被激活和操作的能力。
 - **工作区入口**：父仓库工作区中的 submodule gitlink 变更会以专用项显示，右键可直接打开已克隆的 submodule 仓库；未 init、未 clone 或工作区不存在时提供 init / update 动作。
 - **历史入口**：提交详情中的 submodule gitlink 变更同样支持右键打开当前工作区中的对应 submodule 仓库；若当前 direct submodule 尚不可打开，可直接从菜单执行 init / update。历史中的旧 submodule 即使已从当前 `.gitmodules` 移除，也会通过 gitlink 文件 mode 显示为 submodule 项，但不会提供当前工作区动作。
