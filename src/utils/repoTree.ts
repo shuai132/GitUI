@@ -10,12 +10,64 @@ export interface RepoTreeRow {
 
 export type SubmodulesByRepoId = Record<string, SubmoduleInfo[]>
 
+interface RepoParentPath {
+  full: string
+  segments: string[]
+}
+
 export function normalizeRepoPath(path: string): string {
   let normalized = path.replace(/\\/g, '/')
   while (normalized.length > 1 && normalized.endsWith('/')) {
     normalized = normalized.slice(0, -1)
   }
   return normalized
+}
+
+function repoParentPath(path: string): RepoParentPath {
+  const normalized = normalizeRepoPath(path)
+  const separatorIndex = normalized.lastIndexOf('/')
+  const full = separatorIndex < 0
+    ? '.'
+    : separatorIndex === 0
+      ? '/'
+      : normalized.slice(0, separatorIndex)
+  const segments = full === '/' ? ['/'] : full.split('/').filter(Boolean)
+  return { full, segments: segments.length > 0 ? segments : [full] }
+}
+
+/**
+ * 只为同名仓库生成父路径标签，并从路径末尾开始取最短的唯一片段。
+ */
+export function buildRepoDisambiguationLabels(repos: RepoMeta[]): Map<string, string> {
+  const reposByName = new Map<string, RepoMeta[]>()
+  for (const repo of repos) {
+    const group = reposByName.get(repo.name) ?? []
+    group.push(repo)
+    reposByName.set(repo.name, group)
+  }
+
+  const labels = new Map<string, string>()
+  for (const group of reposByName.values()) {
+    if (group.length < 2) continue
+    const parents = group.map((repo) => ({ repo, parent: repoParentPath(repo.path) }))
+    const maxDepth = Math.max(...parents.map(({ parent }) => parent.segments.length))
+
+    let uniqueLabels: string[] | null = null
+    for (let depth = 1; depth <= maxDepth; depth++) {
+      const candidates = parents.map(({ parent }) =>
+        parent.segments.slice(-depth).join('/'),
+      )
+      if (new Set(candidates).size === group.length) {
+        uniqueLabels = candidates
+        break
+      }
+    }
+
+    parents.forEach(({ repo, parent }, index) => {
+      labels.set(repo.id, uniqueLabels?.[index] ?? parent.full)
+    })
+  }
+  return labels
 }
 
 export function resolveSubmoduleWorkdir(parentPath: string, submodulePath: string): string {

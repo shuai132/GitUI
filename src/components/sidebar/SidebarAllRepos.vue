@@ -17,6 +17,7 @@ import CreateWorktreeDialog from '@/components/repo/CreateWorktreeDialog.vue'
 import SidebarSearchControl from './SidebarSearchControl.vue'
 import type { RepoMeta } from '@/types/git'
 import {
+  buildRepoDisambiguationLabels,
   buildRepoTreeRows,
   filterRepoTreeRows,
   moveRepoSearchSelection,
@@ -38,6 +39,9 @@ const submodulesByRepoId = ref<SubmodulesByRepoId>({})
 let submoduleRelationSeq = 0
 
 const repoRows = computed(() => buildRepoTreeRows(repoStore.repos, submodulesByRepoId.value))
+const repoDisambiguationLabels = computed(() =>
+  buildRepoDisambiguationLabels(repoStore.repos),
+)
 const searchQuery = ref('')
 const hasSearchQuery = computed(() => !!normalizeSidebarSearchQuery(searchQuery.value))
 const filteredRepoRows = computed(() => filterRepoTreeRows(repoRows.value, searchQuery.value))
@@ -581,7 +585,16 @@ function closeWorktreeDialog() {
           <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
           <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
         </svg>
-        <span class="repo-item-name">{{ row.repo.name }}</span>
+        <span
+          class="repo-item-name"
+          :class="{ 'repo-item-name--disambiguated': repoDisambiguationLabels.has(row.repo.id) }"
+        >
+          <span class="repo-item-name-primary">{{ row.repo.name }}</span>
+          <span
+            v-if="repoDisambiguationLabels.get(row.repo.id)"
+            class="repo-item-disambiguator"
+          >· {{ repoDisambiguationLabels.get(row.repo.id) }}</span>
+        </span>
         <button
           class="repo-item-remove"
           :title="t('sidebar.repo.removeRepo')"
@@ -770,8 +783,33 @@ function closeWorktreeDialog() {
 .repo-item-name {
   flex: 1;
   min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+.repo-item-name-primary {
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.repo-item-name--disambiguated .repo-item-name-primary {
+  flex: 0 1 auto;
+  max-width: 60%;
+}
+
+.repo-item-disambiguator {
+  flex: 1 2 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-muted);
+  font-size: calc(var(--font-sm) - 1px);
+  font-weight: 400;
   white-space: nowrap;
 }
 

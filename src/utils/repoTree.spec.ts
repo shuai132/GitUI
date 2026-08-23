@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { RepoMeta, SubmoduleInfo } from '@/types/git'
 import {
+  buildRepoDisambiguationLabels,
   buildRepoTreeRows,
   filterRepoTreeRows,
   moveRepoSearchSelection,
@@ -26,6 +27,31 @@ describe('repoTree', () => {
   it('normalizes separators and trailing slashes', () => {
     expect(normalizeRepoPath('C:\\work\\repo\\')).toBe('C:/work/repo')
     expect(resolveSubmoduleWorkdir('/work/parent/', 'libs/child')).toBe('/work/parent/libs/child')
+  })
+
+  it('adds the shortest unique parent path only for duplicate repository names', () => {
+    const labels = buildRepoDisambiguationLabels([
+      { id: 'personal', name: 'GitUI', path: '/Users/me/personal/work/GitUI' },
+      { id: 'company', name: 'GitUI', path: '/Users/me/company/work/GitUI' },
+      { id: 'unique', name: 'website', path: '/Users/me/work/website' },
+    ])
+
+    expect(Object.fromEntries(labels)).toEqual({
+      personal: 'personal/work',
+      company: 'company/work',
+    })
+  })
+
+  it('normalizes Windows separators when disambiguating repository names', () => {
+    const labels = buildRepoDisambiguationLabels([
+      { id: 'c-drive', name: 'client', path: 'C:\\work\\client' },
+      { id: 'd-drive', name: 'client', path: 'D:\\work\\client' },
+    ])
+
+    expect(Object.fromEntries(labels)).toEqual({
+      'c-drive': 'C:/work',
+      'd-drive': 'D:/work',
+    })
   })
 
   it('places opened submodule repositories under their parent repository', () => {
