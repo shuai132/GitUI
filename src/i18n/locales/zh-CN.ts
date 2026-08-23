@@ -586,7 +586,9 @@ const messages = {
     },
     confirmDelete: {
       title: '删除 Submodule',
-      message: '删除 Submodule "{path}"？\n\n将移除工作目录、.git/modules 条目及 .gitmodules 条目。删除后请提交变更。',
+      message: '删除 Submodule "{path}"？\n\n工作目录和内部 Git 元数据会移入系统废纸篓；随后移除 .gitmodules、本地 config 与 Index 条目。完成后请提交父仓库变更。',
+      dirtyMessage: '删除包含未提交修改的 Submodule "{path}"？\n\n整个工作目录（包括未提交文件）和内部 Git 元数据会移入系统废纸篓；如需保留，请在清空废纸篓前恢复。随后会移除父仓库中的相关条目。',
+      contextChanged: '打开确认框后仓库或 Submodule 已变化，请检查当前目标并重试。',
     },
   },
   remote: {

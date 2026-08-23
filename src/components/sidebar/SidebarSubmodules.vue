@@ -17,7 +17,7 @@ const { t } = useI18n()
 const repoStore = useRepoStore()
 const submodulesStore = useSubmodulesStore()
 const sectionState = useSidebarSectionState()
-const { showActionError } = useGlobalToast()
+const { showError, showActionError } = useGlobalToast()
 
 const submodules = computed(() => submodulesStore.submodules)
 const searchQuery = ref('')
@@ -137,6 +137,22 @@ function onConfirmDialogCancel() {
   confirmDlg.visible = false
 }
 
+function isCurrentSubmoduleTarget(
+  repoId: string,
+  expected: SubmoduleInfo,
+): boolean {
+  if (repoStore.activeRepoId !== repoId) return false
+  return submodulesStore.submodules.some((current) =>
+    current.name === expected.name &&
+    current.path === expected.path &&
+    current.url === expected.url &&
+    current.head_oid === expected.head_oid &&
+    current.workdir_oid === expected.workdir_oid &&
+    current.state === expected.state &&
+    current.has_workdir_modifications === expected.has_workdir_modifications,
+  )
+}
+
 async function onSubmoduleMenuAction(action: string) {
   const s = submoduleMenu.target
   if (!s) return
@@ -152,18 +168,29 @@ async function onSubmoduleMenuAction(action: string) {
         editDialog.target = s
         editDialog.visible = true
         break
-      case 'delete':
+      case 'delete': {
+        const repoId = repoStore.activeRepoId
+        if (!repoId) break
+        const expected = { ...s }
+        const messageKey = s.has_workdir_modifications
+          ? 'submodule.confirmDelete.dirtyMessage'
+          : 'submodule.confirmDelete.message'
         openConfirm(
           t('submodule.confirmDelete.title'),
-          t('submodule.confirmDelete.message', { path: s.path, name: s.name }),
+          t(messageKey, { path: s.path, name: s.name }),
           async () => {
-            await submodulesStore.deinit(s.name)
+            if (!isCurrentSubmoduleTarget(repoId, expected)) {
+              showError(t('submodule.confirmDelete.contextChanged'))
+              return
+            }
+            await submodulesStore.deinit(repoId, expected.name)
           },
           {
             loadingLabel: t('common.deleting', '删除中...'),
-          }
+          },
         )
         break
+      }
     }
   } catch (err) {
     console.error(err)

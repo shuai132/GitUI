@@ -587,7 +587,9 @@ const messages = {
     },
     confirmDelete: {
       title: 'Delete submodule',
-      message: 'Delete submodule "{path}"?\n\nThis will remove the work directory, .git/modules entry, and .gitmodules entry. Remember to commit afterwards.',
+      message: 'Delete submodule "{path}"?\n\nThe work directory and internal Git metadata will be moved to the system Trash. The .gitmodules, local config, and index entries will be removed. Remember to commit the parent repository changes afterwards.',
+      dirtyMessage: 'Delete submodule "{path}" with uncommitted changes?\n\nIts entire work directory, including uncommitted files, and internal Git metadata will be moved to the system Trash. Restore them before emptying Trash if needed. The parent repository entries will then be removed.',
+      contextChanged: 'The repository or submodule changed after confirmation opened. Review the current target and try again.',
     },
   },
   remote: {

@@ -155,6 +155,13 @@ impl GitEngine {
     /// 4. 从 .git/config 移除对应 submodule.<name>.* 条目
     /// 5. 把 submodule 从父仓库 index 移除，并把 .gitmodules 重新 add
     pub fn deinit_submodule(path: &str, name: &str) -> GitResult<()> {
+        Self::deinit_submodule_with(path, name, move_submodule_path_to_system_trash)
+    }
+
+    fn deinit_submodule_with<F>(path: &str, name: &str, mut move_to_trash: F) -> GitResult<()>
+    where
+        F: FnMut(&Path) -> GitResult<()>,
+    {
         let repo = Self::open(path)?;
         let repo_workdir = repo
             .workdir()
@@ -167,30 +174,20 @@ impl GitEngine {
             sub.path().to_path_buf()
         };
 
-        // 1. 删除 .git/modules/<name>
-        let modules_dir = repo.path().join("modules").join(name);
-        if modules_dir.exists() {
-            std::fs::remove_dir_all(&modules_dir).map_err(|e| {
-                GitError::OperationFailed(format!("删除 {} 失败：{}", modules_dir.display(), e))
-            })?;
-        }
-
-        // 2. 删除工作区目录
+        // 1. 将工作区和 .git/modules 元数据移入系统废纸篓。
+        // 任一步失败都会在修改父仓库配置与 Index 之前停止。
         let workdir_path = repo_workdir.join(&sub_rel_path);
-        if workdir_path.exists() {
-            std::fs::remove_dir_all(&workdir_path).map_err(|e| {
-                GitError::OperationFailed(format!("删除 {} 失败：{}", workdir_path.display(), e))
-            })?;
-        }
+        let modules_dir = repo.path().join("modules").join(name);
+        move_submodule_storage_to_trash_with(&workdir_path, &modules_dir, &mut move_to_trash)?;
 
-        // 3. 重写 .gitmodules，剥离对应 section
+        // 2. 重写 .gitmodules，剥离对应 section
         let gitmodules_path = repo_workdir.join(".gitmodules");
         let gitmodules_still_exists = gitmodules_path.exists();
         if gitmodules_still_exists {
             Self::strip_gitmodules_section(&gitmodules_path, name)?;
         }
 
-        // 4. 从 .git/config 删除 submodule.<name>.* 条目
+        // 3. 从 .git/config 删除 submodule.<name>.* 条目
         if let Ok(mut config) = repo.config() {
             let prefix = format!("submodule.{}.", name);
             let mut keys_to_remove: Vec<String> = Vec::new();
@@ -208,7 +205,7 @@ impl GitEngine {
             }
         }
 
-        // 5. 更新 index：移除 submodule 条目，重新 add .gitmodules
+        // 4. 更新 index：移除 submodule 条目，重新 add .gitmodules
         let mut index = repo.index()?;
         let _ = index.remove_path(&sub_rel_path);
         if gitmodules_still_exists {
@@ -290,5 +287,151 @@ impl GitEngine {
         }
 
         Ok(())
+    }
+}
+
+fn move_submodule_path_to_system_trash(path: &Path) -> GitResult<()> {
+    trash::delete(path).map_err(|error| {
+        GitError::OperationFailed(format!(
+            "无法将 Submodule 数据移入系统废纸篓 {}：{error}",
+            path.display()
+        ))
+    })
+}
+
+fn move_submodule_storage_to_trash_with<F>(
+    workdir_path: &Path,
+    modules_dir: &Path,
+    mut move_to_trash: F,
+) -> GitResult<()>
+where
+    F: FnMut(&Path) -> GitResult<()>,
+{
+    for (label, path) in [("工作目录", workdir_path), ("内部 Git 元数据", modules_dir)] {
+        if !path.exists() {
+            continue;
+        }
+        move_to_trash(path).map_err(|error| {
+            GitError::OperationFailed(format!(
+                "无法回收 Submodule {label} {}：{error}",
+                path.display()
+            ))
+        })?;
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+
+    #[test]
+    fn submodule_storage_is_moved_to_recovery_locations() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let workdir = temp_dir.path().join("workdir/module");
+        let modules = temp_dir.path().join("git/modules/module");
+        let recovery = temp_dir.path().join("recovery");
+        fs::create_dir_all(&workdir).unwrap();
+        fs::create_dir_all(&modules).unwrap();
+        fs::write(workdir.join("local.txt"), "uncommitted").unwrap();
+        fs::write(modules.join("HEAD"), "ref: refs/heads/main").unwrap();
+        fs::create_dir(&recovery).unwrap();
+        let mut moved = 0;
+
+        move_submodule_storage_to_trash_with(&workdir, &modules, |source| {
+            let target = recovery.join(moved.to_string());
+            moved += 1;
+            fs::rename(source, target)?;
+            Ok(())
+        })
+        .unwrap();
+
+        assert_eq!(moved, 2);
+        assert!(!workdir.exists());
+        assert!(!modules.exists());
+        assert_eq!(
+            fs::read_to_string(recovery.join("0/local.txt")).unwrap(),
+            "uncommitted"
+        );
+        assert!(recovery.join("1/HEAD").is_file());
+    }
+
+    #[test]
+    fn submodule_storage_stops_before_any_move_when_workdir_trash_fails() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let workdir = temp_dir.path().join("workdir/module");
+        let modules = temp_dir.path().join("git/modules/module");
+        fs::create_dir_all(&workdir).unwrap();
+        fs::create_dir_all(&modules).unwrap();
+
+        let result = move_submodule_storage_to_trash_with(&workdir, &modules, |_| {
+            Err(GitError::OperationFailed("trash unavailable".to_string()))
+        });
+
+        assert!(result.is_err());
+        assert!(workdir.is_dir());
+        assert!(modules.is_dir());
+    }
+
+    #[test]
+    fn submodule_storage_stops_when_metadata_trash_fails() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let workdir = temp_dir.path().join("workdir/module");
+        let modules = temp_dir.path().join("git/modules/module");
+        let recovery = temp_dir.path().join("recovery");
+        fs::create_dir_all(&workdir).unwrap();
+        fs::create_dir_all(&modules).unwrap();
+        let calls = std::cell::Cell::new(0);
+
+        let result = move_submodule_storage_to_trash_with(&workdir, &modules, |source| {
+            calls.set(calls.get() + 1);
+            if calls.get() == 2 {
+                return Err(GitError::OperationFailed("metadata busy".to_string()));
+            }
+            fs::rename(source, &recovery)?;
+            Ok(())
+        });
+
+        assert!(result.is_err());
+        assert_eq!(calls.get(), 2);
+        assert!(recovery.is_dir());
+        assert!(modules.is_dir());
+    }
+
+    #[test]
+    fn deinit_keeps_parent_repository_entries_when_storage_trash_fails() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let repo = git2::Repository::init(temp_dir.path()).unwrap();
+        let gitmodules = temp_dir.path().join(".gitmodules");
+        let workdir = temp_dir.path().join("vendor/demo");
+        let modules = repo.path().join("modules/vendor.demo");
+        let manifest = "[submodule \"vendor.demo\"]\n\tpath = vendor/demo\n\turl = https://example.com/demo.git\n";
+        fs::write(&gitmodules, manifest).unwrap();
+        fs::create_dir_all(&workdir).unwrap();
+        fs::create_dir_all(&modules).unwrap();
+        repo.config()
+            .unwrap()
+            .set_str("submodule.vendor.demo.url", "https://example.com/demo.git")
+            .unwrap();
+        assert!(repo.find_submodule("vendor.demo").is_ok());
+
+        let result = GitEngine::deinit_submodule_with(
+            temp_dir.path().to_str().unwrap(),
+            "vendor.demo",
+            |_| Err(GitError::OperationFailed("trash unavailable".to_string())),
+        );
+
+        assert!(result.is_err());
+        assert_eq!(fs::read_to_string(gitmodules).unwrap(), manifest);
+        assert_eq!(
+            repo.config()
+                .unwrap()
+                .get_string("submodule.vendor.demo.url")
+                .unwrap(),
+            "https://example.com/demo.git"
+        );
+        assert!(workdir.is_dir());
+        assert!(modules.is_dir());
     }
 }

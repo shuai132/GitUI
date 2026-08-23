@@ -63,11 +63,12 @@ export const useSubmodulesStore = defineStore('submodules', () => {
     return await git.submoduleWorkdir(repoStore.activeRepoId, name)
   }
 
-  async function deinit(name: string) {
+  async function deinit(repoId: string, name: string) {
     const repoStore = useRepoStore()
-    if (!repoStore.activeRepoId) return
-    await git.deinitSubmodule(repoStore.activeRepoId, name)
-    await loadSubmodules()
+    await git.deinitSubmodule(repoId, name)
+    if (repoStore.activeRepoId === repoId) {
+      await loadSubmodules()
+    }
   }
 
   function reset() {

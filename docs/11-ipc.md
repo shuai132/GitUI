@@ -49,7 +49,7 @@ GitUI 采用 Tauri v2 的 IPC 机制实现前后端通信，包括双向的请�
 - `list_tags` / `delete_tag` / `list_remote_tags` / `fetch_tags_from_remote` / `delete_remote_tag`：标签管理。返回的 `git/types.rs::TagInfo` 以 `ref_oid` 表示 Tag 引用直接对象，以 `commit_oid` 表示 peel 后的历史 commit。`delete_tag` 与 `delete_remote_tag` 可接收预期 ref OID，删除前目标不匹配或已不存在时不修改引用。
 
 ### 子模块 (Submodule)
-- `list_submodules` / `init_submodule` / `update_submodule` / `deinit_submodule` / `add_submodule`：完整的子模块工具链支持。
+- `list_submodules` / `init_submodule` / `update_submodule` / `deinit_submodule` / `add_submodule`：完整的子模块工具链支持。`deinit_submodule` 先把工作目录与内部 Git 元数据移入系统废纸篓，任一步失败时不继续修改父仓库配置与 Index。
 
 ### 合并与变基 (Merge / Rebase)
 - `merge_branch` / `merge_continue` / `merge_abort`：合并流程控制。
