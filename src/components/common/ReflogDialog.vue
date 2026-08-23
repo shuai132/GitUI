@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Modal from '@/components/common/Modal.vue'
 import { useGitCommands } from '@/composables/useGitCommands'
 import { useRepoStore } from '@/stores/repos'
 import type { ReflogEntry } from '@/types/git'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 
 const props = defineProps<{ visible: boolean }>()
 const emit = defineEmits<{ close: [] }>()
@@ -17,27 +17,39 @@ const repoStore = useRepoStore()
 const entries = ref<ReflogEntry[]>([])
 const loading = ref(false)
 const error = ref<string | null>(null)
+let loadSeq = 0
+const activeRepoName = computed(() => repoStore.activeRepo()?.name ?? '')
+const title = computed(() => activeRepoName.value
+  ? t('reflog.titleWithRepo', { repo: activeRepoName.value })
+  : t('reflog.title'))
 
 watch(
-  () => props.visible,
-  async (v) => {
-    if (!v) return
-    const id = repoStore.activeRepoId
-    if (!id) return
-    loading.value = true
+  [() => props.visible, () => repoStore.activeRepoId],
+  async ([visible, repoId]) => {
+    const seq = ++loadSeq
+    entries.value = []
     error.value = null
+    if (!visible || !repoId) {
+      loading.value = false
+      return
+    }
+    loading.value = true
     try {
-      entries.value = await git.getReflog(id)
+      const next = await git.getReflog(repoId)
+      if (seq !== loadSeq || !props.visible || repoStore.activeRepoId !== repoId) return
+      entries.value = next
     } catch (e) {
+      if (seq !== loadSeq || !props.visible || repoStore.activeRepoId !== repoId) return
       error.value = String(e)
     } finally {
-      loading.value = false
+      if (seq === loadSeq) loading.value = false
     }
   },
+  { immediate: true },
 )
 
 function formatTime(ts: number): string {
-  return new Date(ts * 1000).toLocaleString('zh-CN', {
+  return new Date(ts * 1000).toLocaleString(locale.value === 'zh-CN' ? 'zh-CN' : 'en-US', {
     month: '2-digit',
     day: '2-digit',
     hour: '2-digit',
@@ -51,7 +63,7 @@ function copyOid(oid: string) {
 </script>
 
 <template>
-  <Modal :visible="visible" :title="t('reflog.title')" width="680px" @close="emit('close')">
+  <Modal :visible="visible" :title="title" width="680px" @close="emit('close')">
     <div class="reflog-body">
       <div v-if="loading" class="reflog-hint">{{ t('reflog.loading') }}</div>
       <div v-else-if="error" class="reflog-hint reflog-error">{{ error }}</div>

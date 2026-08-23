@@ -629,6 +629,7 @@ const messages = {
   },
   reflog: {
     title: 'Reflog — HEAD history',
+    titleWithRepo: 'Reflog — {repo}',
     loading: 'Loading...',
     empty: 'No reflog entries',
     columnHash: 'Hash',
