@@ -1,14 +1,22 @@
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { open } from '@tauri-apps/plugin-dialog'
 import { useI18n } from 'vue-i18n'
 import { usePluginsStore } from '@/stores/plugins'
 import { useGlobalToast } from '@/composables/useGlobalToast'
+import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import type { PluginInfo, PluginPermission } from '@/types/plugin'
 
 const pluginsStore = usePluginsStore()
 const { t } = useI18n()
-const { showToast } = useGlobalToast()
+const { showToast, showError, showActionError } = useGlobalToast()
+const pendingUninstall = ref<{
+  id: string
+  name: string
+  version: string
+  path: string
+} | null>(null)
+const uninstalling = ref(false)
 
 const sortedPlugins = computed(() =>
   [...pluginsStore.plugins].sort((a, b) =>
@@ -38,9 +46,44 @@ async function onToggle(plugin: PluginInfo) {
   else await pluginsStore.enable(plugin.manifest.id)
 }
 
-async function onUninstall(plugin: PluginInfo) {
-  await pluginsStore.uninstall(plugin.manifest.id)
-  showToast('success', t('settings.plugins.uninstallSuccess'))
+function onUninstall(plugin: PluginInfo) {
+  pendingUninstall.value = {
+    id: plugin.manifest.id,
+    name: plugin.manifest.name,
+    version: plugin.manifest.version,
+    path: plugin.path,
+  }
+}
+
+function uninstallTargetIsCurrent(): boolean {
+  const pending = pendingUninstall.value
+  if (!pending) return false
+  return pluginsStore.plugins.some((plugin) =>
+    plugin.manifest.id === pending.id &&
+    plugin.manifest.name === pending.name &&
+    plugin.manifest.version === pending.version &&
+    plugin.path === pending.path,
+  )
+}
+
+async function onConfirmUninstall() {
+  const pending = pendingUninstall.value
+  if (!pending || uninstalling.value) return
+  if (!uninstallTargetIsCurrent()) {
+    pendingUninstall.value = null
+    showError(t('settings.plugins.uninstallContextChanged'))
+    return
+  }
+  uninstalling.value = true
+  try {
+    await pluginsStore.uninstall(pending.id)
+    showToast('success', t('settings.plugins.uninstallSuccess'))
+    pendingUninstall.value = null
+  } catch (error) {
+    showActionError(error)
+  } finally {
+    uninstalling.value = false
+  }
 }
 
 function commandCount(plugin: PluginInfo): number {
@@ -71,7 +114,7 @@ function permissionReason(permission: PluginPermission): string | undefined {
         <button
           type="button"
           class="btn btn-secondary"
-          :disabled="pluginsStore.loading"
+          :disabled="pluginsStore.loading || uninstalling"
           @click="pluginsStore.load()"
         >
           {{ t('settings.plugins.refresh') }}
@@ -79,7 +122,7 @@ function permissionReason(permission: PluginPermission): string | undefined {
         <button
           type="button"
           class="btn btn-primary"
-          :disabled="pluginsStore.loading"
+          :disabled="pluginsStore.loading || uninstalling"
           @click="onInstall"
         >
           {{ t('settings.plugins.install') }}
@@ -141,6 +184,7 @@ function permissionReason(permission: PluginPermission): string | undefined {
           <button
             type="button"
             class="btn btn-secondary"
+            :disabled="pluginsStore.loading || uninstalling"
             @click="onToggle(plugin)"
           >
             {{ plugin.enabled ? t('settings.plugins.disable') : t('settings.plugins.enable') }}
@@ -148,13 +192,35 @@ function permissionReason(permission: PluginPermission): string | undefined {
           <button
             type="button"
             class="btn btn-danger"
+            :disabled="pluginsStore.loading || uninstalling"
             @click="onUninstall(plugin)"
           >
-            {{ t('common.delete') }}
+            {{ uninstalling && pendingUninstall?.id === plugin.manifest.id
+              ? t('settings.plugins.uninstalling')
+              : t('common.delete') }}
           </button>
         </div>
       </article>
     </div>
+
+    <ConfirmDialog
+      :visible="pendingUninstall !== null"
+      :title="t('settings.plugins.confirmUninstallTitle')"
+      :message="pendingUninstall
+        ? t('settings.plugins.confirmUninstall', {
+            name: pendingUninstall.name,
+            version: pendingUninstall.version,
+            id: pendingUninstall.id,
+            path: pendingUninstall.path,
+          })
+        : ''"
+      :confirm-label="t('settings.plugins.uninstall')"
+      :loading-label="t('settings.plugins.uninstalling')"
+      :danger="true"
+      :loading="uninstalling"
+      @confirm="onConfirmUninstall"
+      @cancel="pendingUninstall = null"
+    />
   </div>
 </template>
 

@@ -215,12 +215,25 @@ pub async fn disable_plugin(plugin_id: String, app: AppHandle) -> Result<(), Git
 #[tauri::command]
 pub async fn uninstall_plugin(plugin_id: String, app: AppHandle) -> Result<(), GitError> {
     let dir = plugin_dir(&app, &plugin_id)?;
-    if dir.exists() {
-        fs::remove_dir_all(&dir)?;
-    }
+    uninstall_plugin_dir_with(&dir, move_plugin_to_system_trash)?;
     let mut state = read_state(&app)?;
     state.remove(&plugin_id);
     write_state(&app, &state)
+}
+
+fn move_plugin_to_system_trash(path: &Path) -> Result<(), GitError> {
+    trash::delete(path)
+        .map_err(|error| GitError::OperationFailed(format!("无法将插件移入系统废纸篓: {error}")))
+}
+
+fn uninstall_plugin_dir_with<F>(dir: &Path, mut move_to_trash: F) -> Result<(), GitError>
+where
+    F: FnMut(&Path) -> Result<(), GitError>,
+{
+    if dir.exists() {
+        move_to_trash(dir)?;
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -763,5 +776,37 @@ mod tests {
         let result = response.result.unwrap();
         assert_eq!(result.message.as_deref(), Some("done"));
         assert_eq!(result.refresh, vec!["workspace", "history"]);
+    }
+
+    #[test]
+    fn uninstall_moves_plugin_directory_before_completing() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let plugin_dir = temp_dir.path().join("plugin");
+        let recovery_dir = temp_dir.path().join("recovery");
+        fs::create_dir(&plugin_dir).unwrap();
+        fs::write(plugin_dir.join(MANIFEST_FILE), "{}").unwrap();
+
+        uninstall_plugin_dir_with(&plugin_dir, |source| {
+            fs::rename(source, &recovery_dir)?;
+            Ok(())
+        })
+        .unwrap();
+
+        assert!(!plugin_dir.exists());
+        assert!(recovery_dir.join(MANIFEST_FILE).is_file());
+    }
+
+    #[test]
+    fn uninstall_keeps_plugin_directory_when_trash_fails() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let plugin_dir = temp_dir.path().join("plugin");
+        fs::create_dir(&plugin_dir).unwrap();
+
+        let result = uninstall_plugin_dir_with(&plugin_dir, |_| {
+            Err(GitError::OperationFailed("trash unavailable".to_string()))
+        });
+
+        assert!(result.is_err());
+        assert!(plugin_dir.is_dir());
     }
 }
