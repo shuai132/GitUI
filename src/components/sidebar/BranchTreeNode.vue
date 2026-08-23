@@ -80,30 +80,38 @@ const indentPx = (level: number) => 12 + level * 12 + 'px'
       class="tree-row tree-folder"
       :class="{ 'tree-folder--remote-root': isRemoteRoot }"
       :style="{ paddingLeft: indentPx(level) }"
-      @click="onFolderClick"
       @contextmenu="onFolderContextMenu"
     >
-      <svg
-        class="chevron"
-        :class="{ open: forceExpanded || !treeState.isCollapsed(node.path) }"
-        width="10"
-        height="10"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="2.5"
+      <button
+        type="button"
+        class="tree-row-action"
+        :aria-expanded="forceExpanded || !treeState.isCollapsed(node.path)"
+        @click="onFolderClick"
       >
-        <polyline points="9 18 15 12 9 6" />
-      </svg>
-      <svg class="folder-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
-      </svg>
-      <span class="tree-label">{{ node.name }}</span>
+        <svg
+          class="chevron"
+          :class="{ open: forceExpanded || !treeState.isCollapsed(node.path) }"
+          width="10"
+          height="10"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.5"
+        >
+          <polyline points="9 18 15 12 9 6" />
+        </svg>
+        <svg class="folder-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+        </svg>
+        <span class="tree-label">{{ node.name }}</span>
+      </button>
       <!-- 顶层 remote folder：悬停时显示删除按钮 -->
       <button
         v-if="isRemoteRoot"
+        type="button"
         class="remote-delete-btn"
         :title="`Remove remote '${node.name}'`"
+        :aria-label="`Remove remote '${node.name}'`"
         @click.stop="onDeleteRemote"
       >
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
@@ -134,7 +142,8 @@ const indentPx = (level: number) => 12 + level * 12 + 'px'
 
   <!-- Branch 叶子节点 -->
   <template v-else>
-    <div
+    <button
+      type="button"
       class="tree-row tree-branch"
       :class="{
         'tree-branch--current': node.branch.is_head,
@@ -160,7 +169,7 @@ const indentPx = (level: number) => 12 + level * 12 + 'px'
         <span v-if="(node.branch.ahead ?? 0) > 0" class="ab-ahead">↑{{ node.branch.ahead }}</span>
         <span v-if="(node.branch.behind ?? 0) > 0" class="ab-behind">↓{{ node.branch.behind }}</span>
       </span>
-    </div>
+    </button>
   </template>
 </template>
 
@@ -177,6 +186,12 @@ const indentPx = (level: number) => 12 + level * 12 + 'px'
   cursor: pointer;
   transition: background 0.1s;
   user-select: none;
+  width: 100%;
+  box-sizing: border-box;
+  border: none;
+  background: transparent;
+  font: inherit;
+  text-align: left;
 }
 
 .tree-row:hover {
@@ -189,6 +204,29 @@ const indentPx = (level: number) => 12 + level * 12 + 'px'
 
 .tree-folder:hover {
   color: var(--text-secondary);
+}
+
+.tree-row-action {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  align-self: stretch;
+  gap: 6px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.tree-row:focus-visible,
+.tree-row-action:focus-visible,
+.remote-delete-btn:focus-visible {
+  outline: 1px solid var(--accent-blue);
+  outline-offset: -1px;
 }
 
 .tree-branch--current,
@@ -280,7 +318,7 @@ const indentPx = (level: number) => 12 + level * 12 + 'px'
 
 /* 顶层 remote folder 的删除按钮：默认隐藏，hover 时显示 */
 .remote-delete-btn {
-  display: none;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   background: none;
@@ -291,10 +329,14 @@ const indentPx = (level: number) => 12 + level * 12 + 'px'
   color: var(--text-muted);
   flex-shrink: 0;
   line-height: 0;
+  opacity: 0;
+  pointer-events: none;
 }
 
-.tree-folder--remote-root:hover .remote-delete-btn {
-  display: inline-flex;
+.tree-folder--remote-root:hover .remote-delete-btn,
+.tree-folder--remote-root:focus-within .remote-delete-btn {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .remote-delete-btn:hover {
