@@ -608,7 +608,9 @@ const messages = {
     },
     confirmDelete: {
       title: '删除 Remote',
-      message: '删除 Remote "{name}"？\n\n该 Remote 的所有 remote-tracking 分支也将一并移除。',
+      message: '删除本地 Remote "{name}"？\n\nURL：{url}\n将移除的 remote-tracking branches：{count}\n\n不会删除服务器仓库或远端分支；重新添加 Remote 并 Fetch 可重建本地 tracking refs。',
+      missingUrl: '（无 URL）',
+      contextChanged: '打开确认框后仓库、Remote URL 或 tracking refs 已变化，请检查当前目标并重试。',
     },
   },
   reflog: {

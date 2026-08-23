@@ -701,8 +701,18 @@ impl GitEngine {
     }
 
     /// 删除一个 remote，同时移除所有 remote-tracking refs（等价于 `git remote remove <name>`）。
-    pub fn remove_remote(path: &str, name: &str) -> GitResult<()> {
+    pub fn remove_remote(path: &str, name: &str, expected_url: Option<&str>) -> GitResult<()> {
         let repo = Self::open(path)?;
+        let remote = repo.find_remote(name)?;
+        let current_url = remote.url();
+        if current_url != expected_url {
+            return Err(GitError::OperationFailed(format!(
+                "Remote target changed: {name} expected URL {}, current URL {}",
+                expected_url.unwrap_or("missing"),
+                current_url.unwrap_or("missing")
+            )));
+        }
+        drop(remote);
         repo.remote_delete(name)?;
         Ok(())
     }
@@ -715,5 +725,47 @@ impl GitEngine {
         }
         repo.remote_set_url(new_name, new_url)?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn remove_remote_rejects_a_changed_url() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let repo = Repository::init(temp_dir.path()).unwrap();
+        repo.remote("origin", "https://example.com/current.git")
+            .unwrap();
+
+        let result = GitEngine::remove_remote(
+            temp_dir.path().to_str().unwrap(),
+            "origin",
+            Some("https://example.com/expected.git"),
+        );
+
+        assert!(result.is_err());
+        assert_eq!(
+            repo.find_remote("origin").unwrap().url(),
+            Some("https://example.com/current.git")
+        );
+    }
+
+    #[test]
+    fn remove_remote_accepts_the_exact_url() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let repo = Repository::init(temp_dir.path()).unwrap();
+        repo.remote("origin", "https://example.com/current.git")
+            .unwrap();
+
+        GitEngine::remove_remote(
+            temp_dir.path().to_str().unwrap(),
+            "origin",
+            Some("https://example.com/current.git"),
+        )
+        .unwrap();
+
+        assert!(repo.find_remote("origin").is_err());
     }
 }

@@ -17,7 +17,7 @@ import CheckoutRemoteDialog from '@/components/branch/CheckoutRemoteDialog.vue'
 import BranchTreeNode from './BranchTreeNode.vue' // Wait, BranchTreeNode is in the parent dir in the old code. We need to import from '../layout/BranchTreeNode.vue' or move it.
 import SidebarSearchControl from './SidebarSearchControl.vue'
 import { matchesSidebarSearch, normalizeSidebarSearchQuery } from '@/utils/sidebarSearch'
-import type { BranchInfo } from '@/types/git'
+import type { BranchInfo, RemoteInfo } from '@/types/git'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -26,7 +26,7 @@ const repoStore = useRepoStore()
 const uiStore = useUiStore()
 const sectionState = useSidebarSectionState()
 const git = useGitCommands()
-const { showActionError } = useGlobalToast()
+const { showError, showActionError } = useGlobalToast()
 
 const localBranches = computed(() => historyStore.branches.filter((b) => !b.is_remote))
 const currentUpstream = computed(() => localBranches.value.find((b) => b.is_head)?.upstream)
@@ -69,14 +69,64 @@ async function onAddRemoteSuccess() {
 function onDeleteRemote(remoteName: string) {
   const repoId = repoStore.activeRepoId
   if (!repoId) return
+  const remote = historyStore.remotes.find(
+    (candidate) => candidate.name === remoteName,
+  )
+  if (!remote) {
+    showError(t('remote.confirmDelete.contextChanged'))
+    return
+  }
+  const expected = {
+    repoId,
+    remote: { ...remote },
+    trackingSignature: remoteTrackingSignature(remoteName),
+  }
+  const trackingCount = remoteTrackingBranches(remoteName).length
   openConfirm(
     t('remote.confirmDelete.title'),
-    t('remote.confirmDelete.message', { name: remoteName }),
+    t('remote.confirmDelete.message', {
+      name: remote.name,
+      url: remote.url ?? t('remote.confirmDelete.missingUrl'),
+      count: trackingCount,
+    }),
     async () => {
-      await git.removeRemote(repoId, remoteName)
+      if (!isCurrentRemoteRemovalTarget(expected)) {
+        showError(t('remote.confirmDelete.contextChanged'))
+        return
+      }
+      await git.removeRemote(repoId, remote.name, remote.url)
       await historyStore.loadBranches()
     },
-    { loadingLabel: t('common.deleting', '删除中...') }
+    { loadingLabel: t('common.deleting', '删除中...') },
+  )
+}
+
+function remoteTrackingBranches(remoteName: string): BranchInfo[] {
+  const prefix = `${remoteName}/`
+  return historyStore.branches.filter(
+    (branch) => branch.is_remote && branch.name.startsWith(prefix),
+  )
+}
+
+function remoteTrackingSignature(remoteName: string): string {
+  return remoteTrackingBranches(remoteName)
+    .map((branch) => `${branch.name}:${branch.commit_oid ?? ''}`)
+    .sort()
+    .join('\n')
+}
+
+function isCurrentRemoteRemovalTarget(expected: {
+  repoId: string
+  remote: RemoteInfo
+  trackingSignature: string
+}): boolean {
+  if (repoStore.activeRepoId !== expected.repoId) return false
+  const current = historyStore.remotes.find(
+    (remote) => remote.name === expected.remote.name,
+  )
+  return (
+    current?.url === expected.remote.url &&
+    remoteTrackingSignature(expected.remote.name) === expected.trackingSignature
   )
 }
 

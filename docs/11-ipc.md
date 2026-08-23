@@ -44,7 +44,7 @@ GitUI 采用 Tauri v2 的 IPC 机制实现前后端通信，包括双向的请�
 ### 引用与远程 (Branch / Remote / Tag)
 - `list_branches` / `create_branch` / `switch_branch` / `delete_branch`：分支全生命周期管理。`delete_branch` 必须接收预期 commit OID，实际本地引用不匹配或已不存在时不删除。
 - `fetch_remote` / `pull_branch` / `push_branch` / `push_tag`：远程协作与同步。`pull_branch` 在 fetch 前要求仓库没有未完成 Git 操作，且 staged / unstaged / untracked 均为空；自动 stash 生命周期由前端在调用前后协调。`push_branch` 成功后会为尚无 upstream 的目标本地分支建立所选 remote 的同名 tracking；tracking 配置即使对应引用已 gone 也视为已有，不改写。`push_tag` 可接收预期本地 ref OID，并在强推时选择复核预期远端 ref OID；目标变化则不执行推送。
-- `list_remotes` / `add_remote` / `edit_remote` / `remove_remote`：远程节点管理。
+- `list_remotes` / `add_remote` / `edit_remote` / `remove_remote`：远程节点管理。`remove_remote` 必须传入预期 fetch URL，删除前目标不匹配或已不存在时不修改本地配置与 remote-tracking refs。
 - `delete_remote_branch`：删除远端分支；必须接收预期 commit OID，并以显式 force-with-lease 在同一次 push 中原子校验远端引用，目标变化时拒绝删除。
 - `list_tags` / `delete_tag` / `list_remote_tags` / `fetch_tags_from_remote` / `delete_remote_tag`：标签管理。返回的 `git/types.rs::TagInfo` 以 `ref_oid` 表示 Tag 引用直接对象，以 `commit_oid` 表示 peel 后的历史 commit。`delete_tag` 与 `delete_remote_tag` 可接收预期 ref OID，删除前目标不匹配或已不存在时不修改引用。
 

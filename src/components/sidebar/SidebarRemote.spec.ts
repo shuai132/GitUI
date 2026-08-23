@@ -53,8 +53,71 @@ describe('SidebarRemote guarded deletion', () => {
   beforeEach(() => {
     mocks.repo.activeRepoId = 'repo-a'
     mocks.history.branches = [{ ...remoteBranch }]
+    mocks.history.remotes = [{ name: 'origin', url: '/remote' }]
     mocks.history.deleteRemoteBranch.mockReset().mockResolvedValue(undefined)
+    mocks.history.loadBranches.mockReset().mockResolvedValue(undefined)
+    mocks.git.removeRemote.mockReset().mockResolvedValue(undefined)
     mocks.showError.mockReset()
+  })
+
+  async function requestRemoteRemoval() {
+    const wrapper = shallowMount(SidebarRemote)
+    wrapper.findComponent(BranchTreeNode).vm.$emit('delete-remote', 'origin')
+    await flushPromises()
+    return wrapper
+  }
+
+  it('previews the Remote URL and tracking ref count before exact deletion', async () => {
+    const wrapper = await requestRemoteRemoval()
+    const dialog = wrapper.findComponent(ConfirmDialog)
+
+    expect(dialog.props('message')).toContain('/remote')
+    expect(dialog.props('message')).toContain('1')
+    dialog.vm.$emit('confirm')
+    await flushPromises()
+
+    expect(mocks.git.removeRemote).toHaveBeenCalledWith(
+      'repo-a',
+      'origin',
+      '/remote',
+    )
+    expect(mocks.history.loadBranches).toHaveBeenCalled()
+  })
+
+  it('cancels removal after the Remote URL changes', async () => {
+    const wrapper = await requestRemoteRemoval()
+    mocks.history.remotes = [{ name: 'origin', url: '/replacement' }]
+
+    wrapper.findComponent(ConfirmDialog).vm.$emit('confirm')
+    await flushPromises()
+
+    expect(mocks.git.removeRemote).not.toHaveBeenCalled()
+    expect(mocks.showError).toHaveBeenCalled()
+  })
+
+  it('cancels removal after the tracking refs change', async () => {
+    const wrapper = await requestRemoteRemoval()
+    mocks.history.branches = [{
+      ...remoteBranch,
+      commit_oid: '3333333333333333333333333333333333333333',
+    }]
+
+    wrapper.findComponent(ConfirmDialog).vm.$emit('confirm')
+    await flushPromises()
+
+    expect(mocks.git.removeRemote).not.toHaveBeenCalled()
+    expect(mocks.showError).toHaveBeenCalled()
+  })
+
+  it('cancels removal after the active repository changes', async () => {
+    const wrapper = await requestRemoteRemoval()
+    mocks.repo.activeRepoId = 'repo-b'
+
+    wrapper.findComponent(ConfirmDialog).vm.$emit('confirm')
+    await flushPromises()
+
+    expect(mocks.git.removeRemote).not.toHaveBeenCalled()
+    expect(mocks.showError).toHaveBeenCalled()
   })
 
   it('deletes the exact remote branch target shown in confirmation', async () => {

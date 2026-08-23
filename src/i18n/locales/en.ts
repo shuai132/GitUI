@@ -609,7 +609,9 @@ const messages = {
     },
     confirmDelete: {
       title: 'Delete remote',
-      message: 'Delete remote "{name}"?\n\nAll remote-tracking branches for this remote will also be removed.',
+      message: 'Delete local Remote "{name}"?\n\nURL: {url}\nRemote-tracking branches removed: {count}\n\nThis does not delete the server repository or its branches. Re-adding the Remote and fetching can recreate the local tracking refs.',
+      missingUrl: '(no URL)',
+      contextChanged: 'The repository, Remote URL, or tracking refs changed after confirmation opened. Review the current target and try again.',
     },
   },
   reflog: {

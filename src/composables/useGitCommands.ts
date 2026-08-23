@@ -480,8 +480,12 @@ export function useGitCommands() {
   const editRemote = (repoId: string, oldName: string, newName: string, newUrl: string) =>
     call<void>('edit_remote', { repoId, oldName, newName, newUrl })
 
-  const removeRemote = (repoId: string, name: string) =>
-    call<void>('remove_remote', { repoId, name })
+  const removeRemote = (
+    repoId: string,
+    name: string,
+    expectedUrl: string | null,
+  ) =>
+    call<void>('remove_remote', { repoId, name, expectedUrl })
 
   // ---- Submodule ----
   const listSubmodules = (repoId: string) =>

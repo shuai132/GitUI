@@ -182,13 +182,14 @@ pub async fn add_remote(
 pub async fn remove_remote(
     repo_id: String,
     name: String,
+    expected_url: Option<String>,
     repo_manager: State<'_, RepoManager>,
 ) -> Result<(), GitError> {
     log::debug!("[remove_remote] name={name}");
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    GitEngine::remove_remote(&meta.path, &name)
+    GitEngine::remove_remote(&meta.path, &name, expected_url.as_deref())
 }
 
 #[tauri::command]
