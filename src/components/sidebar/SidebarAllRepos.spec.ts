@@ -1,6 +1,7 @@
 import { flushPromises, shallowMount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RepoMeta } from '@/types/git'
+import type { UnavailableRepo } from '@/stores/repos'
 import ContextMenu from '@/components/common/ContextMenu.vue'
 import SidebarAllRepos from './SidebarAllRepos.vue'
 
@@ -20,12 +21,14 @@ const mocks = vi.hoisted(() => ({
   } as RepoMeta,
   repoStore: {
     repos: [] as RepoMeta[],
-    unavailableRepos: [],
+    unavailableRepos: [] as UnavailableRepo[],
     activeRepoId: 'repo-a' as string | null,
     setActive: vi.fn(),
     closeRepo: vi.fn(),
     openRepos: vi.fn(),
     reorderRepos: vi.fn(),
+    recoverUnavailableRepo: vi.fn(),
+    removeUnavailableRepo: vi.fn(),
   },
   git: {
     listSubmodules: vi.fn(),
@@ -86,11 +89,14 @@ vi.mock('@tauri-apps/api/webview', () => ({
 describe('SidebarAllRepos action feedback', () => {
   beforeEach(() => {
     mocks.repoStore.repos = [{ ...mocks.repo }]
+    mocks.repoStore.unavailableRepos = []
     mocks.repoStore.activeRepoId = 'repo-a'
     mocks.repoStore.setActive.mockReset().mockResolvedValue(undefined)
     mocks.repoStore.closeRepo.mockReset().mockResolvedValue(undefined)
     mocks.repoStore.openRepos.mockReset().mockResolvedValue({ opened: [], failed: [] })
     mocks.repoStore.reorderRepos.mockReset().mockResolvedValue(undefined)
+    mocks.repoStore.recoverUnavailableRepo.mockReset().mockResolvedValue(undefined)
+    mocks.repoStore.removeUnavailableRepo.mockReset().mockResolvedValue(undefined)
     mocks.git.listSubmodules.mockReset().mockResolvedValue([])
     mocks.git.openInNewWindow.mockReset().mockResolvedValue(undefined)
     mocks.git.openTerminal.mockReset().mockResolvedValue(undefined)
@@ -179,5 +185,27 @@ describe('SidebarAllRepos action feedback', () => {
     expect(mocks.showError).toHaveBeenCalledWith(
       'sidebar.repo.menuActionFailed Error: window failed',
     )
+  })
+
+  it('separates unavailable repository retry from labeled row actions', async () => {
+    mocks.repoStore.repos = []
+    mocks.repoStore.unavailableRepos = [{
+      path: '/repos/missing',
+      name: 'missing',
+      error: 'not found',
+    }]
+    const wrapper = shallowMount(SidebarAllRepos)
+    await flushPromises()
+    const retryButton = wrapper.find<HTMLButtonElement>('.repo-unavailable-main')
+    const actions = wrapper.findAll<HTMLButtonElement>('.repo-unavailable-action')
+
+    expect(retryButton.element.tagName).toBe('BUTTON')
+    expect(retryButton.attributes('aria-label')).toContain('missing')
+    expect(actions).toHaveLength(3)
+    expect(actions[1]?.attributes('aria-label')).toContain('missing')
+
+    await retryButton.trigger('click')
+    await flushPromises()
+    expect(mocks.repoStore.recoverUnavailableRepo).toHaveBeenCalledWith('/repos/missing')
   })
 })

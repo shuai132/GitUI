@@ -688,43 +688,57 @@ function closeWorktreeDialog() {
         :key="`unavailable:${repo.path}`"
         class="repo-item repo-item--unavailable"
         :title="t('sidebar.repo.unavailableTitle', { path: repo.path, error: repo.error })"
-        @click="retryUnavailableRepo(repo.path)"
       >
-        <svg
-          class="repo-item-icon repo-item-icon--unavailable"
-          width="12"
-          height="12"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
-          <line x1="12" y1="9" x2="12" y2="13"/>
-          <line x1="12" y1="17" x2="12.01" y2="17"/>
-        </svg>
-        <span class="repo-item-name repo-item-name--unavailable">
-          <span class="repo-item-name-primary">{{ repo.name }}</span>
-          <span class="repo-item-unavailable-label">{{ t('sidebar.repo.unavailable') }}</span>
-        </span>
         <button
+          type="button"
+          class="repo-item-main repo-unavailable-main"
+          :disabled="retryingUnavailablePath !== null"
+          :title="t('sidebar.repo.retryUnavailable')"
+          :aria-label="`${t('sidebar.repo.retryUnavailable')}: ${repo.name}`"
+          @click="retryUnavailableRepo(repo.path)"
+        >
+          <svg
+            class="repo-item-icon repo-item-icon--unavailable"
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+            <line x1="12" y1="9" x2="12" y2="13"/>
+            <line x1="12" y1="17" x2="12.01" y2="17"/>
+          </svg>
+          <span class="repo-item-name repo-item-name--unavailable">
+            <span class="repo-item-name-primary">{{ repo.name }}</span>
+            <span class="repo-item-unavailable-label">{{ t('sidebar.repo.unavailable') }}</span>
+          </span>
+        </button>
+        <button
+          type="button"
           class="repo-unavailable-action"
           :disabled="retryingUnavailablePath !== null"
           :title="t('sidebar.repo.retryUnavailable')"
+          :aria-label="`${t('sidebar.repo.retryUnavailable')}: ${repo.name}`"
           @click.stop="retryUnavailableRepo(repo.path)"
         >↻</button>
         <button
+          type="button"
           class="repo-unavailable-action"
           :disabled="retryingUnavailablePath !== null"
           :title="t('sidebar.repo.locateUnavailable')"
+          :aria-label="`${t('sidebar.repo.locateUnavailable')}: ${repo.name}`"
           @click.stop="locateUnavailableRepo(repo.path)"
         >…</button>
         <button
+          type="button"
           class="repo-unavailable-action repo-unavailable-action--remove"
           :disabled="retryingUnavailablePath !== null"
           :title="t('sidebar.repo.removeRepo')"
+          :aria-label="`${t('sidebar.repo.removeRepo')}: ${repo.name}`"
           @click.stop="removeUnavailableRepo(repo.path)"
         >×</button>
       </div>
@@ -1007,7 +1021,7 @@ function closeWorktreeDialog() {
 }
 
 .repo-unavailable-action {
-  display: none;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   min-width: 17px;
@@ -1021,10 +1035,12 @@ function closeWorktreeDialog() {
   line-height: 1;
   cursor: pointer;
   pointer-events: auto;
+  opacity: 0;
 }
 
-.repo-item--unavailable:hover .repo-unavailable-action {
-  display: inline-flex;
+.repo-item--unavailable:hover .repo-unavailable-action,
+.repo-item--unavailable:focus-within .repo-unavailable-action {
+  opacity: 1;
 }
 
 .repo-unavailable-action:hover {
