@@ -26,6 +26,7 @@
 | [13-i18n.md](./13-i18n.md) | 国际化：vue-i18n 接入、auto 模式 locale 解析、key 命名、errorMap 集成 |
 | [14-icons.md](./14-icons.md) | 应用图标源图、HIG padding 规范、`tauri icon` 重建命令 |
 | [15-merge-rebase.md](./15-merge-rebase.md) | Merge / 交互式 Rebase、三路合并编辑器、拖拽触发、自动 stash |
+| [16-terminal.md](./16-terminal.md) | 内置终端会话、标签页、仓库隔离与渲染策略 |
 | [17-plugins.md](./17-plugins.md) | 插件系统：本地插件、manifest、贡献点、后端执行模型 |
 
 ## 阅读建议

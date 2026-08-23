@@ -19,6 +19,7 @@ let activeResizeObs: ResizeObserver | null = null
 let resizeDebounce: number | null = null
 let themeObs: MutationObserver | null = null
 let disposed = false
+let preserveTabBarFocus = false
 
 const currentRepoId = computed(() => repoStore.activeRepoId)
 const currentTabs = computed(() => currentRepoId.value ? terminalStore.getTabsForRepo(currentRepoId.value) : [])
@@ -185,7 +186,11 @@ watch(() => {
   if (key) {
     nextTick(() => {
       mountActiveTerminal()
-      activeTab.value?.term.focus()
+      if (preserveTabBarFocus) {
+        preserveTabBarFocus = false
+      } else {
+        activeTab.value?.term.focus()
+      }
     })
   }
 })
@@ -208,7 +213,28 @@ watch(() => uiStore.terminalDock, () => scheduleResize())
 
 async function onAddTab() { if (currentRepoId.value) await terminalStore.createTerminal(currentRepoId.value) }
 function onCloseTab(tabId: string) { if (currentRepoId.value) terminalStore.closeTab(currentRepoId.value, tabId) }
-function onSelectTab(tabId: string) { if (currentRepoId.value) terminalStore.setActiveTab(currentRepoId.value, tabId) }
+function onSelectTab(tabId: string, keepTabFocus = false) {
+  if (!currentRepoId.value) return
+  preserveTabBarFocus = keepTabFocus && activeTab.value?.id !== tabId
+  terminalStore.setActiveTab(currentRepoId.value, tabId)
+}
+
+function onTabKeydown(e: KeyboardEvent, tabIndex: number) {
+  let nextIndex: number | null = null
+  if (e.key === 'ArrowRight') nextIndex = (tabIndex + 1) % currentTabs.value.length
+  if (e.key === 'ArrowLeft') {
+    nextIndex = (tabIndex - 1 + currentTabs.value.length) % currentTabs.value.length
+  }
+  if (e.key === 'Home') nextIndex = 0
+  if (e.key === 'End') nextIndex = currentTabs.value.length - 1
+  if (nextIndex === null || currentTabs.value.length === 0) return
+
+  e.preventDefault()
+  const nextTab = currentTabs.value[nextIndex]
+  onSelectTab(nextTab.id, true)
+  const tabList = (e.currentTarget as HTMLElement).closest('[role="tablist"]')
+  tabList?.querySelector<HTMLElement>(`[data-terminal-tab-index="${nextIndex}"]`)?.focus()
+}
 function onToggleDock() { uiStore.toggleTerminalDock() }
 function onClosePanel() { terminalStore.setActiveRepoVisible(false) }
 
@@ -257,31 +283,61 @@ async function onCtxSelect(action: string) {
   <div class="terminal-panel" :class="`terminal-panel--${uiStore.terminalDock}`">
     <div class="terminal-resize" @pointerdown="startResize" />
     <div class="terminal-header">
-      <div class="terminal-tabs">
-        <div v-for="tab in currentTabs" :key="tab.id" class="terminal-tab"
-          :class="{ active: tab.id === activeTab?.id }" @click="onSelectTab(tab.id)">
-          <span class="tab-title">{{ tab.title }}</span>
-          <button class="tab-close" @click.stop="onCloseTab(tab.id)">
+      <div class="terminal-tabs" role="tablist">
+        <div
+          v-for="(tab, tabIndex) in currentTabs"
+          :key="tab.id"
+          class="terminal-tab"
+          :class="{ active: tab.id === activeTab?.id }"
+        >
+          <button
+            :id="`terminal-tab-${currentRepoId}-${tab.id}`"
+            type="button"
+            class="tab-select"
+            role="tab"
+            :data-terminal-tab-index="tabIndex"
+            :aria-selected="tab.id === activeTab?.id"
+            :aria-controls="`terminal-panel-${currentRepoId}-${tab.id}`"
+            :tabindex="tab.id === activeTab?.id ? 0 : -1"
+            @click="onSelectTab(tab.id)"
+            @keydown="onTabKeydown($event, tabIndex)"
+          >
+            <span class="tab-title">{{ tab.title }}</span>
+          </button>
+          <button
+            type="button"
+            class="tab-close"
+            :title="t('terminal.closeTab')"
+            :aria-label="`${t('terminal.closeTab')}: ${tab.title}`"
+            :tabindex="tab.id === activeTab?.id ? 0 : -1"
+            @click.stop="onCloseTab(tab.id)"
+          >
             <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
               <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
             </svg>
           </button>
         </div>
-        <button class="add-tab-btn" :title="t('terminal.newTab')" @click="onAddTab">
+        <button type="button" class="add-tab-btn" :title="t('terminal.newTab')" :aria-label="t('terminal.newTab')" @click="onAddTab">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
             <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
           </svg>
         </button>
       </div>
       <div class="terminal-actions">
-        <button class="term-btn" @click="onToggleDock">
+        <button
+          type="button"
+          class="term-btn"
+          :title="uiStore.terminalDock === 'bottom' ? t('terminal.dockRight') : t('terminal.dockBottom')"
+          :aria-label="uiStore.terminalDock === 'bottom' ? t('terminal.dockRight') : t('terminal.dockBottom')"
+          @click="onToggleDock"
+        >
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <rect x="3" y="3" width="18" height="18" rx="1"/>
             <line v-if="uiStore.terminalDock === 'bottom'" x1="15" y1="3" x2="15" y2="21"/>
             <line v-else x1="3" y1="15" x2="21" y2="15"/>
           </svg>
         </button>
-        <button class="term-btn" @click="onClosePanel">
+        <button type="button" class="term-btn" :title="t('terminal.close')" :aria-label="t('terminal.close')" @click="onClosePanel">
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
           </svg>
@@ -292,6 +348,9 @@ async function onCtxSelect(action: string) {
       <!-- 使用 v-show 保持所有实例，确保切换顺畅且不丢失状态 -->
       <div v-for="item in mountedTabs" :key="item.key" class="terminal-host"
         v-show="item.repoId === currentRepoId && item.tab.id === activeTab?.id"
+        :id="`terminal-panel-${item.repoId}-${item.tab.id}`"
+        role="tabpanel"
+        :aria-labelledby="`terminal-tab-${item.repoId}-${item.tab.id}`"
         :ref="el => setHostEl(item.repoId, item.tab.id, el as HTMLDivElement)"
         @contextmenu="onContextMenu" />
     </div>
@@ -319,8 +378,8 @@ async function onCtxSelect(action: string) {
 }
 .terminal-tabs { display: flex; align-items: center; height: 100%; overflow: hidden; }
 .terminal-tab {
-  display: flex; align-items: center; height: 100%; padding: 0 4px 0 8px;
-  cursor: pointer; background: var(--bg-secondary); color: var(--text-muted);
+  display: flex; align-items: center; height: 100%; padding-right: 4px;
+  background: var(--bg-secondary); color: var(--text-muted);
   font-size: 10px; max-width: 120px; min-width: 40px; position: relative;
   border-right: 1px solid var(--border); transition: background 0.1s;
 }
@@ -328,7 +387,12 @@ async function onCtxSelect(action: string) {
 .terminal-tab.active::after {
   content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px; background: var(--accent-blue);
 }
-.tab-title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-right: 2px; }
+.tab-select {
+  display: flex; align-items: center; flex: 1; min-width: 0; height: 100%; padding: 0 2px 0 8px;
+  border: none; background: transparent; color: inherit; font: inherit; cursor: pointer;
+}
+.tab-select:focus-visible { outline: 1px solid var(--accent-blue); outline-offset: -1px; }
+.tab-title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
 .tab-close {
   display: inline-flex; align-items: center; justify-content: center; width: 11px; height: 11px;
   border: none; background: transparent; color: var(--text-muted); border-radius: 2px;
