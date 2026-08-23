@@ -811,6 +811,7 @@ const messages = {
   },
   terminal: {
     close: 'Close Terminal',
+    resize: 'Resize terminal',
     dockRight: 'Dock to Right',
     dockBottom: 'Dock to Bottom',
     spawnFailed: 'Spawn failed',

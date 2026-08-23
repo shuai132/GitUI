@@ -810,6 +810,7 @@ const messages = {
   },
   terminal: {
     close: '关闭终端',
+    resize: '调整终端大小',
     dockRight: '停靠到右侧',
     dockBottom: '停靠到底部',
     spawnFailed: 'spawn 失败',

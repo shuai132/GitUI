@@ -56,6 +56,11 @@ vi.mock('@/composables/useGitCommands', () => ({
 describe('TerminalPanel tabs', () => {
   beforeEach(() => {
     document.body.innerHTML = ''
+    mocks.ui.terminalDock = 'bottom'
+    mocks.ui.terminalHeight = 240
+    mocks.ui.terminalWidth = 400
+    mocks.ui.persistTerminalHeight.mockReset()
+    mocks.ui.persistTerminalWidth.mockReset()
     mocks.terminal.setActiveTab.mockReset()
     mocks.terminal.closeTab.mockReset()
   })
@@ -91,5 +96,34 @@ describe('TerminalPanel tabs', () => {
     expect(wrapper.findAll('.term-btn')[0]?.attributes('aria-label')).toBe('terminal.dockRight')
     expect(wrapper.findAll('.term-btn')[1]?.attributes('aria-label')).toBe('terminal.close')
     wrapper.unmount()
+  })
+
+  it('resizes both terminal dock orientations from the keyboard', async () => {
+    const wrapper = mount(TerminalPanel, {
+      global: { stubs: { ContextMenu: true } },
+    })
+    const separator = wrapper.find<HTMLElement>('[role="separator"]')
+
+    expect(separator.attributes('aria-label')).toBe('terminal.resize')
+    expect(separator.attributes('aria-orientation')).toBe('horizontal')
+    expect(separator.attributes('aria-valuenow')).toBe('240')
+    expect(Number(separator.attributes('aria-valuemax'))).toBeGreaterThanOrEqual(240)
+
+    await separator.trigger('keydown', { key: 'ArrowUp' })
+    expect(mocks.ui.terminalHeight).toBe(260)
+    expect(mocks.ui.persistTerminalHeight).toHaveBeenCalledOnce()
+    wrapper.unmount()
+
+    mocks.ui.terminalDock = 'right'
+    const rightWrapper = mount(TerminalPanel, {
+      global: { stubs: { ContextMenu: true } },
+    })
+    const rightSeparator = rightWrapper.find<HTMLElement>('[role="separator"]')
+
+    expect(rightSeparator.attributes('aria-orientation')).toBe('vertical')
+    await rightSeparator.trigger('keydown', { key: 'ArrowLeft' })
+    expect(mocks.ui.terminalWidth).toBe(420)
+    expect(mocks.ui.persistTerminalWidth).toHaveBeenCalledOnce()
+    rightWrapper.unmount()
   })
 })

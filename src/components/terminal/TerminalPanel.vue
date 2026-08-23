@@ -238,6 +238,11 @@ function onTabKeydown(e: KeyboardEvent, tabIndex: number) {
 function onToggleDock() { uiStore.toggleTerminalDock() }
 function onClosePanel() { terminalStore.setActiveRepoVisible(false) }
 
+function terminalMaxSize(dock: 'bottom' | 'right'): number {
+  const available = dock === 'bottom' ? window.innerHeight : window.innerWidth
+  return Math.max(120, available - 80)
+}
+
 function startResize(e: PointerEvent) {
   e.preventDefault()
   const dock = uiStore.terminalDock
@@ -245,7 +250,7 @@ function startResize(e: PointerEvent) {
   const startSize = dock === 'bottom' ? uiStore.terminalHeight : uiStore.terminalWidth
   const onMove = (ev: PointerEvent) => {
     const delta = (dock === 'bottom' ? ev.clientY : ev.clientX) - startPos
-    const next = Math.max(120, startSize - delta)
+    const next = Math.max(120, Math.min(terminalMaxSize(dock), startSize - delta))
     if (dock === 'bottom') uiStore.terminalHeight = next
     else uiStore.terminalWidth = next
     scheduleResize()
@@ -257,6 +262,31 @@ function startResize(e: PointerEvent) {
     else uiStore.persistTerminalWidth()
   }
   window.addEventListener('pointermove', onMove); window.addEventListener('pointerup', onUp)
+}
+
+function onResizeKeydown(e: KeyboardEvent) {
+  const dock = uiStore.terminalDock
+  let delta = 0
+  if (dock === 'bottom' && e.key === 'ArrowUp') delta = 20
+  else if (dock === 'bottom' && e.key === 'ArrowDown') delta = -20
+  else if (dock === 'right' && e.key === 'ArrowLeft') delta = 20
+  else if (dock === 'right' && e.key === 'ArrowRight') delta = -20
+  else if (e.key !== 'Home') return
+
+  e.preventDefault()
+  const maxSize = terminalMaxSize(dock)
+  if (dock === 'bottom') {
+    uiStore.terminalHeight = e.key === 'Home'
+      ? 120
+      : Math.max(120, Math.min(maxSize, uiStore.terminalHeight + delta))
+    uiStore.persistTerminalHeight()
+  } else {
+    uiStore.terminalWidth = e.key === 'Home'
+      ? 120
+      : Math.max(120, Math.min(maxSize, uiStore.terminalWidth + delta))
+    uiStore.persistTerminalWidth()
+  }
+  scheduleResize()
 }
 
 function onContextMenu(e: MouseEvent) {
@@ -281,7 +311,19 @@ async function onCtxSelect(action: string) {
 
 <template>
   <div class="terminal-panel" :class="`terminal-panel--${uiStore.terminalDock}`">
-    <div class="terminal-resize" @pointerdown="startResize" />
+    <div
+      class="terminal-resize"
+      role="separator"
+      :aria-label="t('terminal.resize')"
+      :aria-orientation="uiStore.terminalDock === 'bottom' ? 'horizontal' : 'vertical'"
+      aria-valuemin="120"
+      :aria-valuemax="terminalMaxSize(uiStore.terminalDock)"
+      :aria-valuenow="uiStore.terminalDock === 'bottom' ? uiStore.terminalHeight : uiStore.terminalWidth"
+      :aria-valuetext="`${uiStore.terminalDock === 'bottom' ? uiStore.terminalHeight : uiStore.terminalWidth}px`"
+      tabindex="0"
+      @pointerdown="startResize"
+      @keydown="onResizeKeydown"
+    />
     <div class="terminal-header">
       <div class="terminal-tabs" role="tablist">
         <div
@@ -370,7 +412,8 @@ async function onCtxSelect(action: string) {
 .terminal-resize { position: absolute; background: transparent; z-index: 5; transition: background 0.15s; }
 .terminal-panel--bottom .terminal-resize { top: 0; left: 0; right: 0; height: 5px; margin-top: -2px; cursor: row-resize; }
 .terminal-panel--right .terminal-resize { top: 0; bottom: 0; left: 0; width: 5px; margin-left: -2px; cursor: col-resize; }
-.terminal-resize:hover { background: rgba(138, 173, 244, 0.3); }
+.terminal-resize:hover, .terminal-resize:focus-visible { background: rgba(138, 173, 244, 0.3); }
+.terminal-resize:focus-visible { outline: 1px solid var(--accent-blue); outline-offset: -1px; }
 .terminal-header {
   display: flex; align-items: center; justify-content: space-between;
   padding: 0 2px 0 0; background: var(--bg-secondary);
