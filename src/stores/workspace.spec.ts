@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   createCommit: vi.fn(),
   amendCommit: vi.fn(),
   undoLastCommit: vi.fn(),
+  discardFiles: vi.fn(),
   setRepoState: vi.fn(),
 }))
 
@@ -22,6 +23,7 @@ vi.mock('@/composables/useGitCommands', () => ({
     createCommit: mocks.createCommit,
     amendCommit: mocks.amendCommit,
     undoLastCommit: mocks.undoLastCommit,
+    discardFiles: mocks.discardFiles,
   }),
 }))
 
@@ -71,6 +73,7 @@ describe('workspace commit undo candidate', () => {
     mocks.createCommit.mockReset()
     mocks.amendCommit.mockReset()
     mocks.undoLastCommit.mockReset()
+    mocks.discardFiles.mockReset()
     mocks.setRepoState.mockReset()
   })
 
@@ -137,6 +140,18 @@ describe('workspace commit undo candidate', () => {
 
     store.clearUndoCommitCandidate('repo-1')
     expect(store.undoCommitCandidate).toBeNull()
+  })
+
+  it('discards multiple files with one command and one refresh', async () => {
+    const store = useWorkspaceStore()
+    mocks.discardFiles.mockResolvedValue(undefined)
+    mocks.getStatus.mockResolvedValue(status('head'))
+
+    await store.discardFiles(['one.txt', 'two.txt'])
+
+    expect(mocks.discardFiles).toHaveBeenCalledTimes(1)
+    expect(mocks.discardFiles).toHaveBeenCalledWith('repo-1', ['one.txt', 'two.txt'])
+    expect(mocks.getStatus).toHaveBeenCalledTimes(1)
   })
 
   it('keeps independent drafts per repository and restores them after store recreation', () => {

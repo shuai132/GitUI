@@ -344,6 +344,8 @@ mod tests {
     fn test_discard_file_keeps_staged_changes() {
         let test_repo = TestRepo::new();
         let path = test_repo.path_str();
+        let trash_dir = tempfile::tempdir().unwrap();
+        let mut moved = Vec::new();
         let base = multiline_base();
         commit_file(&test_repo, "base", "existing.txt", &base);
 
@@ -354,11 +356,18 @@ mod tests {
         let unstaged = staged.replace("line12\n", "LINE12\n");
         fs::write(test_repo.dir.path().join("existing.txt"), unstaged).unwrap();
 
-        GitEngine::discard_file(path, "existing.txt").unwrap();
+        GitEngine::discard_files_with(path, &["existing.txt".to_string()], |source| {
+            let destination = trash_dir.path().join(moved.len().to_string());
+            fs::rename(source, &destination)?;
+            moved.push(destination);
+            Ok(())
+        })
+        .unwrap();
 
         let worktree = fs::read_to_string(test_repo.dir.path().join("existing.txt")).unwrap();
         assert!(worktree.contains("LINE2\n"));
         assert!(!worktree.contains("LINE12\n"));
+        assert!(fs::read_to_string(&moved[0]).unwrap().contains("LINE12\n"));
 
         let status = GitEngine::get_status(path).unwrap();
         assert_eq!(status.staged.len(), 1);
@@ -369,12 +378,177 @@ mod tests {
     fn test_discard_file_removes_untracked_file() {
         let test_repo = TestRepo::new();
         let path = test_repo.path_str();
+        let trash_dir = tempfile::tempdir().unwrap();
+        let mut moved = Vec::new();
         let target = test_repo.dir.path().join("new.txt");
         fs::write(&target, "new\n").unwrap();
 
-        GitEngine::discard_file(path, "new.txt").unwrap();
+        GitEngine::discard_files_with(path, &["new.txt".to_string()], |source| {
+            let destination = trash_dir.path().join(moved.len().to_string());
+            fs::rename(source, &destination)?;
+            moved.push(destination);
+            Ok(())
+        })
+        .unwrap();
 
         assert!(!target.exists());
+        assert_eq!(fs::read_to_string(&moved[0]).unwrap(), "new\n");
+    }
+
+    #[test]
+    fn test_discard_files_batches_tracked_and_untracked_paths() {
+        let test_repo = TestRepo::new();
+        let path = test_repo.path_str();
+        let trash_dir = tempfile::tempdir().unwrap();
+        let mut moved = Vec::new();
+        commit_file(&test_repo, "base", "existing.txt", "base\n");
+        fs::write(test_repo.dir.path().join("existing.txt"), "changed\n").unwrap();
+        fs::write(test_repo.dir.path().join("new.txt"), "new\n").unwrap();
+
+        GitEngine::discard_files_with(
+            path,
+            &["existing.txt".to_string(), "new.txt".to_string()],
+            |source| {
+                let destination = trash_dir.path().join(moved.len().to_string());
+                fs::rename(source, &destination)?;
+                moved.push(destination);
+                Ok(())
+            },
+        )
+        .unwrap();
+
+        assert_eq!(
+            fs::read_to_string(test_repo.dir.path().join("existing.txt")).unwrap(),
+            "base\n"
+        );
+        assert!(!test_repo.dir.path().join("new.txt").exists());
+        let discarded = moved
+            .iter()
+            .map(|path| fs::read_to_string(path).unwrap())
+            .collect::<Vec<_>>();
+        assert!(discarded.contains(&"changed\n".to_string()));
+        assert!(discarded.contains(&"new\n".to_string()));
+    }
+
+    #[test]
+    fn test_discard_all_moves_originals_to_trash_and_restores_head() {
+        let test_repo = TestRepo::new();
+        let path = test_repo.path_str();
+        let trash_dir = tempfile::tempdir().unwrap();
+        let mut moved = Vec::new();
+        commit_file(&test_repo, "base", "existing.txt", "base\n");
+        commit_file(&test_repo, "ignore", ".gitignore", "ignored.log\n");
+
+        fs::write(test_repo.dir.path().join("existing.txt"), "staged\n").unwrap();
+        GitEngine::stage_file(path, "existing.txt").unwrap();
+        fs::write(test_repo.dir.path().join("existing.txt"), "unstaged\n").unwrap();
+        fs::write(test_repo.dir.path().join("staged-new.txt"), "staged new\n").unwrap();
+        GitEngine::stage_file(path, "staged-new.txt").unwrap();
+        fs::write(test_repo.dir.path().join("untracked.txt"), "untracked\n").unwrap();
+        fs::write(test_repo.dir.path().join("ignored.log"), "ignored\n").unwrap();
+
+        GitEngine::discard_all_changes_with(path, |source| {
+            let destination = trash_dir.path().join(moved.len().to_string());
+            fs::rename(source, &destination)?;
+            moved.push(destination);
+            Ok(())
+        })
+        .unwrap();
+
+        assert_eq!(
+            fs::read_to_string(test_repo.dir.path().join("existing.txt")).unwrap(),
+            "base\n"
+        );
+        assert!(!test_repo.dir.path().join("staged-new.txt").exists());
+        assert!(!test_repo.dir.path().join("untracked.txt").exists());
+        assert_eq!(
+            fs::read_to_string(test_repo.dir.path().join("ignored.log")).unwrap(),
+            "ignored\n"
+        );
+        let status = GitEngine::get_status(path).unwrap();
+        assert!(status.staged.is_empty());
+        assert!(status.unstaged.is_empty());
+        assert!(status.untracked.is_empty());
+        let discarded = moved
+            .iter()
+            .map(|path| fs::read_to_string(path).unwrap())
+            .collect::<Vec<_>>();
+        assert!(discarded.contains(&"unstaged\n".to_string()));
+        assert!(discarded.contains(&"staged new\n".to_string()));
+        assert!(discarded.contains(&"untracked\n".to_string()));
+    }
+
+    #[test]
+    fn test_discard_stops_before_checkout_when_trash_fails() {
+        let test_repo = TestRepo::new();
+        let path = test_repo.path_str();
+        commit_file(&test_repo, "base", "existing.txt", "base\n");
+        fs::write(test_repo.dir.path().join("existing.txt"), "keep me\n").unwrap();
+
+        let error = GitEngine::discard_files_with(path, &["existing.txt".to_string()], |_| {
+            Err(GitError::OperationFailed("trash unavailable".to_string()))
+        })
+        .unwrap_err();
+
+        assert!(error.to_string().contains("trash unavailable"));
+        assert_eq!(
+            fs::read_to_string(test_repo.dir.path().join("existing.txt")).unwrap(),
+            "keep me\n"
+        );
+    }
+
+    #[test]
+    fn test_discard_all_clears_index_in_unborn_repository() {
+        let repo_dir = tempfile::tempdir().unwrap();
+        let repo = git2::Repository::init(repo_dir.path()).unwrap();
+        let trash_dir = tempfile::tempdir().unwrap();
+        let mut moved = Vec::new();
+        fs::write(repo_dir.path().join("staged.txt"), "staged\n").unwrap();
+        fs::write(repo_dir.path().join("untracked.txt"), "untracked\n").unwrap();
+        let mut index = repo.index().unwrap();
+        index.add_path(Path::new("staged.txt")).unwrap();
+        index.write().unwrap();
+        drop(index);
+
+        GitEngine::discard_all_changes_with(repo_dir.path().to_str().unwrap(), |source| {
+            let destination = trash_dir.path().join(moved.len().to_string());
+            fs::rename(source, &destination)?;
+            moved.push(destination);
+            Ok(())
+        })
+        .unwrap();
+
+        assert!(git2::Repository::open(repo_dir.path())
+            .unwrap()
+            .index()
+            .unwrap()
+            .is_empty());
+        assert!(!repo_dir.path().join("staged.txt").exists());
+        assert!(!repo_dir.path().join("untracked.txt").exists());
+        assert_eq!(moved.len(), 2);
+    }
+
+    #[test]
+    fn test_discard_does_not_move_submodule_workdir_to_trash() {
+        let test_repo = TestRepo::new();
+        let path = test_repo.path_str();
+        commit_gitlink(&test_repo, "gitlink", "module");
+        let module_dir = test_repo.dir.path().join("module");
+        fs::create_dir(&module_dir).unwrap();
+        fs::write(module_dir.join("local.txt"), "local\n").unwrap();
+        let mut move_count = 0;
+
+        GitEngine::discard_files_with(path, &["module".to_string()], |_| {
+            move_count += 1;
+            Ok(())
+        })
+        .unwrap();
+
+        assert_eq!(move_count, 0);
+        assert_eq!(
+            fs::read_to_string(module_dir.join("local.txt")).unwrap(),
+            "local\n"
+        );
     }
 
     #[test]

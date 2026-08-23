@@ -131,9 +131,11 @@ function toGitCommand(entry: DebugEntry): string | null {
     case 'stash_list':
       return 'git stash list'
     case 'discard_all_changes':
-      return 'git checkout -- . && git clean -fd'
+      return 'git reset --hard HEAD  # originals moved to Trash first'
     case 'discard_file':
-      return `git checkout -- ${a.filePath ?? ''}`
+      return `git checkout -- ${a.filePath ?? ''}  # original moved to Trash first`
+    case 'discard_files':
+      return `git checkout -- ${Array.isArray(a.filePaths) ? a.filePaths.join(' ') : ''}  # originals moved to Trash first`
     case 'get_status':
       return 'git status'
     case 'list_branches':

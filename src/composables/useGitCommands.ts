@@ -469,6 +469,9 @@ export function useGitCommands() {
   const discardFile = (repoId: string, filePath: string) =>
     call<void>('discard_file', { repoId, filePath })
 
+  const discardFiles = (repoId: string, filePaths: string[]) =>
+    call<void>('discard_files', { repoId, filePaths })
+
   const getReflog = (repoId: string) =>
     call<ReflogEntry[]>('get_reflog', { repoId })
 
@@ -636,6 +639,7 @@ export function useGitCommands() {
     consumeStartupRepo,
     discardAllChanges,
     discardFile,
+    discardFiles,
     getReflog,
     runGc,
     dropUnreachableCommit,

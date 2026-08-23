@@ -242,6 +242,14 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     await refresh(id)
   }
 
+  async function discardFiles(filePaths: string[]) {
+    const repoStore = useRepoStore()
+    const id = repoStore.activeRepoId
+    if (!id || filePaths.length === 0) return
+    await git.discardFiles(id, filePaths)
+    await refresh(id)
+  }
+
   function selectFile(file: FileEntry | null) {
     selectedFile.value = file
   }
@@ -275,6 +283,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     clearUndoCommitCandidate,
     discardAll,
     discardFile,
+    discardFiles,
     selectFile,
     reset,
   }

@@ -541,7 +541,7 @@ watch(
           <li>{{ t('workspace.confirmDiscard.stagedCount', { count: stagedAll.length }) }}</li>
         </ul>
         <p class="warn">
-          {{ t('workspace.confirmDiscard.warnIrreversible') }}
+          {{ t('workspace.confirmDiscard.warnTrash') }}
           <code>.gitignore</code>
           {{ t('workspace.confirmDiscard.warnIgnored') }}
         </p>

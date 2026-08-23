@@ -300,6 +300,19 @@ pub async fn discard_file(
     GitEngine::discard_file(&meta.path, &file_path)
 }
 
+/// 批量丢弃文件的未暂存变更，只执行一次仓库 checkout。
+#[tauri::command]
+pub async fn discard_files(
+    repo_id: String,
+    file_paths: Vec<String>,
+    repo_manager: State<'_, RepoManager>,
+) -> Result<(), GitError> {
+    let meta = repo_manager
+        .get_meta(&repo_id)
+        .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
+    GitEngine::discard_files(&meta.path, &file_paths)
+}
+
 /// 在系统文件管理器中高亮显示指定文件（接收绝对文件路径）。
 /// macOS: `open -R <path>`  Windows: `explorer /select,<path>`  Linux: xdg-open 父目录
 #[tauri::command]

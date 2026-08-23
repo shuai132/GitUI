@@ -1,4 +1,7 @@
-use std::path::{Component, Path, PathBuf};
+use std::{
+    collections::HashSet,
+    path::{Component, Path, PathBuf},
+};
 
 use crate::git::error::{GitError, GitResult};
 
@@ -180,38 +183,84 @@ impl GitEngine {
 
     // ── Discard ────────────────────────────────────────────────────────
 
-    /// 丢弃所有工作区变更 + untracked 文件。保持 HEAD 不动。
-    /// 不删除 `.gitignore` 里的 ignored 文件。
+    /// 丢弃所有工作区变更 + untracked 文件。保持 HEAD 不动，且不处理 ignored 文件。
+    /// 当前工作区原件会先移入系统废纸篓；失败时不会降级为永久删除。
     pub fn discard_all_changes(path: &str) -> GitResult<()> {
+        Self::discard_all_changes_with(path, move_to_system_trash)
+    }
+
+    pub(crate) fn discard_all_changes_with<F>(path: &str, mut move_to_trash: F) -> GitResult<()>
+    where
+        F: FnMut(&Path) -> GitResult<()>,
+    {
         let repo = Self::open(path)?;
-        let mut cb = git2::build::CheckoutBuilder::new();
-        cb.force().remove_untracked(true);
-        repo.checkout_head(Some(&mut cb))?;
+        let head_oid = match repo.head() {
+            Ok(reference) => Some(reference.peel_to_commit()?.id()),
+            Err(error)
+                if matches!(
+                    error.code(),
+                    git2::ErrorCode::UnbornBranch | git2::ErrorCode::NotFound
+                ) =>
+            {
+                None
+            }
+            Err(error) => return Err(error.into()),
+        };
+        let mut opts = git2::StatusOptions::new();
+        opts.include_untracked(true)
+            .recurse_untracked_dirs(true)
+            .include_ignored(false);
+        let file_paths = repo
+            .statuses(Some(&mut opts))?
+            .iter()
+            .filter_map(|entry| entry.path().map(ToOwned::to_owned))
+            .collect::<Vec<_>>();
+        let mut index = repo.index()?;
+        move_worktree_originals(&repo, &index, &file_paths, &mut move_to_trash)?;
+
+        if let Some(head_oid) = head_oid {
+            let head = repo.find_object(head_oid, Some(git2::ObjectType::Commit))?;
+            let mut cb = git2::build::CheckoutBuilder::new();
+            cb.force();
+            repo.reset(&head, git2::ResetType::Hard, Some(&mut cb))?;
+        } else {
+            index.clear()?;
+            index.write()?;
+        }
         Ok(())
     }
 
     /// 丢弃单个文件的未暂存变更（恢复工作区到 index）
-    /// 若是 untracked 文件，会被移除。
+    /// 当前工作区原件会先移入系统废纸篓。
     pub fn discard_file(path: &str, file_path: &str) -> GitResult<()> {
+        Self::discard_files(path, &[file_path.to_string()])
+    }
+
+    /// 批量丢弃文件的未暂存变更，只打开一次仓库并执行一次 checkout。
+    pub fn discard_files(path: &str, file_paths: &[String]) -> GitResult<()> {
+        Self::discard_files_with(path, file_paths, move_to_system_trash)
+    }
+
+    pub(crate) fn discard_files_with<F>(
+        path: &str,
+        file_paths: &[String],
+        mut move_to_trash: F,
+    ) -> GitResult<()>
+    where
+        F: FnMut(&Path) -> GitResult<()>,
+    {
         let repo = Self::open(path)?;
         let mut index = repo.index()?;
-        if index.get_path(Path::new(file_path), 0).is_none() {
-            let workdir = repo
-                .workdir()
-                .ok_or_else(|| GitError::OperationFailed("仓库没有工作目录".to_string()))?;
-            let target = workdir.join(file_path);
-            if target.is_dir() {
-                std::fs::remove_dir_all(&target)
-                    .map_err(|e| GitError::OperationFailed(format!("删除未跟踪目录失败：{}", e)))?;
-            } else if target.exists() {
-                std::fs::remove_file(&target)
-                    .map_err(|e| GitError::OperationFailed(format!("删除未跟踪文件失败：{}", e)))?;
-            }
+        let tracked_paths = move_worktree_originals(&repo, &index, file_paths, &mut move_to_trash)?;
+        if tracked_paths.is_empty() {
             return Ok(());
         }
 
         let mut cb = git2::build::CheckoutBuilder::new();
-        cb.force().path(file_path);
+        cb.force();
+        for file_path in tracked_paths {
+            cb.path(file_path);
+        }
         repo.checkout_index(Some(&mut index), Some(&mut cb))?;
         Ok(())
     }
@@ -244,6 +293,56 @@ impl GitEngine {
         Self::apply_workdir_diff(&repo, &diff, patch_text, false)?;
         Ok(())
     }
+}
+
+fn move_to_system_trash(path: &Path) -> GitResult<()> {
+    trash::delete(path).map_err(|error| {
+        GitError::OperationFailed(format!(
+            "无法将 {} 移入系统废纸篓：{}",
+            path.display(),
+            error
+        ))
+    })
+}
+
+fn move_worktree_originals<F>(
+    repo: &git2::Repository,
+    index: &git2::Index,
+    file_paths: &[String],
+    move_to_trash: &mut F,
+) -> GitResult<Vec<String>>
+where
+    F: FnMut(&Path) -> GitResult<()>,
+{
+    let workdir = repo
+        .workdir()
+        .ok_or_else(|| GitError::OperationFailed("仓库没有工作目录".to_string()))?;
+    let mut seen = HashSet::new();
+    let mut tracked_paths = Vec::new();
+
+    for file_path in file_paths {
+        if !seen.insert(file_path.clone()) {
+            continue;
+        }
+        let target = safe_workdir_path(workdir, file_path)?;
+        let index_entry = index.get_path(Path::new(file_path), 0);
+        let is_gitlink = index_entry
+            .as_ref()
+            .is_some_and(|entry| entry.mode == u32::from(git2::FileMode::Commit));
+
+        if path_present(&target) && !is_gitlink {
+            move_to_trash(&target)?;
+        }
+        if index_entry.is_some() {
+            tracked_paths.push(file_path.clone());
+        }
+    }
+
+    Ok(tracked_paths)
+}
+
+fn path_present(path: &Path) -> bool {
+    std::fs::symlink_metadata(path).is_ok()
 }
 
 struct ParsedPatch {

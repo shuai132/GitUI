@@ -81,9 +81,7 @@ export function useWipFileActions(options: WipFileActionsOptions) {
   async function batchDiscard() {
     const paths = [...unstagedMultiPaths.value]
     if (!confirmDiscardSelected(paths.length)) return
-    for (const path of paths) {
-      await workspaceStore.discardFile(path)
-    }
+    await workspaceStore.discardFiles(paths)
     if (paths.includes(selectedPath.value ?? '')) {
       selectedPath.value = null
     }

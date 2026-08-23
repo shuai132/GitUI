@@ -156,6 +156,7 @@ pub fn run() {
             consume_startup_repo,
             discard_all_changes,
             discard_file,
+            discard_files,
             get_reflog,
             run_gc,
             drop_unreachable_commit,
