@@ -315,6 +315,7 @@ pub struct CreateWorktreeOptions {
     pub start_point: Option<String>,
     #[serde(default)]
     pub start_point_is_remote: bool,
+    pub expected_start_oid: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -465,6 +466,7 @@ pub async fn create_worktree(
             &opts.branch_name,
             opts.start_point.as_deref(),
             opts.start_point_is_remote,
+            &opts.expected_start_oid,
         )
     });
 

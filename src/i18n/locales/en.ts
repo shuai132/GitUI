@@ -1205,7 +1205,10 @@ const messages = {
     stash: { targetChanged: 'The stash stack changed, so the action was cancelled. Select the target again.' },
     history: { contextChanged: 'The repository or HEAD changed, so the pending history action was cancelled. Select the target again.' },
     reflog: { contextChanged: 'The reflog changed, so the affected entries were refreshed. Review the new count and confirm again.' },
-    worktree: { dirty: 'Working tree has uncommitted changes, please commit / stash / discard first' },
+    worktree: {
+      dirty: 'Working tree has uncommitted changes, please commit / stash / discard first',
+      startPointChanged: 'The selected Worktree start branch moved. Refresh the choices and select the start point again.',
+    },
     cherrypick: { conflict: '{type} conflict detected — resolve it to continue' },
     config: { missingUser: 'git config is missing user.name / user.email, please configure it in the terminal first' },
     repo: { invalid: 'Not a Git repository, or the repository is no longer valid' },

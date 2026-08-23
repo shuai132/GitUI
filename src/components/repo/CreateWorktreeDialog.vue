@@ -23,7 +23,10 @@ interface WorktreeStartPoint {
   name: string
   is_remote: boolean
   is_head: boolean
+  commit_oid: string
 }
+
+type ResolvedBranch = BranchInfo & { commit_oid: string }
 
 const git = useGitCommands()
 const repoStore = useRepoStore()
@@ -122,15 +125,17 @@ function dirname(path: string): string {
   return idx > 0 ? normalized.slice(0, idx) : ''
 }
 
-function toStartPoint(branch: BranchInfo): WorktreeStartPoint {
+function toStartPoint(branch: ResolvedBranch): WorktreeStartPoint {
+  const baseLabel = branch.is_remote
+    ? t('repo.worktree.remoteStartPoint', { name: branch.name })
+    : branch.name
   return {
     key: `${branch.is_remote ? 'remote' : 'local'}:${branch.name}`,
-    label: branch.is_remote
-      ? t('repo.worktree.remoteStartPoint', { name: branch.name })
-      : branch.name,
+    label: `${baseLabel} · ${branch.commit_oid.slice(0, 7)}`,
     name: branch.name,
     is_remote: branch.is_remote,
     is_head: branch.is_head,
+    commit_oid: branch.commit_oid,
   }
 }
 
@@ -141,8 +146,11 @@ async function loadStartPoints(repo: RepoMeta) {
   try {
     const branches = await git.listBranches(repo.id)
     if (seq !== branchLoadSeq) return
-    const local = branches.filter((branch) => !branch.is_remote).map(toStartPoint)
-    const remote = branches.filter((branch) => branch.is_remote).map(toStartPoint)
+    const resolved = branches.filter(
+      (branch): branch is ResolvedBranch => typeof branch.commit_oid === 'string',
+    )
+    const local = resolved.filter((branch) => !branch.is_remote).map(toStartPoint)
+    const remote = resolved.filter((branch) => branch.is_remote).map(toStartPoint)
     startPoints.value = [...local, ...remote]
     const head = startPoints.value.find((branch) => branch.is_head)
     startPointKey.value = (head ?? startPoints.value[0])?.key ?? ''
@@ -201,6 +209,7 @@ async function onSubmit() {
       branchName: branchName.value.trim(),
       startPoint: startPoint.name,
       startPointIsRemote: startPoint.is_remote,
+      expectedStartOid: startPoint.commit_oid,
     })
     emit('close')
   } catch (e: unknown) {

@@ -16,6 +16,7 @@ impl GitEngine {
         branch_name: &str,
         start_point: Option<&str>,
         start_point_is_remote: bool,
+        expected_start_oid: &str,
     ) -> GitResult<String> {
         let repo = Self::open(path)?;
         repo.workdir()
@@ -29,7 +30,12 @@ impl GitEngine {
             )));
         }
 
-        let start_commit = resolve_start_commit(&repo, start_point, start_point_is_remote)?;
+        let start_commit = resolve_start_commit(
+            &repo,
+            start_point,
+            start_point_is_remote,
+            expected_start_oid,
+        )?;
         let created_branch = repo.branch(branch_name, &start_commit, false)?;
         drop(start_commit);
 
@@ -126,28 +132,39 @@ fn resolve_start_commit<'repo>(
     repo: &'repo Repository,
     start_point: Option<&str>,
     start_point_is_remote: bool,
+    expected_start_oid: &str,
 ) -> GitResult<git2::Commit<'repo>> {
-    let Some(name) = start_point.map(str::trim).filter(|s| !s.is_empty()) else {
-        return repo.head()?.peel_to_commit().map_err(GitError::from);
-    };
-
-    let branch_type = if start_point_is_remote {
-        BranchType::Remote
-    } else {
-        BranchType::Local
-    };
-    let branch = repo.find_branch(name, branch_type).map_err(|e| {
-        let kind = if start_point_is_remote {
-            "remote branch"
-        } else {
-            "local branch"
-        };
-        GitError::OperationFailed(format!("cannot find {kind} '{name}': {}", e.message()))
+    let expected = git2::Oid::from_str(expected_start_oid).map_err(|e| {
+        GitError::OperationFailed(format!("invalid expected worktree start OID: {e}"))
     })?;
-    branch
-        .get()
-        .peel_to_commit()
-        .map_err(|e| GitError::OperationFailed(e.message().to_string()))
+    let commit = if let Some(name) = start_point.map(str::trim).filter(|s| !s.is_empty()) {
+        let branch_type = if start_point_is_remote {
+            BranchType::Remote
+        } else {
+            BranchType::Local
+        };
+        let branch = repo.find_branch(name, branch_type).map_err(|e| {
+            let kind = if start_point_is_remote {
+                "remote branch"
+            } else {
+                "local branch"
+            };
+            GitError::OperationFailed(format!("cannot find {kind} '{name}': {}", e.message()))
+        })?;
+        branch
+            .get()
+            .peel_to_commit()
+            .map_err(|e| GitError::OperationFailed(e.message().to_string()))?
+    } else {
+        repo.head()?.peel_to_commit()?
+    };
+    if commit.id() != expected {
+        return Err(GitError::OperationFailed(format!(
+            "Worktree start point changed: expected {expected}, current {}",
+            commit.id()
+        )));
+    }
+    Ok(commit)
 }
 
 fn unique_worktree_name(repo: &Repository, target: &Path) -> GitResult<String> {
@@ -190,14 +207,36 @@ fn is_dir_empty(path: &Path) -> bool {
 mod tests {
     use super::*;
     use crate::git::test_utils::TestRepo;
+    use std::fs;
 
     fn head_oid(repo: &Repository) -> git2::Oid {
         repo.head().unwrap().target().unwrap()
     }
 
+    fn commit_file(
+        test_repo: &TestRepo,
+        message: &str,
+        file_name: &str,
+        content: &str,
+    ) -> git2::Oid {
+        fs::write(test_repo.dir.path().join(file_name), content).unwrap();
+        let mut index = test_repo.repo.index().unwrap();
+        index.add_path(Path::new(file_name)).unwrap();
+        index.write().unwrap();
+        let tree_oid = index.write_tree().unwrap();
+        let tree = test_repo.repo.find_tree(tree_oid).unwrap();
+        let parent = test_repo.repo.head().unwrap().peel_to_commit().unwrap();
+        let sig = test_repo.repo.signature().unwrap();
+        test_repo
+            .repo
+            .commit(Some("HEAD"), &sig, &sig, message, &tree, &[&parent])
+            .unwrap()
+    }
+
     #[test]
     fn creates_worktree_from_head() {
         let test_repo = TestRepo::new();
+        let oid = head_oid(&test_repo.repo);
         let parent = tempfile::tempdir().unwrap();
         let target = parent.path().join("feature-head");
 
@@ -207,6 +246,7 @@ mod tests {
             "feature/head",
             None,
             false,
+            &oid.to_string(),
         )
         .unwrap();
 
@@ -240,6 +280,7 @@ mod tests {
             "feature/local",
             Some("base/local"),
             false,
+            &commit.id().to_string(),
         )
         .unwrap();
 
@@ -272,6 +313,7 @@ mod tests {
             "feature/remote",
             Some("origin/main"),
             true,
+            &oid.to_string(),
         )
         .unwrap();
 
@@ -290,6 +332,7 @@ mod tests {
     #[test]
     fn rejects_existing_branch_and_non_empty_target() {
         let test_repo = TestRepo::new();
+        let oid = head_oid(&test_repo.repo);
         let parent = tempfile::tempdir().unwrap();
         let target = parent.path().join("not-empty");
         std::fs::create_dir(&target).unwrap();
@@ -301,6 +344,7 @@ mod tests {
             "feature/non-empty",
             None,
             false,
+            &oid.to_string(),
         )
         .unwrap_err();
         assert!(matches!(err, GitError::OperationFailed(_)));
@@ -319,8 +363,45 @@ mod tests {
             &existing_branch,
             None,
             false,
+            &oid.to_string(),
         )
         .unwrap_err();
         assert!(matches!(err, GitError::OperationFailed(_)));
+    }
+
+    #[test]
+    fn rejects_a_start_branch_that_moved_after_selection() {
+        let test_repo = TestRepo::new();
+        let original = head_oid(&test_repo.repo);
+        let original_commit = test_repo.repo.find_commit(original).unwrap();
+        test_repo
+            .repo
+            .branch("base/moving", &original_commit, false)
+            .unwrap();
+        drop(original_commit);
+        let moved = commit_file(&test_repo, "moved", "moved.txt", "moved\n");
+        test_repo
+            .repo
+            .reference("refs/heads/base/moving", moved, true, "move test branch")
+            .unwrap();
+        let parent = tempfile::tempdir().unwrap();
+        let target = parent.path().join("stale-start");
+
+        let error = GitEngine::create_worktree(
+            test_repo.path_str(),
+            target.to_str().unwrap(),
+            "feature/stale-start",
+            Some("base/moving"),
+            false,
+            &original.to_string(),
+        )
+        .unwrap_err();
+
+        assert!(error.to_string().contains("start point changed"));
+        assert!(!target.exists());
+        assert!(test_repo
+            .repo
+            .find_branch("feature/stale-start", BranchType::Local)
+            .is_err());
     }
 }

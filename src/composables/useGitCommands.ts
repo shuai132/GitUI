@@ -100,6 +100,7 @@ export function useGitCommands() {
       branchName: string
       startPoint?: string
       startPointIsRemote: boolean
+      expectedStartOid: string
     },
   ) => call<string>('create_worktree', { repoId, opts })
 

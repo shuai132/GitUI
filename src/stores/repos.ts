@@ -257,6 +257,7 @@ export const useRepoStore = defineStore('repos', () => {
       branchName: string
       startPoint?: string
       startPointIsRemote: boolean
+      expectedStartOid: string
     },
   ): Promise<RepoMeta> {
     const workdir = await git.createWorktree(repoId, opts)

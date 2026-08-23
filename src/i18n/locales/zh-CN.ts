@@ -1204,7 +1204,10 @@ const messages = {
     stash: { targetChanged: 'Stash 栈已变化，已取消操作；请重新选择目标' },
     history: { contextChanged: '仓库或 HEAD 已变化，已取消旧的历史操作；请重新选择目标' },
     reflog: { contextChanged: 'Reflog 已变化，受影响条目已重新预览；请核对新数量后再次确认' },
-    worktree: { dirty: '工作区有未提交的变更，请先 commit / stash / discard' },
+    worktree: {
+      dirty: '工作区有未提交的变更，请先 commit / stash / discard',
+      startPointChanged: '所选 Worktree 起点分支已移动，请刷新选项并重新选择起点',
+    },
     cherrypick: { conflict: '{type} 出现冲突，请解决后继续' },
     config: { missingUser: '当前 git config 缺少 user.name / user.email，请先在终端设置' },
     repo: { invalid: '不是 Git 仓库，或仓库已失效' },

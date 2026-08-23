@@ -158,6 +158,11 @@ const PATTERNS: Array<{ test: (msg: string) => boolean; build: (msg: string) => 
     test: (m) => /Reflog removal context changed/i.test(m),
     build: () => ({ key: 'errors.reflog.contextChanged' }),
   },
+  // Worktree 对话框打开后，所选起点分支被外部操作移动
+  {
+    test: (m) => /Worktree start point changed/i.test(m),
+    build: () => ({ key: 'errors.worktree.startPointChanged' }),
+  },
   // Rebase 冲突
   {
     test: (m) => /Rebase conflict|Rebase 出现冲突/i.test(m),

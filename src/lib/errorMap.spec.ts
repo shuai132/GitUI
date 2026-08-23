@@ -43,4 +43,11 @@ describe('mapGitError', () => {
       message: 'Reflog removal context changed; preview the affected entries again',
     })).toMatchObject({ key: 'errors.reflog.contextChanged' })
   })
+
+  it('maps a moved Worktree start branch to refresh guidance', () => {
+    expect(mapGitError('create_worktree', {
+      kind: 'OperationFailed',
+      message: 'Worktree start point changed: expected old, current new',
+    })).toMatchObject({ key: 'errors.worktree.startPointChanged' })
+  })
 })
