@@ -671,6 +671,11 @@ export const useUiStore = defineStore('ui', () => {
     openRepoSearchSignal.value++
   }
 
+  const focusCommitMessageSignal = ref(0)
+  function requestFocusCommitMessage() {
+    focusCommitMessageSignal.value++
+  }
+
   const openDiffSearchSignal = ref(0)
   function requestOpenDiffSearch() {
     openDiffSearchSignal.value++
@@ -754,6 +759,8 @@ export const useUiStore = defineStore('ui', () => {
     requestOpenSearch,
     openRepoSearchSignal,
     requestOpenRepoSearch,
+    focusCommitMessageSignal,
+    requestFocusCommitMessage,
     openDiffSearchSignal,
     requestOpenDiffSearch,
     fetchSignal,

@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { bindingToLabel, matchesBinding, useShortcutsStore } from '@/stores/shortcuts'
 import { useHistoryStore } from '@/stores/history'
 import { useWorkspaceStore } from '@/stores/workspace'
+import { useUiStore } from '@/stores/ui'
 
 const props = defineProps<{
   isUnborn: boolean
@@ -12,6 +13,7 @@ const props = defineProps<{
 
 const { t } = useI18n()
 const workspaceStore = useWorkspaceStore()
+const uiStore = useUiStore()
 const historyStore = useHistoryStore()
 const shortcutsStore = useShortcutsStore()
 
@@ -25,6 +27,17 @@ const message = computed({
 const committing = ref(false)
 const commitError = ref<string | null>(null)
 const messageInputRef = ref<HTMLTextAreaElement | null>(null)
+
+watch(
+  () => uiStore.focusCommitMessageSignal,
+  async () => {
+    await nextTick()
+    const input = messageInputRef.value
+    if (!input) return
+    input.focus()
+    input.setSelectionRange(input.value.length, input.value.length)
+  },
+)
 
 const canCommit = computed(() => {
   if (committing.value) return false

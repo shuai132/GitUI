@@ -10,15 +10,17 @@
  * 2. 当前有快捷键录制正在进行（页面上存在 .shortcut-key.recording 元素）
  */
 
-import { onMounted, onUnmounted } from 'vue'
+import { nextTick, onMounted, onUnmounted } from 'vue'
 import { useShortcutsStore, matchesBinding } from '@/stores/shortcuts'
 import { useUiStore } from '@/stores/ui'
 import { useHistoryStore } from '@/stores/history'
 import { useRepoStore } from '@/stores/repos'
 import { useTerminalStore } from '@/stores/terminal'
 import { useWorkspaceStore } from '@/stores/workspace'
+import { useDiffStore } from '@/stores/diff'
 import { useGlobalToast } from '@/composables/useGlobalToast'
 import { useRepositoryRefresh } from '@/composables/useRepositoryRefresh'
+import { findWipFileBySelection } from '@/utils/wipSelection'
 
 export function useShortcuts() {
   const shortcutsStore = useShortcutsStore()
@@ -27,6 +29,7 @@ export function useShortcuts() {
   const repoStore = useRepoStore()
   const terminalStore = useTerminalStore()
   const workspaceStore = useWorkspaceStore()
+  const diffStore = useDiffStore()
   const { showError } = useGlobalToast()
   const { refreshActiveRepository } = useRepositoryRefresh()
 
@@ -49,6 +52,74 @@ export function useShortcuts() {
     function consume() {
       e.preventDefault()
       e.stopPropagation()
+    }
+
+    function currentWipFile() {
+      const status = workspaceStore.status
+      const selectedPath = workspaceStore.wipSelectedPath
+      if (!historyStore.selectedWip || !status || !selectedPath) return null
+      return findWipFileBySelection(
+        [...status.unstaged, ...status.untracked, ...status.staged],
+        selectedPath,
+        diffStore.currentStaged,
+      )
+    }
+
+    async function moveCurrentWipFile(targetStaged: boolean): Promise<boolean> {
+      const file = currentWipFile()
+      if (!file || file.staged === targetStaged) return false
+      consume()
+      if (e.repeat) return true
+
+      const repoId = repoStore.activeRepoId
+      const sourceStaged = file.staged
+      try {
+        if (targetStaged) await workspaceStore.stageFile(file.path)
+        else await workspaceStore.unstageFile(file.path)
+        if (
+          repoStore.activeRepoId === repoId &&
+          workspaceStore.wipSelectedPath === file.path &&
+          diffStore.currentPath === file.path &&
+          diffStore.currentStaged === sourceStaged
+        ) {
+          await diffStore.loadFileDiff(file.path, targetStaged)
+        }
+      } catch (err) {
+        showError(String(err))
+      }
+      return true
+    }
+
+    async function moveAllWipFiles(targetStaged: boolean): Promise<boolean> {
+      const status = workspaceStore.status
+      if (!historyStore.selectedWip || !status) return false
+      const sourceCount = targetStaged
+        ? status.unstaged.length + status.untracked.length
+        : status.staged.length
+      if (sourceCount === 0) return false
+
+      consume()
+      if (e.repeat) return true
+      const selected = currentWipFile()
+      const repoId = repoStore.activeRepoId
+      const selectedPath = workspaceStore.wipSelectedPath
+      const selectedStaged = diffStore.currentStaged
+      try {
+        if (targetStaged) await workspaceStore.stageAll()
+        else await workspaceStore.unstageAll()
+        if (
+          selected &&
+          repoStore.activeRepoId === repoId &&
+          workspaceStore.wipSelectedPath === selectedPath &&
+          diffStore.currentPath === selected.path &&
+          diffStore.currentStaged === selectedStaged
+        ) {
+          await diffStore.loadFileDiff(selected.path, targetStaged)
+        }
+      } catch (err) {
+        showError(String(err))
+      }
+      return true
     }
 
     if (matchesBinding(e, b.refresh)) {
@@ -114,6 +185,32 @@ export function useShortcuts() {
     if (matchesBinding(e, b.nextCommit)) {
       consume()
       historyStore.jumpAdjacentCommit(1)
+      return
+    }
+
+    if (matchesBinding(e, b.stageCurrentFile)) {
+      if (await moveCurrentWipFile(true)) return
+    }
+
+    if (matchesBinding(e, b.unstageCurrentFile)) {
+      if (await moveCurrentWipFile(false)) return
+    }
+
+    if (matchesBinding(e, b.stageAllFiles)) {
+      if (await moveAllWipFiles(true)) return
+    }
+
+    if (matchesBinding(e, b.unstageAllFiles)) {
+      if (await moveAllWipFiles(false)) return
+    }
+
+    if (matchesBinding(e, b.focusCommitMessage) && historyStore.selectedWip) {
+      consume()
+      if (!e.repeat) {
+        historyStore.showDetail = true
+        await nextTick()
+        uiStore.requestFocusCommitMessage()
+      }
       return
     }
 

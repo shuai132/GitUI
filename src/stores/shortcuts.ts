@@ -20,6 +20,11 @@ export type ShortcutActionId =
   | 'openRepo'
   | 'prevCommit'
   | 'nextCommit'
+  | 'stageCurrentFile'
+  | 'unstageCurrentFile'
+  | 'stageAllFiles'
+  | 'unstageAllFiles'
+  | 'focusCommitMessage'
   | 'commit'
   | 'toggleDiffLayout'
 
@@ -62,6 +67,11 @@ export const SHORTCUT_DEFS: ShortcutDef[] = [
   { id: 'openRepo',         labelKey: 'shortcuts.openRepo',         defaultBinding: mkBinding('o', { shift: true }) },
   { id: 'prevCommit',       labelKey: 'shortcuts.prevCommit',       defaultBinding: { key: 'ArrowUp', alt: true } },
   { id: 'nextCommit',       labelKey: 'shortcuts.nextCommit',       defaultBinding: { key: 'ArrowDown', alt: true } },
+  { id: 'stageCurrentFile', labelKey: 'shortcuts.stageCurrentFile', defaultBinding: { key: 's' } },
+  { id: 'unstageCurrentFile', labelKey: 'shortcuts.unstageCurrentFile', defaultBinding: { key: 'u' } },
+  { id: 'stageAllFiles',    labelKey: 'shortcuts.stageAllFiles',    defaultBinding: mkBinding('s', { shift: true }) },
+  { id: 'unstageAllFiles',  labelKey: 'shortcuts.unstageAllFiles',  defaultBinding: mkBinding('u', { shift: true }) },
+  { id: 'focusCommitMessage', labelKey: 'shortcuts.focusCommitMessage', defaultBinding: mkBinding('m', { shift: true }) },
   { id: 'commit',           labelKey: 'shortcuts.commit',           defaultBinding: mkBinding('Enter') },
   { id: 'toggleDiffLayout', labelKey: 'shortcuts.toggleDiffLayout', defaultBinding: mkBinding('d', { shift: true }) },
 ]

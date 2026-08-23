@@ -21,7 +21,7 @@
 
 - [x] 多仓库管理：侧边栏切换、同名仓库自动路径消歧、仓库搜索与全键盘快速切换、各列表放大镜搜索、Submodule 仓库子树展示、linked Worktree 创建并加入所有仓库、路径持久化、多窗口单一托盘入口、仓库右键菜单（复制名称 / 复制绝对路径 / 新建 Worktree / 新窗口 / Finder / 终端）
 - [x] 添加仓库：打开本地 / 拖入一个或多个仓库目录 / 克隆远程（含浅克隆、递归子模块、实时进度）/ 新建本地仓库
-- [x] 工作副本：暂存 / 取消暂存（支持文件级、目录级和 hunk 级）、提交、amend、discard（未暂存文件、hunk 或全部）；文件右键菜单（复制路径、在 Finder/编辑器/终端中打开、打开 / 初始化 / 更新 Submodule、添加到 .gitignore、按仓库移动到变更列表最前 / 最后）；支持文件树状显示
+- [x] 工作副本：暂存 / 取消暂存（支持文件级、目录级和 hunk 级及全键盘审阅流程）、提交、amend、discard（未暂存文件、hunk 或全部）；文件右键菜单（复制路径、在 Finder/编辑器/终端中打开、打开 / 初始化 / 更新 Submodule、添加到 .gitignore、按仓库移动到变更列表最前 / 最后）；支持文件树状显示
 - [x] 提交历史：分页加载、提交图可视化、打开仓库自动定位当前 HEAD、按仓库保存当前分支 first-parent Solo、远程分支过滤、可排序历史列、可隐藏变更规模列（文件数、增删行、大文件 / 二进制提示）、丢失引用 / 贮藏可视化、本地搜索、提交行 tag 胶囊；变动文件右键菜单（复制路径、在 Finder/编辑器中打开、打开 / 初始化 / 更新 Submodule、签出该文件历史版本、按仓库移动到变更列表最前 / 最后），历史 gitlink 会标记为 Submodule
 - [x] 提交操作：checkout、远程分支 chip 快速检出、cherry-pick、revert、reset（soft / mixed / hard）、创建 tag、修改提交信息（HEAD 走 amend，历史提交走 rebase reword，支持编辑作者/提交时间并双向一键对齐）
 - [x] Merge / Rebase：完整 merge（ff / no-ff / squash）、交互式 rebase（reword / squash / fixup / drop / reorder）；右键菜单或拖拽 commit 触发；冲突时用内置三路合并编辑器解决；可选"自动 stash & 恢复"
