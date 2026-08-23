@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Modal from '@/components/common/Modal.vue'
 import AppearanceSection from './AppearanceSection.vue'
@@ -20,6 +20,12 @@ const { t } = useI18n()
 
 type Tab = 'appearance' | 'font' | 'tools' | 'advanced' | 'shortcuts' | 'plugins' | 'update' | 'about'
 const activeTab = ref<Tab>('appearance')
+const tabsetId = useId()
+const panelId = `settings-panel-${tabsetId}`
+
+function tabId(tab: Tab): string {
+  return `settings-tab-${tabsetId}-${tab}`
+}
 
 const tabs = computed<Array<{ id: Tab; label: string }>>(() => [
   { id: 'appearance', label: t('settings.tabs.appearance') },
@@ -31,6 +37,27 @@ const tabs = computed<Array<{ id: Tab; label: string }>>(() => [
   { id: 'update', label: t('settings.tabs.update') },
   { id: 'about', label: t('settings.tabs.about') },
 ])
+
+function onTabKeydown(e: KeyboardEvent, currentTab: Tab) {
+  const tabOrder = tabs.value.map((tab) => tab.id)
+  const currentIndex = tabOrder.indexOf(currentTab)
+  let nextIndex: number | null = null
+  if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
+    nextIndex = (currentIndex + 1) % tabOrder.length
+  }
+  if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
+    nextIndex = (currentIndex - 1 + tabOrder.length) % tabOrder.length
+  }
+  if (e.key === 'Home') nextIndex = 0
+  if (e.key === 'End') nextIndex = tabOrder.length - 1
+  if (nextIndex === null) return
+
+  e.preventDefault()
+  const nextTab = tabOrder[nextIndex]
+  activeTab.value = nextTab
+  const tabList = (e.currentTarget as HTMLElement).closest('[role="tablist"]')
+  tabList?.querySelector<HTMLElement>(`[data-settings-tab="${nextTab}"]`)?.focus()
+}
 
 const resetLabel = computed(() => {
   switch (activeTab.value) {
@@ -66,18 +93,32 @@ const resetDisabled = computed(() =>
     @close="emit('close')"
   >
     <div class="settings-layout">
-      <nav class="settings-tabs">
+      <nav class="settings-tabs" role="tablist" aria-orientation="vertical">
         <button
           v-for="tab in tabs"
           :key="tab.id"
+          type="button"
           class="tab-btn"
           :class="{ 'is-active': activeTab === tab.id }"
+          role="tab"
+          :id="tabId(tab.id)"
+          :data-settings-tab="tab.id"
+          :aria-selected="activeTab === tab.id"
+          :aria-controls="panelId"
+          :tabindex="activeTab === tab.id ? 0 : -1"
           @click="activeTab = tab.id"
+          @keydown="onTabKeydown($event, tab.id)"
         >
           {{ tab.label }}
         </button>
       </nav>
-      <div class="settings-content">
+      <div
+        :id="panelId"
+        class="settings-content"
+        role="tabpanel"
+        :aria-labelledby="tabId(activeTab)"
+        tabindex="0"
+      >
         <AppearanceSection v-if="activeTab === 'appearance'" />
         <FontSection v-else-if="activeTab === 'font'" />
         <ExternalToolsSection v-else-if="activeTab === 'tools'" />
