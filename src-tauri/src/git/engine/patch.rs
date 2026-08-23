@@ -112,11 +112,17 @@ impl GitEngine {
 
     /// 在当前 HEAD 上 amend 一次提交：用 index 里的 tree + 新 message 替换
     /// HEAD commit。返回新 commit OID。
-    pub fn amend_commit(path: &str, message: &str) -> GitResult<String> {
+    pub fn amend_commit(
+        path: &str,
+        message: &str,
+        expected_head: &str,
+        expected_head_ref: &str,
+    ) -> GitResult<String> {
         let repo = Self::open(path)?;
         if message.trim().is_empty() {
             return Err(GitError::OperationFailed("提交信息不能为空".to_string()));
         }
+        Self::ensure_commit_context(&repo, Some(expected_head), expected_head_ref)?;
         let head = repo.head()?.peel_to_commit()?;
         let committer = repo.signature()?;
         let mut index = repo.index()?;
@@ -149,11 +155,14 @@ impl GitEngine {
         committer_time: Option<i64>,
         author_name: Option<&str>,
         author_email: Option<&str>,
+        expected_head: &str,
+        expected_head_ref: &str,
     ) -> GitResult<String> {
         let repo = Self::open(path)?;
         if message.trim().is_empty() {
             return Err(GitError::OperationFailed("提交信息不能为空".to_string()));
         }
+        Self::ensure_commit_context(&repo, Some(expected_head), expected_head_ref)?;
         let head = repo.head()?.peel_to_commit()?;
         // committer：有指定时间则覆盖，否则用当前时间（repo.signature()）
         let committer_base = repo.signature()?;

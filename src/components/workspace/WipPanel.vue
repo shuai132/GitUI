@@ -624,7 +624,11 @@ watch(
       </div>
     </div>
 
-    <WipCommitBox :is-unborn="isUnborn" :staged-count="stagedAll.length" />
+    <WipCommitBox
+      :is-unborn="isUnborn"
+      :staged-count="stagedAll.length"
+      :operation-in-progress="mergeRebaseStore.isOngoing"
+    />
 
     <WorkspaceDiscardDialog
       :request="pendingWorkspaceDiscard"

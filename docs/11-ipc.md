@@ -20,14 +20,14 @@ GitUI 采用 Tauri v2 的 IPC 机制实现前后端通信，包括双向的请�
 - `validate_repo_path`：路径合法性校验。
 
 ### 工作区与索引 (Status / Index)
-- `get_status` / `get_repo_state`：获取当前工作区状态及仓库特定状态（如 Merge/Rebase 中）。`FileEntry.status` 使用 `git/types.rs::FileStatusKind`，其中 `type_changed` 表示普通文件、符号链接、gitlink 等文件类型变化。
+- `get_status` / `get_repo_state`：获取当前工作区状态及仓库特定状态（如 Merge/Rebase 中）。`FileEntry.status` 使用 `git/types.rs::FileStatusKind`，其中 `type_changed` 表示普通文件、符号链接、gitlink 等文件类型变化；`WorkspaceStatus` 同时返回后端解析的完整 HEAD ref，覆盖 unborn 与 detached 边界。
 - `stage_file` / `unstage_file` / `stage_files` / `unstage_files` / `stage_all` / `unstage_all`：索引区精细化管理。批量命令接收仓库相对路径数组，复用一次仓库打开和 Index 写盘。
 - `apply_patch`：将补丁文本应用到工作区（常用于历史记录的单个变动行/Hunk回滚，或放弃未暂存 Hunk）。
 - `apply_patch_to_index`：将补丁文本应用到 Index（用于工作区单个 Hunk 的暂存 / 取消暂存）。
 - `apply_patch_to_workdir_and_index`：将补丁文本同时应用到工作区和 Index（用于放弃已暂存 Hunk）。
 
 ### 提交管理 (Commit)
-- `create_commit` / `amend_commit` / `amend_commit_message`：提交创建与修补。
+- `create_commit` / `amend_commit` / `amend_commit_message`：提交创建与修补。三个命令都必须携带预期 HEAD OID / ref；`create_commit` 的空 OID 明确表示预期 unborn。后端只在仓库状态 clean 且上下文完全匹配时写入。
 - `undo_last_commit(repo_id, expected_head)`：撤销当前分支刚创建的未发布单父提交；原子校验 HEAD 与 upstream 后执行 mixed reset，返回父提交 OID。
 - `checkout_commit` / `reset_to_commit`：版本回退与切换。历史确认流程可传 `expected_head` 与 `expected_head_ref`，后端在写操作前校验 HEAD 提交和分支引用仍与用户打开确认框时一致。
 - `cherry_pick_commit` / `revert_commit` / `create_tag`：高级版本操作。Cherry-pick / Revert 同样支持 HEAD 提交与引用快照，防止执行过期确认请求。

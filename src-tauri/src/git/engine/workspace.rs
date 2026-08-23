@@ -1,7 +1,10 @@
 use git2::{Diff, DiffFormat, DiffOptions, Repository, RepositoryState, ResetType, StatusOptions};
 
 use super::{commit_message_decoded, read_rebase_state, read_trimmed_file, GitEngine};
-use crate::git::{error::GitResult, types::*};
+use crate::git::{
+    error::{GitError, GitResult},
+    types::*,
+};
 
 impl GitEngine {
     pub fn get_status(path: &str) -> GitResult<WorkspaceStatus> {
@@ -124,7 +127,20 @@ impl GitEngine {
             }
         }
 
-        // Get HEAD info
+        // Get HEAD info. 直接读取 HEAD 引用可保留 unborn 分支的符号目标。
+        let head_ref = repo
+            .find_reference("HEAD")
+            .ok()
+            .and_then(|head| {
+                head.symbolic_target()
+                    .or_else(|| head.name())
+                    .map(str::to_string)
+            })
+            .or_else(|| {
+                repo.head()
+                    .ok()
+                    .and_then(|head| head.name().map(str::to_string))
+            });
         let (head_branch, head_commit, head_commit_message, is_detached) = match repo.head() {
             Ok(head) => {
                 let commit = head.peel_to_commit().ok();
@@ -227,6 +243,7 @@ impl GitEngine {
             unstaged,
             untracked,
             head_branch,
+            head_ref,
             head_commit,
             head_commit_message,
             is_detached,
@@ -322,8 +339,28 @@ impl GitEngine {
         Ok(())
     }
 
-    pub fn create_commit(path: &str, message: &str) -> GitResult<String> {
+    pub(crate) fn ensure_commit_context(
+        repo: &Repository,
+        expected_head: Option<&str>,
+        expected_head_ref: &str,
+    ) -> GitResult<()> {
+        if repo.state() != RepositoryState::Clean {
+            return Err(GitError::OperationFailed(
+                "Cannot create or amend a commit while another Git operation is in progress"
+                    .to_string(),
+            ));
+        }
+        Self::ensure_expected_head(repo, expected_head, Some(expected_head_ref))
+    }
+
+    pub fn create_commit(
+        path: &str,
+        message: &str,
+        expected_head: Option<&str>,
+        expected_head_ref: &str,
+    ) -> GitResult<String> {
         let repo = Self::open(path)?;
+        Self::ensure_commit_context(&repo, expected_head, expected_head_ref)?;
 
         let sig = repo.signature()?;
         let mut index = repo.index()?;

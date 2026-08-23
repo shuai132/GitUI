@@ -242,20 +242,39 @@ export function useGitCommands() {
   })
 
   // ---- Commit ----
-  const createCommit = (repoId: string, message: string) =>
-    call<string>('create_commit', { repoId, message })
+  const createCommit = (
+    repoId: string,
+    message: string,
+    expectedHead: string | null,
+    expectedHeadRef: string,
+  ) => call<string>('create_commit', { repoId, message, expectedHead, expectedHeadRef })
 
-  const amendCommit = (repoId: string, message: string) =>
-    call<string>('amend_commit', { repoId, message })
+  const amendCommit = (
+    repoId: string,
+    message: string,
+    expectedHead: string,
+    expectedHeadRef: string,
+  ) => call<string>('amend_commit', { repoId, message, expectedHead, expectedHeadRef })
 
   const amendCommitMessage = (
     repoId: string,
     message: string,
+    expectedHead: string,
+    expectedHeadRef: string,
     authorTime?: number,
     committerTime?: number,
     authorName?: string,
     authorEmail?: string,
-  ) => call<string>('amend_commit_message', { repoId, message, authorTime, committerTime, authorName, authorEmail })
+  ) => call<string>('amend_commit_message', {
+    repoId,
+    message,
+    expectedHead,
+    expectedHeadRef,
+    authorTime,
+    committerTime,
+    authorName,
+    authorEmail,
+  })
 
   const checkoutCommit = (
     repoId: string,

@@ -9,6 +9,8 @@ use crate::{
 pub async fn create_commit(
     repo_id: String,
     message: String,
+    expected_head: Option<String>,
+    expected_head_ref: String,
     repo_manager: State<'_, RepoManager>,
 ) -> Result<String, GitError> {
     let meta = repo_manager
@@ -22,7 +24,12 @@ pub async fn create_commit(
     }
 
     log::debug!("[create_commit] message_len={}", message.len());
-    GitEngine::create_commit(&meta.path, &message)
+    GitEngine::create_commit(
+        &meta.path,
+        &message,
+        expected_head.as_deref(),
+        &expected_head_ref,
+    )
 }
 
 #[tauri::command]
@@ -163,6 +170,8 @@ pub async fn undo_last_commit(
 pub async fn amend_commit(
     repo_id: String,
     message: String,
+    expected_head: String,
+    expected_head_ref: String,
     repo_manager: State<'_, RepoManager>,
 ) -> Result<String, GitError> {
     let meta = repo_manager
@@ -175,7 +184,7 @@ pub async fn amend_commit(
         ));
     }
 
-    GitEngine::amend_commit(&meta.path, &message)
+    GitEngine::amend_commit(&meta.path, &message, &expected_head, &expected_head_ref)
 }
 
 #[tauri::command]
@@ -186,6 +195,8 @@ pub async fn amend_commit_message(
     committer_time: Option<i64>,
     author_name: Option<String>,
     author_email: Option<String>,
+    expected_head: String,
+    expected_head_ref: String,
     repo_manager: State<'_, RepoManager>,
 ) -> Result<String, GitError> {
     let meta = repo_manager
@@ -205,6 +216,8 @@ pub async fn amend_commit_message(
         committer_time,
         author_name.as_deref(),
         author_email.as_deref(),
+        &expected_head,
+        &expected_head_ref,
     )
 }
 

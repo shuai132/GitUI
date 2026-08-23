@@ -684,10 +684,12 @@ const messages = {
       summaryLengthHint: 'The first line is the commit summary: aim for 50 characters or fewer; history views may truncate after 72',
       amendLabel: 'Amend previous commit',
       amendUnbornHint: ' (no previous commit)',
+      operationInProgressHint: 'Finish or abort the current Git operation before creating a regular commit',
       stagedCount: '{count} file(s) staged',
       button: {
         commit: 'Commit',
         committing: 'Committing...',
+        finishOperation: 'Finish current operation first',
         amend: 'Amend previous commit',
         stageFirst: 'Stage changes to commit',
         commitCount: 'Commit {count} change(s)',
@@ -1184,6 +1186,7 @@ const messages = {
     commit: {
       undoPublished: 'This commit is already published upstream; use Revert to preserve shared history',
       undoUnavailable: 'The commit undo context is no longer valid; check the current HEAD',
+      contextUnavailable: 'The commit target is unavailable or has not finished loading. Refresh the repository and try again.',
     },
     rebase: {
       conflict: 'Rebase conflict detected — resolve it to continue',

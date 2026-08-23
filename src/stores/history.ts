@@ -595,14 +595,30 @@ export const useHistoryStore = defineStore('history', () => {
     return await git.previewDropUnreachableCommit(repoStore.activeRepoId, oid)
   }
 
-  async function amendCommitMessage(message: string, authorTime?: number, committerTime?: number, authorName?: string, authorEmail?: string) {
-    const repoStore = useRepoStore()
-    if (!repoStore.activeRepoId) return
-    await git.amendCommitMessage(repoStore.activeRepoId, message, authorTime, committerTime, authorName, authorEmail)
+  async function amendCommitMessage(
+    repoId: string,
+    message: string,
+    authorTime: number | undefined,
+    committerTime: number | undefined,
+    authorName: string | undefined,
+    authorEmail: string | undefined,
+    expectedHead: string,
+    expectedHeadRef: string,
+  ) {
+    const amendedOid = await git.amendCommitMessage(
+      repoId,
+      message,
+      expectedHead,
+      expectedHeadRef,
+      authorTime,
+      committerTime,
+      authorName,
+      authorEmail,
+    )
+    if (!isActiveRepo(repoId)) return amendedOid
     await Promise.all([loadLog(), loadBranches()])
-    if (selectedCommit.value) {
-      await selectCommit(selectedCommit.value.info.oid)
-    }
+    await selectCommit(amendedOid)
+    return amendedOid
   }
 
   async function createTag(repoId: string, name: string, oid: string, message: string | null) {

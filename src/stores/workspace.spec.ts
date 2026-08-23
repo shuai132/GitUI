@@ -97,6 +97,13 @@ describe('workspace commit undo candidate', () => {
 
     await store.commit('fix: message')
 
+    expect(mocks.createCommit).toHaveBeenCalledWith(
+      'repo-1',
+      'fix: message',
+      'parent',
+      'refs/heads/main',
+    )
+
     expect(store.undoCommitCandidate).toEqual({
       repoId: 'repo-1',
       oid: 'child',
@@ -119,6 +126,12 @@ describe('workspace commit undo candidate', () => {
     mocks.getStatus.mockResolvedValueOnce(status('root'))
 
     await store.commit('initial')
+    expect(mocks.createCommit).toHaveBeenCalledWith(
+      'repo-1',
+      'initial',
+      null,
+      'refs/heads/main',
+    )
     expect(store.undoCommitCandidate).toBeNull()
 
     store.undoCommitCandidate = { repoId: 'repo-1', oid: 'old', message: 'old' }
@@ -235,6 +248,12 @@ describe('workspace commit undo candidate', () => {
     mocks.getStatus.mockResolvedValueOnce(status('amended'))
 
     await store.amend('amended message')
+    expect(mocks.amendCommit).toHaveBeenCalledWith(
+      'repo-1',
+      'amended message',
+      'child',
+      'refs/heads/main',
+    )
     expect(store.commitDraft).toBe('')
     expect(localStorage.length).toBe(0)
   })
@@ -257,6 +276,7 @@ describe('workspace commit undo candidate', () => {
 
   it('retains the draft when commit fails or a consumer has a stale snapshot', async () => {
     const store = useWorkspaceStore()
+    store.status = status('parent')
     store.commitDraft = 'keep this message'
     mocks.createCommit.mockRejectedValueOnce(new Error('commit failed'))
 

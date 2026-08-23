@@ -4,6 +4,7 @@ import type { WorkspaceStatus, FileEntry } from '@/types/git'
 import { useGitCommands } from '@/composables/useGitCommands'
 import { useRepoStore } from './repos'
 import { useMergeRebaseStore } from './mergeRebase'
+import { t } from '@/i18n'
 
 const COMMIT_DRAFT_KEY_PREFIX = 'gitui.workspace.commitDraft:'
 
@@ -188,8 +189,19 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     if (!id) return
     const repoPath = repoStore.activeRepo()?.path
     const submittedDraft = commitDraft.value
-    const previousHead = status.value?.head_commit
-    const oid = await git.createCommit(id, message)
+    const submittedStatus = status.value
+    const previousHead = submittedStatus?.head_commit
+    const expectedHeadRef = submittedStatus?.head_ref ?? (
+      submittedStatus?.head_branch
+        ? `refs/heads/${submittedStatus.head_branch}`
+        : submittedStatus?.is_detached
+          ? 'HEAD'
+          : null
+    )
+    if (!submittedStatus || !expectedHeadRef) {
+      throw new Error(t('errors.commit.contextUnavailable'))
+    }
+    const oid = await git.createCommit(id, message, previousHead ?? null, expectedHeadRef)
     if (repoPath && submittedDraft.trim() === message.trim()) {
       clearCommitDraftIfUnchanged(repoPath, submittedDraft)
     }
@@ -206,7 +218,19 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     if (!id) return
     const repoPath = repoStore.activeRepo()?.path
     const submittedDraft = commitDraft.value
-    const oid = await git.amendCommit(id, message)
+    const submittedStatus = status.value
+    const expectedHead = submittedStatus?.head_commit
+    const expectedHeadRef = submittedStatus?.head_ref ?? (
+      submittedStatus?.head_branch
+        ? `refs/heads/${submittedStatus.head_branch}`
+        : submittedStatus?.is_detached
+          ? 'HEAD'
+          : null
+    )
+    if (!expectedHead || !expectedHeadRef) {
+      throw new Error(t('errors.commit.contextUnavailable'))
+    }
+    const oid = await git.amendCommit(id, message, expectedHead, expectedHeadRef)
     if (repoPath && submittedDraft.trim() === message.trim()) {
       clearCommitDraftIfUnchanged(repoPath, submittedDraft)
     }

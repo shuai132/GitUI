@@ -9,6 +9,7 @@ import { useUiStore } from '@/stores/ui'
 const props = defineProps<{
   isUnborn: boolean
   stagedCount: number
+  operationInProgress?: boolean
 }>()
 
 const { t } = useI18n()
@@ -50,6 +51,7 @@ watch(
 
 const canCommit = computed(() => {
   if (committing.value) return false
+  if (props.operationInProgress) return false
   if (message.value.trim().length === 0) return false
   if (amendChecked.value) return !props.isUnborn
   return props.stagedCount > 0
@@ -57,6 +59,7 @@ const canCommit = computed(() => {
 
 const commitButtonLabel = computed(() => {
   if (committing.value) return t('workspace.commit.button.committing')
+  if (props.operationInProgress) return t('workspace.commit.button.finishOperation')
   if (amendChecked.value) return t('workspace.commit.button.amend')
   if (props.stagedCount === 0) return t('workspace.commit.button.stageFirst')
   return t('workspace.commit.button.commitCount', { count: props.stagedCount })
@@ -72,6 +75,10 @@ watch(amendChecked, (checked) => {
     message.value = ''
   }
   nextTick(autoResizeInput)
+})
+
+watch(() => props.operationInProgress, (inProgress) => {
+  if (inProgress) amendChecked.value = false
 })
 
 async function onCommit() {
@@ -130,7 +137,7 @@ function autoResizeInput() {
         <input
           v-model="amendChecked"
           type="checkbox"
-          :disabled="isUnborn"
+          :disabled="isUnborn || operationInProgress"
         >
         <span>Amend</span>
       </label>
@@ -145,7 +152,11 @@ function autoResizeInput() {
       <button
         class="btn-commit"
         :disabled="!canCommit"
-        :title="shortcutsStore.bindings.commit ? bindingToLabel(shortcutsStore.bindings.commit) : undefined"
+        :title="operationInProgress
+          ? t('workspace.commit.operationInProgressHint')
+          : shortcutsStore.bindings.commit
+            ? bindingToLabel(shortcutsStore.bindings.commit)
+            : undefined"
         @click="onCommit"
       >
         {{ commitButtonLabel }}

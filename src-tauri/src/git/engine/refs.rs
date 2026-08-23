@@ -14,7 +14,7 @@ use super::{
 };
 
 impl GitEngine {
-    fn ensure_expected_head(
+    pub(crate) fn ensure_expected_head(
         repo: &Repository,
         expected_head: Option<&str>,
         expected_head_ref: Option<&str>,
@@ -22,17 +22,41 @@ impl GitEngine {
         if expected_head.is_none() && expected_head_ref.is_none() {
             return Ok(());
         }
-        let head = repo.head()?;
-        let current_ref = head.name().unwrap_or("HEAD");
-        let current = head.peel_to_commit()?.id().to_string();
-        let oid_changed = expected_head.is_some_and(|expected| current != expected);
-        let ref_changed = expected_head_ref.is_some_and(|expected| current_ref != expected);
-        if oid_changed || ref_changed {
-            return Err(GitError::OperationFailed(format!(
-                "Confirmed Git action context changed: expected HEAD {} at {}, current {current} at {current_ref}",
-                expected_head.unwrap_or("(any)"),
-                expected_head_ref.unwrap_or("(any)"),
-            )));
+        match repo.head() {
+            Ok(head) => {
+                let current_ref = head.name().unwrap_or("HEAD");
+                let current = head.peel_to_commit()?.id().to_string();
+                // expected_head=None + expected_head_ref=Some(...) means the caller
+                // explicitly confirmed an unborn branch, not "any OID".
+                let oid_changed = expected_head
+                    .map(|expected| current != expected)
+                    .unwrap_or(expected_head_ref.is_some());
+                let ref_changed = expected_head_ref.is_some_and(|expected| current_ref != expected);
+                if oid_changed || ref_changed {
+                    return Err(GitError::OperationFailed(format!(
+                        "Confirmed Git action context changed: expected HEAD {} at {}, current {current} at {current_ref}",
+                        expected_head.unwrap_or("(unborn)"),
+                        expected_head_ref.unwrap_or("(any)"),
+                    )));
+                }
+            }
+            Err(error) if error.code() == git2::ErrorCode::UnbornBranch => {
+                let current_ref = repo
+                    .find_reference("HEAD")?
+                    .symbolic_target()
+                    .unwrap_or("HEAD")
+                    .to_string();
+                let oid_changed = expected_head.is_some();
+                let ref_changed = expected_head_ref.is_some_and(|expected| current_ref != expected);
+                if oid_changed || ref_changed {
+                    return Err(GitError::OperationFailed(format!(
+                        "Confirmed Git action context changed: expected HEAD {} at {}, current unborn HEAD at {current_ref}",
+                        expected_head.unwrap_or("(unborn)"),
+                        expected_head_ref.unwrap_or("(any)"),
+                    )));
+                }
+            }
+            Err(error) => return Err(error.into()),
         }
         Ok(())
     }

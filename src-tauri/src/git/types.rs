@@ -43,6 +43,8 @@ pub struct WorkspaceStatus {
     pub unstaged: Vec<FileEntry>,
     pub untracked: Vec<FileEntry>,
     pub head_branch: Option<String>,
+    /// 完整 HEAD ref；unborn 分支也返回符号目标，detached 时为 `HEAD`。
+    pub head_ref: Option<String>,
     pub head_commit: Option<String>,
     pub head_commit_message: Option<String>,
     pub is_detached: bool,

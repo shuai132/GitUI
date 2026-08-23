@@ -23,6 +23,7 @@ const {
   getCommitSummaryMock,
   getFileDiffAtCommitMock,
   listRemoteTagsMock,
+  amendCommitMessageMock,
 } = vi.hoisted(() => ({
   getLogMock: vi.fn(),
   searchCommitsMock: vi.fn(),
@@ -33,6 +34,7 @@ const {
   getCommitSummaryMock: vi.fn(),
   getFileDiffAtCommitMock: vi.fn(),
   listRemoteTagsMock: vi.fn(),
+  amendCommitMessageMock: vi.fn(),
 }))
 
 vi.mock('@tauri-apps/plugin-store', () => ({
@@ -54,6 +56,7 @@ vi.mock('@/composables/useGitCommands', () => ({
     getCommitSummary: getCommitSummaryMock,
     getFileDiffAtCommit: getFileDiffAtCommitMock,
     listRemoteTags: listRemoteTagsMock,
+    amendCommitMessage: amendCommitMessageMock,
   }),
 }))
 
@@ -193,6 +196,7 @@ describe('history store log filters', () => {
     getCommitSummaryMock.mockReset()
     getFileDiffAtCommitMock.mockReset()
     listRemoteTagsMock.mockReset()
+    amendCommitMessageMock.mockReset()
     setActivePinia(createPinia())
   })
 
@@ -219,6 +223,41 @@ describe('history store log filters', () => {
       'current_first_parent',
       false,
     )
+  })
+
+  it('amends the captured repository and does not refresh a newly active repository', async () => {
+    const pending = deferred<string>()
+    amendCommitMessageMock.mockReturnValueOnce(pending.promise)
+    const repoStore = useRepoStore()
+    const historyStore = useHistoryStore()
+    setActiveRepo(repoStore, 'repo-1', '/repos/a')
+
+    const request = historyStore.amendCommitMessage(
+      'repo-1',
+      'new message',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      'old-head',
+      'refs/heads/main',
+    )
+    setActiveRepo(repoStore, 'repo-2', '/repos/b')
+    pending.resolve('new-head')
+    await request
+
+    expect(amendCommitMessageMock).toHaveBeenCalledWith(
+      'repo-1',
+      'new message',
+      'old-head',
+      'refs/heads/main',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+    )
+    expect(getLogMock).not.toHaveBeenCalled()
+    expect(getCommitSummaryMock).not.toHaveBeenCalled()
   })
 
   it('searches the full history with the active filters', async () => {

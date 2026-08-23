@@ -1720,6 +1720,10 @@ mod tests {
         fs::write(test_repo.dir.path().join("existing.txt"), "hello modified").unwrap();
 
         let status = GitEngine::get_status(path).expect("Failed to get status");
+        assert_eq!(
+            status.head_ref.as_deref(),
+            test_repo.repo.head().unwrap().name()
+        );
         assert_eq!(status.untracked.len(), 1);
         assert_eq!(status.untracked[0].path, "new_file.txt");
         assert_eq!(status.untracked[0].additions, 2);
@@ -1848,12 +1852,98 @@ mod tests {
         assert_eq!(log.commits.len(), 1);
         assert_eq!(log.commits[0].summary, "init");
 
-        GitEngine::create_commit(path, "second commit").unwrap();
+        let head = test_repo.repo.head().unwrap();
+        GitEngine::create_commit(
+            path,
+            "second commit",
+            Some(&head.target().unwrap().to_string()),
+            head.name().unwrap(),
+        )
+        .unwrap();
         let log_after =
             GitEngine::get_log(path, 0, 10, false, false, LogBranchScope::All, true).unwrap();
 
         assert_eq!(log_after.commits.len(), 2);
         assert_eq!(log_after.commits[0].summary, "second commit");
+    }
+
+    #[test]
+    fn commit_writes_reject_changed_head_and_ongoing_operations() {
+        let test_repo = TestRepo::new();
+        let path = test_repo.path_str();
+        let original_head = test_repo.repo.head().unwrap().target().unwrap();
+        let head_ref = test_repo.repo.head().unwrap().name().unwrap().to_string();
+        let current_head = commit_file(&test_repo, "current", "existing.txt", "current\n");
+
+        let create_error = GitEngine::create_commit(
+            path,
+            "stale commit",
+            Some(&original_head.to_string()),
+            &head_ref,
+        )
+        .unwrap_err();
+        assert!(create_error.to_string().contains("context changed"));
+
+        let amend_error =
+            GitEngine::amend_commit(path, "stale amend", &original_head.to_string(), &head_ref)
+                .unwrap_err();
+        assert!(amend_error.to_string().contains("context changed"));
+
+        let message_error = GitEngine::amend_commit_message(
+            path,
+            "stale reword",
+            None,
+            None,
+            None,
+            None,
+            &original_head.to_string(),
+            &head_ref,
+        )
+        .unwrap_err();
+        assert!(message_error.to_string().contains("context changed"));
+        assert_eq!(test_repo.repo.head().unwrap().target(), Some(current_head));
+
+        fs::write(
+            test_repo.repo.path().join("MERGE_HEAD"),
+            format!("{original_head}\n"),
+        )
+        .unwrap();
+        let ongoing_error = GitEngine::create_commit(
+            path,
+            "wrong parent chain",
+            Some(&current_head.to_string()),
+            &head_ref,
+        )
+        .unwrap_err();
+        assert!(ongoing_error.to_string().contains("another Git operation"));
+        assert_eq!(test_repo.repo.head().unwrap().target(), Some(current_head));
+    }
+
+    #[test]
+    fn create_commit_accepts_the_confirmed_unborn_branch() {
+        let dir = tempfile::tempdir().unwrap();
+        let repo = Repository::init(dir.path()).unwrap();
+        let mut config = repo.config().unwrap();
+        config.set_str("user.name", "test").unwrap();
+        config.set_str("user.email", "test@test.com").unwrap();
+        fs::write(dir.path().join("initial.txt"), "initial\n").unwrap();
+        let mut index = repo.index().unwrap();
+        index.add_path(Path::new("initial.txt")).unwrap();
+        index.write().unwrap();
+        let head_ref = repo
+            .find_reference("HEAD")
+            .unwrap()
+            .symbolic_target()
+            .unwrap()
+            .to_string();
+        let status = GitEngine::get_status(dir.path().to_str().unwrap()).unwrap();
+        assert_eq!(status.head_ref.as_deref(), Some(head_ref.as_str()));
+
+        let oid =
+            GitEngine::create_commit(dir.path().to_str().unwrap(), "initial", None, &head_ref)
+                .unwrap();
+
+        assert_eq!(repo.head().unwrap().target().unwrap().to_string(), oid);
     }
 
     #[test]

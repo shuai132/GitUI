@@ -77,4 +77,18 @@ describe('WipCommitBox', () => {
     expect(counter.text()).toBe('3/50')
     expect(counter.attributes('title')).toBe('workspace.commit.summaryLengthHint')
   })
+
+  it('disables regular commit and amend while another Git operation is active', async () => {
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    const wrapper = mount(WipCommitBox, {
+      props: { isUnborn: false, stagedCount: 1, operationInProgress: true },
+      global: { plugins: [pinia] },
+    })
+    await wrapper.find<HTMLTextAreaElement>('.message-input').setValue('message')
+
+    expect(wrapper.find<HTMLButtonElement>('.btn-commit').element.disabled).toBe(true)
+    expect(wrapper.find('.btn-commit').text()).toBe('workspace.commit.button.finishOperation')
+    expect(wrapper.find<HTMLInputElement>('.amend-row input').element.disabled).toBe(true)
+  })
 })

@@ -614,7 +614,16 @@ export function useCommitContextMenu(
     const authorEmail = editMessageAuthorEmail.value.trim() || undefined
     try {
       if (commit.oid === headCommitOid.value) {
-        await historyStore.amendCommitMessage(text, authorTime, committerTime, authorName, authorEmail)
+        await historyStore.amendCommitMessage(
+          repoId,
+          text,
+          authorTime,
+          committerTime,
+          authorName,
+          authorEmail,
+          expectedHead,
+          editMessageHeadRef.value,
+        )
       } else {
         const parentOid = commit.parent_oids[0]
         if (!parentOid) return

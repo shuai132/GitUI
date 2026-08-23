@@ -32,6 +32,8 @@ export interface WorkspaceStatus {
   unstaged: FileEntry[]
   untracked: FileEntry[]
   head_branch?: string
+  /** Full HEAD ref, including unborn branches; detached HEAD uses `HEAD`. */
+  head_ref?: string
   head_commit?: string
   head_commit_message?: string
   is_detached: boolean

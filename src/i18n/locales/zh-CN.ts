@@ -683,10 +683,12 @@ const messages = {
       summaryLengthHint: '首行是提交摘要：建议不超过 50 个字符，超过 72 个字符可能在历史列表中截断',
       amendLabel: '修补上次提交 (Amend)',
       amendUnbornHint: '（尚无历史提交）',
+      operationInProgressHint: '请先继续或中止当前 Git 操作，再创建普通提交',
       stagedCount: '{count} 个文件已暂存',
       button: {
         commit: '提交',
         committing: '提交中...',
+        finishOperation: '请先完成当前操作',
         amend: '修补上次提交',
         stageFirst: '暂存变更后提交',
         commitCount: '提交 {count} 个变更',
@@ -1183,6 +1185,7 @@ const messages = {
     commit: {
       undoPublished: '该提交已发布到上游；请使用 Revert 保留共享历史',
       undoUnavailable: '提交撤销上下文已失效，请重新检查当前 HEAD',
+      contextUnavailable: '提交目标不可用或尚未加载完成，请刷新仓库后重试',
     },
     rebase: {
       conflict: 'Rebase 出现冲突，请解决后继续',
