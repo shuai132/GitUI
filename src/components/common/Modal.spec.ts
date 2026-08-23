@@ -13,6 +13,17 @@ function dispatchEscape() {
   return event
 }
 
+function dispatchTab(shiftKey = false) {
+  const event = new KeyboardEvent('keydown', {
+    key: 'Tab',
+    shiftKey,
+    bubbles: true,
+    cancelable: true,
+  })
+  document.dispatchEvent(event)
+  return event
+}
+
 function mountVisibleModal(title = 'Dialog') {
   return mount(Modal, {
     attachTo: document.body,
@@ -81,5 +92,90 @@ describe('Modal', () => {
     document.removeEventListener('keydown', recordingKeydown, { capture: true })
     recordingButton.remove()
     wrapper.unmount()
+  })
+
+  it('exposes modal dialog semantics and focuses its title without controls', async () => {
+    const wrapper = mountVisibleModal('Accessible dialog')
+    await nextTick()
+    await nextTick()
+
+    const dialog = document.querySelector<HTMLElement>('[role="dialog"]')
+    const title = document.querySelector<HTMLElement>('.modal-title')
+    expect(dialog?.getAttribute('aria-modal')).toBe('true')
+    expect(dialog?.getAttribute('aria-labelledby')).toBe(title?.id)
+    expect(document.activeElement).toBe(title)
+
+    wrapper.unmount()
+  })
+
+  it('moves focus inside, loops Tab, and restores the trigger on close', async () => {
+    const trigger = document.createElement('button')
+    trigger.textContent = 'Open'
+    document.body.appendChild(trigger)
+    trigger.focus()
+    const wrapper = mount(Modal, {
+      attachTo: document.body,
+      props: { visible: true, title: 'Form' },
+      slots: {
+        default: '<input class="first-control"><button class="last-control">Save</button>',
+      },
+    })
+    await nextTick()
+    await nextTick()
+    const first = document.querySelector<HTMLElement>('.first-control')
+    const last = document.querySelector<HTMLElement>('.last-control')
+
+    expect(document.activeElement).toBe(first)
+    const backward = dispatchTab(true)
+    expect(backward.defaultPrevented).toBe(true)
+    expect(document.activeElement).toBe(last)
+
+    const forward = dispatchTab()
+    expect(forward.defaultPrevented).toBe(true)
+    expect(document.activeElement).toBe(first)
+
+    await wrapper.setProps({ visible: false })
+    expect(document.activeElement).toBe(trigger)
+
+    wrapper.unmount()
+    trigger.remove()
+  })
+
+  it('keeps focus in the topmost nested modal and restores the lower modal', async () => {
+    const trigger = document.createElement('button')
+    document.body.appendChild(trigger)
+    trigger.focus()
+    const first = mount(Modal, {
+      attachTo: document.body,
+      props: { visible: true, title: 'First' },
+      slots: { default: '<button class="first-modal-control">First action</button>' },
+    })
+    await nextTick()
+    await nextTick()
+    const firstControl = document.querySelector<HTMLElement>('.first-modal-control')
+    expect(document.activeElement).toBe(firstControl)
+
+    const second = mount(Modal, {
+      attachTo: document.body,
+      props: { visible: true, title: 'Second' },
+      slots: { default: '<button class="second-modal-control">Second action</button>' },
+    })
+    await nextTick()
+    await nextTick()
+    const secondControl = document.querySelector<HTMLElement>('.second-modal-control')
+    expect(document.activeElement).toBe(secondControl)
+
+    firstControl?.focus()
+    dispatchTab()
+    expect(document.activeElement).toBe(secondControl)
+
+    await second.setProps({ visible: false })
+    expect(document.activeElement).toBe(firstControl)
+    await first.setProps({ visible: false })
+    expect(document.activeElement).toBe(trigger)
+
+    first.unmount()
+    second.unmount()
+    trigger.remove()
   })
 })

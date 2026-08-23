@@ -39,6 +39,8 @@
 | `composables/` | 逻辑抽象层，封装 IPC 调用 (`useGitCommands`) 和事件监听 (`useGitEvents`)。 |
 | `utils/` | 工具函数，包含提交图算法、格式化工具等独立逻辑。 |
 
+公共 `Modal` 统一提供 modal dialog 语义和键盘焦点边界：打开时焦点进入最上层弹窗，Tab / Shift+Tab 在其中循环，关闭后恢复到原触发控件；嵌套弹窗沿用最上层优先的 Escape 与焦点规则。
+
 ## 错误处理流
 
 系统建立了从底层到 UI 的完整错误映射链：

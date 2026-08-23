@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onBeforeUnmount, ref, watch } from 'vue'
+import { nextTick, onBeforeUnmount, ref, useId, watch } from 'vue'
 
 const props = defineProps<{
   visible: boolean
@@ -7,6 +7,7 @@ const props = defineProps<{
   width?: string
   height?: string
   bodyClass?: string
+  ariaLabel?: string
 }>()
 
 const emit = defineEmits<{
@@ -14,6 +15,27 @@ const emit = defineEmits<{
 }>()
 
 const overlayRef = ref<HTMLElement | null>(null)
+const boxRef = ref<HTMLElement | null>(null)
+const titleRef = ref<HTMLElement | null>(null)
+const titleId = `modal-title-${useId()}`
+let previouslyFocused: HTMLElement | null = null
+
+const FOCUSABLE_SELECTOR = [
+  'a[href]',
+  'button:not([disabled])',
+  'input:not([disabled]):not([type="hidden"])',
+  'select:not([disabled])',
+  'textarea:not([disabled])',
+  '[tabindex]:not([tabindex="-1"])',
+].join(',')
+
+function focusableElements(): HTMLElement[] {
+  const box = boxRef.value
+  if (!box) return []
+  return Array.from(box.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter(
+    (element) => !element.hidden && element.getAttribute('aria-hidden') !== 'true',
+  )
+}
 
 function isShortcutRecording() {
   return document.querySelector('.shortcut-key.recording') !== null
@@ -27,26 +49,76 @@ function isTopmostModal() {
 }
 
 function onKey(e: KeyboardEvent) {
-  if (e.key !== 'Escape') return
-  if (isShortcutRecording() || !isTopmostModal()) return
+  if (!isTopmostModal()) return
+  if (e.key === 'Escape') {
+    if (isShortcutRecording()) return
+    e.preventDefault()
+    e.stopPropagation()
+    e.stopImmediatePropagation()
+    emit('close')
+    return
+  }
+  if (e.key !== 'Tab') return
 
-  e.preventDefault()
-  e.stopPropagation()
-  e.stopImmediatePropagation()
-  emit('close')
+  const focusable = focusableElements()
+  if (focusable.length === 0) {
+    e.preventDefault()
+    titleRef.value?.focus()
+    return
+  }
+  const first = focusable[0]
+  const last = focusable[focusable.length - 1]
+  const active = document.activeElement
+  const activeIndex = focusable.indexOf(active as HTMLElement)
+  if (e.shiftKey && (active === first || activeIndex < 0)) {
+    e.preventDefault()
+    last.focus()
+  } else if (!e.shiftKey && (active === last || activeIndex < 0)) {
+    e.preventDefault()
+    first.focus()
+  }
+}
+
+async function focusInitialElement() {
+  await nextTick()
+  if (!props.visible || !isTopmostModal()) return
+  const focusable = focusableElements()
+  const target = focusable[0] ?? titleRef.value
+  target?.focus()
+}
+
+function restorePreviousFocus() {
+  const overlay = overlayRef.value
+  const overlays = Array.from(document.querySelectorAll<HTMLElement>('[data-modal-overlay="true"]'))
+  if (overlays[overlays.length - 1] !== overlay) {
+    previouslyFocused = null
+    return
+  }
+  const target = previouslyFocused
+  previouslyFocused = null
+  if (target?.isConnected) target.focus()
 }
 
 watch(
   () => props.visible,
-  (v) => {
-    if (v) document.addEventListener('keydown', onKey, { capture: true })
-    else document.removeEventListener('keydown', onKey, { capture: true })
+  (v, wasVisible) => {
+    if (v) {
+      previouslyFocused = document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null
+      document.addEventListener('keydown', onKey, { capture: true })
+      void focusInitialElement()
+    } else {
+      document.removeEventListener('keydown', onKey, { capture: true })
+      if (wasVisible) restorePreviousFocus()
+    }
   },
   { immediate: true },
 )
 
 onBeforeUnmount(() => {
   document.removeEventListener('keydown', onKey, { capture: true })
+  if (props.visible) restorePreviousFocus()
 })
 
 function onOverlayClick() {
@@ -64,10 +136,20 @@ function onOverlayClick() {
         data-modal-overlay="true"
         @mousedown.self="onOverlayClick"
       >
-        <div class="modal-box" :style="{ width: width ?? '460px', height }">
+        <div
+          ref="boxRef"
+          class="modal-box"
+          role="dialog"
+          aria-modal="true"
+          :aria-labelledby="title ? titleId : undefined"
+          :aria-label="title ? undefined : ariaLabel"
+          :style="{ width: width ?? '460px', height }"
+        >
           <div v-if="title || $slots.header" class="modal-header">
             <slot name="header">
-              <div class="modal-title">{{ title }}</div>
+              <div :id="titleId" ref="titleRef" class="modal-title" tabindex="-1">
+                {{ title }}
+              </div>
             </slot>
           </div>
           <div class="modal-body" :class="bodyClass">
