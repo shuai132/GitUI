@@ -54,6 +54,7 @@ impl GitEngine {
                 path,
                 &["push", "--force-with-lease", remote_name, branch_name],
             )?;
+            Self::set_upstream_after_push(path, remote_name, branch_name)?;
             return Ok(());
         }
 
@@ -66,6 +67,7 @@ impl GitEngine {
         let url = get_remote_url(path, remote_name)?;
         if is_ssh_url(&url) {
             run_git(path, &["push", remote_name, &refspec])?;
+            Self::set_upstream_after_push(path, remote_name, branch_name)?;
             log::debug!("[engine::push] done (ssh cli)");
             return Ok(());
         }
@@ -78,8 +80,46 @@ impl GitEngine {
         push_opts.remote_callbacks(callbacks);
         log::debug!("[engine::push] pushing refspec={refspec}");
         remote.push(&[&refspec], Some(&mut push_opts))?;
+        drop(remote);
+        Self::set_upstream_after_push(path, remote_name, branch_name)?;
         log::debug!("[engine::push] done");
         Ok(())
+    }
+
+    /// 首次成功 Push 同名远端分支后建立 tracking；已有 upstream 代表用户配置，绝不覆盖。
+    pub(super) fn set_upstream_after_push(
+        path: &str,
+        remote_name: &str,
+        branch_name: &str,
+    ) -> GitResult<bool> {
+        let repo = Self::open(path)?;
+        let mut branch = repo.find_branch(branch_name, git2::BranchType::Local)?;
+        if Self::configured_upstream(&repo, branch_name).is_some() {
+            return Ok(false);
+        }
+
+        let upstream = format!("{remote_name}/{branch_name}");
+        branch.set_upstream(Some(&upstream))?;
+        log::debug!("[engine::push] upstream established: {branch_name} -> {upstream}");
+        Ok(true)
+    }
+
+    /// 从 branch 配置读取 upstream，不要求对应 remote-tracking ref 仍存在。
+    /// `Branch::upstream()` 在引用已 gone 时会失败，不能据此判断用户是否配置过 tracking。
+    pub(super) fn configured_upstream(repo: &Repository, branch_name: &str) -> Option<String> {
+        let config = repo.config().ok()?;
+        let remote = config
+            .get_string(&format!("branch.{branch_name}.remote"))
+            .ok()?;
+        let merge = config
+            .get_string(&format!("branch.{branch_name}.merge"))
+            .ok()?;
+        let merge_name = merge.strip_prefix("refs/heads/").unwrap_or(&merge);
+        Some(if remote == "." {
+            merge_name.to_string()
+        } else {
+            format!("{remote}/{merge_name}")
+        })
     }
 
     /// 推送一个本地 tag 到远端。refspec `refs/tags/<name>:refs/tags/<name>`。

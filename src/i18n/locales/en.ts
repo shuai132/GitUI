@@ -29,6 +29,7 @@ const messages = {
       pull: 'Pull (fetch + merge)',
       pullModeSelect: 'Choose Pull mode',
       push: 'Push current branch',
+      publishBranch: 'Publish current branch and establish remote tracking',
       pushModeSelect: 'Choose Push mode',
       fetch: 'Fetch from remote (no merge)',
       stash: 'Stash current working tree',
@@ -94,6 +95,7 @@ const messages = {
     opLabels: {
       pull: 'Pull',
       push: 'Push',
+      publishBranch: 'Publish branch',
       fetch: 'Fetch',
       stash: 'Stash',
       stashPop: 'Stash pop',

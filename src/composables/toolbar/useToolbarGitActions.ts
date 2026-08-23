@@ -48,11 +48,14 @@ export function useToolbarGitActions(options: UseToolbarGitActionsOptions) {
 
   const busy = computed(() => repoOpsStore.getBusy(repoStore.activeRepoId))
   const hasRepo = computed(() => !!repoStore.activeRepoId)
-  const currentBranch = computed(
-    () =>
-      historyStore.branches.find((b) => b.is_head && !b.is_remote)?.name ?? null,
+  const currentBranchInfo = computed(
+    () => historyStore.branches.find((branch) => branch.is_head && !branch.is_remote) ?? null,
   )
+  const currentBranch = computed(() => currentBranchInfo.value?.name ?? null)
   const canRemoteOp = computed(() => hasRepo.value && currentBranch.value !== null)
+  const isPublishingBranch = computed(
+    () => canRemoteOp.value && !currentBranchInfo.value?.upstream,
+  )
   const canStash = computed(() => {
     if (!hasRepo.value) return false
     const s = workspaceStore.status
@@ -214,12 +217,18 @@ export function useToolbarGitActions(options: UseToolbarGitActionsOptions) {
       if (remotes.length === 0) showError(t('toolbar.noRemoteConfigured'))
       return
     }
+    // remote 菜单等待期间可能已切换仓库 / 分支，旧 Push 请求不再有效。
+    if (repoStore.activeRepoId !== id || currentBranch.value !== branch) return
+
+    const publishing = !currentBranchInfo.value?.upstream
     repoOpsStore.setBusy(id, 'push', true)
     try {
       await git.pushBranch(id, remote, branch, mode)
       await historyStore.loadBranches()
       workspaceStore.clearUndoCommitCandidate(id)
-      showToast('success', t('toolbar.opSuccess', { label: t('toolbar.opLabels.push') }))
+      showToast('success', t('toolbar.opSuccess', {
+        label: t(publishing ? 'toolbar.opLabels.publishBranch' : 'toolbar.opLabels.push'),
+      }))
     } catch {
       // 错误在 ToolbarToast 中拦截处理
     } finally {
@@ -334,6 +343,7 @@ export function useToolbarGitActions(options: UseToolbarGitActionsOptions) {
     busy,
     hasRepo,
     canRemoteOp,
+    isPublishingBranch,
     canStash,
     canStashPop,
     pullWithChangesVisible,

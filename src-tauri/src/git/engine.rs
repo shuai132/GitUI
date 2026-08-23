@@ -200,6 +200,140 @@ mod tests {
         assert!(error.to_string().contains("unfinished Git operation"));
     }
 
+    #[test]
+    fn push_publishes_branch_and_establishes_upstream() {
+        let test_repo = TestRepo::new();
+        let remote_dir = tempfile::tempdir().unwrap();
+        let remote_repo = Repository::init_bare(remote_dir.path()).unwrap();
+        test_repo
+            .repo
+            .remote("origin", remote_dir.path().to_str().unwrap())
+            .unwrap();
+        let branch_name = test_repo
+            .repo
+            .head()
+            .unwrap()
+            .shorthand()
+            .unwrap()
+            .to_string();
+        let local_oid = test_repo.repo.head().unwrap().target().unwrap();
+
+        GitEngine::push(test_repo.path_str(), "origin", &branch_name, "normal").unwrap();
+
+        let local_branch = test_repo
+            .repo
+            .find_branch(&branch_name, git2::BranchType::Local)
+            .unwrap();
+        assert_eq!(
+            local_branch.upstream().unwrap().name().unwrap(),
+            Some(format!("origin/{branch_name}").as_str())
+        );
+        assert_eq!(
+            remote_repo
+                .find_reference(&format!("refs/heads/{branch_name}"))
+                .unwrap()
+                .target(),
+            Some(local_oid)
+        );
+    }
+
+    #[test]
+    fn push_keeps_an_existing_upstream_when_using_another_remote() {
+        let test_repo = TestRepo::new();
+        let origin_dir = tempfile::tempdir().unwrap();
+        let backup_dir = tempfile::tempdir().unwrap();
+        Repository::init_bare(origin_dir.path()).unwrap();
+        Repository::init_bare(backup_dir.path()).unwrap();
+        test_repo
+            .repo
+            .remote("origin", origin_dir.path().to_str().unwrap())
+            .unwrap();
+        test_repo
+            .repo
+            .remote("backup", backup_dir.path().to_str().unwrap())
+            .unwrap();
+        let branch_name = test_repo
+            .repo
+            .head()
+            .unwrap()
+            .shorthand()
+            .unwrap()
+            .to_string();
+
+        GitEngine::push(test_repo.path_str(), "origin", &branch_name, "normal").unwrap();
+        GitEngine::push(test_repo.path_str(), "backup", &branch_name, "normal").unwrap();
+
+        let local_branch = test_repo
+            .repo
+            .find_branch(&branch_name, git2::BranchType::Local)
+            .unwrap();
+        assert_eq!(
+            local_branch.upstream().unwrap().name().unwrap(),
+            Some(format!("origin/{branch_name}").as_str())
+        );
+    }
+
+    #[test]
+    fn failed_push_does_not_establish_upstream() {
+        let test_repo = TestRepo::new();
+        let missing_remote = test_repo.dir.path().join("missing-remote.git");
+        test_repo
+            .repo
+            .remote("origin", missing_remote.to_str().unwrap())
+            .unwrap();
+        let branch_name = test_repo
+            .repo
+            .head()
+            .unwrap()
+            .shorthand()
+            .unwrap()
+            .to_string();
+
+        assert!(GitEngine::push(test_repo.path_str(), "origin", &branch_name, "normal").is_err());
+
+        let local_branch = test_repo
+            .repo
+            .find_branch(&branch_name, git2::BranchType::Local)
+            .unwrap();
+        assert!(local_branch.upstream().is_err());
+    }
+
+    #[test]
+    fn configured_missing_upstream_is_preserved_and_reported() {
+        let test_repo = TestRepo::new();
+        let branch_name = test_repo
+            .repo
+            .head()
+            .unwrap()
+            .shorthand()
+            .unwrap()
+            .to_string();
+        let mut config = test_repo.repo.config().unwrap();
+        config
+            .set_str(&format!("branch.{branch_name}.remote"), "origin")
+            .unwrap();
+        config
+            .set_str(
+                &format!("branch.{branch_name}.merge"),
+                &format!("refs/heads/{branch_name}"),
+            )
+            .unwrap();
+        drop(config);
+
+        assert!(
+            !GitEngine::set_upstream_after_push(test_repo.path_str(), "backup", &branch_name)
+                .unwrap()
+        );
+        let branch = GitEngine::list_branches(test_repo.path_str())
+            .unwrap()
+            .into_iter()
+            .find(|branch| branch.name == branch_name)
+            .unwrap();
+        assert_eq!(branch.upstream, Some(format!("origin/{branch_name}")));
+        assert_eq!(branch.ahead, None);
+        assert_eq!(branch.behind, None);
+    }
+
     fn commit_file_bytes(
         test_repo: &TestRepo,
         message: &str,

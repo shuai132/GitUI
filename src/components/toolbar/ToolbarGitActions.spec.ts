@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   canUndo: true,
   pullWithChangesVisible: false,
   pendingPullChangeCount: 0,
+  isPublishingBranch: false,
   onUndoLastCommit: vi.fn(),
   confirmPullWithStash: vi.fn(),
 }))
@@ -47,6 +48,7 @@ vi.mock('@/composables/toolbar/useToolbarGitActions', () => ({
     },
     hasRepo: true,
     canRemoteOp: true,
+    isPublishingBranch: mocks.isPublishingBranch,
     canStash: false,
     canStashPop: false,
     pullWithChangesVisible: mocks.pullWithChangesVisible,
@@ -76,6 +78,7 @@ describe('ToolbarGitActions', () => {
     mocks.canUndo = true
     mocks.pullWithChangesVisible = false
     mocks.pendingPullChangeCount = 0
+    mocks.isPublishingBranch = false
     mocks.onUndoLastCommit.mockReset()
     mocks.confirmPullWithStash.mockReset()
   })
@@ -111,5 +114,16 @@ describe('ToolbarGitActions', () => {
     expect(dialog.props('message')).toBe('toolbar.pullWithChanges.message')
     dialog.vm.$emit('confirm')
     expect(mocks.confirmPullWithStash).toHaveBeenCalledOnce()
+  })
+
+  it('labels a branch without upstream as Publish', () => {
+    mocks.isPublishingBranch = true
+    const wrapper = mount(ToolbarGitActions, {
+      global: { stubs: { ContextMenu: true } },
+    })
+
+    const pushButton = wrapper.findAll('.btn-tool--main')[1]
+    expect(pushButton?.attributes('title')).toBe('toolbar.title.publishBranch')
+    expect(pushButton?.text()).toContain('toolbar.opLabels.publishBranch')
   })
 })

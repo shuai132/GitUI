@@ -36,6 +36,7 @@ const {
   busy,
   hasRepo,
   canRemoteOp,
+  isPublishingBranch,
   canStash,
   canStashPop,
   pullWithChangesVisible,
@@ -150,7 +151,7 @@ function onPushModeSelect(action: string) {
     <div class="btn-tool-group">
       <button
         class="btn-tool btn-tool--main"
-        :title="t('toolbar.title.push')"
+        :title="isPublishingBranch ? t('toolbar.title.publishBranch') : t('toolbar.title.push')"
         :disabled="!canRemoteOp || busy.push"
         @click="onPush($event)"
       >
@@ -160,7 +161,7 @@ function onPushModeSelect(action: string) {
           <polyline points="18 15 12 9 6 15"/>
           <line x1="6" y1="3" x2="18" y2="3"/>
         </svg>
-        <span>Push</span>
+        <span>{{ isPublishingBranch ? t('toolbar.opLabels.publishBranch') : 'Push' }}</span>
       </button>
       <button
         class="btn-tool btn-tool--chevron"

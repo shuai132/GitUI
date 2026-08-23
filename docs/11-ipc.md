@@ -43,7 +43,7 @@ GitUI 采用 Tauri v2 的 IPC 机制实现前后端通信，包括双向的请�
 
 ### 引用与远程 (Branch / Remote / Tag)
 - `list_branches` / `create_branch` / `switch_branch` / `delete_branch`：分支全生命周期管理。
-- `fetch_remote` / `pull_branch` / `push_branch` / `push_tag`：远程协作与同步。`pull_branch` 在 fetch 前要求仓库没有未完成 Git 操作，且 staged / unstaged / untracked 均为空；自动 stash 生命周期由前端在调用前后协调。
+- `fetch_remote` / `pull_branch` / `push_branch` / `push_tag`：远程协作与同步。`pull_branch` 在 fetch 前要求仓库没有未完成 Git 操作，且 staged / unstaged / untracked 均为空；自动 stash 生命周期由前端在调用前后协调。`push_branch` 成功后会为尚无 upstream 的目标本地分支建立所选 remote 的同名 tracking；tracking 配置即使对应引用已 gone 也视为已有，不改写。
 - `list_remotes` / `add_remote` / `edit_remote` / `remove_remote`：远程节点管理。
 - `list_tags` / `delete_tag` / `list_remote_tags` / `fetch_tags_from_remote` / `delete_remote_tag`：标签管理。
 

@@ -44,7 +44,13 @@ impl GitEngine {
             };
             let upstream = upstream_branch
                 .as_ref()
-                .and_then(|u| u.name_bytes().ok().map(decode_ref_name));
+                .and_then(|u| u.name_bytes().ok().map(decode_ref_name))
+                .or_else(|| {
+                    if is_remote {
+                        return None;
+                    }
+                    Self::configured_upstream(&repo, &name)
+                });
 
             let local_oid = branch.get().peel_to_commit().ok().map(|c| c.id());
             let commit_oid = local_oid.map(|o| o.to_string());

@@ -29,6 +29,7 @@ const messages = {
       pull: 'Pull (fetch + merge)',
       pullModeSelect: '选择 Pull 模式',
       push: 'Push 当前分支',
+      publishBranch: '首次推送当前分支并建立远程跟踪',
       pushModeSelect: '选择 Push 模式',
       fetch: '从远端抓取（不合并）',
       stash: 'Stash 当前工作区',
@@ -94,6 +95,7 @@ const messages = {
     opLabels: {
       pull: 'Pull',
       push: 'Push',
+      publishBranch: 'Publish 分支',
       fetch: 'Fetch',
       stash: 'Stash',
       stashPop: 'Stash pop',
