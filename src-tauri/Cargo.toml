@@ -1,6 +1,6 @@
 [package]
 name = "gitui"
-version = "0.12.3"
+version = "0.13.0"
 description = "A cross-platform Git desktop client"
 authors = ["liushuai"]
 edition = "2021"
