@@ -731,14 +731,15 @@ impl GitEngine {
             }
 
             let mut file_bom_enc: Option<&'static encoding_rs::Encoding> = None;
-            for oid_str in [&pending.new_blob_oid, &pending.old_blob_oid] {
-                if let Some(oid_str) = oid_str {
-                    if let Ok(oid) = git2::Oid::from_str(oid_str) {
-                        if let Ok(blob) = repo.find_blob(oid) {
-                            if let Some((enc, _)) = encoding_rs::Encoding::for_bom(blob.content()) {
-                                file_bom_enc = Some(enc);
-                                break;
-                            }
+            for oid_str in [&pending.new_blob_oid, &pending.old_blob_oid]
+                .into_iter()
+                .flatten()
+            {
+                if let Ok(oid) = git2::Oid::from_str(oid_str) {
+                    if let Ok(blob) = repo.find_blob(oid) {
+                        if let Some((enc, _)) = encoding_rs::Encoding::for_bom(blob.content()) {
+                            file_bom_enc = Some(enc);
+                            break;
                         }
                     }
                 }

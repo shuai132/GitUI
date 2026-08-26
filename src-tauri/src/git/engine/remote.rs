@@ -434,8 +434,7 @@ impl GitEngine {
             return Self::clone_repo_ssh(url, target_path, depth, recurse_submodules, on_progress);
         }
 
-        let on_progress: Arc<dyn Fn(&str, u32, Option<String>) + Send + Sync> =
-            Arc::new(on_progress);
+        let on_progress = Arc::new(on_progress);
 
         let mut callbacks = git2::RemoteCallbacks::new();
         callbacks.credentials(make_credentials_callback());

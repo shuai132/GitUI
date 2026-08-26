@@ -46,7 +46,7 @@ pub(super) struct CoordinatorPaths {
 
 pub(super) enum CoordinatorMode {
     Unstarted,
-    Owner(OwnerRuntime),
+    Owner(Box<OwnerRuntime>),
     Client(ClientRuntime),
 }
 

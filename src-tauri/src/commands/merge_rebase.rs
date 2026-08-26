@@ -12,6 +12,7 @@ use crate::{
 // ── Merge ──────────────────────────────────────────────────────────────
 
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub async fn merge_branch(
     repo_id: String,
     source_branch: String,
@@ -62,6 +63,7 @@ pub async fn merge_abort(
 // ── Rebase ─────────────────────────────────────────────────────────────
 
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub async fn rebase_plan(
     repo_id: String,
     upstream: String,
@@ -87,6 +89,7 @@ pub async fn rebase_plan(
 }
 
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub async fn rebase_start(
     repo_id: String,
     upstream: String,

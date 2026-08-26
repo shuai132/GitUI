@@ -188,9 +188,9 @@ pub fn run() {
             logger::init();
             logger::set_app_handle(app.handle().clone());
             log::info!("GitUI started");
-            tray::setup_tray(&app.handle())?;
+            tray::setup_tray(app.handle())?;
             #[cfg(target_os = "macos")]
-            menu::setup_menu(&app.handle())?;
+            menu::setup_menu(app.handle())?;
             app.state::<AutoFetchService>().start(app.handle().clone());
             Ok(())
         })

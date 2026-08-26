@@ -101,6 +101,7 @@ impl GitEngine {
     }
 
     /// 开始 rebase。`todo=None` 等价于 `rebase_plan` 默认结果（全部 pick）。
+    #[allow(clippy::too_many_arguments)]
     pub fn rebase_start(
         path: &str,
         upstream: &str,

@@ -76,6 +76,7 @@ fn try_become_owner(inner: &Arc<Mutex<CoordinatorInner>>, app: &AppHandle) -> io
         .create(true)
         .read(true)
         .write(true)
+        .truncate(false)
         .open(&paths.lock_path)?;
 
     match lock_file.try_lock_exclusive() {
@@ -113,13 +114,13 @@ fn try_become_owner(inner: &Arc<Mutex<CoordinatorInner>>, app: &AppHandle) -> io
         if !local_window_closed {
             registry.register_window(window_id, pid, active_repo, None, true);
         }
-        guard.mode = CoordinatorMode::Owner(OwnerRuntime {
+        guard.mode = CoordinatorMode::Owner(Box::new(OwnerRuntime {
             token: token.clone(),
             lock_file,
             state_path: paths.state_path.clone(),
             registry,
             tray: None,
-        });
+        }));
     }
 
     spawn_owner_accept_loop(Arc::clone(inner), app.clone(), listener, token);

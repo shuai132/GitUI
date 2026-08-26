@@ -98,18 +98,18 @@ fn read_single_oid_file(p: &Path) -> GitResult<git2::Oid> {
     git2::Oid::from_str(first).map_err(|e| GitError::OperationFailed(e.message().to_string()))
 }
 
+type RebaseState = (
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    Option<u32>,
+    Option<u32>,
+    Option<String>,
+);
+
 /// 读取 `.git/rebase-merge/*` 或 `.git/rebase-apply/*` 下的 rebase 中间态。
 /// 两套目录字段略有差异；返回 `(onto, orig_head, head_name, step, total, current_oid)`。
-fn read_rebase_state(
-    git_dir: &Path,
-) -> (
-    Option<String>,
-    Option<String>,
-    Option<String>,
-    Option<u32>,
-    Option<u32>,
-    Option<String>,
-) {
+fn read_rebase_state(git_dir: &Path) -> RebaseState {
     let merge_dir = git_dir.join("rebase-merge");
     let apply_dir = git_dir.join("rebase-apply");
     let dir = if merge_dir.is_dir() {

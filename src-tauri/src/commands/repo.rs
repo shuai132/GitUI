@@ -333,10 +333,7 @@ pub struct CloneProgressPayload {
 /// - 落空时返回 "repo"
 fn infer_dir_name_from_url(url: &str) -> String {
     let trimmed = url.trim().trim_end_matches('/');
-    let last = trimmed
-        .rsplit(|c: char| c == '/' || c == ':')
-        .next()
-        .unwrap_or("");
+    let last = trimmed.rsplit(['/', ':']).next().unwrap_or("");
     let stripped = last.strip_suffix(".git").unwrap_or(last);
     if stripped.is_empty() {
         "repo".to_string()

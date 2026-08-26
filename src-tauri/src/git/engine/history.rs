@@ -414,8 +414,6 @@ impl GitEngine {
         Ok(diff.deltas().count() > 0)
     }
 
-    /// 返回指定提交里 file_path 的 diff（仅该文件，不加载整个 CommitDetail）。
-
     pub fn get_file_blame(path: &str, file_path: &str) -> GitResult<FileBlame> {
         let repo = Self::open(path)?;
 
@@ -501,7 +499,6 @@ impl GitEngine {
 
     /// 从指定提交签出单个文件到工作目录（不修改 HEAD 或暂存区）。
     /// 若该提交中不存在此文件，返回错误。
-
     pub fn checkout_file_at_commit(path: &str, sha: &str, file_path: &str) -> GitResult<()> {
         use std::path::Path;
         let repo = Self::open(path)?;

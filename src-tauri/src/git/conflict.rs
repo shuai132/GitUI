@@ -207,10 +207,7 @@ fn read_blob_raw(repo: &Repository, oid: &git2::Oid) -> GitResult<Vec<u8>> {
 }
 
 fn any_binary(sides: &[Option<&[u8]>]) -> bool {
-    sides
-        .iter()
-        .filter_map(|s| *s)
-        .any(|bytes| is_likely_binary(bytes))
+    sides.iter().filter_map(|s| *s).any(is_likely_binary)
 }
 
 fn is_likely_binary(bytes: &[u8]) -> bool {

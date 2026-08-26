@@ -147,7 +147,9 @@ impl GitEngine {
     /// - `author_time`：None = 保留原 author date；Some(t) = 覆盖为指定 Unix 秒
     /// - `committer_time`：None = 当前时间；Some(t) = 覆盖为指定 Unix 秒
     /// - `author_name` / `author_email`：None = 保留原值；Some(s) = 覆盖
+    ///
     /// 返回新 commit OID。
+    #[allow(clippy::too_many_arguments)]
     pub fn amend_commit_message(
         path: &str,
         message: &str,

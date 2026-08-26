@@ -12,6 +12,7 @@ use crate::{
 };
 
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub async fn get_log(
     repo_id: String,
     offset: usize,
@@ -39,6 +40,7 @@ pub async fn get_log(
 }
 
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub async fn search_commits(
     repo_id: String,
     query: String,

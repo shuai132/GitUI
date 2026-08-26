@@ -188,6 +188,7 @@ pub async fn amend_commit(
 }
 
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub async fn amend_commit_message(
     repo_id: String,
     message: String,

@@ -361,12 +361,10 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn shellout_path_prefers_shell_path_and_deduplicates() {
-        let current = env::join_paths(["/usr/bin", "/opt/homebrew/bin"])
-            .expect("valid current path")
-            .into();
+        let current =
+            env::join_paths(["/usr/bin", "/opt/homebrew/bin"]).expect("valid current path");
         let shell = env::join_paths(["/opt/homebrew/bin", "/Users/me/.local/bin"])
-            .expect("valid shell path")
-            .into();
+            .expect("valid shell path");
 
         let merged = build_shellout_path(
             Some(current),

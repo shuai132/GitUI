@@ -43,7 +43,7 @@ pub async fn open_terminal(
             .args(["-a", app, &path])
             .spawn()
             .map_err(|e| GitError::OperationFailed(format!("打开终端失败: {}", e)))?;
-        return Ok(());
+        Ok(())
     }
 
     // 非 macOS 平台忽略 terminal_app，走原自动探测逻辑
@@ -216,7 +216,7 @@ pub async fn open_in_new_window(
             .arg(&path)
             .spawn()
             .map_err(|e| GitError::OperationFailed(format!("启动新窗口失败: {}", e)))?;
-        return Ok(());
+        Ok(())
     }
 
     #[cfg(not(target_os = "macos"))]
@@ -247,7 +247,7 @@ pub async fn reveal_in_file_manager(
             .args(["-R", &path])
             .spawn()
             .map_err(|e| GitError::OperationFailed(format!("打开 Finder 失败: {}", e)))?;
-        return Ok(());
+        Ok(())
     }
 
     #[cfg(target_os = "windows")]
@@ -326,7 +326,7 @@ pub async fn reveal_file(path: String) -> Result<(), GitError> {
             .args(["-R", &path])
             .spawn()
             .map_err(|e| GitError::OperationFailed(format!("打开 Finder 失败: {}", e)))?;
-        return Ok(());
+        Ok(())
     }
 
     #[cfg(target_os = "windows")]
@@ -388,7 +388,7 @@ pub async fn open_terminal_here(
             .args(["-a", app, &path])
             .spawn()
             .map_err(|e| GitError::OperationFailed(format!("打开终端失败: {}", e)))?;
-        return Ok(());
+        Ok(())
     }
 
     #[cfg(not(target_os = "macos"))]
@@ -511,7 +511,7 @@ pub fn list_system_fonts() -> Vec<String> {
     use font_kit::source::SystemSource;
     let source = SystemSource::new();
     let mut families = source.all_families().unwrap_or_default();
-    families.sort_unstable_by(|a, b| a.to_lowercase().cmp(&b.to_lowercase()));
+    families.sort_unstable_by_key(|name| name.to_lowercase());
     families.dedup();
     families
 }

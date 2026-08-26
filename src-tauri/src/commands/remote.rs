@@ -91,6 +91,7 @@ pub async fn push_branch(
 }
 
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub async fn push_tag(
     repo_id: String,
     remote_name: String,
