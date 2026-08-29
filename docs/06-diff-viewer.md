@@ -36,6 +36,8 @@ Diff 查看器服务于 **WIP 工作区 diff** 和 **提交内 diff**。两种�
 - **Hunk 列表**：每个 Hunk 包含补丁头（Header）及具体的行数据。
 - **Blob 引用**：旧版与新版的 Blob OID，用于按需拉取原始内容（如图片预览）。
 
+历史提交识别为重命名时，文件列表和 Diff 工具栏展示“旧路径 → 新路径”。加载单文件正文时，前端同时传递两侧路径，让后端只在这两个候选间恢复 rename delta；正文因此展示真实内容变化，而不是整文件删除与新增。
+
 关闭按 Hunk 分组时，Inline / Side-by-Side 不要求后端返回全量上下文；前端根据 Blob 引用和工作区读取接口按需加载完整旧 / 新文本，再用 hunk 元数据补齐未变化行。读取失败或超过原始内容读取阈值时，文本视图回退到后端 hunk 数据。
 
 文档预览额外使用 `src/types/git.ts::DocumentTextSource` 和 `DocumentText`。前端按旧 / 新两侧构造 blob 或工作区来源，后端抽取 PDF / DOCX 文本后返回；该文本只用于文档内容 diff，不替代 `FileDiff` 的 hunk 契约。

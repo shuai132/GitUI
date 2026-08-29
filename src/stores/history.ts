@@ -463,11 +463,13 @@ export const useHistoryStore = defineStore('history', () => {
     try {
       const path = diff.new_path || diff.old_path
       if (!path) return
+      const oldPath = diff.old_path !== path ? diff.old_path : undefined
       const fullDiff = await git.getFileDiffAtCommit(
         repoId,
         path,
         oid,
         uiStore.diffIgnoreWhitespace,
+        oldPath,
       )
       if (
         requestSeq !== fileDiffRequestSeq ||

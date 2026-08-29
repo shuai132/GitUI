@@ -13,6 +13,7 @@ import {
 import { EMPTY_FILE_ORDER_BUCKET, type FileOrderBucket } from '@/utils/fileOrderPrefs'
 import { buildSubmodulePathSet, isSubmodulePath } from '@/utils/submodules'
 import { scrollElementByWheel } from '@/utils/wheelScroll'
+import { displayDiffPath, isRenamedDiff } from '@/utils/diffPath'
 
 const { t } = useI18n()
 const settings = useSettingsStore()
@@ -88,8 +89,9 @@ function isSubmoduleFile(item: CommitFileDisplayItem): boolean {
 }
 
 function fileTitle(item: CommitFileDisplayItem): string {
-  if (!isSubmoduleFile(item)) return item.path
-  return `${item.path}\n${t('workspace.fileList.submoduleTitle')}`
+  const path = item.type === 'file' ? displayDiffPath(item.file) : item.path
+  if (!isSubmoduleFile(item)) return path
+  return `${path}\n${t('workspace.fileList.submoduleTitle')}`
 }
 
 function expandSelectedFileAncestors() {
@@ -143,7 +145,7 @@ function isActiveFile(item: CommitFileDisplayItem): boolean {
 
 function displayFileName(item: CommitFileDisplayItem): string {
   if (item.type === 'dir') return item.name
-  if (viewMode.value !== 'tree') return item.path
+  if (viewMode.value !== 'tree' || isRenamedDiff(item.file)) return displayDiffPath(item.file)
   return item.path.split('/').pop() || item.path
 }
 

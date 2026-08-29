@@ -63,6 +63,7 @@ pub async fn extract_document_text(
 pub async fn get_file_diff_at_commit(
     repo_id: String,
     file_path: String,
+    old_file_path: Option<String>,
     oid: String,
     ignore_whitespace: bool,
     repo_manager: State<'_, RepoManager>,
@@ -70,7 +71,13 @@ pub async fn get_file_diff_at_commit(
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    GitEngine::get_file_diff_at_commit(&meta.path, &file_path, &oid, ignore_whitespace)
+    GitEngine::get_file_diff_at_commit(
+        &meta.path,
+        &file_path,
+        old_file_path.as_deref(),
+        &oid,
+        ignore_whitespace,
+    )
 }
 
 #[tauri::command]

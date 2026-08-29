@@ -1,5 +1,5 @@
 use base64::prelude::{Engine as _, BASE64_STANDARD};
-use git2::{AttrCheckFlags, DiffFormat, DiffOptions, Repository};
+use git2::{AttrCheckFlags, DiffFindOptions, DiffFormat, DiffOptions, Repository};
 use quick_xml::{events::Event, Reader};
 use std::{
     io::{Cursor, Read},
@@ -18,6 +18,13 @@ use super::{build_commit_info, GitEngine, LARGE_BLOB_THRESHOLD_BYTES, MAX_PREVIE
 const MAX_DOCUMENT_TEXT_CHARS: usize = 250_000;
 
 impl GitEngine {
+    fn find_renames(diff: &mut git2::Diff<'_>) -> GitResult<()> {
+        let mut find_opts = DiffFindOptions::new();
+        find_opts.renames(true);
+        diff.find_similar(Some(&mut find_opts))?;
+        Ok(())
+    }
+
     pub(super) fn add_tree_change_stats(
         repo: &Repository,
         old_tree: Option<&git2::Tree<'_>>,
@@ -26,7 +33,8 @@ impl GitEngine {
     ) -> GitResult<()> {
         let mut opts = git2::DiffOptions::new();
         opts.context_lines(0).interhunk_lines(0);
-        let diff = repo.diff_tree_to_tree(old_tree, new_tree, Some(&mut opts))?;
+        let mut diff = repo.diff_tree_to_tree(old_tree, new_tree, Some(&mut opts))?;
+        Self::find_renames(&mut diff)?;
         Self::add_diff_change_stats(repo, &diff, stats)
     }
 
@@ -88,7 +96,7 @@ impl GitEngine {
         let mut opts = git2::DiffOptions::new();
         opts.context_lines(0).interhunk_lines(0);
 
-        let diff = if commit.parent_count() > 0 {
+        let mut diff = if commit.parent_count() > 0 {
             let parent = commit.parent(0)?;
             let parent_tree = parent.tree()?;
             let commit_tree = commit.tree()?;
@@ -97,6 +105,7 @@ impl GitEngine {
             let commit_tree = commit.tree()?;
             repo.diff_tree_to_tree(None, Some(&commit_tree), Some(&mut opts))?
         };
+        Self::find_renames(&mut diff)?;
 
         let mut diffs = Self::parse_diff_summary(&repo, &diff, include_stats)?;
 
@@ -138,7 +147,7 @@ impl GitEngine {
         let mut opts = git2::DiffOptions::new();
         opts.context_lines(0).interhunk_lines(0);
 
-        let diff = if commit.parent_count() > 0 {
+        let mut diff = if commit.parent_count() > 0 {
             let parent = commit.parent(0)?;
             let parent_tree = parent.tree()?;
             let commit_tree = commit.tree()?;
@@ -147,6 +156,7 @@ impl GitEngine {
             let commit_tree = commit.tree()?;
             repo.diff_tree_to_tree(None, Some(&commit_tree), Some(&mut opts))?
         };
+        Self::find_renames(&mut diff)?;
 
         let mut diffs = Self::parse_diff(&repo, &diff)?;
 
@@ -1063,6 +1073,7 @@ impl GitEngine {
     pub fn get_file_diff_at_commit(
         path: &str,
         file_path: &str,
+        old_file_path: Option<&str>,
         oid_str: &str,
         ignore_whitespace: bool,
     ) -> GitResult<FileDiff> {
@@ -1076,13 +1087,17 @@ impl GitEngine {
         diff_opts
             .pathspec(file_path)
             .ignore_whitespace(ignore_whitespace);
+        if let Some(old_path) = old_file_path.filter(|old_path| *old_path != file_path) {
+            diff_opts.pathspec(old_path);
+        }
 
-        let diff = if commit.parent_count() > 0 {
+        let mut diff = if commit.parent_count() > 0 {
             let parent_tree = commit.parent(0)?.tree()?;
             repo.diff_tree_to_tree(Some(&parent_tree), Some(&commit_tree), Some(&mut diff_opts))?
         } else {
             repo.diff_tree_to_tree(None, Some(&commit_tree), Some(&mut diff_opts))?
         };
+        Self::find_renames(&mut diff)?;
 
         let mut diffs = Self::parse_diff(&repo, &diff)?;
 

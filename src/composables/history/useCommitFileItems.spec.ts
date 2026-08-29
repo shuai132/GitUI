@@ -27,4 +27,9 @@ describe('commitFileStatus', () => {
   it('keeps executable bit changes as modified', () => {
     expect(commitFileStatus(diff({ new_file_mode: 0o100755 }))).toBe('modified')
   })
+
+  it('detects a changed path with both blobs as renamed', () => {
+    expect(commitFileStatus(diff({ old_path: 'old/file.txt', new_path: 'new/file.txt' })))
+      .toBe('renamed')
+  })
 })

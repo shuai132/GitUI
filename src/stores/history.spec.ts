@@ -746,6 +746,7 @@ describe('history store log filters', () => {
       'src/app.ts',
       'commit-1',
       false,
+      undefined,
     )
     expect(getFileDiffAtCommitMock).toHaveBeenNthCalledWith(
       2,
@@ -753,7 +754,34 @@ describe('history store log filters', () => {
       'src/app.ts',
       'commit-1',
       true,
+      undefined,
     )
     expect(historyStore.selectedCommit.diffs[0].additions).toBe(7)
+  })
+
+  it('loads a renamed file with both its old and new paths', async () => {
+    const repoStore = useRepoStore()
+    const historyStore = useHistoryStore()
+    setActiveRepo(repoStore, 'repo-1', '/repos/a')
+    const renamed = {
+      ...fileDiff('new/file.ts'),
+      old_path: 'old/file.ts',
+      hunks: [],
+    }
+    historyStore.selectedCommit = {
+      info: commit('commit-1'),
+      diffs: [renamed],
+    }
+    getFileDiffAtCommitMock.mockResolvedValue(renamed)
+
+    await historyStore.reloadSelectedFileDiff()
+
+    expect(getFileDiffAtCommitMock).toHaveBeenCalledWith(
+      'repo-1',
+      'new/file.ts',
+      'commit-1',
+      false,
+      'old/file.ts',
+    )
   })
 })

@@ -20,10 +20,10 @@ const diff: FileDiff = {
   encoding: 'UTF-8',
 }
 
-function mountToolbar(previewKind: 'pdf' | null = null) {
+function mountToolbar(previewKind: 'pdf' | null = null, fileDiff: FileDiff = diff) {
   return mount(DiffToolbar, {
     props: {
-      diff,
+      diff: fileDiff,
       isImageView: false,
       previewKind,
       svgTextMode: false,
@@ -78,5 +78,19 @@ describe('DiffToolbar whitespace toggle', () => {
 
   it('does not offer a raw-diff filter for document previews', () => {
     expect(mountToolbar('pdf').find('.btn-ignore-whitespace').exists()).toBe(false)
+  })
+
+  it('shows both paths for a renamed file', () => {
+    const wrapper = mountToolbar(null, {
+      ...diff,
+      old_path: '.agents/skills/deploy-rv1106/SKILL.md',
+      new_path: '.agents/skills/deploy/SKILL.md',
+    })
+    const path = wrapper.find('.diff-file-path')
+
+    expect(path.text()).toBe(
+      '.agents/skills/deploy-rv1106/SKILL.md → .agents/skills/deploy/SKILL.md',
+    )
+    expect(path.attributes('title')).toBe(path.text())
   })
 })

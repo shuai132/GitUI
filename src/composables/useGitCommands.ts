@@ -426,7 +426,14 @@ export function useGitCommands() {
     filePath: string,
     oid: string,
     ignoreWhitespace: boolean,
-  ) => call<FileDiff>('get_file_diff_at_commit', { repoId, filePath, oid, ignoreWhitespace })
+    oldFilePath?: string,
+  ) => call<FileDiff>('get_file_diff_at_commit', {
+    repoId,
+    filePath,
+    oldFilePath,
+    oid,
+    ignoreWhitespace,
+  })
 
   const getFileBlame = (repoId: string, filePath: string) =>
     call<FileBlame>('get_file_blame', { repoId, filePath })

@@ -6,6 +6,7 @@ import { useUiStore } from '@/stores/ui'
 import { useShortcutsStore, bindingToLabel, type ShortcutActionId } from '@/stores/shortcuts'
 import { useDiffSearch } from '@/composables/diff/useDiffSearch'
 import type { PreviewKind } from '@/lib/preview'
+import { displayDiffPath } from '@/utils/diffPath'
 
 const props = defineProps<{
   diff: FileDiff
@@ -54,13 +55,15 @@ const canIgnoreWhitespace = computed(() =>
   props.previewKind !== 'docx' &&
   props.previewKind !== 'pptx',
 )
+
+const filePathLabel = computed(() => displayDiffPath(props.diff))
 </script>
 
 <template>
   <div class="diff-toolbar" :class="{ 'diff-toolbar--has-leading': hasLeading }">
     <slot name="leading" />
-    <span class="diff-file-path" :title="diff.new_path ?? diff.old_path">
-      <span class="diff-file-path-text"><bdi>{{ diff.new_path ?? diff.old_path }}</bdi></span>
+    <span class="diff-file-path" :title="filePathLabel">
+      <span class="diff-file-path-text"><bdi>{{ filePathLabel }}</bdi></span>
     </span>
     <span class="diff-file-stats" v-if="!isImageView">
       <span class="add">+{{ diff.additions }}</span>

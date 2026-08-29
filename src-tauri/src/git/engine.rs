@@ -161,6 +161,34 @@ mod tests {
             .unwrap()
     }
 
+    fn rename_file_and_commit(
+        test_repo: &TestRepo,
+        message: &str,
+        old_path: &str,
+        new_path: &str,
+        content: &str,
+    ) -> Oid {
+        let old_full_path = test_repo.dir.path().join(old_path);
+        let new_full_path = test_repo.dir.path().join(new_path);
+        if let Some(parent) = new_full_path.parent() {
+            fs::create_dir_all(parent).unwrap();
+        }
+        fs::rename(old_full_path, &new_full_path).unwrap();
+        fs::write(new_full_path, content).unwrap();
+
+        let repo = &test_repo.repo;
+        let mut index = repo.index().unwrap();
+        index.remove_path(Path::new(old_path)).unwrap();
+        index.add_path(Path::new(new_path)).unwrap();
+        index.write().unwrap();
+        let tree_oid = index.write_tree().unwrap();
+        let tree = repo.find_tree(tree_oid).unwrap();
+        let sig = repo.signature().unwrap();
+        let parent = repo.head().unwrap().peel_to_commit().unwrap();
+        repo.commit(Some("HEAD"), &sig, &sig, message, &tree, &[&parent])
+            .unwrap()
+    }
+
     #[test]
     fn pull_guard_accepts_clean_repository() {
         let test_repo = TestRepo::new();
@@ -1733,6 +1761,48 @@ mod tests {
     }
 
     #[test]
+    fn test_commit_diff_detects_rename_with_content_changes() {
+        let test_repo = TestRepo::new();
+        let path = test_repo.path_str();
+        let old_path = "old/location/example.txt";
+        let new_path = "new/location/example.txt";
+        let base = (1..=20)
+            .map(|line| format!("line {line}\n"))
+            .collect::<Vec<_>>()
+            .join("");
+        fs::create_dir_all(test_repo.dir.path().join("old/location")).unwrap();
+        commit_file(&test_repo, "add source", old_path, &base);
+        let updated = base.replace("line 10\n", "line ten\n");
+        let rename_oid =
+            rename_file_and_commit(&test_repo, "rename source", old_path, new_path, &updated);
+
+        let summary = GitEngine::get_commit_summary(path, &rename_oid.to_string(), true).unwrap();
+        assert_eq!(summary.diffs.len(), 1);
+        let summary_diff = &summary.diffs[0];
+        assert_eq!(summary_diff.old_path.as_deref(), Some(old_path));
+        assert_eq!(summary_diff.new_path.as_deref(), Some(new_path));
+        assert_eq!((summary_diff.additions, summary_diff.deletions), (1, 1));
+
+        let file_diff = GitEngine::get_file_diff_at_commit(
+            path,
+            new_path,
+            Some(old_path),
+            &rename_oid.to_string(),
+            false,
+        )
+        .unwrap();
+        assert_eq!(file_diff.old_path.as_deref(), Some(old_path));
+        assert_eq!(file_diff.new_path.as_deref(), Some(new_path));
+        assert_eq!((file_diff.additions, file_diff.deletions), (1, 1));
+        assert_eq!(file_diff.hunks.len(), 1);
+
+        let stats = GitEngine::get_commit_change_stats(path, vec![rename_oid.to_string()]).unwrap();
+        let stats = &stats[0];
+        assert_eq!(stats.files_changed, 1);
+        assert_eq!((stats.additions, stats.deletions), (1, 1));
+    }
+
+    #[test]
     fn test_get_status() {
         let test_repo = TestRepo::new();
         let path = test_repo.path_str();
@@ -1792,6 +1862,7 @@ mod tests {
         let commit_visible = GitEngine::get_file_diff_at_commit(
             path,
             "existing.txt",
+            None,
             &whitespace_commit.to_string(),
             false,
         )
@@ -1799,6 +1870,7 @@ mod tests {
         let commit_ignored = GitEngine::get_file_diff_at_commit(
             path,
             "existing.txt",
+            None,
             &whitespace_commit.to_string(),
             true,
         )
