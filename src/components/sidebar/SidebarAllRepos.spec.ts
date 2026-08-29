@@ -133,6 +133,16 @@ describe('SidebarAllRepos action feedback', () => {
     expect(mocks.repoStore.setActive).toHaveBeenCalledWith('repo-a')
   })
 
+  it('activates a repository when clicking anywhere on its row', async () => {
+    const wrapper = shallowMount(SidebarAllRepos)
+    await flushPromises()
+
+    await wrapper.find('.repo-item').trigger('click')
+    await flushPromises()
+
+    expect(mocks.repoStore.setActive).toHaveBeenCalledWith('repo-a')
+  })
+
   it('reports failed folders from a partial drop', async () => {
     const dropError = new Error('not a repository')
     mocks.repoStore.openRepos.mockResolvedValue({

@@ -622,6 +622,7 @@ function closeWorktreeDialog() {
         :style="{ paddingLeft: (12 + row.depth * 14) + 'px' }"
         :title="row.repo.path"
         @pointerdown="onRepoPointerDown($event, idx, row.repo.id)"
+        @click="onRepoClick($event, row.repo.id)"
         @mouseenter="onRepoSearchMouseEnter(row.repo.id)"
         @contextmenu="openRepoMenu($event, row.repo)"
       >
@@ -630,7 +631,6 @@ function closeWorktreeDialog() {
           class="repo-item-main"
           :title="row.repo.path"
           :aria-current="row.repo.id === repoStore.activeRepoId ? 'true' : undefined"
-          @click="onRepoClick($event, row.repo.id)"
         >
           <svg
             v-if="row.depth === 0"
