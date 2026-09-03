@@ -51,6 +51,24 @@ describe('diff inline change highlighting', () => {
     expect(wrapper.find('.hunk-block mark.word-add').exists()).toBe(true)
     expect(wrapper.html()).toContain('hljs')
   })
+
+  it('pairs every deleted and added line within an inline change run', () => {
+    const wrapper = mount(InlineDiff, {
+      props: {
+        diff: cmakeFlagsDiff(),
+        groupByHunk: true,
+        syntaxLang: null,
+      },
+      global: { plugins: [i18n] },
+    })
+
+    const changedLines = wrapper.findAll('.hunk-block .inline-line .code')
+    expect(changedLines).toHaveLength(4)
+    expect(markTexts(changedLines[0].element, 'word-add')).toEqual([''])
+    expect(markTexts(changedLines[1].element, 'word-del')).toEqual(['_C'])
+    expect(markTexts(changedLines[2].element, 'word-add')).toEqual([',undefined'])
+    expect(markTexts(changedLines[3].element, 'word-add')).toEqual(['_CXX', ',undefined'])
+  })
 })
 
 function fileDiff(): FileDiff {
@@ -79,4 +97,52 @@ function changedLineHunk(): DiffHunk {
       { origin: '+', content: 'class AiModelKeyword extends JsonInterface {\n', new_lineno: 3 },
     ],
   }
+}
+
+function cmakeFlagsDiff(): FileDiff {
+  return {
+    old_path: 'CMakeLists.txt',
+    new_path: 'CMakeLists.txt',
+    is_binary: false,
+    hunks: [{
+      old_start: 10,
+      old_lines: 2,
+      new_start: 10,
+      new_lines: 2,
+      header: '@@ -10,2 +10,2 @@',
+      lines: [
+        {
+          origin: '-',
+          content: '    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fsanitize=address")\n',
+          old_lineno: 10,
+        },
+        {
+          origin: '-',
+          content: '    set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -fsanitize=address")\n',
+          old_lineno: 11,
+        },
+        {
+          origin: '+',
+          content: '    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fsanitize=address,undefined")\n',
+          new_lineno: 10,
+        },
+        {
+          origin: '+',
+          content: '    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address,undefined")\n',
+          new_lineno: 11,
+        },
+      ],
+    }],
+    additions: 2,
+    deletions: 2,
+    old_blob_oid: 'old',
+    new_blob_oid: 'new',
+    encoding: 'UTF-8',
+  }
+}
+
+function markTexts(element: Element, className: string): string[] {
+  return Array.from(element.querySelectorAll(`mark.${className}`)).map(
+    (mark) => mark.textContent ?? '',
+  )
 }

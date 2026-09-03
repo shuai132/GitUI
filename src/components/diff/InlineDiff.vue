@@ -92,26 +92,37 @@ function buildHunkRows(diff: FileDiff): InlineRow[] {
 }
 
 function addInlineWordDiff(sourceRows: InlineRow[]): InlineRow[] {
-  const result: InlineRow[] = []
-  for (let i = 0; i < sourceRows.length; i++) {
-    const cur = { ...sourceRows[i] }
-    const nxt = sourceRows[i + 1]
-    if (cur.kind === 'del' && nxt?.kind === 'add') {
-      const nextRow = { ...nxt }
-      const { leftHtml, rightHtml } = diffLinePairHtml(
-        cur.content,
-        nextRow.content,
-        langForRow(cur),
-        langForRow(nextRow),
-      )
-      cur.wordHtml = leftHtml
-      nextRow.wordHtml = rightHtml
-      result.push(cur, nextRow)
-      i++
+  const result = sourceRows.map((row) => ({ ...row }))
+
+  for (let start = 0; start < result.length;) {
+    if (!isChangeRow(result[start])) {
+      start++
       continue
     }
-    result.push(cur)
+
+    let end = start + 1
+    while (end < result.length && isChangeRow(result[end])) end++
+
+    const deletedRows = result.slice(start, end).filter((row) => row.kind === 'del')
+    const addedRows = result.slice(start, end).filter((row) => row.kind === 'add')
+    const pairCount = Math.min(deletedRows.length, addedRows.length)
+
+    for (let i = 0; i < pairCount; i++) {
+      const deletedRow = deletedRows[i]
+      const addedRow = addedRows[i]
+      const { leftHtml, rightHtml } = diffLinePairHtml(
+        deletedRow.content,
+        addedRow.content,
+        langForRow(deletedRow),
+        langForRow(addedRow),
+      )
+      deletedRow.wordHtml = leftHtml
+      addedRow.wordHtml = rightHtml
+    }
+
+    start = end
   }
+
   return result
 }
 
