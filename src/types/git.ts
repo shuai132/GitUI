@@ -277,6 +277,16 @@ export interface BuildInfo {
   git_hash: string | null
 }
 
+/** 由后端注册到 updater 资源表中的开发版更新元数据。 */
+export interface DevelopmentUpdateMetadata {
+  rid: number
+  current_version: string
+  version: string
+  date: string | null
+  body: string | null
+  raw_json: Record<string, unknown>
+}
+
 // Graph node for DAG visualization
 export interface GraphNode {
   oid: string

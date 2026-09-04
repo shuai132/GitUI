@@ -4,7 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { useSettingsStore } from '@/stores/settings'
 import type { UpdateStrategy } from '@/stores/settings'
 import { useGitCommands } from '@/composables/useGitCommands'
-import { check, type Update } from '@tauri-apps/plugin-updater'
+import { check, Update } from '@tauri-apps/plugin-updater'
 import { message } from '@tauri-apps/plugin-dialog'
 import { formatTime } from '@/utils/format'
 import {
@@ -12,6 +12,7 @@ import {
   isNetworkUpdateCheckError,
   readLastUpdateCheckTime,
   recordLastUpdateCheckTime,
+  updateCheckErrorMessage,
 } from '@/utils/updateCheck'
 import UpdateDialog from '@/components/common/UpdateDialog.vue'
 
@@ -21,9 +22,11 @@ const git = useGitCommands()
 
 const appVersion = ref('')
 const gitHash = ref<string | null>(null)
-const isChecking = ref(false)
+type UpdateChannel = 'release' | 'development'
+const checkingChannel = ref<UpdateChannel | null>(null)
 const lastCheckTime = ref<number | null>(null)
 const availableUpdate = ref<Update | null>(null)
+const dialogChannel = ref<UpdateChannel>('release')
 const showUpdateDialog = ref(false)
 
 const updateStrategyOptions = [
@@ -55,28 +58,53 @@ const lastCheckLabel = computed(() => {
   return t('settings.about.lastChecked', { time: formatTime(lastCheckTime.value) })
 })
 
-async function checkForUpdates() {
-  if (isChecking.value) return
-  isChecking.value = true
+async function checkForUpdates(channel: UpdateChannel) {
+  if (checkingChannel.value) return
+  checkingChannel.value = channel
   try {
-    const update = await check()
-    lastCheckTime.value = recordLastUpdateCheckTime()
+    const update = channel === 'release'
+      ? await check()
+      : toUpdaterResource(await git.checkDevelopmentUpdate())
+    if (channel === 'release') lastCheckTime.value = recordLastUpdateCheckTime()
 
     if (update) {
       availableUpdate.value = update
+      dialogChannel.value = channel
       showUpdateDialog.value = true
     } else {
-      await message(t('settings.about.noUpdateFound'), { title: t('settings.about.checkUpdate'), kind: 'info' })
+      await message(
+        t(channel === 'release'
+          ? 'settings.about.noUpdateFound'
+          : 'settings.about.noDevelopmentUpdateFound'),
+        {
+          title: t(channel === 'release'
+            ? 'settings.about.checkUpdate'
+            : 'settings.about.checkDevelopmentUpdate'),
+          kind: 'info',
+        },
+      )
     }
   } catch (err: unknown) {
-    if (!isNetworkUpdateCheckError(err)) {
+    if (channel === 'release' && !isNetworkUpdateCheckError(err)) {
       lastCheckTime.value = recordLastUpdateCheckTime()
     }
-    const detail = err instanceof Error ? err.message : String(err)
+    const detail = updateCheckErrorMessage(err)
     await message(`${t('settings.about.updateError')}：${detail}`, { title: '错误', kind: 'error' })
   } finally {
-    isChecking.value = false
+    checkingChannel.value = null
   }
+}
+
+function toUpdaterResource(metadata: Awaited<ReturnType<typeof git.checkDevelopmentUpdate>>) {
+  if (!metadata) return null
+  return new Update({
+    rid: metadata.rid,
+    currentVersion: metadata.current_version,
+    version: metadata.version,
+    date: metadata.date ?? undefined,
+    body: metadata.body ?? undefined,
+    rawJson: metadata.raw_json,
+  })
 }
 </script>
 
@@ -90,21 +118,34 @@ async function checkForUpdates() {
           <span class="app-name">GitUI</span>
           <span class="app-ver">v{{ appVersion }}</span>
         </div>
-        <button 
-          class="btn btn-primary check-btn" 
-          :disabled="isChecking"
-          @click="checkForUpdates"
-        >
-          <svg v-if="isChecking" class="spinner" viewBox="0 0 24 24">
-            <circle class="path" cx="12" cy="12" r="10" fill="none" stroke-width="3"></circle>
-          </svg>
-          {{ isChecking ? t('settings.about.checking') : t('settings.about.checkUpdate') }}
-        </button>
+        <div class="check-actions">
+          <button
+            class="btn btn-secondary check-btn development-check-btn"
+            :disabled="checkingChannel !== null"
+            @click="checkForUpdates('development')"
+          >
+            <svg v-if="checkingChannel === 'development'" class="spinner" viewBox="0 0 24 24">
+              <circle class="path" cx="12" cy="12" r="10" fill="none" stroke-width="3"></circle>
+            </svg>
+            {{ checkingChannel === 'development' ? t('settings.about.checking') : t('settings.about.checkDevelopmentUpdate') }}
+          </button>
+          <button
+            class="btn btn-primary check-btn release-check-btn"
+            :disabled="checkingChannel !== null"
+            @click="checkForUpdates('release')"
+          >
+            <svg v-if="checkingChannel === 'release'" class="spinner" viewBox="0 0 24 24">
+              <circle class="path" cx="12" cy="12" r="10" fill="none" stroke-width="3"></circle>
+            </svg>
+            {{ checkingChannel === 'release' ? t('settings.about.checking') : t('settings.about.checkUpdate') }}
+          </button>
+        </div>
       </div>
       <div class="version-footer">
         <div class="git-hash" v-if="gitHash">Build: {{ gitHash }}</div>
         <div class="last-check">{{ lastCheckLabel }}</div>
       </div>
+      <div class="development-hint">{{ t('settings.about.developmentUpdateHint') }}</div>
     </div>
 
     <div class="strategy-list">
@@ -130,6 +171,7 @@ async function checkForUpdates() {
     <UpdateDialog 
       :visible="showUpdateDialog" 
       :update="availableUpdate" 
+      :channel="dialogChannel"
       @close="showUpdateDialog = false" 
     />
   </div>
@@ -189,6 +231,18 @@ async function checkForUpdates() {
   color: var(--text-muted);
   border-top: 1px solid var(--border);
   padding-top: 10px;
+}
+
+.development-hint {
+  font-size: var(--font-sm);
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.check-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .strategy-list {
@@ -287,8 +341,14 @@ async function checkForUpdates() {
   height: 14px;
 }
 
-.spinner .path {
+.btn-primary .spinner .path {
   stroke: #fff;
+  stroke-linecap: round;
+  animation: dash 1.5s ease-in-out infinite;
+}
+
+.btn-secondary .spinner .path {
+  stroke: currentColor;
   stroke-linecap: round;
   animation: dash 1.5s ease-in-out infinite;
 }

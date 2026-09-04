@@ -46,9 +46,11 @@ function response(body: string): Response {
 function update(
   version: string,
   downloadAndInstall = vi.fn().mockResolvedValue(undefined),
-): Pick<Update, 'version' | 'downloadAndInstall'> {
+  body: string | undefined = undefined,
+): Pick<Update, 'version' | 'body' | 'downloadAndInstall'> {
   return {
     version,
+    body,
     downloadAndInstall: downloadAndInstall as unknown as Update['downloadAndInstall'],
   }
 }
@@ -155,5 +157,32 @@ describe('UpdateDialog release context', () => {
       restartError,
       'settings.about.restartFailed',
     )
+  })
+
+  it('shows development build context without fetching Release notes or changing skipped versions', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    mocks.skippedVersion = '1.0.0'
+    const download = vi.fn().mockResolvedValue(undefined)
+    const wrapper = mount(UpdateDialog, {
+      props: {
+        visible: true,
+        update: update('1.0.1-dev.42', download, 'main @ abcdef0'),
+        channel: 'development',
+      },
+      global: { stubs: { Modal: ModalStub } },
+    })
+    await flushPromises()
+
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(wrapper.text()).toContain('settings.about.developmentUpdateWarning')
+    expect(wrapper.text()).toContain('main @ abcdef0')
+    expect(wrapper.find('.btn-skip').exists()).toBe(false)
+
+    await wrapper.find('.btn-primary').trigger('click')
+    await flushPromises()
+
+    expect(download).toHaveBeenCalledOnce()
+    expect(mocks.skippedVersion).toBe('1.0.0')
   })
 })

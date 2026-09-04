@@ -1,13 +1,14 @@
 use std::process::Command;
 use std::sync::Mutex;
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, Manager, State, Url, Webview};
+use tauri_plugin_updater::UpdaterExt;
 
 use crate::{
     auto_fetch::AutoFetchService,
     git::{
         engine::GitEngine,
         error::GitError,
-        types::{BuildInfo, ReflogDropPreview, ReflogEntry},
+        types::{BuildInfo, DevelopmentUpdateMetadata, ReflogDropPreview, ReflogEntry},
     },
     repo_manager::RepoManager,
 };
@@ -16,6 +17,8 @@ use crate::{
 /// 子进程前端在 `loadPersisted` 完成后调用 `consume_startup_repo` 取走并置空，使之只生效一次。
 #[derive(Default)]
 pub struct StartupRepo(pub Mutex<Option<String>>);
+
+const DEVELOPMENT_UPDATE_ENDPOINT: &str = "https://shuai132.github.io/GitUI/latest.json";
 
 /// 在仓库目录打开系统默认终端。
 /// - macOS: `open -a <terminal_app> <path>`，`terminal_app` 由前端从设置传入（默认 `Terminal`）
@@ -492,16 +495,49 @@ pub async fn set_auto_fetch_interval(secs: u64, app: AppHandle) -> Result<(), Gi
     Ok(())
 }
 
-/// 返回应用版本（`Cargo.toml` 中的 `version`）和编译时注入的短 commit hash。
+/// 返回应用运行时版本和编译时注入的短 commit hash。
 /// 用于「关于」面板等需要展示精确 build 标识的场景。
 #[tauri::command]
-pub fn get_build_info() -> BuildInfo {
+pub fn get_build_info(app: AppHandle) -> BuildInfo {
     BuildInfo {
-        version: env!("CARGO_PKG_VERSION").to_string(),
+        version: app.package_info().version.to_string(),
         git_hash: option_env!("GIT_HASH")
             .filter(|s| !s.is_empty())
             .map(str::to_string),
     }
+}
+
+/// 仅检查 `main` 分支最新成功构建对应的开发版更新清单。
+/// 返回的 updater 资源仍由官方插件负责下载、验签和安装。
+#[tauri::command]
+pub async fn check_development_update(
+    webview: Webview,
+) -> Result<Option<DevelopmentUpdateMetadata>, GitError> {
+    let endpoint = Url::parse(DEVELOPMENT_UPDATE_ENDPOINT)
+        .map_err(|error| GitError::OperationFailed(error.to_string()))?;
+    let updater = webview
+        .updater_builder()
+        .endpoints(vec![endpoint])
+        .map_err(|error| GitError::OperationFailed(error.to_string()))?
+        .build()
+        .map_err(|error| GitError::OperationFailed(error.to_string()))?;
+    let Some(update) = updater
+        .check()
+        .await
+        .map_err(|error| GitError::OperationFailed(error.to_string()))?
+    else {
+        return Ok(None);
+    };
+
+    let metadata = DevelopmentUpdateMetadata {
+        current_version: update.current_version.clone(),
+        version: update.version.clone(),
+        date: None,
+        body: update.body.clone(),
+        raw_json: update.raw_json.clone(),
+        rid: webview.resources_table().add(update),
+    };
+    Ok(Some(metadata))
 }
 
 /// 枚举系统已安装的字体族名称，返回按字母排序的去重列表。

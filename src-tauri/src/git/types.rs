@@ -415,3 +415,15 @@ pub struct BuildInfo {
     pub version: String,
     pub git_hash: Option<String>,
 }
+
+/// 开发版 updater 资源元数据。字段保持项目 IPC 的 snake_case 约定，前端再转换为
+/// `@tauri-apps/plugin-updater` 使用的 camelCase 资源构造参数。
+#[derive(Debug, Clone, Serialize)]
+pub struct DevelopmentUpdateMetadata {
+    pub rid: u32,
+    pub current_version: String,
+    pub version: String,
+    pub date: Option<String>,
+    pub body: Option<String>,
+    pub raw_json: serde_json::Value,
+}

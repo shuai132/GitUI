@@ -22,6 +22,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: build-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref == 'refs/heads/main' }}
+
 jobs:
   build:
     strategy:
@@ -86,6 +90,24 @@ jobs:
         shell: bash
         run: echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
 
+      - name: Prepare development version
+        id: development
+        shell: bash
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" == "push" && "$GITHUB_REF" == "refs/heads/main" ]]; then
+            version=$(node .github/scripts/development-update.mjs version \
+              --base-version "${{ steps.version.outputs.version }}" \
+              --run-number "$GITHUB_RUN_NUMBER")
+            echo "version=$version" >> "$GITHUB_OUTPUT"
+            tauri_config=$(node .github/scripts/development-update.mjs config \
+              --base-version "${{ steps.version.outputs.version }}" \
+              --run-number "$GITHUB_RUN_NUMBER")
+            echo "tauri_config=$tauri_config" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=${{ steps.version.outputs.version }}" >> "$GITHUB_OUTPUT"
+            echo 'tauri_config={}' >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Get short commit hash
         id: hash
         shell: bash
@@ -104,12 +126,59 @@ jobs:
           releaseBody: 'See the assets below to download and install GitUI for your platform.'
           releaseDraft: true
           prerelease: false
-          args: --target ${{ matrix.target }}
+          args: >-
+            --target ${{ matrix.target }}
+            --config '${{ steps.development.outputs.tauri_config }}'
 
       - name: Upload build artifacts
         if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.label }}-${{ steps.version.outputs.version }}-${{ steps.hash.outputs.short }}
+          name: ${{ matrix.label }}-${{ steps.development.outputs.version }}-${{ steps.hash.outputs.short }}
           path: src-tauri/target/${{ matrix.target }}/release/bundle/**/*
           retention-days: 7
+
+  publish-development-update:
+    name: Publish development update
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure GitHub Pages
+        id: pages
+        uses: actions/configure-pages@v5
+
+      - name: Download signed updater artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: development-artifacts
+
+      - name: Create development update manifest
+        shell: bash
+        run: |
+          node .github/scripts/development-update.mjs manifest \
+            --artifacts-dir development-artifacts \
+            --output-dir development-update \
+            --base-version "$(node -p "require('./package.json').version")" \
+            --run-number "$GITHUB_RUN_NUMBER" \
+            --sha "$GITHUB_SHA" \
+            --base-url "${{ steps.pages.outputs.base_url }}"
+
+      - name: Upload development update site
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: development-update
+
+      - name: Deploy rolling development snapshot
+        id: deployment
+        uses: actions/deploy-pages@v4

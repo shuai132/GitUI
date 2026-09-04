@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, toRaw } from 'vue'
+import { computed, ref, watch, toRaw } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
@@ -18,10 +18,13 @@ marked.use({
   }
 })
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   visible: boolean
-  update: Pick<Update, 'version' | 'downloadAndInstall'> | null
-}>()
+  update: Pick<Update, 'version' | 'body' | 'downloadAndInstall'> | null
+  channel?: 'release' | 'development'
+}>(), {
+  channel: 'release',
+})
 
 const emit = defineEmits<{
   close: []
@@ -40,6 +43,10 @@ const releaseNotesHtml = ref<string | null>(null)
 const notesLoading = ref(false)
 const RELEASES_URL = 'https://github.com/shuai132/GitUI/releases'
 let notesRequestSeq = 0
+const isDevelopment = computed(() => props.channel === 'development')
+const dialogTitle = computed(() => t(isDevelopment.value
+  ? 'settings.about.developmentUpdateAvailable'
+  : 'settings.about.updateAvailable'))
 
 function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err)
@@ -78,16 +85,17 @@ async function fetchReleaseNotes(version: string) {
 }
 
 watch(
-  () => [props.visible, props.update?.version ?? null] as const,
-  ([visible, version], previous) => {
+  () => [props.visible, props.update?.version ?? null, props.channel] as const,
+  ([visible, version, channel], previous) => {
     notesRequestSeq++
     notesLoading.value = false
     releaseNotesHtml.value = null
     const previousVersion = previous?.[1] ?? null
-    if (version !== previousVersion && !isDownloading.value) {
+    const previousChannel = previous?.[2] ?? null
+    if ((version !== previousVersion || channel !== previousChannel) && !isDownloading.value) {
       resetDownloadState()
     }
-    if (visible && version) void fetchReleaseNotes(version)
+    if (visible && version && channel === 'release') void fetchReleaseNotes(version)
   },
   { immediate: true },
 )
@@ -126,8 +134,8 @@ async function handleDownload() {
       }
     })
     if (props.update?.version === version) isDownloaded.value = true
-    // If successfully downloaded, clear skipped version
-    settings.skippedVersion = null
+    // 正式版安装成功后清除跳过记录；开发版不参与正式版跳过策略。
+    if (!isDevelopment.value) settings.skippedVersion = null
   } catch (err: unknown) {
     console.error('Download failed', err)
     if (props.update?.version === version) error.value = errorMessage(err)
@@ -168,31 +176,38 @@ function handleClose() {
 </script>
 
 <template>
-  <Modal :visible="visible" :title="t('settings.about.updateAvailable')" width="500px" @close="handleClose">
+  <Modal :visible="visible" :title="dialogTitle" width="500px" @close="handleClose">
     <div class="update-dialog-content">
       <div v-if="update" class="update-info">
         <div class="version-badge">v{{ update.version }}</div>
         <div class="release-notes-container">
-          <div class="release-notes-title">{{ t('settings.about.releaseNotes') }}</div>
-          <div v-if="notesLoading" class="release-notes-loading">
-            <svg class="spinner" viewBox="0 0 24 24"><circle class="path" cx="12" cy="12" r="10" fill="none" stroke-width="3"></circle></svg>
-          </div>
-          <!-- Rendered markdown from GitHub API -->
-          <div
-            v-else-if="releaseNotesHtml"
-            class="release-notes-body release-notes-md"
-            v-html="releaseNotesHtml"
-          />
-          <div v-else class="release-notes-body release-notes-fallback">
-            <span>{{ t('settings.about.releaseNotesFallback') }}</span>
-            <a
-              class="release-notes-link"
-              :href="RELEASES_URL"
-              target="_blank"
-              rel="noopener"
-              @click.prevent="openReleases"
-            >{{ t('settings.about.openReleases') }}</a>
-          </div>
+          <template v-if="isDevelopment">
+            <div class="release-notes-title">{{ t('settings.about.developmentBuildDetails') }}</div>
+            <div class="development-warning">{{ t('settings.about.developmentUpdateWarning') }}</div>
+            <div class="release-notes-body">{{ update.body || t('settings.about.noReleaseNotes') }}</div>
+          </template>
+          <template v-else>
+            <div class="release-notes-title">{{ t('settings.about.releaseNotes') }}</div>
+            <div v-if="notesLoading" class="release-notes-loading">
+              <svg class="spinner" viewBox="0 0 24 24"><circle class="path" cx="12" cy="12" r="10" fill="none" stroke-width="3"></circle></svg>
+            </div>
+            <!-- Rendered markdown from GitHub API -->
+            <div
+              v-else-if="releaseNotesHtml"
+              class="release-notes-body release-notes-md"
+              v-html="releaseNotesHtml"
+            />
+            <div v-else class="release-notes-body release-notes-fallback">
+              <span>{{ t('settings.about.releaseNotesFallback') }}</span>
+              <a
+                class="release-notes-link"
+                :href="RELEASES_URL"
+                target="_blank"
+                rel="noopener"
+                @click.prevent="openReleases"
+              >{{ t('settings.about.openReleases') }}</a>
+            </div>
+          </template>
         </div>
       </div>
 
@@ -223,7 +238,7 @@ function handleClose() {
 
     <template #footer>
       <div class="footer-actions">
-        <button v-if="!isDownloaded" class="btn btn-secondary btn-skip" :disabled="isDownloading" @click="handleSkip">
+        <button v-if="!isDownloaded && !isDevelopment" class="btn btn-secondary btn-skip" :disabled="isDownloading" @click="handleSkip">
           {{ t('settings.about.skipVersion') }}
         </button>
         <div class="spacer"></div>
@@ -278,6 +293,12 @@ function handleClose() {
   font-weight: 600;
   font-size: var(--font-sm);
   color: var(--text-primary);
+}
+
+.development-warning {
+  color: var(--accent-yellow);
+  font-size: var(--font-sm);
+  line-height: 1.5;
 }
 
 .release-notes-body {

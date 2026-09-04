@@ -37,13 +37,16 @@ export function recordLastUpdateCheckTime(nowSeconds = Math.floor(Date.now() / 1
 }
 
 export function isNetworkUpdateCheckError(err: unknown): boolean {
-  const message = errorMessage(err).toLowerCase()
+  const message = updateCheckErrorMessage(err).toLowerCase()
   return NETWORK_ERROR_PATTERNS.some((pattern) => message.includes(pattern))
 }
 
-function errorMessage(err: unknown): string {
+export function updateCheckErrorMessage(err: unknown): string {
   if (err instanceof Error) return err.message
   if (typeof err === 'string') return err
+  if (err && typeof err === 'object' && 'message' in err && typeof err.message === 'string') {
+    return err.message
+  }
   try {
     return JSON.stringify(err)
   } catch {

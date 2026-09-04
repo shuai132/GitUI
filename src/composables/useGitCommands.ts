@@ -23,6 +23,7 @@ import type {
   RebaseTodoItem,
   ConflictFile,
   BuildInfo,
+  DevelopmentUpdateMetadata,
   RemoteInfo,
   LogBranchScope,
 } from '@/types/git'
@@ -665,6 +666,9 @@ export function useGitCommands() {
   const getBuildInfo = () =>
     call<BuildInfo>('get_build_info')
 
+  const checkDevelopmentUpdate = () =>
+    call<DevelopmentUpdateMetadata | null>('check_development_update', undefined, { silent: true })
+
   const listSystemFonts = () =>
     call<string[]>('list_system_fonts')
 
@@ -815,6 +819,7 @@ export function useGitCommands() {
     addToGitignore,
     checkoutFileAtCommit,
     getBuildInfo,
+    checkDevelopmentUpdate,
     listSystemFonts,
     setAutoFetchInterval,
     listPlugins,

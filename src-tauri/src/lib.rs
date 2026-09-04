@@ -169,6 +169,7 @@ pub fn run() {
             add_to_gitignore,
             checkout_file_at_commit,
             get_build_info,
+            check_development_update,
             list_system_fonts,
             set_auto_fetch_interval,
             // Plugins

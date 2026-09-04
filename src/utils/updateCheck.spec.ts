@@ -5,6 +5,7 @@ import {
   isNetworkUpdateCheckError,
   readLastUpdateCheckTime,
   recordLastUpdateCheckTime,
+  updateCheckErrorMessage,
 } from './updateCheck'
 
 describe('updateCheck', () => {
@@ -46,5 +47,12 @@ describe('updateCheck', () => {
   it('does not classify non-network updater failures as network errors', () => {
     expect(isNetworkUpdateCheckError(new Error('invalid update signature'))).toBe(false)
     expect(isNetworkUpdateCheckError('manifest version is not valid')).toBe(false)
+  })
+
+  it('extracts the message from structured Tauri command errors', () => {
+    expect(updateCheckErrorMessage({
+      kind: 'OperationFailed',
+      message: 'failed to request the development update manifest',
+    })).toBe('failed to request the development update manifest')
   })
 })
