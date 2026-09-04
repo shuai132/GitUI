@@ -80,6 +80,7 @@ describe('development updater publishing', () => {
     })
 
     expect(manifest.version).toBe('0.13.2-dev.42')
+    expect(manifest.commit).toBe('abcdef0123456789')
     expect(manifest.notes).toBe('main @ abcdef0')
     expect(Object.keys(manifest.platforms)).toEqual([
       'darwin-aarch64',

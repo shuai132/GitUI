@@ -68,7 +68,7 @@ GitUI 采用 Tauri v2 的 IPC 机制实现前后端通信，包括双向的请�
 - `preview_drop_unreachable_commit` / `drop_unreachable_commit`：预览并移除让目标提交退出 HEAD reflog 闭包所需的入口。预览返回 `git/types.rs::ReflogDropPreview`；确认命令必须回传其中的不透明 context，后端只在实际入口集合完全一致时写回。
 - `set_auto_fetch_interval`：运行时调整后台自动 fetch 间隔，传入秒数；`0` 表示禁用。
 - `get_build_info`：获取运行时应用版本与编译元数据；开发版构建会显示 CI 注入的预发布版本。
-- `check_development_update`：只读取 GitHub Pages 上的开发版清单，并把匹配当前平台的更新注册为 Tauri updater 资源；返回结构见 `git/types.rs::DevelopmentUpdateMetadata`，后续下载、验签和安装仍由 updater 插件完成。
+- `check_development_update`：只读取 GitHub Pages 上的开发版清单；清单源 commit 与当前构建一致时返回无更新，否则把匹配当前平台的更新注册为 Tauri updater 资源。返回结构见 `git/types.rs::DevelopmentUpdateMetadata`，后续下载、验签和安装仍由 updater 插件完成。
 
 ### 插件 (Plugins)
 - `list_plugins`：扫描应用数据目录下的本地插件，返回 manifest、启用状态与安装路径。

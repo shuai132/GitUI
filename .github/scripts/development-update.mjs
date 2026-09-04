@@ -86,7 +86,8 @@ export async function createDevelopmentUpdate(options) {
     publishedAt = new Date().toISOString(),
   } = options
   const version = createDevelopmentVersion(baseVersion, runNumber)
-  const shortSha = normalizeSha(sha)
+  const sourceCommit = normalizeSha(sha)
+  const shortSha = sourceCommit.slice(0, 7)
   const files = await walkFiles(artifactsDir)
   const platforms = {}
   let publishedBytes = 0
@@ -120,6 +121,7 @@ export async function createDevelopmentUpdate(options) {
 
   const manifest = {
     version,
+    commit: sourceCommit,
     notes: `main @ ${shortSha}`,
     pub_date: publishedAt,
     platforms,
@@ -149,7 +151,7 @@ async function walkFiles(root) {
 
 function normalizeSha(sha) {
   if (!/^[0-9a-f]{7,40}$/i.test(sha)) throw new Error(`Invalid commit SHA: ${sha}`)
-  return sha.slice(0, 7).toLowerCase()
+  return sha.toLowerCase()
 }
 
 function publishedAssetUrl(baseUrl, fileName) {

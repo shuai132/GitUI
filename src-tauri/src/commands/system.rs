@@ -20,6 +20,37 @@ pub struct StartupRepo(pub Mutex<Option<String>>);
 
 const DEVELOPMENT_UPDATE_ENDPOINT: &str = "https://shuai132.github.io/GitUI/latest.json";
 
+fn commit_ids_match(current: Option<&str>, candidate: Option<&str>) -> bool {
+    let Some(current) = current.map(str::trim).filter(|value| {
+        (7..=64).contains(&value.len()) && value.bytes().all(|byte| byte.is_ascii_hexdigit())
+    }) else {
+        return false;
+    };
+    let Some(candidate) = candidate.map(str::trim).filter(|value| {
+        (7..=64).contains(&value.len()) && value.bytes().all(|byte| byte.is_ascii_hexdigit())
+    }) else {
+        return false;
+    };
+
+    let common_length = current.len().min(candidate.len());
+    current[..common_length].eq_ignore_ascii_case(&candidate[..common_length])
+}
+
+fn is_same_development_commit(
+    current: Option<&str>,
+    raw_json: &serde_json::Value,
+    notes: Option<&str>,
+) -> bool {
+    if let Some(manifest_commit) = raw_json.get("commit") {
+        return commit_ids_match(current, manifest_commit.as_str());
+    }
+
+    let notes_commit = notes
+        .and_then(|value| value.lines().next())
+        .and_then(|line| line.strip_prefix("main @ "));
+    commit_ids_match(current, notes_commit)
+}
+
 /// 在仓库目录打开系统默认终端。
 /// - macOS: `open -a <terminal_app> <path>`，`terminal_app` 由前端从设置传入（默认 `Terminal`）
 /// - Linux: 依次尝试 x-terminal-emulator / gnome-terminal / konsole / xterm（忽略 `terminal_app`）
@@ -528,6 +559,13 @@ pub async fn check_development_update(
     else {
         return Ok(None);
     };
+    if is_same_development_commit(
+        option_env!("GITUI_BUILD_COMMIT"),
+        &update.raw_json,
+        update.body.as_deref(),
+    ) {
+        return Ok(None);
+    }
 
     let metadata = DevelopmentUpdateMetadata {
         current_version: update.current_version.clone(),
@@ -550,4 +588,43 @@ pub fn list_system_fonts() -> Vec<String> {
     families.sort_unstable_by_key(|name| name.to_lowercase());
     families.dedup();
     families
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_same_development_commit;
+    use serde_json::json;
+
+    #[test]
+    fn development_update_treats_the_same_source_commit_as_current() {
+        assert!(is_same_development_commit(
+            Some("ABCDEF0123456789abcdef0123456789abcdef01"),
+            &json!({ "commit": "abcdef0123456789abcdef0123456789abcdef01" }),
+            Some("main @ abcdef0"),
+        ));
+        assert!(is_same_development_commit(
+            Some("abcdef0"),
+            &json!({}),
+            Some("main @ abcdef0"),
+        ));
+    }
+
+    #[test]
+    fn development_update_keeps_a_different_or_unknown_commit_available() {
+        assert!(!is_same_development_commit(
+            Some("1234567"),
+            &json!({ "commit": "abcdef0123456789" }),
+            Some("main @ 1234567"),
+        ));
+        assert!(!is_same_development_commit(
+            None,
+            &json!({ "commit": "abcdef0123456789" }),
+            Some("main @ abcdef0"),
+        ));
+        assert!(!is_same_development_commit(
+            Some("abcdef0"),
+            &json!({ "commit": "not-a-commit" }),
+            Some("release notes without a commit"),
+        ));
+    }
 }
