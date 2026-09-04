@@ -2,6 +2,7 @@ import { describe, expect, it, vi, beforeEach } from 'vitest'
 import {
   LAST_UPDATE_CHECK_EVENT,
   LAST_UPDATE_CHECK_KEY,
+  findStartupUpdate,
   isNetworkUpdateCheckError,
   readLastUpdateCheckTime,
   recordLastUpdateCheckTime,
@@ -54,5 +55,58 @@ describe('updateCheck', () => {
       kind: 'OperationFailed',
       message: 'failed to request the development update manifest',
     })).toBe('failed to request the development update manifest')
+  })
+
+  it('prefers a development update and skips the release check', async () => {
+    const checkDevelopment = vi.fn().mockResolvedValue({ version: '1.1.0-dev.12' })
+    const checkRelease = vi.fn().mockResolvedValue({ version: '1.0.1' })
+
+    await expect(findStartupUpdate({
+      development: checkDevelopment,
+      release: checkRelease,
+    })).resolves.toEqual({
+      channel: 'development',
+      update: { version: '1.1.0-dev.12' },
+    })
+    expect(checkRelease).not.toHaveBeenCalled()
+  })
+
+  it('falls back to the release channel when development has no update', async () => {
+    const checkDevelopment = vi.fn().mockResolvedValue(null)
+    const checkRelease = vi.fn().mockResolvedValue({ version: '1.0.1' })
+
+    await expect(findStartupUpdate({
+      development: checkDevelopment,
+      release: checkRelease,
+    })).resolves.toEqual({
+      channel: 'release',
+      update: { version: '1.0.1' },
+    })
+    expect(checkDevelopment).toHaveBeenCalledOnce()
+    expect(checkRelease).toHaveBeenCalledOnce()
+  })
+
+  it('reports a development error and continues with the release check', async () => {
+    const failure = new Error('development endpoint unavailable')
+    const onError = vi.fn()
+    const checkRelease = vi.fn().mockResolvedValue({ version: '1.0.1' })
+
+    await expect(findStartupUpdate({
+      development: vi.fn().mockRejectedValue(failure),
+      release: checkRelease,
+      onError,
+    })).resolves.toEqual({
+      channel: 'release',
+      update: { version: '1.0.1' },
+    })
+    expect(onError).toHaveBeenCalledWith('development', failure)
+    expect(checkRelease).toHaveBeenCalledOnce()
+  })
+
+  it('does not run checks for disabled channels', async () => {
+    await expect(findStartupUpdate({
+      development: null,
+      release: null,
+    })).resolves.toBeNull()
   })
 })

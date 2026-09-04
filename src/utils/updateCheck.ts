@@ -1,6 +1,19 @@
 export const LAST_UPDATE_CHECK_KEY = 'gitui.last_update_check'
 export const LAST_UPDATE_CHECK_EVENT = 'gitui:last-update-check-changed'
 
+export type UpdateChannel = 'release' | 'development'
+
+export interface ChannelUpdate<T> {
+  channel: UpdateChannel
+  update: T
+}
+
+interface StartupUpdateChecks<T> {
+  development: (() => Promise<T | null>) | null
+  release: (() => Promise<T | null>) | null
+  onError?: (channel: UpdateChannel, error: unknown) => void
+}
+
 const NETWORK_ERROR_PATTERNS = [
   'network',
   'timeout',
@@ -52,6 +65,30 @@ export function updateCheckErrorMessage(err: unknown): string {
   } catch {
     return String(err)
   }
+}
+
+/**
+ * 启动检查按开发版优先、正式版兜底的顺序执行，最多返回一个更新。
+ * 单个通道失败不会阻止后续通道继续检查。
+ */
+export async function findStartupUpdate<T>(
+  checks: StartupUpdateChecks<T>,
+): Promise<ChannelUpdate<T> | null> {
+  const channels: Array<[UpdateChannel, (() => Promise<T | null>) | null]> = [
+    ['development', checks.development],
+    ['release', checks.release],
+  ]
+
+  for (const [channel, checkChannel] of channels) {
+    if (!checkChannel) continue
+    try {
+      const update = await checkChannel()
+      if (update) return { channel, update }
+    } catch (error: unknown) {
+      checks.onError?.(channel, error)
+    }
+  }
+  return null
 }
 
 function notifyLastUpdateCheckChanged() {

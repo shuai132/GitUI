@@ -108,6 +108,8 @@ export interface SettingsData {
   uiLanguage: UiLanguage
   /** 更新策略 */
   updateStrategy: UpdateStrategy
+  /** 是否在启动时自动检查开发版更新；默认关闭 */
+  autoCheckDevelopmentUpdates: boolean
   /** 已跳过的更新版本号 */
   skippedVersion: string | null
 }
@@ -128,6 +130,7 @@ export const DEFAULT_SETTINGS: SettingsData = {
   fileListRowHeight: 18,
   uiLanguage: 'auto',
   updateStrategy: 'auto',
+  autoCheckDevelopmentUpdates: false,
   skippedVersion: null,
 }
 
@@ -359,6 +362,7 @@ export const useSettingsStore = defineStore('settings', () => {
   const fileListRowHeight = ref<number>(clampFileListRowHeight(__initialData.fileListRowHeight))
   const uiLanguage = ref<UiLanguage>(normalizeUiLanguage(__initialData.uiLanguage))
   const updateStrategy = ref<UpdateStrategy>(__initialData.updateStrategy ?? 'auto')
+  const autoCheckDevelopmentUpdates = ref<boolean>(__initialData.autoCheckDevelopmentUpdates === true)
   const skippedVersion = ref<string | null>(__initialData.skippedVersion ?? null)
   const resolvedTheme = computed<ResolvedTheme>(() => resolveTheme(themeMode.value))
 
@@ -379,6 +383,7 @@ export const useSettingsStore = defineStore('settings', () => {
       fileListRowHeight: fileListRowHeight.value,
       uiLanguage: uiLanguage.value,
       updateStrategy: updateStrategy.value,
+      autoCheckDevelopmentUpdates: autoCheckDevelopmentUpdates.value,
       skippedVersion: skippedVersion.value,
     }
   }
@@ -411,6 +416,7 @@ export const useSettingsStore = defineStore('settings', () => {
       fileListRowHeight,
       uiLanguage,
       updateStrategy,
+      autoCheckDevelopmentUpdates,
       skippedVersion,
     ],
     () => {
@@ -510,6 +516,7 @@ export const useSettingsStore = defineStore('settings', () => {
     fileListRowHeight,
     uiLanguage,
     updateStrategy,
+    autoCheckDevelopmentUpdates,
     skippedVersion,
     resolvedTheme,
     uiFontIsDefault,

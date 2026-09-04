@@ -4,16 +4,18 @@ import { useI18n } from 'vue-i18n'
 import { useSettingsStore } from '@/stores/settings'
 import type { UpdateStrategy } from '@/stores/settings'
 import { useGitCommands } from '@/composables/useGitCommands'
-import { check, Update } from '@tauri-apps/plugin-updater'
+import { check, type Update } from '@tauri-apps/plugin-updater'
 import { message } from '@tauri-apps/plugin-dialog'
 import { formatTime } from '@/utils/format'
 import {
   LAST_UPDATE_CHECK_EVENT,
+  type UpdateChannel,
   isNetworkUpdateCheckError,
   readLastUpdateCheckTime,
   recordLastUpdateCheckTime,
   updateCheckErrorMessage,
 } from '@/utils/updateCheck'
+import { createDevelopmentUpdate } from '@/utils/developmentUpdate'
 import UpdateDialog from '@/components/common/UpdateDialog.vue'
 
 const { t } = useI18n()
@@ -22,7 +24,6 @@ const git = useGitCommands()
 
 const appVersion = ref('')
 const gitHash = ref<string | null>(null)
-type UpdateChannel = 'release' | 'development'
 const checkingChannel = ref<UpdateChannel | null>(null)
 const lastCheckTime = ref<number | null>(null)
 const availableUpdate = ref<Update | null>(null)
@@ -64,7 +65,7 @@ async function checkForUpdates(channel: UpdateChannel) {
   try {
     const update = channel === 'release'
       ? await check()
-      : toUpdaterResource(await git.checkDevelopmentUpdate())
+      : createDevelopmentUpdate(await git.checkDevelopmentUpdate())
     if (channel === 'release') lastCheckTime.value = recordLastUpdateCheckTime()
 
     if (update) {
@@ -93,18 +94,6 @@ async function checkForUpdates(channel: UpdateChannel) {
   } finally {
     checkingChannel.value = null
   }
-}
-
-function toUpdaterResource(metadata: Awaited<ReturnType<typeof git.checkDevelopmentUpdate>>) {
-  if (!metadata) return null
-  return new Update({
-    rid: metadata.rid,
-    currentVersion: metadata.current_version,
-    version: metadata.version,
-    date: metadata.date ?? undefined,
-    body: metadata.body ?? undefined,
-    rawJson: metadata.raw_json,
-  })
 }
 </script>
 
@@ -146,6 +135,18 @@ function toUpdaterResource(metadata: Awaited<ReturnType<typeof git.checkDevelopm
         <div class="last-check">{{ lastCheckLabel }}</div>
       </div>
       <div class="development-hint">{{ t('settings.about.developmentUpdateHint') }}</div>
+      <label class="development-auto-setting">
+        <div class="development-auto-text">
+          <div class="development-auto-label">{{ t('settings.about.developmentAutoCheck') }}</div>
+          <div class="development-auto-hint">{{ t('settings.about.developmentAutoCheckHint') }}</div>
+        </div>
+        <input
+          type="checkbox"
+          class="development-auto-checkbox"
+          :checked="settingsStore.autoCheckDevelopmentUpdates"
+          @change="settingsStore.autoCheckDevelopmentUpdates = !settingsStore.autoCheckDevelopmentUpdates"
+        />
+      </label>
     </div>
 
     <div class="strategy-list">
@@ -237,6 +238,39 @@ function toUpdaterResource(metadata: Awaited<ReturnType<typeof git.checkDevelopm
   font-size: var(--font-sm);
   color: var(--text-muted);
   line-height: 1.5;
+}
+
+.development-auto-setting {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+  cursor: pointer;
+}
+
+.development-auto-text {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.development-auto-label {
+  font-size: var(--font-md);
+  color: var(--text-primary);
+}
+
+.development-auto-hint {
+  font-size: var(--font-sm);
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.development-auto-checkbox {
+  flex-shrink: 0;
+  accent-color: var(--accent-blue);
 }
 
 .check-actions {

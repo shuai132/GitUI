@@ -28,7 +28,13 @@ import { useGitCommands } from '@/composables/useGitCommands'
 import { useShortcuts } from '@/composables/useShortcuts'
 import { useSettingsStore } from '@/stores/settings'
 import { findWipFileBySelection } from '@/utils/wipSelection'
-import { isNetworkUpdateCheckError, recordLastUpdateCheckTime } from '@/utils/updateCheck'
+import {
+  findStartupUpdate,
+  isNetworkUpdateCheckError,
+  recordLastUpdateCheckTime,
+  type UpdateChannel,
+} from '@/utils/updateCheck'
+import { createDevelopmentUpdate } from '@/utils/developmentUpdate'
 import { shouldRefreshHistoryDomain } from '@/utils/statusChangeRefresh'
 import { listen } from '@tauri-apps/api/event'
 import { check, type Update } from '@tauri-apps/plugin-updater'
@@ -56,6 +62,7 @@ useShortcuts()
 
 // 更新相关
 const availableUpdate = ref<Update | null>(null)
+const availableUpdateChannel = ref<UpdateChannel>('release')
 const showUpdateDialog = ref(false)
 
 function currentHeadOid(): string | null {
@@ -67,25 +74,29 @@ function currentHeadOid(): string | null {
 }
 
 async function runAutoUpdateCheck() {
-  if (settingsStore.updateStrategy !== 'auto') return
-  
-  try {
-    const update = await check()
-    recordLastUpdateCheckTime()
-    if (update) {
-      // 检查是否是被跳过的版本
-      if (settingsStore.skippedVersion === update.version) {
-        return
+  const result = await findStartupUpdate<Update>({
+    development: settingsStore.autoCheckDevelopmentUpdates
+      ? async () => createDevelopmentUpdate(await git.checkDevelopmentUpdate())
+      : null,
+    release: settingsStore.updateStrategy === 'auto'
+      ? async () => {
+          const update = await check()
+          recordLastUpdateCheckTime()
+          return update?.version === settingsStore.skippedVersion ? null : update
+        }
+      : null,
+    onError: (channel, error) => {
+      if (channel === 'release' && !isNetworkUpdateCheckError(error)) {
+        recordLastUpdateCheckTime()
       }
-      availableUpdate.value = update
-      showUpdateDialog.value = true
-    }
-  } catch (e) {
-    if (!isNetworkUpdateCheckError(e)) {
-      recordLastUpdateCheckTime()
-    }
-    console.error('[updater] auto check failed', e)
-  }
+      console.error(`[updater] ${channel} auto check failed`, error)
+    },
+  })
+
+  if (!result) return
+  availableUpdate.value = result.update
+  availableUpdateChannel.value = result.channel
+  showUpdateDialog.value = true
 }
 
 // 「添加仓库」下拉菜单 + clone/init 对话框：菜单和对话框都挂在 App 顶层，
@@ -416,6 +427,7 @@ watch(
     <UpdateDialog 
       :visible="showUpdateDialog" 
       :update="availableUpdate" 
+      :channel="availableUpdateChannel"
       @close="showUpdateDialog = false" 
     />
   </div>

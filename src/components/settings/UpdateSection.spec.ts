@@ -4,7 +4,10 @@ import UpdateSection from './UpdateSection.vue'
 import UpdateDialog from '@/components/common/UpdateDialog.vue'
 
 const mocks = vi.hoisted(() => ({
-  settings: { updateStrategy: 'auto' as 'auto' | 'manual' },
+  settings: {
+    updateStrategy: 'auto' as 'auto' | 'manual',
+    autoCheckDevelopmentUpdates: false,
+  },
   getBuildInfo: vi.fn(),
   checkDevelopmentUpdate: vi.fn(),
   checkRelease: vi.fn(),
@@ -49,6 +52,7 @@ vi.mock('@/utils/updateCheck', () => ({
 describe('UpdateSection strategy controls', () => {
   beforeEach(() => {
     mocks.settings.updateStrategy = 'auto'
+    mocks.settings.autoCheckDevelopmentUpdates = false
     mocks.getBuildInfo.mockReset().mockResolvedValue({ version: '1.0.0', git_hash: null })
     mocks.checkDevelopmentUpdate.mockReset().mockResolvedValue(null)
     mocks.checkRelease.mockReset().mockResolvedValue(null)
@@ -67,6 +71,17 @@ describe('UpdateSection strategy controls', () => {
 
     await strategies[1].trigger('click')
     expect(mocks.settings.updateStrategy).toBe('manual')
+  })
+
+  it('keeps development auto-check disabled until the user opts in', async () => {
+    const wrapper = shallowMount(UpdateSection)
+    await flushPromises()
+    const checkbox = wrapper.find<HTMLInputElement>('.development-auto-checkbox')
+
+    expect(checkbox.element.checked).toBe(false)
+
+    await checkbox.setValue(true)
+    expect(mocks.settings.autoCheckDevelopmentUpdates).toBe(true)
   })
 
   it('checks the development channel independently from release updates', async () => {

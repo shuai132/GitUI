@@ -147,6 +147,29 @@ describe('settings theme mode', () => {
     expect(store.resolvedTheme).toBe('dark')
     expect(document.documentElement.getAttribute('data-theme')).toBe('dark')
   })
+
+  it('defaults development auto-check to off and persists an opt-in', async () => {
+    installMatchMedia(false)
+    const { useSettingsStore } = await import('./settings')
+    const store = useSettingsStore()
+
+    expect(store.autoCheckDevelopmentUpdates).toBe(false)
+
+    vi.useFakeTimers()
+    try {
+      store.autoCheckDevelopmentUpdates = true
+      await nextTick()
+      await vi.advanceTimersByTimeAsync(300)
+
+      const saved = localStorage.getItem('gitui.settings.v1')
+      expect(saved).not.toBeNull()
+      expect(JSON.parse(saved ?? '{}')).toMatchObject({
+        autoCheckDevelopmentUpdates: true,
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })
 
 async function waitUntil(assertion: () => void) {
