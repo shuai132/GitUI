@@ -392,6 +392,7 @@ const messages = {
       commit: '提交',
       author: '作者',
       date: '日期',
+      resizeGraph: '拖动调整提交图宽度',
       resizeDescription: '拖动调整「描述」列宽度',
       resizeChanges: '拖动调整「变更」列宽度',
       resizeCommit: '拖动调整「提交」列宽度',

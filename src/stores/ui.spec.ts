@@ -3,11 +3,52 @@ import { createPinia, setActivePinia } from 'pinia'
 import {
   DEFAULT_ADVANCED_VIEW_PREFS,
   DEFAULT_HISTORY_COLUMN_ORDER,
+  HISTORY_GRAPH_WIDTH,
   moveHistoryColumn,
   normalizeHistoryColumnOrder,
   useUiStore,
   type HistoryColumnId,
 } from './ui'
+
+describe('history graph width preferences', () => {
+  beforeEach(() => {
+    stubLocalStorage()
+    setActivePinia(createPinia())
+  })
+
+  it('adds a default graph width to older saved layouts without resetting other widths', () => {
+    localStorage.setItem('gitui.history.sizes', JSON.stringify({ descColW: 520, hashColW: 90 }))
+    expect(useUiStore().historyPaneSizes).toMatchObject({
+      graphColW: HISTORY_GRAPH_WIDTH.default,
+      descColW: 520,
+      hashColW: 90,
+    })
+  })
+
+  it('restores a resized graph in a new store', () => {
+    const ui = useUiStore()
+    ui.historyPaneSizes.graphColW = 280
+    ui.persistHistoryPaneSizes()
+    setActivePinia(createPinia())
+    expect(useUiStore().historyPaneSizes.graphColW).toBe(280)
+  })
+
+  it.each([
+    [null, HISTORY_GRAPH_WIDTH.default],
+    ['wide', HISTORY_GRAPH_WIDTH.default],
+    [-100, HISTORY_GRAPH_WIDTH.min],
+    [10000, HISTORY_GRAPH_WIDTH.max],
+  ])('normalizes invalid or out-of-range graph width %s', (stored, expected) => {
+    localStorage.setItem('gitui.history.sizes', JSON.stringify({ graphColW: stored }))
+    expect(useUiStore().historyPaneSizes.graphColW).toBe(expected)
+  })
+
+  it('does not reuse resized in-memory defaults when storage is cleared', () => {
+    useUiStore().historyPaneSizes.graphColW = 280
+    setActivePinia(createPinia())
+    expect(useUiStore().historyPaneSizes.graphColW).toBe(HISTORY_GRAPH_WIDTH.default)
+  })
+})
 
 function stubLocalStorage(initial: Record<string, string> = {}) {
   const values = new Map<string, string>(Object.entries(initial))

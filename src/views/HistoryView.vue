@@ -263,19 +263,14 @@ const {
 } = useCommitTags()
 
 // ── Graph column width ───────────────────────────────────────────────
-const graphColWidth = computed(() => {
-  if (!historyStore.graphRows.length) return LANE_W * 2
-  const maxCols = historyStore.graphRows.reduce((m, r) => Math.max(m, r.totalColumns), 1)
-  return maxCols * LANE_W
-})
+const graphColWidth = computed(() => sizes.graphColW)
 
 const wipCircleX = laneX(0)
 const wipSvgWidth = computed(() => Math.max(LANE_W, graphColWidth.value))
 const wipCircleY = computed(() => rowH.value / 2)
 
-// 提交列表内容的最小宽度：图形 + 描述 + 右三列
-// 面板窄于此时会出现横向滚动条，描述优先、右三列通过滑动查看
-// descColW 可由用户拖动"提交"列左边缘调整（整体移动右三列组）
+// 图列视口 + 可排序数据列；SVG 的实际泳道宽度不参与列表布局。
+// 面板窄于此时通过横向滚动查看其余数据列。
 const commitListMinWidth = computed(() => {
   return graphColWidth.value + historyColumns.value.reduce((sum, col) => sum + col.width, 0)
 })
@@ -1297,6 +1292,7 @@ onUnmounted(() => {
 /* ── Columns ─────────────────────────────────────────────────────── */
 .col-graph {
   flex-shrink: 0;
+  /* 保留泳道原坐标，只裁剪显示范围，避免 SVG 撑宽列表或盖住相邻数据列。 */
   overflow: hidden;
   display: flex;
   align-items: center;

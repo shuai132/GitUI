@@ -392,6 +392,7 @@ const messages = {
       commit: 'Commit',
       author: 'Author',
       date: 'Date',
+      resizeGraph: 'Drag to resize the commit graph',
       resizeDescription: 'Drag to resize the Description column',
       resizeChanges: 'Drag to resize the Changes column',
       resizeCommit: 'Drag to resize the Commit column',

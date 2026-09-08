@@ -140,6 +140,8 @@ export interface HistoryPaneSizes {
   diffRowPct: number
   /** vertical 布局：commit 行高度占比（%） */
   commitRowPct: number
+  /** commit 列表 - 提交图显示宽度（超出部分裁剪） */
+  graphColW: number
   /** commit 列表 - 描述列宽（可拖动，用于整体左右移动右侧三列组） */
   descColW: number
   /** commit 列表 - change stats 列宽 */
@@ -156,11 +158,14 @@ export interface HistoryPaneSizes {
   commitInfoTopH: number
 }
 
+export const HISTORY_GRAPH_WIDTH = { default: 160, min: 36, max: 600 } as const
+
 const DEFAULT_HISTORY_SIZES: HistoryPaneSizes = {
   commitPanePct: 55,
   infoPanePct: 38,
   diffRowPct: 70,
   commitRowPct: 55,
+  graphColW: HISTORY_GRAPH_WIDTH.default,
   descColW: 400,
   statsColW: 150,
   hashColW: 64,
@@ -339,8 +344,12 @@ export const useUiStore = defineStore('ui', () => {
   )
 
   const historyPaneSizes = ref<HistoryPaneSizes>(
-    loadJson<HistoryPaneSizes>(KEYS.historySizes, DEFAULT_HISTORY_SIZES),
+    loadJson<HistoryPaneSizes>(KEYS.historySizes, { ...DEFAULT_HISTORY_SIZES }),
   )
+  const storedGraphWidth = historyPaneSizes.value.graphColW
+  historyPaneSizes.value.graphColW = typeof storedGraphWidth === 'number' && Number.isFinite(storedGraphWidth)
+    ? Math.max(HISTORY_GRAPH_WIDTH.min, Math.min(HISTORY_GRAPH_WIDTH.max, storedGraphWidth))
+    : HISTORY_GRAPH_WIDTH.default
   // 旧版默认 170px，纯占位列没必要这么宽；超过阈值视为旧默认，迁移到新默认。
   if (historyPaneSizes.value.dateCol2W > 40) {
     historyPaneSizes.value.dateCol2W = DEFAULT_HISTORY_SIZES.dateCol2W

@@ -1,5 +1,7 @@
-import { computed, type Ref } from 'vue'
-import { useUiStore, type PanelId } from '@/stores/ui'
+import { computed, onScopeDispose, type Ref } from 'vue'
+import { HISTORY_GRAPH_WIDTH, useUiStore, type PanelId } from '@/stores/ui'
+
+export type ResizableHistoryColumnId = 'graph' | 'desc' | 'stats' | 'hash' | 'author' | 'date'
 
 export function useHistoryPanes(contentAreaRef: Ref<HTMLElement | null>, showDetail: Ref<boolean>) {
   const uiStore = useUiStore()
@@ -126,43 +128,61 @@ export function useHistoryPanes(contentAreaRef: Ref<HTMLElement | null>, showDet
     document.body.style.userSelect = 'none'
   }
 
-  // ── Column resize (change stats / hash / author / date) ──────────────
-  type ColKey = 'desc' | 'stats' | 'hash' | 'author' | 'date'
+  // ── Column resize ───────────────────────────────────────────────────
+  type ColKey = ResizableHistoryColumnId
   const COL_LIMITS: Record<ColKey, [number, number]> = {
+    graph: [HISTORY_GRAPH_WIDTH.min, HISTORY_GRAPH_WIDTH.max],
     desc: [200, 1200],
     stats: [90, 260],
     hash: [48, 240],
     author: [60, 420],
     date: [60, 300],
   }
-  const COL_KEY_MAP: Record<ColKey, 'descColW' | 'statsColW' | 'hashColW' | 'authorColW' | 'dateColW'> = {
+  const COL_KEY_MAP: Record<ColKey, 'graphColW' | 'descColW' | 'statsColW' | 'hashColW' | 'authorColW' | 'dateColW'> = {
+    graph: 'graphColW',
     desc: 'descColW',
     stats: 'statsColW',
     hash: 'hashColW',
     author: 'authorColW',
     date: 'dateColW',
   }
-  
+  let finishColResize: (() => void) | null = null
+  onScopeDispose(() => finishColResize?.())
+
   function startColResize(e: PointerEvent, col: ColKey) {
+    if (e.button !== 0) return
     e.preventDefault()
     e.stopPropagation()
+    finishColResize?.()
     const startX = e.clientX
     const sizeKey = COL_KEY_MAP[col]
     const startW = sizes[sizeKey]
     const [min, max] = COL_LIMITS[col]
+    const previousCursor = document.body.style.cursor
+    const previousUserSelect = document.body.style.userSelect
     const onMove = (ev: PointerEvent) => {
+      if (ev.pointerId !== e.pointerId) return
       const delta = ev.clientX - startX
       sizes[sizeKey] = Math.max(min, Math.min(max, startW + delta))
     }
-    const onUp = () => {
+    const onUp = (ev: PointerEvent) => {
+      if (ev.pointerId === e.pointerId) finishColResize?.()
+    }
+    const finish = () => {
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', onUp)
-      document.body.style.cursor = ''
-      document.body.style.userSelect = ''
-      uiStore.persistHistoryPaneSizes()
+      window.removeEventListener('pointercancel', onUp)
+      window.removeEventListener('blur', finish)
+      document.body.style.cursor = previousCursor
+      document.body.style.userSelect = previousUserSelect
+      finishColResize = null
+      if (sizes[sizeKey] !== startW) uiStore.persistHistoryPaneSizes()
     }
+    finishColResize = finish
     window.addEventListener('pointermove', onMove)
     window.addEventListener('pointerup', onUp)
+    window.addEventListener('pointercancel', onUp)
+    window.addEventListener('blur', finish)
     document.body.style.cursor = 'col-resize'
     document.body.style.userSelect = 'none'
   }

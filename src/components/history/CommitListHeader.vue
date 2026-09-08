@@ -2,10 +2,11 @@
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { HistoryColumnId } from '@/stores/ui'
+import type { ResizableHistoryColumnId } from '@/composables/history/useHistoryPanes'
 
 const { t } = useI18n()
 
-type ResizableColumnId = 'desc' | 'stats' | 'hash' | 'author' | 'date'
+type ResizableColumnId = Exclude<ResizableHistoryColumnId, 'graph'>
 
 interface HeaderColumn {
   id: HistoryColumnId
@@ -25,7 +26,7 @@ defineProps<{
 const emit = defineEmits<{
   listBodyWheel: [e: WheelEvent]
   dragHandlePointerDown: [pane: 'commits', e: PointerEvent]
-  colResizeStart: [e: PointerEvent, col: ResizableColumnId]
+  colResizeStart: [e: PointerEvent, col: ResizableHistoryColumnId]
   columnReorder: [from: HistoryColumnId, to: HistoryColumnId, placement: 'before' | 'after']
 }>()
 
@@ -119,7 +120,13 @@ function resizeTitle(col: ResizableColumnId): string {
       <div class="dock-handle" @pointerdown="emit('dragHandlePointerDown', 'commits', $event)" :title="t('history.dock.dragToMove')">
         <svg width="8" height="14" viewBox="0 0 8 14"><circle cx="2" cy="2" r="1" fill="currentColor"/><circle cx="6" cy="2" r="1" fill="currentColor"/><circle cx="2" cy="7" r="1" fill="currentColor"/><circle cx="6" cy="7" r="1" fill="currentColor"/><circle cx="2" cy="12" r="1" fill="currentColor"/><circle cx="6" cy="12" r="1" fill="currentColor"/></svg>
       </div>
-      <div class="col-graph" :style="{ width: graphColWidth + 'px' }"></div>
+      <div class="col-graph" :style="{ width: graphColWidth + 'px' }">
+        <div
+          class="col-resize graph-col-resize"
+          @pointerdown.stop="emit('colResizeStart', $event, 'graph')"
+          :title="t('history.columns.resizeGraph')"
+        />
+      </div>
       <div
         v-for="col in columns"
         :key="col.id"
@@ -200,8 +207,9 @@ function resizeTitle(col: ResizableColumnId): string {
 }
 
 .col-graph {
+  position: relative;
   flex-shrink: 0;
-  overflow: hidden;
+  height: 100%;
   display: flex;
   align-items: center;
 }
@@ -280,6 +288,7 @@ function resizeTitle(col: ResizableColumnId): string {
   transform: translateX(3px);
   cursor: col-resize;
   z-index: 2;
+  touch-action: none;
 }
 
 .col-resize:hover {
