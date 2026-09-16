@@ -31,16 +31,12 @@ pub struct WatchHandle {
 }
 
 impl WatchHandle {
-    fn new<F>(watch_root: PathBuf, callback: F) -> notify::Result<Self>
+    fn new<F>(watch_roots: Vec<PathBuf>, callback: F) -> notify::Result<Self>
     where
         F: Fn(WatchEventResult) + Send + 'static,
     {
         let (tx, rx) = mpsc::channel();
         let tx_for_watcher = tx.clone();
-        let worker = thread::Builder::new()
-            .name("gitui watcher debounce".to_string())
-            .spawn(move || run_debounce_loop(rx, WATCH_DEBOUNCE, callback))
-            .map_err(notify::Error::io)?;
 
         let mut watcher = RecommendedWatcher::new(
             move |event| {
@@ -48,7 +44,14 @@ impl WatchHandle {
             },
             Config::default(),
         )?;
-        watcher.watch(&watch_root, RecursiveMode::Recursive)?;
+        for root in watch_roots {
+            watcher.watch(&root, RecursiveMode::Recursive)?;
+        }
+
+        let worker = thread::Builder::new()
+            .name("gitui watcher debounce".to_string())
+            .spawn(move || run_debounce_loop(rx, WATCH_DEBOUNCE, callback))
+            .map_err(notify::Error::io)?;
 
         Ok(Self {
             watcher: Some(watcher),
@@ -136,32 +139,95 @@ fn flush_debounced_batch<F>(
     callback(Ok(batch));
 }
 
+/// 工作目录与真实 Git 元数据路径；路径别名只在激活仓库时解析。
+#[derive(Clone, Debug)]
+pub struct WatchPaths {
+    work_dirs: Vec<PathBuf>,
+    git_dirs: Vec<PathBuf>,
+    watch_roots: Vec<PathBuf>,
+}
+
+impl WatchPaths {
+    pub(crate) fn new(root: &Path, git_dir: &Path, common_dir: &Path) -> Self {
+        fn aliases(path: &Path) -> Vec<PathBuf> {
+            let mut paths = vec![path.to_path_buf()];
+            if let Ok(canonical) = path.canonicalize() {
+                if canonical != path {
+                    paths.push(canonical);
+                }
+            }
+            paths
+        }
+        let work_dirs = aliases(root);
+        // 实际 gitdir 必须优先于包含它的 commondir，以正确识别 worktree 的 index / HEAD。
+        let mut git_dirs = aliases(git_dir);
+        git_dirs.extend(aliases(common_dir));
+        git_dirs.extend(aliases(&root.join(".git")));
+        let candidates: BTreeSet<_> = [root, git_dir, common_dir]
+            .into_iter()
+            .map(|path| path.canonicalize().unwrap_or_else(|_| path.to_path_buf()))
+            .collect();
+        let watch_roots = candidates
+            .iter()
+            .filter(|path| {
+                !candidates
+                    .iter()
+                    .any(|other| *path != other && path.starts_with(other))
+            })
+            .cloned()
+            .collect();
+        Self {
+            work_dirs,
+            git_dirs,
+            watch_roots,
+        }
+    }
+
+    pub(crate) fn metadata_relative<'a>(&self, path: &'a Path) -> Option<&'a Path> {
+        self.git_dirs
+            .iter()
+            .find_map(|root| path.strip_prefix(root).ok())
+    }
+
+    pub(crate) fn worktree_relative<'a>(&self, path: &'a Path) -> Option<&'a Path> {
+        self.work_dirs
+            .iter()
+            .find_map(|root| path.strip_prefix(root).ok())
+    }
+}
+
 /// 路径过滤器：使用 libgit2 的 ignore 规则为 watcher 事件减噪。
 ///
 /// 过滤只针对未跟踪路径；已跟踪文件即使命中 ignore 规则也必须放行。
 pub struct IgnoreFilter {
-    root: PathBuf,
-    git_dir: PathBuf,
+    paths: WatchPaths,
 }
 
 impl IgnoreFilter {
     /// 构造一个 filter。实际 ignore 规则在事件批次到达时从仓库读取。
     pub fn build(root: PathBuf) -> Arc<Self> {
-        let git_dir = root.join(".git");
-        Arc::new(Self { root, git_dir })
+        let paths = match Repository::open(&root) {
+            Ok(repo) => WatchPaths::new(&root, repo.path(), repo.commondir()),
+            Err(_) => WatchPaths::new(&root, &root.join(".git"), &root.join(".git")),
+        };
+        Arc::new(Self { paths })
+    }
+
+    pub(crate) fn paths(&self) -> &WatchPaths {
+        &self.paths
     }
 
     /// 判断一个绝对路径是否应该被 ignore。
     ///
     /// 规则：
-    /// - `.git/` 内部永远放行（是我们最关心的信号）
+    /// - 实际 gitdir、commondir 和 `.git` 指针事件永远放行
     /// - 仓库外路径放行（理论上 notify 不会给出这种事件）
     /// - 已跟踪路径放行，即使命中 ignore 规则
     /// - 未跟踪路径交给 libgit2 的 ignore 规则判断，命中则丢弃
     /// - 任意错误都放行，避免漏掉状态刷新
     #[cfg(test)]
     fn should_ignore(&self, abs: &Path) -> bool {
-        let Ok(repo) = Repository::open(&self.root) else {
+        let Ok(repo) = Repository::open(&self.paths.work_dirs[0]) else {
             return false;
         };
         let Ok(index) = repo.index() else {
@@ -171,10 +237,10 @@ impl IgnoreFilter {
     }
 
     fn should_ignore_with_git(&self, repo: &Repository, index: &Index, abs: &Path) -> bool {
-        if abs.starts_with(&self.git_dir) {
+        if self.paths.metadata_relative(abs).is_some() {
             return false;
         }
-        let Ok(rel) = abs.strip_prefix(&self.root) else {
+        let Some(rel) = self.paths.worktree_relative(abs) else {
             return false;
         };
 
@@ -205,6 +271,10 @@ impl WatcherService {
     where
         F: Fn(WatchEventResult) + Send + 'static,
     {
+        let watch_roots = ignore_filter
+            .as_ref()
+            .map(|filter| filter.paths.watch_roots.clone())
+            .unwrap_or_else(|| vec![watch_root]);
         let filtered = move |result: WatchEventResult| match result {
             Ok(batch) => {
                 let path_count = batch.paths.len();
@@ -221,7 +291,7 @@ impl WatcherService {
             Err(errs) => callback(Err(errs)),
         };
 
-        WatchHandle::new(watch_root, filtered)
+        WatchHandle::new(watch_roots, filtered)
     }
 
     /// 只保留指定仓库的 watcher。用于激活仓库切换，避免后台监听非激活仓库。
@@ -270,7 +340,7 @@ fn filter_watch_batch(
         return (!batch.paths.is_empty()).then_some(batch);
     };
 
-    let Ok(repo) = Repository::open(&filter.root) else {
+    let Ok(repo) = Repository::open(&filter.paths.work_dirs[0]) else {
         return Some(batch);
     };
     let Ok(index) = repo.index() else {
@@ -385,6 +455,136 @@ mod tests {
         let (dir, _repo, filter) = init_repo();
 
         assert!(!filter.should_ignore(&dir.path().join(".git/HEAD")));
+    }
+
+    #[test]
+    fn ordinary_repository_has_one_nonoverlapping_watch_root() {
+        let (dir, _repo, filter) = init_repo();
+        assert_eq!(
+            filter.paths.watch_roots,
+            vec![dir.path().canonicalize().unwrap()]
+        );
+        assert_eq!(
+            filter
+                .paths
+                .metadata_relative(&dir.path().join(".git/index")),
+            Some(Path::new("index"))
+        );
+    }
+
+    fn wait_for_path(rx: &mpsc::Receiver<WatchEventResult>, path: &Path) {
+        let path = path.canonicalize().unwrap();
+        let deadline = Instant::now() + Duration::from_secs(5);
+        loop {
+            let batch = rx
+                .recv_timeout(deadline.saturating_duration_since(Instant::now()))
+                .expect("watcher did not report the changed path")
+                .unwrap();
+            if batch.needs_rescan || batch.paths.iter().any(|actual| actual == &path) {
+                return;
+            }
+        }
+    }
+
+    fn assert_external_metadata_is_watched(root: &Path, repo: &Repository) {
+        let filter = IgnoreFilter::build(root.to_path_buf());
+        assert_eq!(filter.paths.watch_roots.len(), 2);
+        let service = WatcherService::new();
+        let (tx, rx) = mpsc::channel();
+        service
+            .watch_only(
+                "external".into(),
+                root.to_path_buf(),
+                Some(filter),
+                move |batch| {
+                    let _ = tx.send(batch);
+                },
+            )
+            .unwrap();
+        let ready = root.join("ready.txt");
+        fs::write(&ready, "ready").unwrap();
+        wait_for_path(&rx, &ready);
+
+        let head = repo.path().join("HEAD");
+        fs::write(&head, fs::read(&head).unwrap()).unwrap();
+        wait_for_path(&rx, &head);
+        let reference = repo.commondir().join("refs/heads/external-change");
+        let oid = repo.head().unwrap().target().unwrap();
+        fs::write(&reference, format!("{oid}\n")).unwrap();
+        wait_for_path(&rx, &reference);
+
+        // 替换激活仓库后，旧 watcher 及其全部外部监听根 / 回调都必须释放。
+        let other = tempfile::tempdir().unwrap();
+        service
+            .watch_only("other".into(), other.path().to_path_buf(), None, |_| {})
+            .unwrap();
+        while rx.try_recv().is_ok() {}
+        assert!(matches!(
+            rx.try_recv(),
+            Err(mpsc::TryRecvError::Disconnected)
+        ));
+        assert_eq!(service.watcher_count(), 1);
+    }
+
+    #[test]
+    fn linked_worktree_watches_private_and_common_metadata() {
+        let (_main_dir, main, _) = init_repo();
+        commit_file(&main, Path::new("tracked.txt"), "tracked\n");
+        let outer = tempfile::tempdir().unwrap();
+        let root = outer.path().join("linked");
+        main.worktree("linked", &root, None).unwrap();
+        let repo = Repository::open(&root).unwrap();
+        assert!(root.join(".git").is_file());
+        let filter = IgnoreFilter::build(root.clone());
+        fs::write(root.join(".gitignore"), "*.txt\n").unwrap();
+        assert!(filter.should_ignore(&root.join("ignored.txt")));
+        assert!(!filter.should_ignore(&root.join("tracked.txt")));
+        assert!(!filter.should_ignore(&repo.path().join("index")));
+        assert_eq!(
+            filter.paths.metadata_relative(&repo.path().join("index")),
+            Some(Path::new("index"))
+        );
+        assert_eq!(
+            filter
+                .paths
+                .metadata_relative(&repo.commondir().join("refs/heads/new")),
+            Some(Path::new("refs/heads/new"))
+        );
+        // 控制事件使用未被 ignore 的文件。
+        fs::write(root.join(".gitignore"), "ignored.txt\n").unwrap();
+        assert_external_metadata_is_watched(&root, &repo);
+    }
+
+    #[test]
+    fn submodule_layout_watches_metadata_outside_its_worktree() {
+        let (parent_dir, parent, _) = init_repo();
+        let root = parent_dir.path().join("child");
+        let mut options = git2::RepositoryInitOptions::new();
+        options.no_dotgit_dir(true).workdir_path(&root);
+        let child = Repository::init_opts(parent.path().join("modules/child"), &options).unwrap();
+        commit_file(&child, Path::new("tracked.txt"), "tracked\n");
+        assert!(root.join(".git").is_file());
+        let filter = IgnoreFilter::build(root.clone());
+        assert!(!filter.should_ignore(&child.path().join("HEAD")));
+        assert!(!filter.should_ignore(&root.join(".git")));
+        assert_external_metadata_is_watched(&root, &child);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn canonical_aliases_keep_ignore_rules_for_deleted_paths() {
+        let (dir, repo, _) = init_repo();
+        commit_file(&repo, Path::new("tracked.log"), "tracked\n");
+        fs::write(dir.path().join(".gitignore"), "*.log\n").unwrap();
+        let outer = tempfile::tempdir().unwrap();
+        let alias = outer.path().join("alias");
+        std::os::unix::fs::symlink(dir.path(), &alias).unwrap();
+        let filter = IgnoreFilter::build(alias.clone());
+        fs::remove_file(dir.path().join("tracked.log")).unwrap();
+        assert!(!filter.should_ignore(&alias.join("tracked.log")));
+        assert!(!filter.should_ignore(&dir.path().canonicalize().unwrap().join("tracked.log")));
+        assert!(filter.should_ignore(&alias.join("ignored.log")));
+        assert!(filter.should_ignore(&dir.path().canonicalize().unwrap().join("ignored.log")));
     }
 
     #[test]

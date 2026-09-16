@@ -11,7 +11,7 @@ use crate::{
     git::{engine::GitEngine, error::GitError, types::RepoMeta},
     repo_manager::RepoManager,
     tray::TrayCoordinator,
-    watcher::{IgnoreFilter, WatchEventResult, WatcherService},
+    watcher::{IgnoreFilter, WatchEventResult, WatchPaths, WatcherService},
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -74,23 +74,23 @@ fn watch_active_repo(
     // 代价是 node_modules / target 等目录也会触发大量事件——
     // 用 IgnoreFilter 按 Git ignore 规则对未跟踪路径做前置过滤。
     let watch_dir = workdir.to_path_buf();
-    let ignore_filter = Some(IgnoreFilter::build(watch_dir.clone()));
+    let ignore_filter = IgnoreFilter::build(watch_dir.clone());
     let app_clone = app.clone();
     let repo_id_clone = repo_id.to_string();
-    let kind_root = watch_dir.clone();
+    let watch_paths = ignore_filter.paths().clone();
 
     watcher
         .watch_only(
             repo_id.to_string(),
             watch_dir,
-            ignore_filter,
+            Some(ignore_filter),
             move |result| {
                 if let Err(err) = &result {
                     log::warn!("[watcher] repo={} error={err}", repo_id_clone);
                 }
                 let payload = StatusChangedPayload {
                     repo_id: repo_id_clone.clone(),
-                    kind: classify_status_change(&kind_root, &result),
+                    kind: classify_status_change(&watch_paths, &result),
                 };
                 log::debug!(
                     "[watcher] notify repo={} kind={:?}",
@@ -245,7 +245,7 @@ pub async fn validate_repo_path(path: String) -> Result<bool, GitError> {
     Ok(Path::new(&path).join(".git").exists() || GitEngine::open(&path).is_ok())
 }
 
-fn classify_status_change(root: &Path, result: &WatchEventResult) -> StatusChangeKind {
+fn classify_status_change(roots: &WatchPaths, result: &WatchEventResult) -> StatusChangeKind {
     let Ok(batch) = result else {
         return StatusChangeKind::OtherGit;
     };
@@ -256,7 +256,7 @@ fn classify_status_change(root: &Path, result: &WatchEventResult) -> StatusChang
     batch
         .paths
         .iter()
-        .map(|path| classify_status_path(root, path))
+        .map(|path| classify_status_path(roots, path))
         .reduce(|combined, next| match (combined, next) {
             // 单个 kind 必须覆盖整批所需的数据域；Refs 不包含配置 / 子模块刷新。
             (StatusChangeKind::Config, StatusChangeKind::Refs)
@@ -267,31 +267,22 @@ fn classify_status_change(root: &Path, result: &WatchEventResult) -> StatusChang
         .unwrap_or(StatusChangeKind::OtherGit)
 }
 
-fn classify_status_path(root: &Path, path: &Path) -> StatusChangeKind {
-    let Ok(rel) = path.strip_prefix(root) else {
-        return StatusChangeKind::OtherGit;
+fn classify_status_path(roots: &WatchPaths, path: &Path) -> StatusChangeKind {
+    let Some(rel) = roots.metadata_relative(path) else {
+        return match roots.worktree_relative(path) {
+            Some(rel) if rel == Path::new(".gitmodules") => StatusChangeKind::Config,
+            Some(rel) if !rel.as_os_str().is_empty() => StatusChangeKind::Worktree,
+            _ => StatusChangeKind::OtherGit,
+        };
     };
-    let mut components = rel.components().filter_map(|c| c.as_os_str().to_str());
-    let Some(first) = components.next() else {
-        return StatusChangeKind::OtherGit;
-    };
-
-    if first == ".gitmodules" {
-        return StatusChangeKind::Config;
-    }
-
-    if first != ".git" {
-        return StatusChangeKind::Worktree;
-    }
-
-    let Some(second) = components.next() else {
+    let Some(name) = rel.components().next().and_then(|c| c.as_os_str().to_str()) else {
         return StatusChangeKind::OtherGit;
     };
 
-    let git_name = second.strip_suffix(".lock").unwrap_or(second);
+    let git_name = name.strip_suffix(".lock").unwrap_or(name);
     match git_name {
         "index" => StatusChangeKind::Index,
-        "config" => StatusChangeKind::Config,
+        "config" | "config.worktree" => StatusChangeKind::Config,
         "refs" | "logs" | "HEAD" | "FETCH_HEAD" | "ORIG_HEAD" | "MERGE_HEAD" | "MERGE_MSG"
         | "REBASE_HEAD" | "CHERRY_PICK_HEAD" | "REVERT_HEAD" | "packed-refs" => {
             StatusChangeKind::Refs
@@ -502,8 +493,9 @@ mod tests {
     #[test]
     fn classifies_plain_worktree_path() {
         let root = Path::new("/repo");
+        let roots = WatchPaths::new(root, &root.join(".git"), &root.join(".git"));
         assert_eq!(
-            classify_status_path(root, Path::new("/repo/src/main.rs")),
+            classify_status_path(&roots, Path::new("/repo/src/main.rs")),
             StatusChangeKind::Worktree
         );
     }
@@ -511,13 +503,14 @@ mod tests {
     #[test]
     fn classifies_rescan_batch_as_conservative_git_change() {
         let root = Path::new("/repo");
+        let roots = WatchPaths::new(root, &root.join(".git"), &root.join(".git"));
         let batch: WatchEventResult = Ok(crate::watcher::WatchEventBatch {
             paths: Vec::new(),
             needs_rescan: true,
         });
 
         assert_eq!(
-            classify_status_change(root, &batch),
+            classify_status_change(&roots, &batch),
             StatusChangeKind::OtherGit
         );
     }
@@ -529,12 +522,13 @@ mod tests {
             vec![".git/refs/heads/main", ".gitmodules"],
         ] {
             let root = Path::new("/repo");
+            let roots = WatchPaths::new(root, &root.join(".git"), &root.join(".git"));
             let batch = Ok(crate::watcher::WatchEventBatch {
                 paths: paths.into_iter().map(|path| root.join(path)).collect(),
                 needs_rescan: false,
             });
             assert_eq!(
-                classify_status_change(root, &batch),
+                classify_status_change(&roots, &batch),
                 StatusChangeKind::OtherGit
             );
         }
@@ -543,29 +537,61 @@ mod tests {
     #[test]
     fn classifies_git_control_paths() {
         let root = Path::new("/repo");
+        let roots = WatchPaths::new(root, &root.join(".git"), &root.join(".git"));
         assert_eq!(
-            classify_status_path(root, Path::new("/repo/.git/index.lock")),
+            classify_status_path(&roots, Path::new("/repo/.git/index.lock")),
             StatusChangeKind::Index
         );
         assert_eq!(
-            classify_status_path(root, Path::new("/repo/.git/refs/heads/main")),
+            classify_status_path(&roots, Path::new("/repo/.git/refs/heads/main")),
             StatusChangeKind::Refs
         );
         assert_eq!(
-            classify_status_path(root, Path::new("/repo/.git/FETCH_HEAD")),
+            classify_status_path(&roots, Path::new("/repo/.git/FETCH_HEAD")),
             StatusChangeKind::Refs
         );
         assert_eq!(
-            classify_status_path(root, Path::new("/repo/.git/config")),
+            classify_status_path(&roots, Path::new("/repo/.git/config")),
             StatusChangeKind::Config
+        );
+    }
+
+    #[test]
+    fn classifies_external_worktree_and_submodule_metadata() {
+        let root = Path::new("/linked");
+        let private = Path::new("/main/.git/worktrees/linked");
+        let common = Path::new("/main/.git");
+        let paths = WatchPaths::new(root, private, common);
+        for (path, expected) in [
+            (private.join("index.lock"), StatusChangeKind::Index),
+            (private.join("HEAD"), StatusChangeKind::Refs),
+            (private.join("config.worktree"), StatusChangeKind::Config),
+            (common.join("refs/heads/deleted"), StatusChangeKind::Refs),
+            (common.join("packed-refs.lock"), StatusChangeKind::Refs),
+            (common.join("config"), StatusChangeKind::Config),
+            (root.join(".git"), StatusChangeKind::OtherGit),
+            (root.join("src/main.rs"), StatusChangeKind::Worktree),
+        ] {
+            assert_eq!(classify_status_path(&paths, &path), expected);
+        }
+        let module = Path::new("/parent/.git/modules/child");
+        let paths = WatchPaths::new(Path::new("/parent/child"), module, module);
+        assert_eq!(
+            classify_status_path(&paths, &module.join("index")),
+            StatusChangeKind::Index
+        );
+        assert_eq!(
+            classify_status_path(&paths, &module.join("HEAD")),
+            StatusChangeKind::Refs
         );
     }
 
     #[test]
     fn classifies_gitmodules_as_config() {
         let root = Path::new("/repo");
+        let roots = WatchPaths::new(root, &root.join(".git"), &root.join(".git"));
         assert_eq!(
-            classify_status_path(root, Path::new("/repo/.gitmodules")),
+            classify_status_path(&roots, Path::new("/repo/.gitmodules")),
             StatusChangeKind::Config
         );
     }
