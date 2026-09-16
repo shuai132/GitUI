@@ -30,6 +30,7 @@
 - [x] 远程操作：fetch、push（新分支 Publish 后自动建立 upstream，原始 force 显示目标并二次确认）、pull（fast-forward / ff-only / rebase 三模式，脏工作区可自动 stash 并安全恢复）、默认远端偏好、tag 推送
 - [x] SSH 凭据链：ssh-agent → `~/.ssh/id_ed25519` → `~/.ssh/id_rsa`，HTTPS 走系统 credential helper
 - [x] Submodule：init / update / edit URL / deinit，已克隆的可作为新仓库打开，并在所有仓库与工作区变更中作为特殊项导航
+- [x] Markdown 阅读：源码差异 / 修改后完整预览 / 渲染对照，源码自动换行，Mermaid 图表与源码切换、缩放和主题适配，GFM 表格 / 任务列表、标题目录、代码复制、同步滚动与显示偏好持久化
 - [x] Diff 查看器：inline / side-by-side 两种布局，均支持完整文件视图与按 hunk 分组、忽略空白变更、多语言语法高亮、行内字符级变化高亮、图片 / SVG 预览、PDF / DOCX / PPTX 文档预览与抽取文本高亮 diff
 - [x] 字符编码自适应：commit message 按 git `encoding` header 解码、文件内容按 `.gitattributes` 的 `working-tree-encoding` 或 chardetng 自动检测，混合 UTF-8 / GBK 仓库正常显示
 - [x] Stash：push / pop / apply / delete（含 untracked 文件），用提交信息作 stash message；脏工作区快捷 Pop 会显示目标与改动数后确认

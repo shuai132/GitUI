@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
   DEFAULT_ADVANCED_VIEW_PREFS,
+  MARKDOWN_MODES,
   useUiStore,
   type DiffLayoutMode,
 } from '@/stores/ui'
@@ -31,6 +32,8 @@ interface ToggleRow {
 }
 
 const viewToggles = computed<ToggleRow[]>(() => [
+  { key: 'markdownWrap', label: t('diff.markdown.wrap'), hint: t('diff.markdown.wrapHint'), get: () => uiStore.markdownWrap, toggle: () => uiStore.toggleMarkdownWrap() },
+  { key: 'markdownMermaid', label: t('diff.markdown.mermaid'), hint: t('diff.markdown.mermaidHint'), get: () => uiStore.markdownMermaid, toggle: () => uiStore.toggleMarkdownMermaid() },
   {
     key: 'diffGroupByHunk',
     label: t('settings.advanced.diffGroupByHunk'),
@@ -97,7 +100,10 @@ const viewToggles = computed<ToggleRow[]>(() => [
 ])
 
 const viewPrefsAreDefault = computed(() =>
-  uiStore.diffLayoutMode === DEFAULT_ADVANCED_VIEW_PREFS.diffLayoutMode
+  uiStore.markdownMode === DEFAULT_ADVANCED_VIEW_PREFS.markdownMode
+  && uiStore.markdownWrap === DEFAULT_ADVANCED_VIEW_PREFS.markdownWrap
+  && uiStore.markdownMermaid === DEFAULT_ADVANCED_VIEW_PREFS.markdownMermaid
+  && uiStore.diffLayoutMode === DEFAULT_ADVANCED_VIEW_PREFS.diffLayoutMode
   && uiStore.diffGroupByHunk === DEFAULT_ADVANCED_VIEW_PREFS.diffGroupByHunk
   && uiStore.diffHighlightEnabled === DEFAULT_ADVANCED_VIEW_PREFS.diffHighlightEnabled
   && uiStore.diffIgnoreWhitespace === DEFAULT_ADVANCED_VIEW_PREFS.diffIgnoreWhitespace
@@ -166,6 +172,16 @@ async function onFetchIntervalChange(e: Event) {
           {{ opt.label }}
         </button>
       </div>
+    </div>
+    <div class="pref-row">
+      <div class="pref-text">
+        <div class="pref-label">{{ t('diff.markdown.displayMode') }}</div>
+        <div class="pref-hint">{{ t('diff.markdown.settingsHint') }}</div>
+      </div>
+      <select class="pref-select" :aria-label="t('diff.markdown.displayMode')" :value="uiStore.markdownMode"
+        @change="uiStore.setMarkdownMode(($event.target as HTMLSelectElement).value as typeof uiStore.markdownMode)">
+        <option v-for="mode in MARKDOWN_MODES" :key="mode" :value="mode">{{ t('diff.markdown.' + mode) }}</option>
+      </select>
     </div>
     <div class="toggle-list">
       <label

@@ -12,6 +12,7 @@ const { t } = useI18n()
 const props = withDefaults(defineProps<{
   diff: FileDiff | null
   loading?: boolean
+  wrapLines?: boolean
   /** true 时保持按 hunk 块展示；false 时优先显示完整文件。 */
   groupByHunk?: boolean
   /** 语法高亮语言（null 表示关闭高亮） */
@@ -284,7 +285,7 @@ function changeCurrentClasses(rowIndex: number): Record<string, boolean> {
 
 function scrollToRow(rowIndex: number) {
   const body = bodyRef.value
-  const scroll = leftScrollRef.value
+  const scroll = props.wrapLines ? bodyRef.value : leftScrollRef.value
   if (!body || !scroll) return
   const el = scroll.querySelector(
     `[data-row="${rowIndex}"]`,
@@ -300,7 +301,7 @@ function scrollToRow(rowIndex: number) {
 
 function scrollToRowStart(rowIndex: number) {
   const body = bodyRef.value
-  const scroll = leftScrollRef.value
+  const scroll = props.wrapLines ? bodyRef.value : leftScrollRef.value
   if (!body || !scroll) return
   const el = scroll.querySelector(
     `[data-row="${rowIndex}"]`,
@@ -314,7 +315,7 @@ function scrollToRowStart(rowIndex: number) {
 
 function getScrollAnchor(): DiffScrollAnchor | null {
   const body = bodyRef.value
-  const scroll = leftScrollRef.value
+  const scroll = props.wrapLines ? bodyRef.value : leftScrollRef.value
   if (!body || !scroll) return null
   const bodyTop = body.getBoundingClientRect().top
   const lineEls = Array.from(scroll.querySelectorAll<HTMLElement>('[data-row]'))
@@ -413,6 +414,27 @@ defineExpose({ goNextChange, goPrevChange, hasChangeTargets, getScrollAnchor, sc
     <!-- Side-by-side content：
          bodyRef 统一垂直滚动；
          每个 pane 分为 gutter（固定行号）+ scroll（水平滚动代码）-->
+    <div v-else-if="wrapLines" ref="bodyRef" class="sbs-body sbs-wrapped">
+      <div v-for="(row, i) in alignedRows" :key="i" class="wrapped-row" :data-row="i">
+        <template v-for="side in (['left', 'right'] as const)" :key="side">
+          <div class="gutter-row" :class="['line-' + row[side].kind, changeCurrentClasses(i)]">
+            <span class="ln">{{ row[side].lineNo ?? '' }}</span>
+            <span class="sign">{{ row[side].kind === 'del' ? '-' : row[side].kind === 'add' ? '+' : '' }}</span>
+          </div>
+          <div class="sbs-line" :class="['line-' + row[side].kind, changeCurrentClasses(i)]">
+            <span v-if="row[side].wordHtml" class="code" v-html="row[side].wordHtml" />
+            <span v-else class="code" v-html="highlightLine(row[side].content, langForLine(side === 'left' ? 'old' : 'new', row[side]))" />
+            <span
+              v-if="row[side].hunkIndex != null && (row[side].kind === 'header' || row[side].isHunkStart) && (canRunHunkAction || canDiscardHunk)"
+              class="hunk-actions"
+            >
+              <button v-if="canRunHunkAction" class="hunk-action-btn" @click.stop="emit('hunk-action', row[side].hunkIndex!)">{{ hunkActionLabel }}</button>
+              <button v-if="canDiscardHunk" class="hunk-action-btn hunk-action-btn--danger" @click.stop="emit('hunk-discard', row[side].hunkIndex!)">{{ hunkDiscardLabel }}</button>
+            </span>
+          </div>
+        </template>
+      </div>
+    </div>
     <template v-else>
       <div class="sbs-body" ref="bodyRef">
         <div class="sbs-inner">
@@ -759,4 +781,11 @@ defineExpose({ goNextChange, goPrevChange, hasChangeTargets, getScrollAnchor, sc
   color: var(--accent-red);
   border-color: var(--accent-red);
 }
+.wrapped-row { display: grid; grid-template-columns: 60px minmax(0, 1fr) 60px minmax(0, 1fr); }
+.sbs-wrapped .gutter-row,
+.sbs-wrapped .sbs-line { height: auto; align-items: flex-start; }
+.sbs-wrapped .sbs-line { flex-wrap: wrap; overflow: visible; min-width: 0; }
+.sbs-wrapped .code { flex: 1; min-width: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.sbs-wrapped .gutter-row:nth-child(3) { border-left: 1px solid var(--border); }
+.sbs-wrapped .hunk-actions { position: static; flex-wrap: wrap; }
 </style>

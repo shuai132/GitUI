@@ -12,6 +12,7 @@ const { t } = useI18n()
 const props = withDefaults(defineProps<{
   diff: FileDiff | null
   loading?: boolean
+  wrapLines?: boolean
   /** true → 每个 hunk 独立成块，块间有空隙；false → 所有 hunk 连续显示 */
   groupByHunk: boolean
   /** 语法高亮语言（null 表示关闭高亮） */
@@ -328,7 +329,7 @@ defineExpose({ goNextChange, goPrevChange, hasChangeTargets, getScrollAnchor, sc
 </script>
 
 <template>
-  <div class="inline-diff">
+  <div class="inline-diff" :class="{ 'wrap-lines': wrapLines }">
     <div v-if="loading" class="inline-state">{{ t('diff.empty.loading') }}</div>
     <div v-else-if="!diff" class="inline-state">{{ t('diff.empty.selectFile') }}</div>
     <div v-else-if="diff.is_binary" class="inline-state">{{ t('diff.empty.binaryFile') }}</div>
@@ -629,4 +630,9 @@ defineExpose({ goNextChange, goPrevChange, hasChangeTargets, getScrollAnchor, sc
   user-select: none;
   -webkit-user-select: none;
 }
+.wrap-lines .inline-lines { min-width: 0; }
+.wrap-lines .code { flex: 1; min-width: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.wrap-lines .line-header-content,
+.wrap-lines .hunk-header-title { white-space: pre-wrap; overflow-wrap: anywhere; min-width: 0; }
+.wrap-lines .hunk-header { flex-wrap: wrap; gap: 4px; }
 </style>

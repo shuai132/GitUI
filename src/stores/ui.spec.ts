@@ -302,3 +302,23 @@ describe('ui store history column preferences', () => {
     expect(uiStore.getHistoryBranchScope('/repos/a')).toBe('all')
   })
 })
+
+describe('Markdown display preferences', () => {
+  it('defaults to wrapped source with diagrams enabled, persists choices and resets them', () => {
+    localStorage.clear()
+    setActivePinia(createPinia())
+    const ui = useUiStore()
+    expect([ui.markdownMode, ui.markdownWrap, ui.markdownMermaid]).toEqual(['source', true, true])
+    ui.setMarkdownMode('compare')
+    ui.toggleMarkdownWrap()
+    ui.toggleMarkdownMermaid()
+    setActivePinia(createPinia())
+    const restored = useUiStore()
+    expect([restored.markdownMode, restored.markdownWrap, restored.markdownMermaid]).toEqual(['compare', false, false])
+    restored.resetAdvancedViewPrefs()
+    expect([restored.markdownMode, restored.markdownWrap, restored.markdownMermaid]).toEqual(['source', true, true])
+    localStorage.setItem('gitui.diff.markdownMode', 'invalid')
+    setActivePinia(createPinia())
+    expect(useUiStore().markdownMode).toBe('source')
+  })
+})

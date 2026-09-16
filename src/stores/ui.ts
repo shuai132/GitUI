@@ -27,6 +27,9 @@ const KEYS = {
   diffGroupByHunk: 'gitui.diff.groupByHunk',
   diffIgnoreWhitespace: 'gitui.diff.ignoreWhitespace',
   diffHighlight: 'gitui.diff.syntax-highlight',
+  markdownMode: 'gitui.diff.markdownMode',
+  markdownWrap: 'gitui.diff.markdownWrap',
+  markdownMermaid: 'gitui.diff.markdownMermaid',
   dockLayout: 'gitui.history.dockLayout',
   customDockLayout: 'gitui.history.customDockLayout',
   layoutPreset: 'gitui.history.layoutPreset',
@@ -84,6 +87,8 @@ export type HistoryLayoutMode = 'horizontal' | 'vertical'
 export type HistoryBranchScope = 'all' | 'current_first_parent'
 export type LayoutPreset = 'custom' | 'vertical' | 'horizontal'
 export type LegacyDiffViewMode = 'side-by-side' | 'inline' | 'by-hunk'
+export type MarkdownMode = 'source' | 'preview' | 'compare'
+export const MARKDOWN_MODES = ['source', 'preview', 'compare'] as const
 export type DiffLayoutMode = 'side-by-side' | 'inline'
 export type PanelId = 'commits' | 'info' | 'diff'
 export type DockEdge = 'top' | 'bottom' | 'left' | 'right'
@@ -116,6 +121,9 @@ export const DEFAULT_ADVANCED_VIEW_PREFS = {
   diffGroupByHunk: true,
   diffHighlightEnabled: true,
   diffIgnoreWhitespace: false,
+  markdownMode: 'source' as MarkdownMode,
+  markdownWrap: true,
+  markdownMermaid: true,
   showRemoteBranches: true,
   showChangeStatsColumn: false,
   showUnreachableCommits: true,
@@ -380,6 +388,9 @@ export const useUiStore = defineStore('ui', () => {
   const diffHighlightEnabled = ref<boolean>(
     loadBool(KEYS.diffHighlight, DEFAULT_ADVANCED_VIEW_PREFS.diffHighlightEnabled),
   )
+  const markdownMode = ref(loadString<MarkdownMode>(KEYS.markdownMode, DEFAULT_ADVANCED_VIEW_PREFS.markdownMode, MARKDOWN_MODES))
+  const markdownWrap = ref(loadBool(KEYS.markdownWrap, DEFAULT_ADVANCED_VIEW_PREFS.markdownWrap))
+  const markdownMermaid = ref(loadBool(KEYS.markdownMermaid, DEFAULT_ADVANCED_VIEW_PREFS.markdownMermaid))
   const diffIgnoreWhitespace = ref<boolean>(
     loadBool(KEYS.diffIgnoreWhitespace, DEFAULT_ADVANCED_VIEW_PREFS.diffIgnoreWhitespace),
   )
@@ -581,6 +592,21 @@ export const useUiStore = defineStore('ui', () => {
     localStorage.setItem(KEYS.showChangeStatsColumn, String(showChangeStatsColumn.value))
   }
 
+  function setMarkdownMode(mode: MarkdownMode) {
+    markdownMode.value = mode
+    localStorage.setItem(KEYS.markdownMode, mode)
+  }
+
+  function toggleMarkdownWrap() {
+    markdownWrap.value = !markdownWrap.value
+    localStorage.setItem(KEYS.markdownWrap, String(markdownWrap.value))
+  }
+
+  function toggleMarkdownMermaid() {
+    markdownMermaid.value = !markdownMermaid.value
+    localStorage.setItem(KEYS.markdownMermaid, String(markdownMermaid.value))
+  }
+
   function setDiffLayoutMode(mode: DiffLayoutMode) {
     diffLayoutMode.value = mode
     localStorage.setItem(KEYS.diffLayoutMode, mode)
@@ -643,6 +669,11 @@ export const useUiStore = defineStore('ui', () => {
   }
 
   function resetAdvancedViewPrefs() {
+    setMarkdownMode(DEFAULT_ADVANCED_VIEW_PREFS.markdownMode)
+    markdownWrap.value = DEFAULT_ADVANCED_VIEW_PREFS.markdownWrap
+    markdownMermaid.value = DEFAULT_ADVANCED_VIEW_PREFS.markdownMermaid
+    localStorage.setItem(KEYS.markdownWrap, String(markdownWrap.value))
+    localStorage.setItem(KEYS.markdownMermaid, String(markdownMermaid.value))
     diffLayoutMode.value = DEFAULT_ADVANCED_VIEW_PREFS.diffLayoutMode
     diffGroupByHunk.value = DEFAULT_ADVANCED_VIEW_PREFS.diffGroupByHunk
     diffHighlightEnabled.value = DEFAULT_ADVANCED_VIEW_PREFS.diffHighlightEnabled
@@ -728,6 +759,12 @@ export const useUiStore = defineStore('ui', () => {
     historyColumnOrder,
     showChangeStatsColumn,
     historyPaneSizes,
+    markdownMode,
+    markdownWrap,
+    markdownMermaid,
+    setMarkdownMode,
+    toggleMarkdownWrap,
+    toggleMarkdownMermaid,
     diffLayoutMode,
     diffGroupByHunk,
     diffHighlightEnabled,

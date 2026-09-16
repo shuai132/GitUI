@@ -2,7 +2,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { FileDiff } from '@/types/git'
-import { useUiStore } from '@/stores/ui'
+import { MARKDOWN_MODES, useUiStore } from '@/stores/ui'
 import { useShortcutsStore, bindingToLabel, type ShortcutActionId } from '@/stores/shortcuts'
 import { useDiffSearch } from '@/composables/diff/useDiffSearch'
 import type { PreviewKind } from '@/lib/preview'
@@ -56,6 +56,8 @@ const canIgnoreWhitespace = computed(() =>
   props.previewKind !== 'pptx',
 )
 
+const isMarkdownPreview = computed(() => props.previewKind === 'markdown' && uiStore.markdownMode !== 'source')
+
 const filePathLabel = computed(() => displayDiffPath(props.diff))
 </script>
 
@@ -77,6 +79,19 @@ const filePathLabel = computed(() => displayDiffPath(props.diff))
     >{{ diff.encoding }}</span>
 
     <div class="toolbar-spacer" />
+
+    <select v-if="previewKind === 'markdown'" class="markdown-mode" :aria-label="t('diff.markdown.displayMode')"
+      :value="uiStore.markdownMode" @change="uiStore.setMarkdownMode(($event.target as HTMLSelectElement).value as typeof uiStore.markdownMode)">
+      <option v-for="mode in MARKDOWN_MODES" :key="mode" :value="mode">{{ t('diff.markdown.' + mode) }}</option>
+    </select>
+    <button v-if="previewKind === 'markdown' && !isMarkdownPreview" type="button"
+      class="btn-icon btn-wrap" :class="{ active: uiStore.markdownWrap }"
+      :aria-pressed="uiStore.markdownWrap" :aria-label="t('diff.markdown.wrap')" :title="t('diff.markdown.wrap')"
+      @click="uiStore.toggleMarkdownWrap()">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+        <path d="M3 5h18M3 10h14a4 4 0 0 1 0 8h-6m3-3-3 3 3 3M3 15h4M3 20h4" />
+      </svg>
+    </button>
 
     <div
       v-if="!isImageView"
@@ -150,7 +165,7 @@ const filePathLabel = computed(() => displayDiffPath(props.diff))
 
     <div class="toolbar-divider" v-if="!isImageView" />
 
-    <template v-if="!isImageView">
+    <template v-if="!isImageView && !isMarkdownPreview">
       <div class="change-nav">
         <div class="change-nav-buttons">
           <button
@@ -514,4 +529,7 @@ const filePathLabel = computed(() => displayDiffPath(props.diff))
   color: var(--text-primary);
   background: var(--bg-overlay);
 }
+.markdown-mode { max-width: 150px; min-width: 95px; background: var(--bg-surface); color: var(--text-primary); border: 1px solid var(--border); border-radius: 4px; padding: 3px; font: inherit; }
+.diff-toolbar { flex-wrap: wrap; }
+.diff-file-path { flex-shrink: 1; }
 </style>

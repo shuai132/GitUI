@@ -28,7 +28,11 @@ vi.mock('@/stores/gitPrefs', () => ({
   ],
 }))
 vi.mock('@/stores/ui', () => ({
+  MARKDOWN_MODES: ['source', 'preview', 'compare'],
   DEFAULT_ADVANCED_VIEW_PREFS: {
+    markdownMode: 'source',
+    markdownWrap: true,
+    markdownMermaid: true,
     diffLayoutMode: 'inline',
     diffGroupByHunk: false,
     diffHighlightEnabled: true,
@@ -41,6 +45,9 @@ vi.mock('@/stores/ui', () => ({
     detailFilesFirst: false,
   },
   useUiStore: () => ({
+    markdownMode: 'source',
+    markdownWrap: true,
+    markdownMermaid: true,
     diffLayoutMode: 'inline',
     diffGroupByHunk: false,
     diffHighlightEnabled: true,
@@ -62,6 +69,9 @@ vi.mock('@/stores/ui', () => ({
     toggleDetailFilesFirst: vi.fn(),
     resetAdvancedViewPrefs: vi.fn(),
     setDiffLayoutMode: vi.fn(),
+    setMarkdownMode: vi.fn(),
+    toggleMarkdownWrap: vi.fn(),
+    toggleMarkdownMermaid: vi.fn(),
   }),
 }))
 vi.mock('@/composables/useGitCommands', () => ({
@@ -93,7 +103,7 @@ describe('AdvancedSection auto-fetch interval', () => {
     mocks.setAutoFetchInterval.mockRejectedValue(new Error('service unavailable'))
     const wrapper = shallowMount(AdvancedSection)
 
-    await wrapper.find('select').setValue('600')
+    await wrapper.find('.prefs-list select').setValue('600')
     await flushPromises()
 
     expect(mocks.setAutoFetchInterval).toHaveBeenCalledWith(600)
@@ -110,12 +120,12 @@ describe('AdvancedSection auto-fetch interval', () => {
     mocks.setAutoFetchInterval.mockReturnValueOnce(update.promise)
     const wrapper = shallowMount(AdvancedSection)
 
-    void wrapper.find('select').setValue('600')
+    void wrapper.find('.prefs-list select').setValue('600')
     await Promise.resolve()
 
-    expect(wrapper.find('select').attributes('disabled')).toBeDefined()
+    expect(wrapper.find('.prefs-list select').attributes('disabled')).toBeDefined()
     update.resolve()
     await flushPromises()
-    expect(wrapper.find('select').attributes('disabled')).toBeUndefined()
+    expect(wrapper.find('.prefs-list select').attributes('disabled')).toBeUndefined()
   })
 })

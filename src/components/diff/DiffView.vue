@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, nextTick, watch, useSlots } from 'vue'
+import { ref, computed, nextTick, watch, useSlots, defineAsyncComponent } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { FileDiff, FileStatusKind } from '@/types/git'
 import SideBySideDiff from './SideBySideDiff.vue'
@@ -17,6 +17,8 @@ import { useRevertHunk } from '@/composables/diff/useRevertHunk'
 import { useWipHunkAction } from '@/composables/diff/useWipHunkAction'
 import { useGitCommands } from '@/composables/useGitCommands'
 import type { FullFileContent } from '@/lib/fullFileDiff'
+
+const MarkdownDiff = defineAsyncComponent(() => import('./MarkdownDiff.vue'))
 
 const props = defineProps<{
   diff: FileDiff | null
@@ -65,6 +67,9 @@ const previewKind = computed(() => {
   if (!props.diff) return null
   return detectPreviewKind(props.diff.new_path ?? props.diff.old_path)
 })
+
+const isMarkdownPreview = computed(() => previewKind.value === 'markdown' && uiStore.markdownMode !== 'source')
+const wrapMarkdown = computed(() => previewKind.value === 'markdown' && uiStore.markdownWrap)
 
 // SVG 可在图片预览和文本 diff 之间切换；位图强制图片视图
 const svgTextMode = ref(false)
@@ -176,7 +181,7 @@ function isInteractiveTarget(target: EventTarget | null): boolean {
 }
 
 watch(
-  () => [uiStore.diffLayoutMode, uiStore.diffGroupByHunk] as const,
+  () => [uiStore.diffLayoutMode, uiStore.diffGroupByHunk, uiStore.markdownWrap] as const,
   () => {
     const anchor = diffRef.value?.getScrollAnchor()
     if (!anchor) return
@@ -321,6 +326,7 @@ watch(
     uiStore.diffLayoutMode,
     uiStore.diffGroupByHunk,
     svgTextMode.value,
+    isMarkdownPreview.value,
   ] as const,
   async () => {
     const seq = ++fullFileLoadSeq
@@ -331,6 +337,7 @@ watch(
       props.diff.is_binary ||
       props.diff.hunks.length === 0 ||
       isImageView.value ||
+      isMarkdownPreview.value ||
       uiStore.diffGroupByHunk
     ) {
       return
@@ -465,8 +472,16 @@ function fallbackDiffIdentityKey(diff: FileDiff | null): string | null {
 
     <!-- Diff body -->
     <div class="diff-body" @click="onDiffBodyClick">
+      <MarkdownDiff
+        v-if="isMarkdownPreview && diff && repoId"
+        :diff="diff"
+        :repo-id="repoId"
+        :wip="wip ?? null"
+        :loading="loading"
+        :identity-key="activeDiffIdentityKey"
+      />
       <DocumentDiff
-        v-if="documentKind && diff && repoId"
+        v-else-if="documentKind && diff && repoId"
         :diff="diff"
         :repo-id="repoId"
         :document-kind="documentKind"
@@ -504,6 +519,7 @@ function fallbackDiffIdentityKey(diff: FileDiff | null): string | null {
         ref="diffRef"
         :diff="diff"
         :loading="loading"
+        :wrap-lines="wrapMarkdown"
         :syntax-lang="syntaxLang"
         :syntax-lang-for-line="syntaxLangForLine"
         :full-file-content="fullFileContent"
@@ -523,6 +539,7 @@ function fallbackDiffIdentityKey(diff: FileDiff | null): string | null {
         :diff="diff"
         :loading="loading"
         :group-by-hunk="uiStore.diffGroupByHunk"
+        :wrap-lines="wrapMarkdown"
         :syntax-lang="syntaxLang"
         :syntax-lang-for-line="syntaxLangForLine"
         :full-file-content="fullFileContent"
