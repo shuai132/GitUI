@@ -211,6 +211,7 @@ export interface CommitChangeStats {
 }
 
 export interface LogPage {
+  snapshot_id: string
   commits: CommitInfo[]
   has_more: boolean
   total_loaded: number

@@ -95,6 +95,7 @@ function commit(oid: string) {
 
 function page(hasMore = false, oids = ['aaa']): LogPage {
   return {
+    snapshot_id: oids.join(','),
     commits: oids.map(commit),
     has_more: hasMore,
     total_loaded: oids.length,

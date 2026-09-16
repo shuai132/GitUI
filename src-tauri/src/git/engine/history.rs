@@ -1,5 +1,5 @@
 use git2::{DiffOptions, Repository, Revwalk};
-use std::{collections::HashSet, path::Path};
+use std::{collections::HashSet, path::Path, sync::Arc};
 
 use crate::git::{
     encoding::{decode_with, detect_file_encoding},
@@ -8,8 +8,9 @@ use crate::git::{
 };
 
 use super::{
-    build_commit_info, commit_message_decoded, signature_email, signature_name, summary_from,
-    GitEngine,
+    build_commit_info, commit_message_decoded,
+    log_cache::{self, CachedCommit, LogKey, LogSnapshot},
+    signature_email, signature_name, summary_from, GitEngine,
 };
 
 struct LogWalkContext<'repo> {
@@ -33,141 +34,209 @@ impl GitEngine {
         include_remote_branches: bool,
     ) -> GitResult<LogPage> {
         let repo = Self::open(path)?;
-        let mut context = Self::prepare_log_walk(
+        let snapshot = Self::log_snapshot(
             &repo,
             include_unreachable,
             include_stashes,
             branch_scope,
             include_remote_branches,
         )?;
-
-        let mut commits = Vec::new();
-        let mut idx = 0;
-        let mut has_more = false;
-
-        while let Some(oid_result) = context.revwalk.next() {
-            let oid = oid_result?;
-            // 跳过 stash 的辅助 commit（index / untracked 快照），它们不作为独立行
-            if context.stash_aux_set.contains(&oid) {
-                continue;
-            }
-            if idx < offset {
-                idx += 1;
-                continue;
-            }
-            if commits.len() >= limit {
-                has_more = true;
-                break;
-            }
-            let commit = repo.find_commit(oid)?;
-            let (is_unreachable, is_stash, is_reflog_tip) = Self::log_commit_flags(&context, oid);
-
-            // stash 在 DAG 中视作普通 1-parent commit：parent_oids 只保留 parent[0] (HEAD)
-            let parent_oids: Vec<String> = if is_stash {
-                commit
-                    .parent_ids()
-                    .next()
-                    .map(|p| vec![p.to_string()])
-                    .unwrap_or_default()
-            } else {
-                commit.parent_ids().map(|p| p.to_string()).collect()
-            };
-
-            commits.push(build_commit_info(
-                &commit,
-                parent_oids,
-                is_unreachable,
-                is_stash,
-                is_reflog_tip,
-            ));
-            idx += 1;
+        let end = offset.saturating_add(limit).min(snapshot.commits.len());
+        let mut commits = Vec::with_capacity(end.saturating_sub(offset));
+        for entry in snapshot.commits.get(offset..end).unwrap_or_default() {
+            let commit = repo.find_commit(entry.oid)?;
+            commits.push(Self::cached_commit_info(&commit, entry));
         }
-
-        let total_loaded = offset + commits.len();
         Ok(LogPage {
+            snapshot_id: snapshot.id.clone(),
+            total_loaded: offset.saturating_add(commits.len()),
+            has_more: end < snapshot.commits.len(),
             commits,
-            has_more,
-            total_loaded,
         })
     }
 
-    fn prepare_log_walk<'repo>(
-        repo: &'repo Repository,
+    pub fn clear_log_cache(path: &str) {
+        if let Ok(repo) = Self::open(path) {
+            let git_dir = repo
+                .path()
+                .canonicalize()
+                .unwrap_or_else(|_| repo.path().to_path_buf());
+            log_cache::clear(&git_dir);
+        }
+    }
+
+    fn log_key(
+        repo: &Repository,
         include_unreachable: bool,
         include_stashes: bool,
         branch_scope: LogBranchScope,
         include_remote_branches: bool,
-    ) -> GitResult<LogWalkContext<'repo>> {
-        // 仅在显示丢失引用时收集所有 ref 可达 oid。普通日志和搜索路径
-        // 不需要判断 unreachable，跳过这轮 revwalk 以保持首屏轻量。
-        let mut reachable = HashSet::new();
-        if include_unreachable {
-            let mut walk = repo.revwalk()?;
-            walk.push_glob("refs/heads/*").ok();
-            walk.push_glob("refs/remotes/*").ok();
-            walk.push_glob("refs/tags/*").ok();
-            walk.push_head().ok();
-            for oid in walk.flatten() {
-                reachable.insert(oid);
-            }
-        }
-
-        // Stash 的 index / untracked parent 是存储细节，不作为独立提交行。
-        let mut stash_set = HashSet::new();
-        if let Ok(entries) = Self::list_stashes(repo) {
-            for (_, _, oid) in entries {
-                stash_set.insert(oid);
-            }
-        }
-        let mut stash_aux_set = HashSet::new();
-        for stash_oid in stash_set.iter().copied() {
-            if let Ok(commit) = repo.find_commit(stash_oid) {
-                for (index, parent) in commit.parent_ids().enumerate() {
-                    if index > 0 {
-                        stash_aux_set.insert(parent);
+    ) -> GitResult<LogKey> {
+        let mut roots = Vec::new();
+        let mut reachable_roots = Vec::new();
+        if branch_scope == LogBranchScope::All || include_unreachable {
+            for reference in repo.references()? {
+                let reference = reference?;
+                let name = reference.name_bytes();
+                let local_or_tag =
+                    name.starts_with(b"refs/heads/") || name.starts_with(b"refs/tags/");
+                let remote = name.starts_with(b"refs/remotes/");
+                if !local_or_tag && (!remote || (!include_remote_branches && !include_unreachable))
+                {
+                    continue;
+                }
+                if let Ok(commit) = reference.peel_to_commit() {
+                    if include_unreachable {
+                        reachable_roots.push(commit.id());
+                    }
+                    if branch_scope == LogBranchScope::All
+                        && (local_or_tag || include_remote_branches)
+                    {
+                        roots.push(commit.id());
                     }
                 }
             }
         }
-
-        let mut revwalk = repo.revwalk()?;
-        revwalk.set_sorting(git2::Sort::TOPOLOGICAL | git2::Sort::TIME)?;
-        match branch_scope {
-            LogBranchScope::All => {
-                revwalk.push_glob("refs/heads/*").ok();
-                if include_remote_branches {
-                    revwalk.push_glob("refs/remotes/*").ok();
-                }
-                revwalk.push_glob("refs/tags/*").ok();
-                revwalk.push_head().ok();
-            }
-            LogBranchScope::CurrentFirstParent => {
-                revwalk.push_head().ok();
-                revwalk.simplify_first_parent().ok();
+        if let Ok(head) = repo.head().and_then(|head| head.peel_to_commit()) {
+            roots.push(head.id());
+            if include_unreachable {
+                reachable_roots.push(head.id());
             }
         }
-        if include_stashes {
-            for oid in &stash_set {
+        let mut stashes: Vec<_> = Self::list_stashes(repo)
+            .unwrap_or_default()
+            .into_iter()
+            .map(|(_, _, oid)| oid)
+            .collect();
+        let mut reflog: Vec<_> = if include_unreachable {
+            repo.reflog("HEAD")
+                .map(|log| log.iter().map(|entry| entry.id_new()).collect())
+                .unwrap_or_default()
+        } else {
+            Vec::new()
+        };
+        for oids in [&mut roots, &mut reachable_roots, &mut stashes, &mut reflog] {
+            oids.sort_unstable();
+            oids.dedup();
+        }
+        let shallow = match std::fs::read(repo.commondir().join("shallow")) {
+            Ok(bytes) => bytes,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Vec::new(),
+            Err(error) => return Err(error.into()),
+        };
+        Ok(LogKey {
+            git_dir: repo
+                .path()
+                .canonicalize()
+                .unwrap_or_else(|_| repo.path().to_path_buf()),
+            roots,
+            reachable_roots,
+            stashes,
+            reflog,
+            shallow,
+            branch_scope,
+            include_unreachable,
+            include_stashes,
+            include_remote_branches,
+        })
+    }
+
+    fn log_snapshot(
+        repo: &Repository,
+        include_unreachable: bool,
+        include_stashes: bool,
+        branch_scope: LogBranchScope,
+        include_remote_branches: bool,
+    ) -> GitResult<Arc<LogSnapshot>> {
+        let key = Self::log_key(
+            repo,
+            include_unreachable,
+            include_stashes,
+            branch_scope,
+            include_remote_branches,
+        )?;
+        log_cache::load(key.clone(), || {
+            let mut context = Self::prepare_log_walk(repo, &key)?;
+            let mut commits = Vec::new();
+            while let Some(oid) = context.revwalk.next() {
+                let oid = oid?;
+                if context.stash_aux_set.contains(&oid) {
+                    continue;
+                }
+                let (is_unreachable, is_stash, is_reflog_tip) =
+                    Self::log_commit_flags(&context, oid);
+                commits.push(CachedCommit {
+                    oid,
+                    is_unreachable,
+                    is_stash,
+                    is_reflog_tip,
+                });
+            }
+            Ok(commits)
+        })
+    }
+
+    fn cached_commit_info(commit: &git2::Commit<'_>, entry: &CachedCommit) -> CommitInfo {
+        let parent_oids = if entry.is_stash {
+            commit
+                .parent_ids()
+                .take(1)
+                .map(|oid| oid.to_string())
+                .collect()
+        } else {
+            commit.parent_ids().map(|oid| oid.to_string()).collect()
+        };
+        build_commit_info(
+            commit,
+            parent_oids,
+            entry.is_unreachable,
+            entry.is_stash,
+            entry.is_reflog_tip,
+        )
+    }
+
+    fn prepare_log_walk<'repo>(
+        repo: &'repo Repository,
+        key: &LogKey,
+    ) -> GitResult<LogWalkContext<'repo>> {
+        let mut reachable = HashSet::new();
+        if key.include_unreachable {
+            let mut walk = repo.revwalk()?;
+            for oid in &key.reachable_roots {
+                walk.push(*oid).ok();
+            }
+            reachable.extend(walk.flatten());
+        }
+        let stash_set: HashSet<_> = key.stashes.iter().copied().collect();
+        let mut stash_aux_set = HashSet::new();
+        for oid in &stash_set {
+            if let Ok(commit) = repo.find_commit(*oid) {
+                stash_aux_set.extend(commit.parent_ids().skip(1));
+            }
+        }
+        let mut revwalk = repo.revwalk()?;
+        revwalk.set_sorting(git2::Sort::TOPOLOGICAL | git2::Sort::TIME)?;
+        for oid in &key.roots {
+            revwalk.push(*oid).ok();
+        }
+        if key.branch_scope == LogBranchScope::CurrentFirstParent {
+            revwalk.simplify_first_parent().ok();
+        }
+        if key.include_stashes {
+            for oid in &key.stashes {
                 revwalk.push(*oid).ok();
             }
         }
-
-        let mut reflog_oids = HashSet::new();
-        let mut strict_ancestors = HashSet::new();
-        if include_unreachable {
-            if let Ok(reflog) = repo.reflog("HEAD") {
-                for entry in reflog.iter() {
-                    let oid = entry.id_new();
-                    if !reachable.contains(&oid) && !stash_set.contains(&oid) {
-                        revwalk.push(oid).ok();
-                        reflog_oids.insert(oid);
-                    }
-                }
-            }
-
-            strict_ancestors = Self::reflog_strict_ancestors(repo, &reflog_oids, &reachable);
+        let reflog_oids: HashSet<_> = key
+            .reflog
+            .iter()
+            .copied()
+            .filter(|oid| !reachable.contains(oid) && !stash_set.contains(oid))
+            .collect();
+        for oid in key.reflog.iter().filter(|oid| reflog_oids.contains(oid)) {
+            revwalk.push(*oid).ok();
         }
-
+        let strict_ancestors = Self::reflog_strict_ancestors(repo, &reflog_oids, &reachable);
         Ok(LogWalkContext {
             revwalk,
             reachable,
@@ -175,7 +244,7 @@ impl GitEngine {
             stash_aux_set,
             reflog_oids,
             strict_ancestors,
-            include_unreachable,
+            include_unreachable: key.include_unreachable,
         })
     }
 
@@ -237,7 +306,7 @@ impl GitEngine {
         }
 
         let repo = Self::open(path)?;
-        let mut context = Self::prepare_log_walk(
+        let snapshot = Self::log_snapshot(
             &repo,
             include_unreachable,
             include_stashes,
@@ -246,13 +315,8 @@ impl GitEngine {
         )?;
         let mut matches = Vec::new();
         let mut has_more = false;
-
-        while let Some(oid_result) = context.revwalk.next() {
-            let oid = oid_result?;
-            if context.stash_aux_set.contains(&oid) {
-                continue;
-            }
-            let commit = repo.find_commit(oid)?;
+        for entry in &snapshot.commits {
+            let commit = repo.find_commit(entry.oid)?;
             if !Self::commit_matches_query(&commit, &normalized_query) {
                 continue;
             }
@@ -260,27 +324,7 @@ impl GitEngine {
                 has_more = true;
                 break;
             }
-
-            let (is_unreachable, is_stash, is_reflog_tip) = Self::log_commit_flags(&context, oid);
-            let parent_oids = if is_stash {
-                commit
-                    .parent_ids()
-                    .next()
-                    .map(|parent| vec![parent.to_string()])
-                    .unwrap_or_default()
-            } else {
-                commit
-                    .parent_ids()
-                    .map(|parent| parent.to_string())
-                    .collect()
-            };
-            matches.push(build_commit_info(
-                &commit,
-                parent_oids,
-                is_unreachable,
-                is_stash,
-                is_reflog_tip,
-            ));
+            matches.push(Self::cached_commit_info(&commit, entry));
         }
 
         Ok(CommitSearchPage {
@@ -572,6 +616,90 @@ mod tests {
                 .unwrap();
         }
         reflog.write().unwrap();
+    }
+
+    #[test]
+    fn snapshot_inputs_track_refs_reflog_stash_and_shallow_boundaries() {
+        let fixture = TestRepo::new();
+        let repo = &fixture.repo;
+        let read_key = || GitEngine::log_key(repo, true, true, LogBranchScope::All, true).unwrap();
+        let original = read_key();
+        std::fs::write(
+            fixture.dir.path().join("worktree.txt"),
+            "not a history change",
+        )
+        .unwrap();
+        assert_eq!(original, read_key());
+        let base = repo.head().unwrap().target().unwrap();
+        let lost = commit(repo, "lost", &[base]);
+        add_reflog_roots(repo, &[lost]);
+        let with_reflog = read_key();
+        assert_ne!(original, with_reflog);
+        repo.reference("refs/heads/recovered", lost, false, "recover")
+            .unwrap();
+        let with_ref = read_key();
+        assert_ne!(with_reflog, with_ref);
+        repo.find_reference("refs/heads/recovered")
+            .unwrap()
+            .delete()
+            .unwrap();
+        assert_eq!(with_reflog, read_key());
+        let mut stash_log = repo.reflog("refs/stash").unwrap();
+        stash_log
+            .append(lost, &repo.signature().unwrap(), Some("stash"))
+            .unwrap();
+        stash_log.write().unwrap();
+        let with_stash = read_key();
+        assert_ne!(with_reflog, with_stash);
+        std::fs::write(repo.commondir().join("shallow"), format!("{base}\n")).unwrap();
+        assert_ne!(with_stash, read_key());
+    }
+
+    #[test]
+    fn snapshot_pages_match_a_single_read_without_duplicates() {
+        let fixture = TestRepo::new();
+        let repo = &fixture.repo;
+        let base = repo.head().unwrap().target().unwrap();
+        let mut parent = base;
+        for index in 0..17 {
+            parent = commit(repo, &format!("commit {index}"), &[parent]);
+        }
+        repo.reference("refs/heads/long", parent, false, "long history")
+            .unwrap();
+        let page = |offset, limit| {
+            GitEngine::get_log(
+                fixture.path_str(),
+                offset,
+                limit,
+                true,
+                true,
+                LogBranchScope::All,
+                true,
+            )
+            .unwrap()
+        };
+        let all = page(0, 100);
+        let mut paged = Vec::new();
+        let mut offset = 0;
+        loop {
+            let next = page(offset, 5);
+            offset += next.commits.len();
+            assert_eq!(next.total_loaded, offset);
+            paged.extend(next.commits);
+            if !next.has_more {
+                break;
+            }
+        }
+        assert_eq!(
+            paged.iter().map(|entry| &entry.oid).collect::<Vec<_>>(),
+            all.commits
+                .iter()
+                .map(|entry| &entry.oid)
+                .collect::<Vec<_>>()
+        );
+        assert_eq!(paged.len(), 18);
+        assert!(page(100, 5).commits.is_empty());
+        assert!(page(0, 0).has_more);
     }
 
     #[test]

@@ -9,6 +9,7 @@ use crate::git::{
 
 mod diff;
 mod history;
+mod log_cache;
 mod patch;
 mod refs;
 mod remote;

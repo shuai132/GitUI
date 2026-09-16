@@ -328,6 +328,7 @@ pub struct CommitChangeStats {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LogPage {
+    pub snapshot_id: String,
     pub commits: Vec<CommitInfo>,
     pub has_more: bool,
     pub total_loaded: usize,

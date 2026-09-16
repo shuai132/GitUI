@@ -118,6 +118,9 @@ pub async fn close_repo(
 ) -> Result<(), GitError> {
     let _active_guard = repo_manager.active_sync_lock();
     let coordinator = app.state::<TrayCoordinator>();
+    if let Some(meta) = repo_manager.get_meta(&repo_id) {
+        GitEngine::clear_log_cache(&meta.path);
+    }
     if coordinator.is_local_window_closed() {
         repo_manager.remove_repo(&repo_id);
         watcher.unwatch_all();

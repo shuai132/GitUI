@@ -59,7 +59,7 @@ function status(head: string, modified = false): WorkspaceStatus {
   }
 }
 
-const emptyLog: LogPage = { commits: [], has_more: false, total_loaded: 0 }
+const emptyLog: LogPage = { snapshot_id: 'empty', commits: [], has_more: false, total_loaded: 0 }
 const diff: FileDiff = {
   old_path: 'app.ts', new_path: 'app.ts', is_binary: false,
   hunks: [], additions: 1, deletions: 0, encoding: 'UTF-8',
