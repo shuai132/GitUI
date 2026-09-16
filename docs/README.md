@@ -41,4 +41,8 @@
 
 ## 其他文档
 
+`examples/` 目录存放预览和功能演示样例：
+
+- [Mermaid 预览测试集](./examples/mermaid-preview.md)：50 个图表示例，用于检查 Markdown 预览、图表布局与主题表现。
+
 `todo/` 目录存放尚未落地的设计草稿和改进点，不保证与当前代码同步。
