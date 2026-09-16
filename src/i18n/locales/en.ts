@@ -372,6 +372,7 @@ const messages = {
     },
   },
    history: {
+    refreshChanged: 'History changed during refresh. The previous list is still shown; refresh again.',
     loading: 'Loading...',
     loadingMore: 'Loading more...',
     totalCount: '{count} commits total',

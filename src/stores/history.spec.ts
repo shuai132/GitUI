@@ -3,6 +3,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { useHistoryStore } from './history'
 import { useRepoStore } from './repos'
 import { useUiStore } from './ui'
+import { useErrorsStore } from './errors'
 import type {
   BranchInfo,
   CommitChangeStats,
@@ -93,9 +94,9 @@ function commit(oid: string) {
   }
 }
 
-function page(hasMore = false, oids = ['aaa']): LogPage {
+function page(hasMore = false, oids = ['aaa'], snapshotId = 'snapshot'): LogPage {
   return {
-    snapshot_id: oids.join(','),
+    snapshot_id: snapshotId,
     commits: oids.map(commit),
     has_more: hasMore,
     total_loaded: oids.length,
@@ -376,6 +377,164 @@ describe('history store log filters', () => {
     )
   })
 
+  async function loadTwoPages() {
+    const store = useHistoryStore()
+    setActiveRepo(useRepoStore(), 'repo-1', '/repos/a')
+    const first = Array.from({ length: 200 }, (_, index) => `commit-${index}`)
+    const second = Array.from({ length: 200 }, (_, index) => `commit-${index + 200}`)
+    getLogMock.mockResolvedValueOnce(page(true, first)).mockResolvedValueOnce(page(true, second))
+    await store.loadLog()
+    await store.loadMore()
+    getLogMock.mockClear()
+    return { store, first, second }
+  }
+
+  it('keeps all loaded pages and graph references when the snapshot is unchanged', async () => {
+    const { store, first } = await loadTwoPages()
+    const commits = store.commits
+    const graph = store.graphRows
+    getLogMock.mockResolvedValueOnce(page(true, first))
+    await store.loadLog()
+    expect(store.commits).toBe(commits)
+    expect(store.graphRows).toBe(graph)
+    expect(store.commits).toHaveLength(400)
+    expect(store.hasMore).toBe(true)
+    expect(getLogMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('publishes the previous loaded range atomically after history changes', async () => {
+    const { store, first, second } = await loadTwoPages()
+    const old = store.commits
+    const tail = deferred<LogPage>()
+    const newFirst = ['new', ...first.slice(0, -1)]
+    const newSecond = [first[199], ...second.slice(0, -1)]
+    getLogMock.mockResolvedValueOnce(page(true, newFirst, 'new')).mockReturnValueOnce(tail.promise)
+    const refresh = store.loadLog()
+    await Promise.resolve()
+    expect(store.commits).toBe(old)
+    tail.resolve(page(true, newSecond, 'new'))
+    await refresh
+    expect(store.commits.map((entry) => entry.oid)).toEqual([...newFirst, ...newSecond])
+    expect(store.graphRows).toHaveLength(400)
+    expect(getLogMock.mock.calls.map((args) => args[1])).toEqual([0, 200])
+  })
+
+  it('retains every old page if refreshing a later page fails', async () => {
+    const { store, first } = await loadTwoPages()
+    const old = store.commits
+    getLogMock.mockResolvedValueOnce(page(true, first, 'new')).mockRejectedValueOnce('read failed')
+    await store.loadLog()
+    expect(store.commits).toBe(old)
+    expect(store.error).toBe('read failed')
+    expect(store.hasMore).toBe(true)
+    expect(store.loading).toBe(false)
+  })
+
+  it('restarts instead of mixing snapshots when history changes between refresh pages', async () => {
+    const { store, first, second } = await loadTwoPages()
+    getLogMock
+      .mockResolvedValueOnce(page(true, first, 'new-1'))
+      .mockResolvedValueOnce(page(true, ['mixed'], 'new-2'))
+      .mockResolvedValueOnce(page(true, first, 'new-2'))
+      .mockResolvedValueOnce(page(false, second, 'new-2'))
+    await store.loadLog()
+    expect(store.commits.map((entry) => entry.oid)).toEqual([...first, ...second])
+    expect(store.hasMore).toBe(false)
+    expect(getLogMock.mock.calls.map((args) => args[1])).toEqual([0, 200, 0, 200])
+  })
+
+  it('bounds refresh retries and keeps the old list during continuous changes', async () => {
+    const { store, first } = await loadTwoPages()
+    const old = store.commits
+    for (let attempt = 0; attempt < 3; attempt++) {
+      getLogMock.mockResolvedValueOnce(page(true, first, `first-${attempt}`))
+        .mockResolvedValueOnce(page(true, ['changed'], `second-${attempt}`))
+    }
+    await store.loadLog()
+    expect(store.commits).toBe(old)
+    expect(store.error).toBeTruthy()
+    expect(useErrorsStore().entries[0].raw).toBe(store.error)
+    expect(store.loading).toBe(false)
+    expect(getLogMock).toHaveBeenCalledTimes(6)
+  })
+
+  it('starts at the first page when filters change and ignores old filter responses', async () => {
+    const { store, first } = await loadTwoPages()
+    const pending = deferred<LogPage>()
+    getLogMock.mockReturnValueOnce(pending.promise)
+    const oldRefresh = store.loadLog()
+    useUiStore().showRemoteBranches = false
+    pending.resolve(page(false, ['stale'], 'stale'))
+    await oldRefresh
+    expect(store.commits).toHaveLength(400)
+    getLogMock.mockResolvedValueOnce(page(true, first, 'filtered'))
+    await store.loadLog()
+    expect(store.commits).toHaveLength(200)
+    expect(getLogMock).toHaveBeenCalledTimes(2)
+    expect(getLogMock.mock.lastCall?.[6]).toBe(false)
+  })
+
+  it('reloads before retrying pagination from a different snapshot', async () => {
+    const { store } = await loadTwoPages()
+    getLogMock.mockResolvedValueOnce(page(false, ['stale-tail'], 'new'))
+      .mockResolvedValueOnce(page(false, ['new-head'], 'new'))
+    await store.loadMore()
+    expect(store.commits.map((entry) => entry.oid)).toEqual(['new-head'])
+    expect(store.hasMore).toBe(false)
+    expect(store.loadingMore).toBe(false)
+    expect(getLogMock.mock.calls.map((args) => args[1])).toEqual([400, 0])
+  })
+
+  it('continues target navigation after replacing an outdated snapshot', async () => {
+    const store = useHistoryStore()
+    setActiveRepo(useRepoStore(), 'repo-1', '/repos/a')
+    const first = Array.from({ length: 200 }, (_, index) => `commit-${index}`)
+    getLogMock.mockResolvedValueOnce(page(true, first))
+    await store.loadLog()
+    getLogMock.mockResolvedValueOnce(page(true, ['wrong-tail'], 'new'))
+      .mockResolvedValueOnce(page(true, first, 'new'))
+      .mockResolvedValueOnce(page(false, ['target'], 'new'))
+    await expect(store.ensureCommitLoaded('target')).resolves.toBe(true)
+    expect(store.commits).toHaveLength(201)
+    expect(store.commits[200].oid).toBe('target')
+  })
+
+  it('updates render flags when identical commit OIDs belong to a new snapshot', async () => {
+    const store = useHistoryStore()
+    setActiveRepo(useRepoStore(), 'repo-1', '/repos/a')
+    getLogMock.mockResolvedValueOnce(page())
+    await store.loadLog()
+    const next = page(false, ['aaa'], 'changed-flags')
+    next.commits[0].is_unreachable = true
+    next.commits[0].is_reflog_tip = true
+    getLogMock.mockResolvedValueOnce(next)
+    await store.loadLog()
+    expect(store.commits[0].is_unreachable).toBe(true)
+    expect(store.commits[0].is_reflog_tip).toBe(true)
+    expect(store.graphRows[0].isUnreachable).toBe(true)
+  })
+
+  it('does not let an old pagination request clear a new repository request state', async () => {
+    const { store } = await loadTwoPages()
+    const oldMore = deferred<LogPage>()
+    getLogMock.mockReturnValueOnce(oldMore.promise)
+    const previous = store.loadMore()
+    store.reset()
+    setActiveRepo(useRepoStore(), 'repo-2', '/repos/b')
+    getLogMock.mockResolvedValueOnce(page(true, ['head'], 'repo-2'))
+    await store.loadLog()
+    const newMore = deferred<LogPage>()
+    getLogMock.mockReturnValueOnce(newMore.promise)
+    const current = store.loadMore()
+    oldMore.resolve(page(false, ['old-tail']))
+    await previous
+    expect(store.loadingMore).toBe(true)
+    newMore.resolve(page(false, ['new-tail'], 'repo-2'))
+    await current
+    expect(store.loadingMore).toBe(false)
+    expect(store.commits.map((entry) => entry.oid)).toEqual(['head', 'new-tail'])
+  })
+
   it('uses the active repo path to choose branch scope', async () => {
     getLogMock.mockResolvedValue(page())
     const repoStore = useRepoStore()
@@ -471,7 +630,7 @@ describe('history store log filters', () => {
     const loadMore = historyStore.loadMore()
     const reloadLog = historyStore.loadLog()
 
-    reload.resolve(page(false, ['fresh']))
+    reload.resolve(page(false, ['fresh'], 'fresh-snapshot'))
     await reloadLog
     staleMore.resolve(page(false, ['stale']))
     await loadMore

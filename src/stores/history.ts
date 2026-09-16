@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
+import { t } from '@/i18n'
 import type {
   CommitInfo,
   BranchInfo,
@@ -11,6 +12,7 @@ import type {
 import { useGitCommands } from '@/composables/useGitCommands'
 import { useRepoStore } from './repos'
 import { useUiStore } from './ui'
+import { useErrorsStore } from './errors'
 import { computeGraphLayout, type GraphRow, type LaneState } from '@/utils/graph'
 import { orderedFileIndices } from '@/utils/fileOrderPrefs'
 
@@ -57,6 +59,9 @@ export const useHistoryStore = defineStore('history', () => {
   const git = useGitCommands()
   const uiStore = useUiStore()
   let logRequestSeq = 0
+  let loadMoreRequestSeq = 0
+  let loadedLogKey: string | null = null
+  let logSnapshotId: string | null = null
   let branchesRequestSeq = 0
   let tagsRequestSeq = 0
   let remoteTagsRequestSeq = 0
@@ -151,91 +156,92 @@ export const useHistoryStore = defineStore('history', () => {
     }
   }
 
+  function logContext() {
+    const repoId = useRepoStore().activeRepoId
+    const filters = [
+      uiStore.showUnreachableCommits,
+      uiStore.showStashCommits,
+      activeRepoBranchScope(),
+      uiStore.showRemoteBranches,
+    ] as const
+    return { repoId, filters, key: JSON.stringify([repoId, ...filters]) }
+  }
+
   async function loadLog() {
-    const repoStore = useRepoStore()
-    const repoId = repoStore.activeRepoId
+    const { repoId, filters, key } = logContext()
     if (!repoId) return
     const requestSeq = ++logRequestSeq
+    const isCurrent = () => requestSeq === logRequestSeq && key === logContext().key
+    const sameContext = loadedLogKey === key
+    const targetCount = sameContext ? commits.value.length : 0
     ensureCommitChangeStatsRepo(repoId)
-
+    ++loadMoreRequestSeq
+    loadingMore.value = false
     loading.value = true
     error.value = null
     try {
-      const page = await git.getLog(
-        repoId,
-        0,
-        PAGE_SIZE,
-        uiStore.showUnreachableCommits,
-        uiStore.showStashCommits,
-        activeRepoBranchScope(),
-        uiStore.showRemoteBranches,
-      )
-      if (requestSeq !== logRequestSeq || !isActiveRepo(repoId)) return
-      // 若 HEAD / 尾部 / 总数 / has_more 都没变，且每个提交的可达/stash/reflog-tip 标志
-      // 也没变，认为提交序列的结构与渲染相关信息都未改动，跳过赋值避免响应式重渲染
-      // （watcher 在纯 worktree 变更时大量出现此情况）。reset --hard 等操作会翻转
-      // 这些标志但不改变 oid 序列，所以必须逐项比对，否则悬垂样式不会立即更新。
-      const prev = commits.value
-      const next = page.commits
-      let unchanged =
-        next.length === prev.length &&
-        page.has_more === hasMore.value &&
-        next[0]?.oid === prev[0]?.oid &&
-        next[next.length - 1]?.oid === prev[prev.length - 1]?.oid
-      if (unchanged) {
-        for (let i = 0; i < next.length; i++) {
-          const a = next[i]
-          const b = prev[i]
-          if (
-            a.oid !== b.oid ||
-            a.is_unreachable !== b.is_unreachable ||
-            a.is_stash !== b.is_stash ||
-            a.is_reflog_tip !== b.is_reflog_tip
-          ) {
-            unchanged = false
+      // Git 可在补页期间继续变化。只发布同一快照，重试有界且不清空旧列表。
+      for (let attempt = 0; attempt < 3; attempt++) {
+        let page = await git.getLog(repoId, 0, PAGE_SIZE, ...filters)
+        if (!isCurrent()) return
+        if (sameContext && page.snapshot_id === logSnapshotId) return
+        const snapshotId = page.snapshot_id
+        const next = [...page.commits]
+        let consistent = true
+        while (page.has_more && next.length < targetCount) {
+          page = await git.getLog(repoId, next.length, PAGE_SIZE, ...filters)
+          if (!isCurrent()) return
+          if (page.snapshot_id !== snapshotId || page.commits.length === 0) {
+            consistent = false
             break
           }
+          next.push(...page.commits)
         }
+        if (!consistent) continue
+        const prev = commits.value
+        const unchanged = sameContext && next.length === prev.length &&
+          page.has_more === hasMore.value && next.every((entry, index) => {
+            const old = prev[index]
+            return entry.oid === old.oid &&
+              entry.is_unreachable === old.is_unreachable &&
+              entry.is_stash === old.is_stash &&
+              entry.is_reflog_tip === old.is_reflog_tip
+          })
+        if (!unchanged) {
+          const { rows, finalState } = computeGraphLayout(next)
+          commits.value = next
+          hasMore.value = page.has_more
+          graphRows.value = rows
+          graphLaneState.value = finalState
+        }
+        loadedLogKey = key
+        logSnapshotId = snapshotId
+        return
       }
-      if (!unchanged) {
-        commits.value = next
-        hasMore.value = page.has_more
-        const { rows, finalState } = computeGraphLayout(commits.value)
-        graphRows.value = rows
-        graphLaneState.value = finalState
-      }
+      error.value = t('history.refreshChanged')
+      useErrorsStore().push('get_log', error.value)
     } catch (e: unknown) {
-      if (requestSeq === logRequestSeq && isActiveRepo(repoId)) {
-        error.value = String(e)
-      }
+      if (isCurrent()) error.value = String(e)
     } finally {
       if (requestSeq === logRequestSeq) loading.value = false
     }
   }
 
-  async function loadMore() {
-    const repoStore = useRepoStore()
-    const repoId = repoStore.activeRepoId
-    if (!repoId || !hasMore.value || loadingMore.value) return
+  async function loadMore(retryOnChange = true): Promise<void> {
+    const { repoId, filters, key } = logContext()
+    if (!repoId || !hasMore.value || loading.value || loadingMore.value || loadedLogKey !== key) return
 
     const requestSeq = logRequestSeq
+    const moreSeq = ++loadMoreRequestSeq
+    const isCurrent = () => requestSeq === logRequestSeq && key === logContext().key
     const offset = commits.value.length
     loadingMore.value = true
     try {
-      const page = await git.getLog(
-        repoId,
-        offset,
-        PAGE_SIZE,
-        uiStore.showUnreachableCommits,
-        uiStore.showStashCommits,
-        activeRepoBranchScope(),
-        uiStore.showRemoteBranches,
-      )
-      if (
-        requestSeq !== logRequestSeq ||
-        !isActiveRepo(repoId) ||
-        commits.value.length !== offset
-      ) {
+      const page = await git.getLog(repoId, offset, PAGE_SIZE, ...filters)
+      if (!isCurrent() || commits.value.length !== offset) return
+      if (page.snapshot_id !== logSnapshotId) {
+        await loadLog()
+        if (retryOnChange && !error.value && key === logContext().key) await loadMore(false)
         return
       }
       // 只计算新增的这一页，从上次的末尾 lane 状态接续，O(200) 而非 O(N)
@@ -247,8 +253,10 @@ export const useHistoryStore = defineStore('history', () => {
       hasMore.value = page.has_more
       graphRows.value.push(...newRows)
       graphLaneState.value = finalState
+    } catch (e: unknown) {
+      if (isCurrent()) error.value = String(e)
     } finally {
-      loadingMore.value = false
+      if (moreSeq === loadMoreRequestSeq) loadingMore.value = false
     }
   }
 
@@ -745,6 +753,9 @@ export const useHistoryStore = defineStore('history', () => {
 
   function reset() {
     logRequestSeq++
+    loadMoreRequestSeq++
+    loadedLogKey = null
+    logSnapshotId = null
     branchesRequestSeq++
     tagsRequestSeq++
     remoteTagsRequestSeq++

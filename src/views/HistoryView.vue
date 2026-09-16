@@ -26,6 +26,7 @@ import { usePanelDock } from '@/composables/usePanelDock'
 import type { HistoryColumnId, PanelId } from '@/stores/ui'
 import type { CommitInfo } from '@/types/git'
 
+import { useHistoryScrollAnchor } from '@/composables/history/useHistoryScrollAnchor'
 import { useHistoryPanes } from '@/composables/history/useHistoryPanes'
 import { useCommitContextMenu } from '@/composables/history/useCommitContextMenu'
 import { useCommitDragDrop } from '@/composables/history/useCommitDragDrop'
@@ -204,6 +205,16 @@ const virtualRowCount = computed(() =>
 )
 
 const scrollContainer = ref<HTMLElement | null>(null)
+useHistoryScrollAnchor({
+  commits: () => filteredCommits.value,
+  contextKey: () => JSON.stringify([
+    repoStore.activeRepoId, activeRepoBranchScope.value, normalizedHistorySearchQuery.value,
+    uiStore.showRemoteBranches, uiStore.showUnreachableCommits, uiStore.showStashCommits,
+  ]),
+  wipVisible: () => isWipVisible.value,
+  rowHeight: () => rowH.value,
+  scrollContainer,
+})
 // 列头水平滚动偏移：与 commit-list-body 的 scrollLeft 同步，用 transform 平移列头。
 // 这样列头不参与 .commit-panel 的水平滚动，body 的垂直滚动条始终贴在面板右缘。
 const headerScrollLeft = ref(0)
@@ -1192,6 +1203,7 @@ onUnmounted(() => {
 }
 
 .commit-list-body {
+  overflow-anchor: none;
   flex: 1;
   /* overflow-y: scroll → 始终保留垂直滚动条 gutter，避免 macOS 默认"按需显示"导致跳动。
      overflow-x: auto → 水平滚动收在 body 内部，列头通过 onScroll 同步偏移；

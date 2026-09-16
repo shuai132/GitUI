@@ -372,6 +372,7 @@ const messages = {
     },
   },
   history: {
+    refreshChanged: '刷新期间历史持续变化，已保留原列表，请再次刷新。',
     loading: '加载中...',
     loadingMore: '加载更多...',
     totalCount: '共 {count} 条',
