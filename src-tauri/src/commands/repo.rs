@@ -85,11 +85,21 @@ fn watch_active_repo(
             watch_dir,
             ignore_filter,
             move |result| {
+                if let Err(err) = &result {
+                    log::warn!("[watcher] repo={} error={err}", repo_id_clone);
+                }
                 let payload = StatusChangedPayload {
                     repo_id: repo_id_clone.clone(),
                     kind: classify_status_change(&kind_root, &result),
                 };
-                let _ = app_clone.emit("repo://status-changed", payload);
+                log::debug!(
+                    "[watcher] notify repo={} kind={:?}",
+                    repo_id_clone,
+                    payload.kind
+                );
+                if let Err(err) = app_clone.emit("repo://status-changed", payload) {
+                    log::warn!("[watcher] repo={} emit failed: {err}", repo_id_clone);
+                }
             },
         )
         .map_err(|e| GitError::OperationFailed(format!("启动文件监听失败: {e}")))?;
@@ -244,7 +254,13 @@ fn classify_status_change(root: &Path, result: &WatchEventResult) -> StatusChang
         .paths
         .iter()
         .map(|path| classify_status_path(root, path))
-        .max_by_key(|kind| status_change_priority(*kind))
+        .reduce(|combined, next| match (combined, next) {
+            // 单个 kind 必须覆盖整批所需的数据域；Refs 不包含配置 / 子模块刷新。
+            (StatusChangeKind::Config, StatusChangeKind::Refs)
+            | (StatusChangeKind::Refs, StatusChangeKind::Config) => StatusChangeKind::OtherGit,
+            _ if status_change_priority(next) > status_change_priority(combined) => next,
+            _ => combined,
+        })
         .unwrap_or(StatusChangeKind::OtherGit)
 }
 
@@ -501,6 +517,24 @@ mod tests {
             classify_status_change(root, &batch),
             StatusChangeKind::OtherGit
         );
+    }
+
+    #[test]
+    fn mixed_config_and_refs_batch_preserves_both_refresh_domains() {
+        for paths in [
+            vec![".git/config", ".git/refs/heads/main"],
+            vec![".git/refs/heads/main", ".gitmodules"],
+        ] {
+            let root = Path::new("/repo");
+            let batch = Ok(crate::watcher::WatchEventBatch {
+                paths: paths.into_iter().map(|path| root.join(path)).collect(),
+                needs_rescan: false,
+            });
+            assert_eq!(
+                classify_status_change(root, &batch),
+                StatusChangeKind::OtherGit
+            );
+        }
     }
 
     #[test]

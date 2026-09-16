@@ -8,6 +8,7 @@ use git2::{Index, Repository};
 use notify::{Config, Event, RecommendedWatcher, RecursiveMode, Watcher};
 use parking_lot::Mutex;
 
+// 从批次首事件起算的合并窗口；持续写入（包括 ignored 文件）不能延后期限。
 const WATCH_DEBOUNCE: Duration = Duration::from_millis(300);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -76,6 +77,13 @@ where
     let mut deadline: Option<Instant> = None;
 
     loop {
+        // recv_timeout 即使超时也可能先取出已排队的消息，必须先检查期限，
+        // 否则事件队列持续非空时仍然无法派发（包括 rescan）。
+        if deadline.is_some_and(|when| Instant::now() >= when) {
+            flush_debounced_batch(&mut pending_paths, &mut needs_rescan, &callback);
+            deadline = None;
+        }
+
         let message = match deadline {
             Some(when) => match rx.recv_timeout(when.saturating_duration_since(Instant::now())) {
                 Ok(message) => Some(message),
@@ -103,7 +111,7 @@ where
                     needs_rescan = true;
                 }
                 pending_paths.extend(event.paths);
-                deadline = Some(Instant::now() + debounce);
+                deadline.get_or_insert_with(|| Instant::now() + debounce);
             }
             WatchMessage::Event(Err(err)) => callback(Err(err)),
         }
@@ -199,7 +207,14 @@ impl WatcherService {
     {
         let filtered = move |result: WatchEventResult| match result {
             Ok(batch) => {
+                let path_count = batch.paths.len();
                 if let Some(relevant) = filter_watch_batch(batch, ignore_filter.as_ref()) {
+                    log::debug!(
+                        "[watcher] batch paths={} relevant={} rescan={}",
+                        path_count,
+                        relevant.paths.len(),
+                        relevant.needs_rescan
+                    );
                     callback(Ok(relevant));
                 }
             }
@@ -390,6 +405,86 @@ mod tests {
 
         assert!(batch.needs_rescan);
         assert!(batch.paths.is_empty());
+    }
+
+    #[test]
+    fn queued_events_cannot_starve_an_expired_batch() {
+        let (tx, rx) = mpsc::channel();
+        let (batch_tx, batch_rx) = mpsc::channel();
+        // 队列始终非空：即使末尾已有 Stop，也必须先派发已到期的批次。
+        tx.send(WatchMessage::Event(Ok(Event::new(EventKind::Other))))
+            .unwrap();
+        tx.send(WatchMessage::Stop).unwrap();
+        run_debounce_loop(rx, Duration::ZERO, |batch| {
+            batch_tx.send(batch.unwrap()).unwrap();
+        });
+
+        assert!(batch_rx.try_recv().unwrap().needs_rescan);
+    }
+
+    #[test]
+    fn continuous_ignored_events_do_not_delay_changes_or_rescan() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+
+        for rescan in [false, true] {
+            let (dir, _repo, filter) = init_repo();
+            fs::write(dir.path().join(".gitignore"), "build.log\n").unwrap();
+            fs::write(dir.path().join("build.log"), "noise").unwrap();
+            let relevant_path = dir.path().join(".git/refs/heads/main");
+            let noise_path = dir.path().join("build.log");
+            let (tx, rx) = mpsc::channel();
+            let (batch_tx, batch_rx) = mpsc::channel();
+            let worker = thread::spawn(move || {
+                run_debounce_loop(rx, Duration::from_millis(40), |result| {
+                    if let Some(batch) = filter_watch_batch(result.unwrap(), Some(&filter)) {
+                        batch_tx.send(batch).unwrap();
+                    }
+                });
+            });
+            let event = if rescan {
+                Event::new(EventKind::Other).set_flag(notify::event::Flag::Rescan)
+            } else {
+                Event::new(EventKind::Any).add_path(relevant_path.clone())
+            };
+            tx.send(WatchMessage::Event(Ok(event))).unwrap();
+
+            let stop_noise = Arc::new(AtomicBool::new(false));
+            let noise_stop = stop_noise.clone();
+            let noise_tx = tx.clone();
+            let noise_worker = thread::spawn(move || {
+                while !noise_stop.load(Ordering::Relaxed) {
+                    noise_tx
+                        .send(WatchMessage::Event(Ok(
+                            Event::new(EventKind::Any).add_path(noise_path.clone())
+                        )))
+                        .unwrap();
+                    thread::sleep(Duration::from_millis(2));
+                }
+            });
+
+            // 在噪声仍持续期间必须收到通知；先清理线程，再断言，避免失败时泄漏。
+            let during_noise = batch_rx.recv_timeout(Duration::from_secs(1));
+            stop_noise.store(true, Ordering::Relaxed);
+            noise_worker.join().unwrap();
+
+            // 末尾的另一条有效事件也不能随上一个窗口被清掉。
+            let tail = dir.path().join("src/tail.rs");
+            tx.send(WatchMessage::Event(Ok(
+                Event::new(EventKind::Any).add_path(tail.clone())
+            )))
+            .unwrap();
+            let tail_batch = batch_rx.recv_timeout(Duration::from_secs(1));
+            tx.send(WatchMessage::Stop).unwrap();
+            worker.join().unwrap();
+
+            let batch = during_noise.expect("ignored noise starved the pending change");
+            assert_eq!(batch.needs_rescan, rescan);
+            if !rescan {
+                assert_eq!(batch.paths, vec![relevant_path]);
+            }
+            assert_eq!(tail_batch.unwrap().paths, vec![tail]);
+            assert!(batch_rx.try_recv().is_err());
+        }
     }
 
     #[test]

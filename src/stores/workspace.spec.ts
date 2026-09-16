@@ -119,6 +119,27 @@ describe('workspace commit undo candidate', () => {
     expect(store.status?.head_commit).toBe('parent')
   })
 
+  it('reports superseded status reads without overwriting the latest snapshot', async () => {
+    const store = useWorkspaceStore()
+    const first = deferred<WorkspaceStatus>()
+    mocks.getStatus.mockReturnValueOnce(first.promise).mockResolvedValueOnce(status('new'))
+    const oldRefresh = store.refresh()
+    expect(await store.refresh()).toEqual({ outcome: 'updated' })
+    first.resolve(status('old', true))
+    expect(await oldRefresh).toEqual({ outcome: 'superseded' })
+    expect(store.status?.head_commit).toBe('new')
+  })
+
+  it('returns the original failure and retains the previous workspace snapshot', async () => {
+    const store = useWorkspaceStore()
+    store.status = status('old', true)
+    const failure = new Error('the index is locked')
+    mocks.getStatus.mockRejectedValueOnce(failure)
+    expect(await store.refresh()).toEqual({ outcome: 'failed', error: failure })
+    expect(store.status?.head_commit).toBe('old')
+    expect(store.loading).toBe(false)
+  })
+
   it('does not offer undo for a root commit and clears a stale candidate on refresh', async () => {
     const store = useWorkspaceStore()
     store.status = status(undefined)

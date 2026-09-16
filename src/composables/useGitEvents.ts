@@ -10,13 +10,17 @@ export interface StatusChangedPayload {
 
 export function useGitEvents() {
   const unlisteners: UnlistenFn[] = []
+  let disposed = false
+
+  function keepListener(unlisten: UnlistenFn) {
+    if (disposed) unlisten()
+    else unlisteners.push(unlisten)
+  }
 
   const onStatusChanged = (handler: (payload: StatusChangedPayload) => void) => {
     listen<StatusChangedPayload>('repo://status-changed', (event) => {
       handler(event.payload)
-    }).then((unlisten) => {
-      unlisteners.push(unlisten)
-    })
+    }).then(keepListener)
   }
 
   const onOperationProgress = (
@@ -32,37 +36,30 @@ export function useGitEvents() {
       (event) => {
         handler(event.payload)
       }
-    ).then((unlisten) => {
-      unlisteners.push(unlisten)
-    })
+    ).then(keepListener)
   }
 
   const onError = (handler: (payload: { repoId: string; msg: string }) => void) => {
     listen<{ repoId: string; msg: string }>('repo://error', (event) => {
       handler(event.payload)
-    }).then((unlisten) => {
-      unlisteners.push(unlisten)
-    })
+    }).then(keepListener)
   }
 
   const onRemoteUpdated = (handler: (repoId: string) => void) => {
     listen<string>('repo://remote-updated', (event) => {
       handler(event.payload)
-    }).then((unlisten) => {
-      unlisteners.push(unlisten)
-    })
+    }).then(keepListener)
   }
 
   // macOS `open -a GitUI <path>` 热启动：app 已在运行时打开新路径
   const onOpenPath = (handler: (path: string) => void) => {
     listen<string>('repo://open-path', (event) => {
       handler(event.payload)
-    }).then((unlisten) => {
-      unlisteners.push(unlisten)
-    })
+    }).then(keepListener)
   }
 
   onUnmounted(() => {
+    disposed = true
     unlisteners.forEach((fn) => fn())
   })
 

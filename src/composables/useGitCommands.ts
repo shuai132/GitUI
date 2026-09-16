@@ -59,7 +59,7 @@ export function useGitCommands() {
       debugStore.reject(dbg.id, performance.now() - start, rawStr)
       if (opts?.silent) throw raw
       const entry = errorsStore.push(op, raw)
-      throw new GitCommandError(entry.friendly)
+      throw new GitCommandError(entry.friendly, raw)
     }
   }
 

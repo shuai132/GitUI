@@ -36,6 +36,11 @@ export interface UndoCommitCandidate {
   message: string
 }
 
+export type WorkspaceRefreshResult =
+  | { outcome: 'updated' }
+  | { outcome: 'superseded' }
+  | { outcome: 'failed'; error: unknown }
+
 export const useWorkspaceStore = defineStore('workspace', () => {
   const repoStore = useRepoStore()
   const commitDrafts = new Map<string, string>()
@@ -100,10 +105,10 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     { flush: 'sync' },
   )
 
-  async function refresh(repoId?: string) {
+  async function refresh(repoId?: string): Promise<WorkspaceRefreshResult> {
     const repoStore = useRepoStore()
     const id = repoId ?? repoStore.activeRepoId
-    if (!id) return
+    if (!id) return { outcome: 'superseded' }
 
     const requestSeq = ++refreshSeq
     loading.value = true
@@ -113,7 +118,9 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       // 丢弃过期响应：await 期间用户可能已切换到其他仓库，
       // 此时 id 与当前活跃仓库不符，写入会污染新仓库的 status。
       // 同一仓库的多次刷新也只允许最后一次写入，避免旧快照覆盖新快照。
-      if (requestSeq !== refreshSeq || id !== repoStore.activeRepoId) return
+      if (requestSeq !== refreshSeq || id !== repoStore.activeRepoId) {
+        return { outcome: 'superseded' }
+      }
       status.value = result
       if (
         undoCommitCandidate.value?.repoId === id &&
@@ -134,10 +141,13 @@ export const useWorkspaceStore = defineStore('workspace', () => {
           selectedFile.value = null
         }
       }
+      return { outcome: 'updated' }
     } catch (e: unknown) {
       if (requestSeq === refreshSeq && id === repoStore.activeRepoId) {
         error.value = String(e)
+        return { outcome: 'failed', error: e }
       }
+      return { outcome: 'superseded' }
     } finally {
       if (requestSeq === refreshSeq) loading.value = false
     }

@@ -27,7 +27,6 @@ import { useGitEvents } from '@/composables/useGitEvents'
 import { useGitCommands } from '@/composables/useGitCommands'
 import { useShortcuts } from '@/composables/useShortcuts'
 import { useSettingsStore } from '@/stores/settings'
-import { findWipFileBySelection } from '@/utils/wipSelection'
 import {
   findStartupUpdate,
   isNetworkUpdateCheckError,
@@ -35,7 +34,7 @@ import {
   type UpdateChannel,
 } from '@/utils/updateCheck'
 import { createDevelopmentUpdate } from '@/utils/developmentUpdate'
-import { shouldRefreshHistoryDomain } from '@/utils/statusChangeRefresh'
+import { useAutomaticRepositoryRefresh } from '@/composables/useAutomaticRepositoryRefresh'
 import { listen } from '@tauri-apps/api/event'
 import { check, type Update } from '@tauri-apps/plugin-updater'
 import UpdateDialog from '@/components/common/UpdateDialog.vue'
@@ -54,11 +53,12 @@ const terminalStore = useTerminalStore()
 const debugStore = useDebugStore()
 const errorsStore = useErrorsStore()
 const gitPrefsStore = useGitPrefsStore()
-const { onStatusChanged, onRemoteUpdated, onError, onOpenPath } = useGitEvents()
+const { onRemoteUpdated, onError, onOpenPath } = useGitEvents()
 const git = useGitCommands()
 
 // 全局键盘快捷键
 useShortcuts()
+useAutomaticRepositoryRefresh()
 
 // 更新相关
 const availableUpdate = ref<Update | null>(null)
@@ -228,52 +228,6 @@ function toggleSidebar() {
   uiStore.sidebarWidth = uiStore.sidebarWidth === 0 ? SIDEBAR_DEFAULT : 0
   uiStore.persistSidebarWidth()
 }
-
-// Listen for file system changes and refresh status
-onStatusChanged(async ({ repo_id: repoId, kind }) => {
-  if (repoId !== repoStore.activeRepoId) return
-
-  const previousHead = workspaceStore.status?.head_commit ?? null
-
-  // 先等 status 刷新完，再决定 diff 怎么处理——
-  // 这样可以判断当前预览的文件是否还存在，避免对已消失的文件发起加载
-  await workspaceStore.refresh(repoId)
-  if (repoId !== repoStore.activeRepoId) return
-
-  const nextHead = workspaceStore.status?.head_commit ?? null
-
-  if (kind === 'config' || kind === 'other_git') {
-    submodulesStore.loadSubmodules()
-  }
-
-  // WIP diff 刷新：currentPath 仍在新 status 里才 refresh，否则 clear
-  if (diffStore.currentPath) {
-    const s = workspaceStore.status
-    const allFiles = [
-      ...(s?.staged ?? []),
-      ...(s?.unstaged ?? []),
-      ...(s?.untracked ?? []),
-    ]
-    const wipFile = findWipFileBySelection(allFiles, diffStore.currentPath, diffStore.currentStaged)
-    if (wipFile) {
-      diffStore.currentStaged = wipFile.staged
-      diffStore.refresh()
-    } else {
-      diffStore.clear()
-    }
-  }
-
-  // 普通 worktree/index 变化只影响 WIP；引用、保守归类的 .git 变化，
-  // 或 status 读到 HEAD 变化时才刷新历史域。
-  if (shouldRefreshHistoryDomain(kind, previousHead, nextHead)) {
-    historyStore.loadLog()
-    historyStore.loadBranches()
-    historyStore.loadTags()
-    stashStore.refresh()
-  } else if (kind === 'config') {
-    historyStore.loadBranches()
-  }
-})
 
 // macOS `open -a GitUI <path>`：热启动时后端推来路径，直接打开仓库
 onOpenPath(async (path) => {
