@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import AppSelect from '@/components/common/AppSelect.vue'
 import Modal from '@/components/common/Modal.vue'
 import { useGitCommands } from '@/composables/useGitCommands'
 import { useGlobalToast } from '@/composables/useGlobalToast'
@@ -45,6 +46,7 @@ const error = ref<string | null>(null)
 const branchInputEl = ref<HTMLInputElement | null>(null)
 let branchLoadSeq = 0
 
+const startPointOptions = computed(() => startPoints.value.map(item => ({ value: item.key, label: item.label })))
 const selectedStartPoint = computed(() =>
   startPoints.value.find((item) => item.key === startPointKey.value) ?? null,
 )
@@ -243,19 +245,9 @@ function onCancel() {
 
     <div class="form-row">
       <label class="form-label">{{ t('repo.worktree.startPointLabel') }}</label>
-      <select
-        v-model="startPointKey"
-        class="form-control"
-        :disabled="loadingBranches || submitting || startPoints.length === 0"
-      >
-        <option
-          v-for="item in startPoints"
-          :key="item.key"
-          :value="item.key"
-        >
-          {{ item.label }}
-        </option>
-      </select>
+      <AppSelect v-model="startPointKey" searchable :options="startPointOptions"
+        :aria-label="t('repo.worktree.startPointLabel')" :loading="loadingBranches"
+        :disabled="submitting || startPoints.length === 0" />
     </div>
 
     <div class="form-row">

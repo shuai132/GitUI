@@ -1,6 +1,7 @@
 // 中文（简体）翻译资源。按域组织。新增文案时请同步在 en.ts 加对应 key。
 const messages = {
   common: {
+    select: { placeholder: '请选择', search: '输入以搜索…', noResults: '没有匹配的选项', customValue: '已使用输入的自定义值' },
     aboutTitle: '关于 GitUI',
     operationFailed: '操作失败：{detail}',
     cancel: '取消',
@@ -1130,6 +1131,7 @@ const messages = {
   },
   rebase: {
     dialog: {
+      actionLabel: '提交 {oid} 的操作',
       title: '变基',
       hint: '将当前分支变基到 {upstream}。可重排、编辑或丢弃下方步骤。',
       loading: '计算变基计划中...',

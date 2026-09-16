@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import AppSelect from '@/components/common/AppSelect.vue'
 import {
   DEFAULT_ADVANCED_VIEW_PREFS,
   MARKDOWN_MODES,
@@ -17,6 +18,10 @@ const git = useGitCommands()
 const { t } = useI18n()
 const { showActionError } = useGlobalToast()
 const fetchIntervalSaving = ref(false)
+const markdownOptions = computed(() => MARKDOWN_MODES.map(value => ({ value, label: t('diff.markdown.' + value) })))
+const fetchIntervalOptions = computed(() => FETCH_INTERVAL_OPTIONS.map(option => ({
+  value: option.value, label: t(option.labelKey, 'params' in option ? option.params : {}),
+})))
 
 const diffLayoutOptions = computed<Array<{ value: DiffLayoutMode; label: string }>>(() => [
   { value: 'inline', label: t('settings.advanced.diffLayoutInline') },
@@ -115,17 +120,8 @@ const viewPrefsAreDefault = computed(() =>
   && uiStore.detailFilesFirst === DEFAULT_ADVANCED_VIEW_PREFS.detailFilesFirst,
 )
 
-const fetchIntervalLabel = computed(() => {
-  const opt = FETCH_INTERVAL_OPTIONS.find(
-    (o) => o.value === gitPrefsStore.autoFetchInterval,
-  )
-  if (!opt) return String(gitPrefsStore.autoFetchInterval)
-  return t(opt.labelKey, 'params' in opt ? opt.params : {})
-})
-
-async function onFetchIntervalChange(e: Event) {
+async function onFetchIntervalChange(secs: number) {
   if (fetchIntervalSaving.value) return
-  const secs = Number((e.target as HTMLSelectElement).value)
   const previousSecs = gitPrefsStore.autoFetchInterval
   gitPrefsStore.setAutoFetchInterval(secs)
   fetchIntervalSaving.value = true
@@ -178,10 +174,10 @@ async function onFetchIntervalChange(e: Event) {
         <div class="pref-label">{{ t('diff.markdown.displayMode') }}</div>
         <div class="pref-hint">{{ t('diff.markdown.settingsHint') }}</div>
       </div>
-      <select class="pref-select" :aria-label="t('diff.markdown.displayMode')" :value="uiStore.markdownMode"
-        @change="uiStore.setMarkdownMode(($event.target as HTMLSelectElement).value as typeof uiStore.markdownMode)">
-        <option v-for="mode in MARKDOWN_MODES" :key="mode" :value="mode">{{ t('diff.markdown.' + mode) }}</option>
-      </select>
+      <!-- @vue-generic {import('@/stores/ui').MarkdownMode} -->
+      <AppSelect class="pref-select" compact :aria-label="t('diff.markdown.displayMode')"
+        :modelValue="uiStore.markdownMode" :options="markdownOptions"
+        @update:modelValue="uiStore.setMarkdownMode" />
     </div>
     <div class="toggle-list">
       <label
@@ -211,20 +207,11 @@ async function onFetchIntervalChange(e: Event) {
           <div class="pref-label">{{ t('settings.gitPrefs.fetchIntervalLabel') }}</div>
           <div class="pref-hint">{{ t('settings.gitPrefs.fetchIntervalHint') }}</div>
         </div>
-        <select
-          class="pref-select"
-          :value="gitPrefsStore.autoFetchInterval"
-          :disabled="fetchIntervalSaving"
-          @change="onFetchIntervalChange"
-        >
-          <option
-            v-for="opt in FETCH_INTERVAL_OPTIONS"
-            :key="opt.value"
-            :value="opt.value"
-          >
-            {{ t(opt.labelKey, 'params' in opt ? opt.params : {}) }}
-          </option>
-        </select>
+        <!-- @vue-generic {number} -->
+        <AppSelect class="pref-select fetch-interval-select" compact
+          :aria-label="t('settings.gitPrefs.fetchIntervalLabel')"
+          :modelValue="gitPrefsStore.autoFetchInterval" :options="fetchIntervalOptions"
+          :disabled="fetchIntervalSaving" @update:modelValue="onFetchIntervalChange" />
       </div>
     </div>
 
@@ -372,20 +359,7 @@ async function onFetchIntervalChange(e: Event) {
   color: var(--text-muted);
 }
 
-.pref-select {
-  flex-shrink: 0;
-  background: var(--bg-surface);
-  color: var(--text-primary);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 3px 6px;
-  font-size: var(--font-sm);
-  cursor: pointer;
-}
-
-.pref-select:focus {
-  outline: 1px solid var(--accent-blue);
-}
+.pref-select { flex-shrink: 0; max-width: 200px; }
 
 .segmented-control {
   display: inline-flex;

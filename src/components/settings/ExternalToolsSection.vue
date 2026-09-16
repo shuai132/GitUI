@@ -1,23 +1,18 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import AppSelect from '@/components/common/AppSelect.vue'
 import {
   EXTERNAL_TERMINAL_PRESETS,
   useSettingsStore,
-  type ExternalTerminal,
 } from '@/stores/settings'
 
 const store = useSettingsStore()
 const { t } = useI18n()
 
-const options = EXTERNAL_TERMINAL_PRESETS
+const options = computed(() => EXTERNAL_TERMINAL_PRESETS.map(option => ({ value: option.value, label: t(option.labelKey) })))
 
 const isCustom = computed(() => store.externalTerminal === 'custom')
-
-function onSelect(e: Event) {
-  const v = (e.target as HTMLSelectElement).value as ExternalTerminal
-  store.externalTerminal = v
-}
 
 function onCustomInput(e: Event) {
   store.externalTerminalCustom = (e.target as HTMLInputElement).value
@@ -32,16 +27,8 @@ const isMac = typeof navigator !== 'undefined' && /Mac/i.test(navigator.platform
     <div class="section-title">{{ t('settings.externalTools.sectionTitle') }}</div>
     <div class="tool-row">
       <label class="tool-label" for="external-terminal-select">{{ t('settings.externalTools.terminalTitle') }}</label>
-      <select
-        id="external-terminal-select"
-        class="tool-select"
-        :value="store.externalTerminal"
-        @change="onSelect"
-      >
-        <option v-for="opt in options" :key="opt.value" :value="opt.value">
-          {{ t(opt.labelKey) }}
-        </option>
-      </select>
+      <AppSelect id="external-terminal-select" v-model="store.externalTerminal"
+        :aria-label="t('settings.externalTools.terminalTitle')" :options="options" />
     </div>
 
     <div v-if="isCustom" class="tool-row tool-row--custom">
@@ -98,7 +85,6 @@ const isMac = typeof navigator !== 'undefined' && /Mac/i.test(navigator.platform
   color: var(--text-primary);
 }
 
-.tool-select,
 .tool-input {
   background: var(--bg-primary);
   border: 1px solid var(--border);
@@ -111,7 +97,6 @@ const isMac = typeof navigator !== 'undefined' && /Mac/i.test(navigator.platform
   width: 100%;
 }
 
-.tool-select:focus,
 .tool-input:focus {
   border-color: var(--accent-blue);
 }

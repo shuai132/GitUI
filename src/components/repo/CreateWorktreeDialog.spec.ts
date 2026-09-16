@@ -1,5 +1,6 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { SelectOption } from '@/types/select'
 import CreateWorktreeDialog from './CreateWorktreeDialog.vue'
 import type { BranchInfo, RepoMeta } from '@/types/git'
 
@@ -64,7 +65,7 @@ describe('CreateWorktreeDialog', () => {
     })
     await flushPromises()
 
-    expect(wrapper.findAll('option').map((option) => option.text())).toEqual([
+    expect(wrapper.findComponent({ name: 'AppSelect' }).props('options').map((option: SelectOption) => option.label)).toEqual([
       'main · 1234567',
       'Remote: origin/release · fedcba0',
     ])

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, watch, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import AppSelect from '@/components/common/AppSelect.vue'
 import type { BranchInfo } from '@/types/git'
 import Modal from '@/components/common/Modal.vue'
 import { useHistoryStore } from '@/stores/history'
@@ -23,6 +24,9 @@ const historyStore = useHistoryStore()
 const repoStore = useRepoStore()
 
 const selectedRemote = ref<string>('')
+const remoteOptions = computed(() => openedRemoteBranches.value.map(branch => ({
+  value: branch.name, label: branch.name, disabled: branch.name.endsWith('/HEAD'),
+})))
 const localName = ref<string>('')
 const track = ref<boolean>(true)
 const submitting = ref<boolean>(false)
@@ -105,16 +109,8 @@ function onCancel() {
   <Modal :visible="visible" :title="t('branch.checkoutRemote.title')" width="480px" @close="onCancel">
     <div class="form-row">
       <label class="form-label">{{ t('branch.checkoutRemote.remoteLabel') }}</label>
-      <select v-model="selectedRemote" class="form-control">
-        <option
-          v-for="b in openedRemoteBranches"
-          :key="b.name"
-          :value="b.name"
-          :disabled="b.name.endsWith('/HEAD')"
-        >
-          {{ b.name }}
-        </option>
-      </select>
+      <AppSelect v-model="selectedRemote" searchable :options="remoteOptions"
+        :aria-label="t('branch.checkoutRemote.remoteLabel')" />
     </div>
 
     <div class="form-row">

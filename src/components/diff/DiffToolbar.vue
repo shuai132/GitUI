@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import AppSelect from '@/components/common/AppSelect.vue'
 import type { FileDiff } from '@/types/git'
 import { MARKDOWN_MODES, useUiStore } from '@/stores/ui'
 import { useShortcutsStore, bindingToLabel, type ShortcutActionId } from '@/stores/shortcuts'
@@ -58,6 +59,8 @@ const canIgnoreWhitespace = computed(() =>
 
 const isMarkdownPreview = computed(() => props.previewKind === 'markdown' && uiStore.markdownMode !== 'source')
 
+const markdownOptions = computed(() => MARKDOWN_MODES.map(value => ({ value, label: t('diff.markdown.' + value) })))
+
 const filePathLabel = computed(() => displayDiffPath(props.diff))
 </script>
 
@@ -80,10 +83,10 @@ const filePathLabel = computed(() => displayDiffPath(props.diff))
 
     <div class="toolbar-spacer" />
 
-    <select v-if="previewKind === 'markdown'" class="markdown-mode" :aria-label="t('diff.markdown.displayMode')"
-      :value="uiStore.markdownMode" @change="uiStore.setMarkdownMode(($event.target as HTMLSelectElement).value as typeof uiStore.markdownMode)">
-      <option v-for="mode in MARKDOWN_MODES" :key="mode" :value="mode">{{ t('diff.markdown.' + mode) }}</option>
-    </select>
+    <!-- @vue-generic {import('@/stores/ui').MarkdownMode} -->
+    <AppSelect v-if="previewKind === 'markdown'" class="markdown-mode" compact
+      :aria-label="t('diff.markdown.displayMode')" :options="markdownOptions"
+      :modelValue="uiStore.markdownMode" @update:modelValue="uiStore.setMarkdownMode" />
     <button v-if="previewKind === 'markdown' && !isMarkdownPreview" type="button"
       class="btn-icon btn-wrap" :class="{ active: uiStore.markdownWrap }"
       :aria-pressed="uiStore.markdownWrap" :aria-label="t('diff.markdown.wrap')" :title="t('diff.markdown.wrap')"
@@ -529,7 +532,7 @@ const filePathLabel = computed(() => displayDiffPath(props.diff))
   color: var(--text-primary);
   background: var(--bg-overlay);
 }
-.markdown-mode { max-width: 150px; min-width: 95px; background: var(--bg-surface); color: var(--text-primary); border: 1px solid var(--border); border-radius: 4px; padding: 3px; font: inherit; }
+.markdown-mode { max-width: 160px; min-width: 105px; flex-shrink: 0; }
 .diff-toolbar { flex-wrap: wrap; }
 .diff-file-path { flex-shrink: 1; }
 </style>

@@ -1,6 +1,7 @@
 // English translation resources. Mirrors the key tree of zh-CN.ts.
 const messages = {
   common: {
+    select: { placeholder: 'Select…', search: 'Type to search…', noResults: 'No matching options', customValue: 'Using your custom value' },
     aboutTitle: 'About GitUI',
     operationFailed: 'Operation failed: {detail}',
     cancel: 'Cancel',
@@ -1131,6 +1132,7 @@ const messages = {
   },
   rebase: {
     dialog: {
+      actionLabel: 'Action for commit {oid}',
       title: 'Rebase',
       hint: 'Rebasing current branch onto {upstream}. Reorder, edit, or drop steps below.',
       loading: 'Computing rebase plan…',

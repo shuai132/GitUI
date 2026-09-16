@@ -43,6 +43,10 @@
 
 公共 `ContextMenu` 使用 menu / menuitem 语义，打开时聚焦首个可用项；方向键、Home / End、Enter / Space、Escape 和左右键二级菜单导航由组件统一处理，业务组件只提供 item 与 action。
 
+公共 `AppSelect` 统一承接表单与工具栏的选择入口，不使用系统原生 Select / datalist 弹层。候选契约见 `types/select.ts::SelectOption`，保留字符串枚举及数值类型；普通选择通过 `update:modelValue` 回传，目录跳转等动作入口使用每次选择都会触发的 `select`。长列表可搜索，字体通过 `customValue` 显式启用自由输入。
+
+`AppSelect` 使用 combobox / listbox 语义，焦点保留在触发按钮或输入框；方向键导航、Enter 确认、Escape 取消，普通选择支持 Home / End 与首字母定位，搜索输入保留文本编辑快捷键。弹层开启时先处理 Escape，随后才轮到 `Modal`；Tab 关闭候选并保留 Modal 焦点循环。候选弹层脱离滚动容器，Modal 内保留在所属 dialog 的无障碍树中，自动避让视口边缘，随外部滚动重新定位，触发控件移出可见范围或失焦时关闭。样式统一引用深浅主题、强调色和字体变量；工具栏支持紧凑尺寸，长列表仅挂载可见项，定位监听仅在打开期间存在。
+
 侧栏的 Local Branches、Remote、Tags、Submodules 与 Stash 标题均使用独立折叠按钮并暴露展开状态；搜索、新增与右键菜单保持为并列控件，不嵌套在折叠触发区内。
 
 ## 错误处理流

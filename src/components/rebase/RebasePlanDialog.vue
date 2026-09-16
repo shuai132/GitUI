@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import AppSelect from '@/components/common/AppSelect.vue'
 import Modal from '@/components/common/Modal.vue'
 import { useMergeRebaseStore } from '@/stores/mergeRebase'
 import { useRepoStore } from '@/stores/repos'
@@ -233,15 +234,10 @@ async function onSubmit() {
             @click="move(idx, 1)"
           >↓</button>
         </div>
-        <select
-          class="action-select"
-          :value="item.action"
-          @change="(e) => onActionChange(idx, ((e.target as HTMLSelectElement).value) as RebaseActionKind)"
-        >
-          <option v-for="a in actions" :key="a.value" :value="a.value">
-            {{ a.label }}
-          </option>
-        </select>
+        <!-- @vue-generic {RebaseActionKind} -->
+        <AppSelect class="action-select" compact :modelValue="item.action" :options="actions"
+          :aria-label="t('rebase.dialog.actionLabel', { oid: item.short_oid })"
+          @update:modelValue="onActionChange(idx, $event)" />
         <code class="oid">{{ item.short_oid }}</code>
         <div class="subject">{{ item.subject }}</div>
         <button
@@ -363,14 +359,7 @@ async function onSubmit() {
   cursor: not-allowed;
 }
 
-.action-select {
-  background: var(--bg-primary);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  color: var(--text-primary);
-  font-size: var(--font-md);
-  padding: 3px 5px;
-}
+.action-select { width: 100%; }
 
 .oid {
   font-family: var(--font-mono, monospace);

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, useId, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import AppSelect from '@/components/common/AppSelect.vue'
 import { openUrl } from '@tauri-apps/plugin-opener'
 import { useGlobalToast } from '@/composables/useGlobalToast'
 import { renderMarkdown, safeExternalUrl, type RenderedMarkdown } from '@/lib/markdown'
@@ -17,6 +18,9 @@ const rendered = computed<{ result: RenderedMarkdown | null; error: string | nul
   try { return { result: renderMarkdown(props.text, prefix, props.remoteImages), error: null } }
   catch (error: unknown) { return { result: null, error: error instanceof Error && error.message === 'too-large' ? 'tooLarge' : 'renderError' } }
 })
+const headingOptions = computed(() => (rendered.value.result?.headings ?? []).map(heading => ({
+  value: heading.id, label: '　'.repeat(heading.level - 1) + heading.text,
+})))
 watch(rendered, async () => {
   const seq = ++sequence
   slots.value = []
@@ -52,10 +56,10 @@ async function onClick(event: MouseEvent | KeyboardEvent) {
     <template v-else-if="rendered.result">
       <div v-if="rendered.result.headings.length" class="markdown-outline">
         <label>{{ t('diff.markdown.outline') }}
-          <select :aria-label="t('diff.markdown.outline')" value="" @change="scrollToHeading(($event.target as HTMLSelectElement).value)">
-            <option value="" disabled>{{ t('diff.markdown.jumpHeading') }}</option>
-            <option v-for="heading in rendered.result.headings" :key="heading.id" :value="heading.id">{{ '　'.repeat(heading.level - 1) + heading.text }}</option>
-          </select>
+          <!-- @vue-generic {string} -->
+          <AppSelect class="outline-select" searchable compact :aria-label="t('diff.markdown.outline')"
+            :modelValue="null" :options="headingOptions" :placeholder="t('diff.markdown.jumpHeading')"
+            @select="scrollToHeading" />
         </label>
       </div>
       <div v-if="rendered.result.remoteImages" class="markdown-notice">{{ t('diff.markdown.remoteImagesHidden') }}</div>
@@ -73,7 +77,7 @@ async function onClick(event: MouseEvent | KeyboardEvent) {
 .markdown-preview { max-width: 1000px; min-width: 0; margin: 0 auto; padding: 16px 24px 40px; font-size: var(--font-base); }
 .markdown-outline { margin-bottom: 16px; color: var(--text-muted); font-size: var(--font-sm); }
 .markdown-outline label { display: flex; align-items: center; gap: 8px; }
-select { min-width: 0; flex: 1; max-width: 500px; padding: 4px; background: var(--bg-surface); color: var(--text-primary); border: 1px solid var(--border); border-radius: 4px; font: inherit; }
+.outline-select { flex: 1; max-width: 500px; }
 .markdown-notice { padding: 10px; margin-bottom: 12px; background: var(--bg-surface); border-radius: 4px; color: var(--text-muted); font-size: var(--font-sm); overflow-wrap: anywhere; }
 .markdown-prose { color: var(--text-primary); line-height: 1.7; overflow-wrap: anywhere; }
 .markdown-prose, .markdown-prose :deep(*) { user-select: text; -webkit-user-select: text; }

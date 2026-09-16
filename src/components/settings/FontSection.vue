@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
+import AppSelect from '@/components/common/AppSelect.vue'
 import { useSettingsStore, MIN_FONT_SIZE, MAX_FONT_SIZE } from '@/stores/settings'
 import { useGitCommands } from '@/composables/useGitCommands'
 
@@ -9,6 +10,8 @@ const { t } = useI18n()
 const { listSystemFonts } = useGitCommands()
 
 const systemFonts = ref<string[]>([])
+const fontOptions = computed(() => systemFonts.value.map(value => ({ value, label: value })))
+const fontValue = (text: string): string => text
 
 onMounted(async () => {
   const fonts = await listSystemFonts().catch(() => [])
@@ -44,18 +47,9 @@ function onCodeSize(e: Event) {
     </div>
     <div class="form-row">
       <label class="form-label">{{ t('settings.font.familyLabel') }}</label>
-      <input
-        v-model="store.uiFontFamily"
-        type="text"
-        list="font-ui-list"
-        class="form-control"
-        :placeholder="t('settings.font.defaultPlaceholder')"
-        autocomplete="off"
-        spellcheck="false"
-      />
-      <datalist id="font-ui-list">
-        <option v-for="f in systemFonts" :key="f" :value="f" />
-      </datalist>
+      <AppSelect v-model="store.uiFontFamily" :options="fontOptions" :custom-value="fontValue"
+        :aria-label="t('settings.font.uiTitle') + ' · ' + t('settings.font.familyLabel')"
+        :placeholder="t('settings.font.defaultPlaceholder')" />
     </div>
     <div class="form-row">
       <label class="form-label">{{ t('settings.font.sizeLabel') }}</label>
@@ -89,18 +83,9 @@ function onCodeSize(e: Event) {
     </div>
     <div class="form-row">
       <label class="form-label">{{ t('settings.font.familyLabel') }}</label>
-      <input
-        v-model="store.codeFontFamily"
-        type="text"
-        list="font-code-list"
-        class="form-control"
-        :placeholder="t('settings.font.defaultPlaceholder')"
-        autocomplete="off"
-        spellcheck="false"
-      />
-      <datalist id="font-code-list">
-        <option v-for="f in systemFonts" :key="f" :value="f" />
-      </datalist>
+      <AppSelect v-model="store.codeFontFamily" :options="fontOptions" :custom-value="fontValue"
+        :aria-label="t('settings.font.codeTitle') + ' · ' + t('settings.font.familyLabel')"
+        :placeholder="t('settings.font.defaultPlaceholder')" />
     </div>
     <div class="form-row">
       <label class="form-label">{{ t('settings.font.sizeLabel') }}</label>

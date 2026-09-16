@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import AppSelect from '@/components/common/AppSelect.vue'
 import Modal from '@/components/common/Modal.vue'
 import { useMergeRebaseStore } from '@/stores/mergeRebase'
 import { useHistoryStore } from '@/stores/history'
@@ -8,6 +9,7 @@ import { mergeSourceNames, resolveReferenceOid } from '@/utils/mergeSources'
 import { useRepoStore } from '@/stores/repos'
 import { useWorkspaceStore } from '@/stores/workspace'
 import type { BranchInfo, MergeStrategy } from '@/types/git'
+import type { SelectOption } from '@/types/select'
 
 const { t } = useI18n()
 
@@ -42,6 +44,13 @@ const openedCandidateSources = ref<string[]>([])
 const sourceOptions = computed(() =>
   mergeSourceNames(openedBranches.value, openedCandidateSources.value),
 )
+const branchOptions = computed(() => sourceOptions.value.map(value => ({ value, label: value })))
+const strategyOptions = computed<SelectOption<MergeStrategy>[]>(() => [
+  { value: 'auto', label: t('merge.strategy.auto') },
+  { value: 'fast_forward', label: t('merge.strategy.fastForward') },
+  { value: 'no_fast_forward', label: t('merge.strategy.noFastForward') },
+  { value: 'squash', label: t('merge.strategy.squash') },
+])
 const sourceOid = computed(() => resolveReferenceOid(openedBranches.value, sourceBranch.value))
 
 watch(
@@ -120,9 +129,8 @@ async function onSubmit() {
   >
     <div class="row">
       <label>{{ t('merge.dialog.source') }}</label>
-      <select v-model="sourceBranch" class="input">
-        <option v-for="n in sourceOptions" :key="n" :value="n">{{ n }}</option>
-      </select>
+      <AppSelect v-model="sourceBranch" searchable :options="branchOptions"
+        :aria-label="t('merge.dialog.source')" />
     </div>
     <div class="row">
       <label>{{ t('merge.dialog.target') }}</label>
@@ -130,12 +138,7 @@ async function onSubmit() {
     </div>
     <div class="row">
       <label>{{ t('merge.dialog.strategy') }}</label>
-      <select v-model="strategy" class="input">
-        <option value="auto">{{ t('merge.strategy.auto') }}</option>
-        <option value="fast_forward">{{ t('merge.strategy.fastForward') }}</option>
-        <option value="no_fast_forward">{{ t('merge.strategy.noFastForward') }}</option>
-        <option value="squash">{{ t('merge.strategy.squash') }}</option>
-      </select>
+      <AppSelect v-model="strategy" :options="strategyOptions" :aria-label="t('merge.dialog.strategy')" />
     </div>
     <div v-if="needsMessage" class="row row--stack">
       <label>{{ t('merge.dialog.message') }}</label>

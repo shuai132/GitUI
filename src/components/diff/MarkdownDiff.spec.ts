@@ -108,7 +108,7 @@ describe('Markdown diff integration', () => {
     useUiStore().setDiffLayoutMode('side-by-side')
     await flushPromises()
     expect(wrapper.findComponent(SideBySideDiff).props('wrapLines')).toBe(false)
-    await wrapper.find('.markdown-mode').setValue('preview')
+    wrapper.findComponent({ name: 'AppSelect' }).vm.$emit('update:modelValue', 'preview')
     await vi.waitFor(() => expect(wrapper.findComponent(MarkdownDiff).exists()).toBe(true))
     await flushPromises()
     expect(wrapper.find('.change-nav').exists()).toBe(false)
