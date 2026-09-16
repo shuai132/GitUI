@@ -1,3 +1,4 @@
+use crate::git_tasks::run_git;
 use std::process::Command;
 use std::sync::Mutex;
 use tauri::{AppHandle, Manager, State, Url, Webview};
@@ -140,7 +141,10 @@ pub async fn discard_all_changes(
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    GitEngine::discard_all_changes(&meta.path, expected_head.as_deref(), &expected_paths)
+    run_git(move || {
+        GitEngine::discard_all_changes(&meta.path, expected_head.as_deref(), &expected_paths)
+    })
+    .await
 }
 
 /// 读取 HEAD reflog，返回最新的 500 条记录
@@ -152,7 +156,7 @@ pub async fn get_reflog(
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    GitEngine::get_reflog(&meta.path, 500)
+    run_git(move || GitEngine::get_reflog(&meta.path, 500)).await
 }
 
 /// 执行 git gc
@@ -164,7 +168,7 @@ pub async fn run_gc(
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    GitEngine::run_gc(&meta.path)
+    run_git(move || GitEngine::run_gc(&meta.path)).await
 }
 
 /// 从 HEAD reflog 中移除让 `oid` 从 unreachable 视图消失所需的所有 entry（剥链）。
@@ -180,7 +184,8 @@ pub async fn drop_unreachable_commit(
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    GitEngine::drop_unreachable_commit(&meta.path, &oid, &expected_context_id)
+    run_git(move || GitEngine::drop_unreachable_commit(&meta.path, &oid, &expected_context_id))
+        .await
 }
 
 /// `drop_unreachable_commit` 的 dry-run：返回将被移除的 reflog entry 数，不改 reflog。
@@ -194,7 +199,7 @@ pub async fn preview_drop_unreachable_commit(
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    GitEngine::preview_drop_unreachable_commit(&meta.path, &oid)
+    run_git(move || GitEngine::preview_drop_unreachable_commit(&meta.path, &oid)).await
 }
 
 /// 在一个新的 GitUI 实例（新进程）里打开指定仓库。
@@ -334,7 +339,7 @@ pub async fn discard_file(
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    GitEngine::discard_file(&meta.path, &file_path)
+    run_git(move || GitEngine::discard_file(&meta.path, &file_path)).await
 }
 
 /// 批量丢弃文件的未暂存变更，只执行一次仓库 checkout。
@@ -347,7 +352,7 @@ pub async fn discard_files(
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    GitEngine::discard_files(&meta.path, &file_paths)
+    run_git(move || GitEngine::discard_files(&meta.path, &file_paths)).await
 }
 
 /// 在系统文件管理器中高亮显示指定文件（接收绝对文件路径）。
@@ -484,23 +489,26 @@ pub async fn add_to_gitignore(
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    let gitignore_path = std::path::PathBuf::from(&meta.path).join(".gitignore");
-    let existing = std::fs::read_to_string(&gitignore_path).unwrap_or_default();
-    if existing.lines().any(|l| l == file_path) {
-        return Ok(());
-    }
-    let mut f = std::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(&gitignore_path)
-        .map_err(|e| GitError::OperationFailed(format!("打开 .gitignore 失败: {}", e)))?;
-    if !existing.is_empty() && !existing.ends_with('\n') {
-        writeln!(f)
+    run_git(move || {
+        let gitignore_path = std::path::PathBuf::from(&meta.path).join(".gitignore");
+        let existing = std::fs::read_to_string(&gitignore_path).unwrap_or_default();
+        if existing.lines().any(|l| l == file_path) {
+            return Ok(());
+        }
+        let mut f = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&gitignore_path)
+            .map_err(|e| GitError::OperationFailed(format!("打开 .gitignore 失败: {}", e)))?;
+        if !existing.is_empty() && !existing.ends_with('\n') {
+            writeln!(f)
+                .map_err(|e| GitError::OperationFailed(format!("写入 .gitignore 失败: {}", e)))?;
+        }
+        writeln!(f, "{}", file_path)
             .map_err(|e| GitError::OperationFailed(format!("写入 .gitignore 失败: {}", e)))?;
-    }
-    writeln!(f, "{}", file_path)
-        .map_err(|e| GitError::OperationFailed(format!("写入 .gitignore 失败: {}", e)))?;
-    Ok(())
+        Ok(())
+    })
+    .await
 }
 
 /// 从指定提交签出单个文件到工作目录（不修改 HEAD 或暂存区）。
@@ -514,7 +522,7 @@ pub async fn checkout_file_at_commit(
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    GitEngine::checkout_file_at_commit(&meta.path, &sha, &file_path)
+    run_git(move || GitEngine::checkout_file_at_commit(&meta.path, &sha, &file_path)).await
 }
 
 /// 设置自动 fetch 间隔（秒），0 表示禁用自动 fetch。

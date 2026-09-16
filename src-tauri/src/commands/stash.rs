@@ -1,3 +1,4 @@
+use crate::git_tasks::run_git;
 use tauri::State;
 
 use crate::{
@@ -14,7 +15,7 @@ pub async fn stash_push(
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    GitEngine::stash_push(&meta.path, message.as_deref())
+    run_git(move || GitEngine::stash_push(&meta.path, message.as_deref())).await
 }
 
 #[tauri::command]
@@ -27,11 +28,14 @@ pub async fn stash_pop(
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    GitEngine::stash_pop(
-        &meta.path,
-        index.unwrap_or(0) as usize,
-        expected_oid.as_deref(),
-    )
+    run_git(move || {
+        GitEngine::stash_pop(
+            &meta.path,
+            index.unwrap_or(0) as usize,
+            expected_oid.as_deref(),
+        )
+    })
+    .await
 }
 
 #[tauri::command]
@@ -44,7 +48,7 @@ pub async fn stash_apply(
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    GitEngine::stash_apply(&meta.path, index as usize, &expected_oid)
+    run_git(move || GitEngine::stash_apply(&meta.path, index as usize, &expected_oid)).await
 }
 
 #[tauri::command]
@@ -57,7 +61,8 @@ pub async fn stash_drop(
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    GitEngine::stash_drop(&meta.path, index as usize, expected_oid.as_deref())
+    run_git(move || GitEngine::stash_drop(&meta.path, index as usize, expected_oid.as_deref()))
+        .await
 }
 
 #[tauri::command]
@@ -68,5 +73,5 @@ pub async fn stash_list(
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    GitEngine::stash_list(&meta.path)
+    run_git(move || GitEngine::stash_list(&meta.path)).await
 }

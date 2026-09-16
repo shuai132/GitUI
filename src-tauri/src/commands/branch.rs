@@ -1,3 +1,4 @@
+use crate::git_tasks::{run_git, run_network};
 use tauri::State;
 
 use crate::{
@@ -13,7 +14,7 @@ pub async fn list_branches(
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    GitEngine::list_branches(&meta.path)
+    run_git(move || GitEngine::list_branches(&meta.path)).await
 }
 
 #[tauri::command]
@@ -26,8 +27,11 @@ pub async fn create_branch(
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    log::debug!("[create_branch] name={name} from_oid={from_oid:?}");
-    GitEngine::create_branch(&meta.path, &name, from_oid.as_deref())
+    run_git(move || {
+        log::debug!("[create_branch] name={name} from_oid={from_oid:?}");
+        GitEngine::create_branch(&meta.path, &name, from_oid.as_deref())
+    })
+    .await
 }
 
 #[tauri::command]
@@ -41,7 +45,7 @@ pub async fn switch_branch(
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    GitEngine::switch_branch(&meta.path, &name, force)
+    run_git(move || GitEngine::switch_branch(&meta.path, &name, force)).await
 }
 
 #[tauri::command]
@@ -55,7 +59,7 @@ pub async fn delete_branch(
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    GitEngine::delete_branch(&meta.path, &name, &expected_oid)
+    run_git(move || GitEngine::delete_branch(&meta.path, &name, &expected_oid)).await
 }
 
 #[tauri::command]
@@ -70,7 +74,10 @@ pub async fn delete_remote_branch(
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    GitEngine::delete_remote_branch(&meta.path, &remote_name, &branch_name, &expected_oid)
+    run_network(move || {
+        GitEngine::delete_remote_branch(&meta.path, &remote_name, &branch_name, &expected_oid)
+    })
+    .await
 }
 
 #[tauri::command]
@@ -84,5 +91,8 @@ pub async fn checkout_remote_branch(
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    GitEngine::checkout_remote_branch(&meta.path, &remote_branch, &local_name, track)
+    run_git(move || {
+        GitEngine::checkout_remote_branch(&meta.path, &remote_branch, &local_name, track)
+    })
+    .await
 }

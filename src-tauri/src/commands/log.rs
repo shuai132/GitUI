@@ -1,3 +1,4 @@
+use crate::git_tasks::run_git;
 use tauri::State;
 
 use crate::{
@@ -26,17 +27,19 @@ pub async fn get_log(
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-
-    let limit = limit.min(500); // cap at 500 per page
-    GitEngine::get_log(
-        &meta.path,
-        offset,
-        limit,
-        include_unreachable,
-        include_stashes,
-        branch_scope,
-        include_remote_branches,
-    )
+    run_git(move || {
+        let limit = limit.min(500); // cap at 500 per page
+        GitEngine::get_log(
+            &meta.path,
+            offset,
+            limit,
+            include_unreachable,
+            include_stashes,
+            branch_scope,
+            include_remote_branches,
+        )
+    })
+    .await
 }
 
 #[tauri::command]
@@ -54,15 +57,18 @@ pub async fn search_commits(
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    GitEngine::search_commits(
-        &meta.path,
-        &query,
-        limit.min(200),
-        include_unreachable,
-        include_stashes,
-        branch_scope,
-        include_remote_branches,
-    )
+    run_git(move || {
+        GitEngine::search_commits(
+            &meta.path,
+            &query,
+            limit.min(200),
+            include_unreachable,
+            include_stashes,
+            branch_scope,
+            include_remote_branches,
+        )
+    })
+    .await
 }
 
 #[tauri::command]
@@ -74,7 +80,7 @@ pub async fn get_commit_change_stats(
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    GitEngine::get_commit_change_stats(&meta.path, oids)
+    run_git(move || GitEngine::get_commit_change_stats(&meta.path, oids)).await
 }
 
 #[tauri::command]
@@ -87,7 +93,7 @@ pub async fn get_commit_summary(
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    GitEngine::get_commit_summary(&meta.path, &oid, include_stats)
+    run_git(move || GitEngine::get_commit_summary(&meta.path, &oid, include_stats)).await
 }
 
 #[tauri::command]
@@ -99,7 +105,7 @@ pub async fn get_commit_detail(
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    GitEngine::get_commit_detail(&meta.path, &oid)
+    run_git(move || GitEngine::get_commit_detail(&meta.path, &oid)).await
 }
 
 #[tauri::command]
@@ -113,6 +119,9 @@ pub async fn get_file_log(
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    let limit = limit.min(200);
-    GitEngine::get_file_log(&meta.path, &file_path, offset, limit)
+    run_git(move || {
+        let limit = limit.min(200);
+        GitEngine::get_file_log(&meta.path, &file_path, offset, limit)
+    })
+    .await
 }

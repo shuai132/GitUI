@@ -1,3 +1,4 @@
+use crate::git_tasks::{run_git, run_network};
 use tauri::State;
 
 use crate::{
@@ -13,7 +14,7 @@ pub async fn list_submodules(
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    GitEngine::list_submodules(&meta.path)
+    run_git(move || GitEngine::list_submodules(&meta.path)).await
 }
 
 #[tauri::command]
@@ -25,7 +26,7 @@ pub async fn init_submodule(
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    GitEngine::init_submodule(&meta.path, &name)
+    run_git(move || GitEngine::init_submodule(&meta.path, &name)).await
 }
 
 #[tauri::command]
@@ -37,7 +38,7 @@ pub async fn update_submodule(
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    GitEngine::update_submodule(&meta.path, &name)
+    run_network(move || GitEngine::update_submodule(&meta.path, &name)).await
 }
 
 #[tauri::command]
@@ -51,7 +52,8 @@ pub async fn set_submodule_url(
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    GitEngine::set_submodule_url(&meta.path, &name, &url, expected_url.as_deref())
+    run_git(move || GitEngine::set_submodule_url(&meta.path, &name, &url, expected_url.as_deref()))
+        .await
 }
 
 #[tauri::command]
@@ -63,7 +65,7 @@ pub async fn submodule_workdir(
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    GitEngine::submodule_workdir(&meta.path, &name)
+    run_git(move || GitEngine::submodule_workdir(&meta.path, &name)).await
 }
 
 #[tauri::command]
@@ -75,7 +77,7 @@ pub async fn deinit_submodule(
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    GitEngine::deinit_submodule(&meta.path, &name)
+    run_git(move || GitEngine::deinit_submodule(&meta.path, &name)).await
 }
 
 #[tauri::command]
@@ -89,5 +91,5 @@ pub async fn add_submodule(
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    GitEngine::add_submodule(&meta.path, &url, &path)
+    run_network(move || GitEngine::add_submodule(&meta.path, &url, &path)).await
 }

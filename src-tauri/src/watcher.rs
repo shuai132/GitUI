@@ -252,6 +252,7 @@ impl IgnoreFilter {
     }
 }
 
+#[derive(Clone)]
 pub struct WatcherService {
     watchers: Arc<Mutex<HashMap<String, WatchHandle>>>,
 }

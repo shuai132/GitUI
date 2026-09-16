@@ -1,3 +1,4 @@
+use crate::git_tasks::run_git;
 use tauri::State;
 
 use crate::{
@@ -20,7 +21,8 @@ pub async fn get_file_diff(
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    GitEngine::get_file_diff(&meta.path, &file_path, staged, ignore_whitespace)
+    run_git(move || GitEngine::get_file_diff(&meta.path, &file_path, staged, ignore_whitespace))
+        .await
 }
 
 #[tauri::command]
@@ -32,7 +34,7 @@ pub async fn get_blob_bytes(
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    GitEngine::get_blob_bytes(&meta.path, &oid)
+    run_git(move || GitEngine::get_blob_bytes(&meta.path, &oid)).await
 }
 
 #[tauri::command]
@@ -44,7 +46,7 @@ pub async fn read_worktree_file(
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    GitEngine::read_worktree_file(&meta.path, &rel_path)
+    run_git(move || GitEngine::read_worktree_file(&meta.path, &rel_path)).await
 }
 
 #[tauri::command]
@@ -56,7 +58,7 @@ pub async fn extract_document_text(
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    GitEngine::extract_document_text(&meta.path, &source)
+    run_git(move || GitEngine::extract_document_text(&meta.path, &source)).await
 }
 
 #[tauri::command]
@@ -71,13 +73,16 @@ pub async fn get_file_diff_at_commit(
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    GitEngine::get_file_diff_at_commit(
-        &meta.path,
-        &file_path,
-        old_file_path.as_deref(),
-        &oid,
-        ignore_whitespace,
-    )
+    run_git(move || {
+        GitEngine::get_file_diff_at_commit(
+            &meta.path,
+            &file_path,
+            old_file_path.as_deref(),
+            &oid,
+            ignore_whitespace,
+        )
+    })
+    .await
 }
 
 #[tauri::command]
@@ -89,5 +94,5 @@ pub async fn get_file_blame(
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    GitEngine::get_file_blame(&meta.path, &file_path)
+    run_git(move || GitEngine::get_file_blame(&meta.path, &file_path)).await
 }

@@ -1,3 +1,4 @@
+use crate::git_tasks::{run_git, run_network};
 use tauri::State;
 
 use crate::{
@@ -13,7 +14,7 @@ pub async fn list_tags(
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    GitEngine::list_tags(&meta.path)
+    run_git(move || GitEngine::list_tags(&meta.path)).await
 }
 
 #[tauri::command]
@@ -27,7 +28,7 @@ pub async fn delete_tag(
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    GitEngine::delete_tag(&meta.path, &name, expected_oid.as_deref())
+    run_git(move || GitEngine::delete_tag(&meta.path, &name, expected_oid.as_deref())).await
 }
 
 #[tauri::command]
@@ -40,5 +41,5 @@ pub async fn list_remote_tags(
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    GitEngine::list_remote_tags(&meta.path, &remote_name)
+    run_network(move || GitEngine::list_remote_tags(&meta.path, &remote_name)).await
 }

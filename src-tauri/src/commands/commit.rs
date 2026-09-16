@@ -1,3 +1,4 @@
+use crate::git_tasks::run_git;
 use tauri::State;
 
 use crate::{
@@ -16,20 +17,22 @@ pub async fn create_commit(
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
+    run_git(move || {
+        if message.trim().is_empty() {
+            return Err(GitError::OperationFailed(
+                "Commit message cannot be empty".to_string(),
+            ));
+        }
 
-    if message.trim().is_empty() {
-        return Err(GitError::OperationFailed(
-            "Commit message cannot be empty".to_string(),
-        ));
-    }
-
-    log::debug!("[create_commit] message_len={}", message.len());
-    GitEngine::create_commit(
-        &meta.path,
-        &message,
-        expected_head.as_deref(),
-        &expected_head_ref,
-    )
+        log::debug!("[create_commit] message_len={}", message.len());
+        GitEngine::create_commit(
+            &meta.path,
+            &message,
+            expected_head.as_deref(),
+            &expected_head_ref,
+        )
+    })
+    .await
 }
 
 #[tauri::command]
@@ -43,12 +46,15 @@ pub async fn checkout_commit(
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    GitEngine::checkout_commit(
-        &meta.path,
-        &oid,
-        expected_head.as_deref(),
-        expected_head_ref.as_deref(),
-    )
+    run_git(move || {
+        GitEngine::checkout_commit(
+            &meta.path,
+            &oid,
+            expected_head.as_deref(),
+            expected_head_ref.as_deref(),
+        )
+    })
+    .await
 }
 
 #[tauri::command]
@@ -62,12 +68,15 @@ pub async fn cherry_pick_commit(
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    GitEngine::cherry_pick_commit(
-        &meta.path,
-        &oid,
-        expected_head.as_deref(),
-        expected_head_ref.as_deref(),
-    )
+    run_git(move || {
+        GitEngine::cherry_pick_commit(
+            &meta.path,
+            &oid,
+            expected_head.as_deref(),
+            expected_head_ref.as_deref(),
+        )
+    })
+    .await
 }
 
 #[tauri::command]
@@ -81,12 +90,15 @@ pub async fn revert_commit(
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    GitEngine::revert_commit(
-        &meta.path,
-        &oid,
-        expected_head.as_deref(),
-        expected_head_ref.as_deref(),
-    )
+    run_git(move || {
+        GitEngine::revert_commit(
+            &meta.path,
+            &oid,
+            expected_head.as_deref(),
+            expected_head_ref.as_deref(),
+        )
+    })
+    .await
 }
 
 #[tauri::command]
@@ -97,7 +109,7 @@ pub async fn cherry_pick_continue(
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    GitEngine::cherry_pick_continue(&meta.path)
+    run_git(move || GitEngine::cherry_pick_continue(&meta.path)).await
 }
 
 #[tauri::command]
@@ -108,7 +120,7 @@ pub async fn cherry_pick_abort(
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    GitEngine::cherry_pick_abort(&meta.path)
+    run_git(move || GitEngine::cherry_pick_abort(&meta.path)).await
 }
 
 #[tauri::command]
@@ -119,7 +131,7 @@ pub async fn revert_continue(
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    GitEngine::revert_continue(&meta.path)
+    run_git(move || GitEngine::revert_continue(&meta.path)).await
 }
 
 #[tauri::command]
@@ -130,7 +142,7 @@ pub async fn revert_abort(
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    GitEngine::revert_abort(&meta.path)
+    run_git(move || GitEngine::revert_abort(&meta.path)).await
 }
 
 #[tauri::command]
@@ -145,13 +157,16 @@ pub async fn reset_to_commit(
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    GitEngine::reset_to_commit(
-        &meta.path,
-        &oid,
-        &mode,
-        expected_head.as_deref(),
-        expected_head_ref.as_deref(),
-    )
+    run_git(move || {
+        GitEngine::reset_to_commit(
+            &meta.path,
+            &oid,
+            &mode,
+            expected_head.as_deref(),
+            expected_head_ref.as_deref(),
+        )
+    })
+    .await
 }
 
 #[tauri::command]
@@ -163,7 +178,7 @@ pub async fn undo_last_commit(
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    GitEngine::undo_last_commit(&meta.path, &expected_head)
+    run_git(move || GitEngine::undo_last_commit(&meta.path, &expected_head)).await
 }
 
 #[tauri::command]
@@ -177,14 +192,16 @@ pub async fn amend_commit(
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
+    run_git(move || {
+        if message.trim().is_empty() {
+            return Err(GitError::OperationFailed(
+                "Commit message cannot be empty".to_string(),
+            ));
+        }
 
-    if message.trim().is_empty() {
-        return Err(GitError::OperationFailed(
-            "Commit message cannot be empty".to_string(),
-        ));
-    }
-
-    GitEngine::amend_commit(&meta.path, &message, &expected_head, &expected_head_ref)
+        GitEngine::amend_commit(&meta.path, &message, &expected_head, &expected_head_ref)
+    })
+    .await
 }
 
 #[tauri::command]
@@ -203,23 +220,25 @@ pub async fn amend_commit_message(
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
+    run_git(move || {
+        if message.trim().is_empty() {
+            return Err(GitError::OperationFailed(
+                "Commit message cannot be empty".to_string(),
+            ));
+        }
 
-    if message.trim().is_empty() {
-        return Err(GitError::OperationFailed(
-            "Commit message cannot be empty".to_string(),
-        ));
-    }
-
-    GitEngine::amend_commit_message(
-        &meta.path,
-        &message,
-        author_time,
-        committer_time,
-        author_name.as_deref(),
-        author_email.as_deref(),
-        &expected_head,
-        &expected_head_ref,
-    )
+        GitEngine::amend_commit_message(
+            &meta.path,
+            &message,
+            author_time,
+            committer_time,
+            author_name.as_deref(),
+            author_email.as_deref(),
+            &expected_head,
+            &expected_head_ref,
+        )
+    })
+    .await
 }
 
 #[tauri::command]
@@ -233,8 +252,11 @@ pub async fn create_tag(
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    if name.trim().is_empty() {
-        return Err(GitError::OperationFailed("标签名不能为空".to_string()));
-    }
-    GitEngine::create_tag(&meta.path, &name, &oid, message.as_deref())
+    run_git(move || {
+        if name.trim().is_empty() {
+            return Err(GitError::OperationFailed("标签名不能为空".to_string()));
+        }
+        GitEngine::create_tag(&meta.path, &name, &oid, message.as_deref())
+    })
+    .await
 }

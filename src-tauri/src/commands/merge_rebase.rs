@@ -1,3 +1,4 @@
+use crate::git_tasks::run_git;
 use tauri::State;
 
 use crate::{
@@ -26,15 +27,18 @@ pub async fn merge_branch(
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    GitEngine::merge_branch(
-        &meta.path,
-        &source_branch,
-        strategy,
-        message.as_deref(),
-        &expected_head,
-        &expected_head_ref,
-        &expected_source,
-    )
+    run_git(move || {
+        GitEngine::merge_branch(
+            &meta.path,
+            &source_branch,
+            strategy,
+            message.as_deref(),
+            &expected_head,
+            &expected_head_ref,
+            &expected_source,
+        )
+    })
+    .await
 }
 
 #[tauri::command]
@@ -46,7 +50,7 @@ pub async fn merge_continue(
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    GitEngine::merge_continue(&meta.path, &message)
+    run_git(move || GitEngine::merge_continue(&meta.path, &message)).await
 }
 
 #[tauri::command]
@@ -57,7 +61,7 @@ pub async fn merge_abort(
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    GitEngine::merge_abort(&meta.path)
+    run_git(move || GitEngine::merge_abort(&meta.path)).await
 }
 
 // ── Rebase ─────────────────────────────────────────────────────────────
@@ -77,15 +81,18 @@ pub async fn rebase_plan(
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    GitEngine::rebase_plan(
-        &meta.path,
-        &upstream,
-        onto.as_deref(),
-        &expected_head,
-        &expected_head_ref,
-        &expected_upstream,
-        expected_onto.as_deref(),
-    )
+    run_git(move || {
+        GitEngine::rebase_plan(
+            &meta.path,
+            &upstream,
+            onto.as_deref(),
+            &expected_head,
+            &expected_head_ref,
+            &expected_upstream,
+            expected_onto.as_deref(),
+        )
+    })
+    .await
 }
 
 #[tauri::command]
@@ -104,16 +111,19 @@ pub async fn rebase_start(
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    GitEngine::rebase_start(
-        &meta.path,
-        &upstream,
-        onto.as_deref(),
-        todo,
-        &expected_head,
-        &expected_head_ref,
-        &expected_upstream,
-        expected_onto.as_deref(),
-    )
+    run_git(move || {
+        GitEngine::rebase_start(
+            &meta.path,
+            &upstream,
+            onto.as_deref(),
+            todo,
+            &expected_head,
+            &expected_head_ref,
+            &expected_upstream,
+            expected_onto.as_deref(),
+        )
+    })
+    .await
 }
 
 #[tauri::command]
@@ -125,7 +135,7 @@ pub async fn rebase_continue(
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    GitEngine::rebase_continue(&meta.path, amended_message.as_deref())
+    run_git(move || GitEngine::rebase_continue(&meta.path, amended_message.as_deref())).await
 }
 
 #[tauri::command]
@@ -136,7 +146,7 @@ pub async fn rebase_skip(
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    GitEngine::rebase_skip(&meta.path)
+    run_git(move || GitEngine::rebase_skip(&meta.path)).await
 }
 
 #[tauri::command]
@@ -147,7 +157,7 @@ pub async fn rebase_abort(
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    GitEngine::rebase_abort(&meta.path)
+    run_git(move || GitEngine::rebase_abort(&meta.path)).await
 }
 
 // ── Conflict ───────────────────────────────────────────────────────────
@@ -161,7 +171,7 @@ pub async fn get_conflict_file(
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    GitEngine::get_conflict_file(&meta.path, &file_path)
+    run_git(move || GitEngine::get_conflict_file(&meta.path, &file_path)).await
 }
 
 #[tauri::command]
@@ -175,7 +185,10 @@ pub async fn mark_conflict_resolved(
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    GitEngine::mark_conflict_resolved(&meta.path, &file_path, &content, &expected_context)
+    run_git(move || {
+        GitEngine::mark_conflict_resolved(&meta.path, &file_path, &content, &expected_context)
+    })
+    .await
 }
 
 #[tauri::command]
@@ -189,5 +202,8 @@ pub async fn checkout_conflict_side(
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    GitEngine::checkout_conflict_side(&meta.path, &file_path, &side, &expected_context)
+    run_git(move || {
+        GitEngine::checkout_conflict_side(&meta.path, &file_path, &side, &expected_context)
+    })
+    .await
 }

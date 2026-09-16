@@ -1,3 +1,4 @@
+use crate::git_tasks::{run_git, run_network};
 use tauri::State;
 
 use crate::{
@@ -15,28 +16,30 @@ pub async fn fetch_remote(
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-
-    if remote_name == "--all" {
-        let remotes = GitEngine::list_remotes(&meta.path)?;
-        let mut failures = Vec::new();
-        for remote in remotes {
-            if let Err(e) = GitEngine::fetch(&meta.path, &remote.name) {
-                failures.push(format!("{}: {}", remote.name, e));
+    run_network(move || {
+        if remote_name == "--all" {
+            let remotes = GitEngine::list_remotes(&meta.path)?;
+            let mut failures = Vec::new();
+            for remote in remotes {
+                if let Err(e) = GitEngine::fetch(&meta.path, &remote.name) {
+                    failures.push(format!("{}: {}", remote.name, e));
+                }
             }
-        }
-        if failures.is_empty() {
-            Ok(())
+            if failures.is_empty() {
+                Ok(())
+            } else {
+                Err(GitError::OperationFailed(format!(
+                    "Fetch All 部分远程失败：{}",
+                    failures.join("; ")
+                )))
+            }
         } else {
-            Err(GitError::OperationFailed(format!(
-                "Fetch All 部分远程失败：{}",
-                failures.join("; ")
-            )))
+            let result = GitEngine::fetch(&meta.path, &remote_name);
+            log::debug!("[fetch_remote] result={result:?}");
+            result
         }
-    } else {
-        let result = GitEngine::fetch(&meta.path, &remote_name);
-        log::debug!("[fetch_remote] result={result:?}");
-        result
-    }
+    })
+    .await
 }
 
 #[tauri::command]
@@ -49,28 +52,30 @@ pub async fn fetch_tags_from_remote(
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-
-    if remote_name == "--all" {
-        let remotes = GitEngine::list_remotes(&meta.path)?;
-        let mut failures = Vec::new();
-        for remote in remotes {
-            if let Err(e) = GitEngine::fetch_tags(&meta.path, &remote.name) {
-                failures.push(format!("{}: {}", remote.name, e));
+    run_network(move || {
+        if remote_name == "--all" {
+            let remotes = GitEngine::list_remotes(&meta.path)?;
+            let mut failures = Vec::new();
+            for remote in remotes {
+                if let Err(e) = GitEngine::fetch_tags(&meta.path, &remote.name) {
+                    failures.push(format!("{}: {}", remote.name, e));
+                }
             }
-        }
-        if failures.is_empty() {
-            Ok(())
+            if failures.is_empty() {
+                Ok(())
+            } else {
+                Err(GitError::OperationFailed(format!(
+                    "Fetch Tags All 部分远程失败：{}",
+                    failures.join("; ")
+                )))
+            }
         } else {
-            Err(GitError::OperationFailed(format!(
-                "Fetch Tags All 部分远程失败：{}",
-                failures.join("; ")
-            )))
+            let result = GitEngine::fetch_tags(&meta.path, &remote_name);
+            log::debug!("[fetch_tags_from_remote] result={result:?}");
+            result
         }
-    } else {
-        let result = GitEngine::fetch_tags(&meta.path, &remote_name);
-        log::debug!("[fetch_tags_from_remote] result={result:?}");
-        result
-    }
+    })
+    .await
 }
 
 #[tauri::command]
@@ -85,9 +90,12 @@ pub async fn push_branch(
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    let result = GitEngine::push(&meta.path, &remote_name, &branch_name, &mode);
-    log::debug!("[push_branch] result={result:?}");
-    result
+    run_network(move || {
+        let result = GitEngine::push(&meta.path, &remote_name, &branch_name, &mode);
+        log::debug!("[push_branch] result={result:?}");
+        result
+    })
+    .await
 }
 
 #[tauri::command]
@@ -106,17 +114,20 @@ pub async fn push_tag(
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    let result = GitEngine::push_tag(
-        &meta.path,
-        &remote_name,
-        &tag_name,
-        force,
-        expected_local_oid.as_deref(),
-        expected_remote_oid.as_deref(),
-        verify_remote_target,
-    );
-    log::debug!("[push_tag] result={result:?}");
-    result
+    run_network(move || {
+        let result = GitEngine::push_tag(
+            &meta.path,
+            &remote_name,
+            &tag_name,
+            force,
+            expected_local_oid.as_deref(),
+            expected_remote_oid.as_deref(),
+            verify_remote_target,
+        );
+        log::debug!("[push_tag] result={result:?}");
+        result
+    })
+    .await
 }
 
 #[tauri::command]
@@ -131,10 +142,17 @@ pub async fn delete_remote_tag(
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    let result =
-        GitEngine::delete_remote_tag(&meta.path, &remote_name, &tag_name, expected_oid.as_deref());
-    log::debug!("[delete_remote_tag] result={result:?}");
-    result
+    run_network(move || {
+        let result = GitEngine::delete_remote_tag(
+            &meta.path,
+            &remote_name,
+            &tag_name,
+            expected_oid.as_deref(),
+        );
+        log::debug!("[delete_remote_tag] result={result:?}");
+        result
+    })
+    .await
 }
 
 #[tauri::command]
@@ -149,9 +167,12 @@ pub async fn pull_branch(
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    let result = GitEngine::pull(&meta.path, &remote_name, &branch_name, &mode);
-    log::debug!("[pull_branch] result={result:?}");
-    result
+    run_network(move || {
+        let result = GitEngine::pull(&meta.path, &remote_name, &branch_name, &mode);
+        log::debug!("[pull_branch] result={result:?}");
+        result
+    })
+    .await
 }
 
 #[tauri::command]
@@ -162,7 +183,7 @@ pub async fn list_remotes(
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    GitEngine::list_remotes(&meta.path)
+    run_git(move || GitEngine::list_remotes(&meta.path)).await
 }
 
 #[tauri::command]
@@ -176,7 +197,7 @@ pub async fn add_remote(
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    GitEngine::add_remote(&meta.path, &name, &url)
+    run_git(move || GitEngine::add_remote(&meta.path, &name, &url)).await
 }
 
 #[tauri::command]
@@ -190,7 +211,7 @@ pub async fn remove_remote(
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    GitEngine::remove_remote(&meta.path, &name, expected_url.as_deref())
+    run_git(move || GitEngine::remove_remote(&meta.path, &name, expected_url.as_deref())).await
 }
 
 #[tauri::command]
@@ -206,11 +227,14 @@ pub async fn edit_remote(
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    GitEngine::edit_remote(
-        &meta.path,
-        &old_name,
-        &new_name,
-        &new_url,
-        expected_old_url.as_deref(),
-    )
+    run_git(move || {
+        GitEngine::edit_remote(
+            &meta.path,
+            &old_name,
+            &new_name,
+            &new_url,
+            expected_old_url.as_deref(),
+        )
+    })
+    .await
 }

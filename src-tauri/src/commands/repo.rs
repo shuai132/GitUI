@@ -1,3 +1,4 @@
+use crate::git_tasks::{run_git, run_network};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
@@ -35,28 +36,32 @@ pub async fn open_repo(
     path: String,
     repo_manager: State<'_, RepoManager>,
 ) -> Result<RepoMeta, GitError> {
-    // Validate it's a git repo
-    let repo = GitEngine::open(&path)?;
-    let workdir = repo
-        .workdir()
-        .ok_or_else(|| GitError::InvalidPath("Bare repos not supported".to_string()))?;
+    let repo_manager = repo_manager.inner().clone();
+    run_git(move || {
+        // Validate it's a git repo
+        let repo = GitEngine::open(&path)?;
+        let workdir = repo
+            .workdir()
+            .ok_or_else(|| GitError::InvalidPath("Bare repos not supported".to_string()))?;
 
-    let name = workdir
-        .file_name()
-        .unwrap_or(workdir.as_os_str())
-        .to_string_lossy()
-        .to_string();
+        let name = workdir
+            .file_name()
+            .unwrap_or(workdir.as_os_str())
+            .to_string_lossy()
+            .to_string();
 
-    let id = Uuid::new_v4().to_string();
-    let meta = RepoMeta {
-        id: id.clone(),
-        path: path.clone(),
-        name,
-    };
+        let id = Uuid::new_v4().to_string();
+        let meta = RepoMeta {
+            id: id.clone(),
+            path: path.clone(),
+            name,
+        };
 
-    repo_manager.add_repo(meta.clone());
+        repo_manager.add_repo(meta.clone());
 
-    Ok(meta)
+        Ok(meta)
+    })
+    .await
 }
 
 fn watch_active_repo(
@@ -116,75 +121,80 @@ pub async fn close_repo(
     repo_manager: State<'_, RepoManager>,
     watcher: State<'_, WatcherService>,
 ) -> Result<(), GitError> {
-    let _active_guard = repo_manager.active_sync_lock();
-    let coordinator = app.state::<TrayCoordinator>();
-    if let Some(meta) = repo_manager.get_meta(&repo_id) {
-        GitEngine::clear_log_cache(&meta.path);
-    }
-    if coordinator.is_local_window_closed() {
-        repo_manager.remove_repo(&repo_id);
-        watcher.unwatch_all();
-        app.state::<AutoFetchService>().set_active_repo(None);
-        repo_manager.clear_active_runtime();
-        coordinator.update_active_repo(None);
-        return Ok(());
-    }
-
-    let snapshot = repo_manager.active_snapshot();
-    let was_active = snapshot.repo_id.as_deref() == Some(repo_id.as_str());
-    let accepts_generation = repo_manager.accepts_generation(generation);
-
-    let next_active_meta = if accepts_generation && was_active {
-        match next_active_repo_id.as_deref() {
-            Some(next_id) if next_id != repo_id => Some(
-                repo_manager
-                    .get_meta(next_id)
-                    .ok_or_else(|| GitError::RepoNotOpen(next_id.to_string()))?,
-            ),
-            Some(_) => {
-                return Err(GitError::OperationFailed(
-                    "next active repo cannot be the closed repo".to_string(),
-                ));
-            }
-            None => None,
+    let repo_manager = repo_manager.inner().clone();
+    let watcher = watcher.inner().clone();
+    run_git(move || {
+        let _active_guard = repo_manager.active_sync_lock();
+        let coordinator = app.state::<TrayCoordinator>();
+        if let Some(meta) = repo_manager.get_meta(&repo_id) {
+            GitEngine::clear_log_cache(&meta.path);
         }
-    } else {
-        None
-    };
-
-    repo_manager.remove_repo(&repo_id);
-
-    if was_active {
-        if accepts_generation {
-            match next_active_meta {
-                Some(meta) => {
-                    watch_active_repo(&meta.id, &meta.path, &app, &watcher)?;
-                    app.state::<AutoFetchService>()
-                        .set_active_repo(Some(meta.id.clone()));
-                    repo_manager.set_active_state(Some(meta.id.clone()), generation);
-                    coordinator.update_active_repo(Some(meta.clone()));
-                }
-                None => {
-                    watcher.unwatch_all();
-                    app.state::<AutoFetchService>().set_active_repo(None);
-                    repo_manager.set_active_state(None, generation);
-                    coordinator.update_active_repo(None);
-                }
-            }
-        } else {
+        if coordinator.is_local_window_closed() {
+            repo_manager.remove_repo(&repo_id);
             watcher.unwatch_all();
             app.state::<AutoFetchService>().set_active_repo(None);
             repo_manager.clear_active_runtime();
             coordinator.update_active_repo(None);
+            return Ok(());
         }
-    } else {
-        watcher.unwatch(&repo_id);
-        if accepts_generation {
-            repo_manager.set_active_state(snapshot.repo_id, generation);
-        }
-    }
 
-    Ok(())
+        let snapshot = repo_manager.active_snapshot();
+        let was_active = snapshot.repo_id.as_deref() == Some(repo_id.as_str());
+        let accepts_generation = repo_manager.accepts_generation(generation);
+
+        let next_active_meta = if accepts_generation && was_active {
+            match next_active_repo_id.as_deref() {
+                Some(next_id) if next_id != repo_id => Some(
+                    repo_manager
+                        .get_meta(next_id)
+                        .ok_or_else(|| GitError::RepoNotOpen(next_id.to_string()))?,
+                ),
+                Some(_) => {
+                    return Err(GitError::OperationFailed(
+                        "next active repo cannot be the closed repo".to_string(),
+                    ));
+                }
+                None => None,
+            }
+        } else {
+            None
+        };
+
+        repo_manager.remove_repo(&repo_id);
+
+        if was_active {
+            if accepts_generation {
+                match next_active_meta {
+                    Some(meta) => {
+                        watch_active_repo(&meta.id, &meta.path, &app, &watcher)?;
+                        app.state::<AutoFetchService>()
+                            .set_active_repo(Some(meta.id.clone()));
+                        repo_manager.set_active_state(Some(meta.id.clone()), generation);
+                        coordinator.update_active_repo(Some(meta.clone()));
+                    }
+                    None => {
+                        watcher.unwatch_all();
+                        app.state::<AutoFetchService>().set_active_repo(None);
+                        repo_manager.set_active_state(None, generation);
+                        coordinator.update_active_repo(None);
+                    }
+                }
+            } else {
+                watcher.unwatch_all();
+                app.state::<AutoFetchService>().set_active_repo(None);
+                repo_manager.clear_active_runtime();
+                coordinator.update_active_repo(None);
+            }
+        } else {
+            watcher.unwatch(&repo_id);
+            if accepts_generation {
+                repo_manager.set_active_state(snapshot.repo_id, generation);
+            }
+        }
+
+        Ok(())
+    })
+    .await
 }
 
 #[tauri::command]
@@ -195,44 +205,49 @@ pub async fn set_active_repo(
     repo_manager: State<'_, RepoManager>,
     watcher: State<'_, WatcherService>,
 ) -> Result<(), GitError> {
-    let _active_guard = repo_manager.active_sync_lock();
-    let coordinator = app.state::<TrayCoordinator>();
-    if coordinator.is_local_window_closed() {
-        watcher.unwatch_all();
-        app.state::<AutoFetchService>().set_active_repo(None);
-        repo_manager.clear_active_runtime();
-        coordinator.update_active_repo(None);
-        return Ok(());
-    }
-
-    if !repo_manager.accepts_generation(generation) {
-        log::debug!(
-            "[repo] ignored stale set_active_repo generation={} current={}",
-            generation,
-            repo_manager.active_snapshot().generation
-        );
-        return Ok(());
-    }
-
-    match repo_id {
-        Some(id) => {
-            let meta = repo_manager
-                .get_meta(&id)
-                .ok_or_else(|| GitError::RepoNotOpen(id.clone()))?;
-            watch_active_repo(&id, &meta.path, &app, &watcher)?;
-            app.state::<AutoFetchService>().set_active_repo(Some(id));
-            repo_manager.set_active_state(Some(meta.id.clone()), generation);
-            coordinator.update_active_repo(Some(meta.clone()));
-        }
-        None => {
+    let repo_manager = repo_manager.inner().clone();
+    let watcher = watcher.inner().clone();
+    run_git(move || {
+        let _active_guard = repo_manager.active_sync_lock();
+        let coordinator = app.state::<TrayCoordinator>();
+        if coordinator.is_local_window_closed() {
             watcher.unwatch_all();
             app.state::<AutoFetchService>().set_active_repo(None);
-            repo_manager.set_active_state(None, generation);
+            repo_manager.clear_active_runtime();
             coordinator.update_active_repo(None);
+            return Ok(());
         }
-    }
 
-    Ok(())
+        if !repo_manager.accepts_generation(generation) {
+            log::debug!(
+                "[repo] ignored stale set_active_repo generation={} current={}",
+                generation,
+                repo_manager.active_snapshot().generation
+            );
+            return Ok(());
+        }
+
+        match repo_id {
+            Some(id) => {
+                let meta = repo_manager
+                    .get_meta(&id)
+                    .ok_or_else(|| GitError::RepoNotOpen(id.clone()))?;
+                watch_active_repo(&id, &meta.path, &app, &watcher)?;
+                app.state::<AutoFetchService>().set_active_repo(Some(id));
+                repo_manager.set_active_state(Some(meta.id.clone()), generation);
+                coordinator.update_active_repo(Some(meta.clone()));
+            }
+            None => {
+                watcher.unwatch_all();
+                app.state::<AutoFetchService>().set_active_repo(None);
+                repo_manager.set_active_state(None, generation);
+                coordinator.update_active_repo(None);
+            }
+        }
+
+        Ok(())
+    })
+    .await
 }
 
 #[tauri::command]
@@ -242,7 +257,8 @@ pub async fn list_repos(repo_manager: State<'_, RepoManager>) -> Result<Vec<Repo
 
 #[tauri::command]
 pub async fn validate_repo_path(path: String) -> Result<bool, GitError> {
-    Ok(Path::new(&path).join(".git").exists() || GitEngine::open(&path).is_ok())
+    run_git(move || Ok(Path::new(&path).join(".git").exists() || GitEngine::open(&path).is_ok()))
+        .await
 }
 
 fn classify_status_change(roots: &WatchPaths, result: &WatchEventResult) -> StatusChangeKind {
@@ -423,36 +439,16 @@ pub async fn clone_repo(opts: CloneOptions, app: AppHandle) -> Result<String, Gi
         let _ = app_for_cb.emit("repo://operation-progress", payload);
     };
 
-    let url_for_task = url.clone();
-    let target_for_task = target_str.clone();
-    let handle = tokio::task::spawn_blocking(move || {
-        GitEngine::clone_repo(&url_for_task, &target_for_task, depth, recurse, on_progress)
-    });
-
-    match handle.await {
-        Ok(Ok(workdir)) => Ok(workdir),
-        Ok(Err(e)) => Err(e),
-        Err(join_err) => Err(GitError::OperationFailed(format!(
-            "clone task panicked: {}",
-            join_err
-        ))),
-    }
+    run_network(move || GitEngine::clone_repo(&url, &target_str, depth, recurse, on_progress)).await
 }
 
 #[tauri::command]
 pub async fn init_repo(path: String) -> Result<String, GitError> {
-    let path_for_task = path.clone();
-    let handle =
-        tokio::task::spawn_blocking(move || GitEngine::init_repo(&path_for_task).map(|_| ()));
-
-    match handle.await {
-        Ok(Ok(())) => Ok(path),
-        Ok(Err(e)) => Err(e),
-        Err(join_err) => Err(GitError::OperationFailed(format!(
-            "init task panicked: {}",
-            join_err
-        ))),
-    }
+    run_git(move || {
+        GitEngine::init_repo(&path)?;
+        Ok(path)
+    })
+    .await
 }
 
 #[tauri::command]
@@ -464,26 +460,17 @@ pub async fn create_worktree(
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    let repo_path = meta.path.clone();
-
-    let handle = tokio::task::spawn_blocking(move || {
+    run_git(move || {
         GitEngine::create_worktree(
-            &repo_path,
+            &meta.path,
             &opts.path,
             &opts.branch_name,
             opts.start_point.as_deref(),
             opts.start_point_is_remote,
             &opts.expected_start_oid,
         )
-    });
-
-    match handle.await {
-        Ok(result) => result,
-        Err(join_err) => Err(GitError::OperationFailed(format!(
-            "worktree task panicked: {}",
-            join_err
-        ))),
-    }
+    })
+    .await
 }
 
 #[cfg(test)]

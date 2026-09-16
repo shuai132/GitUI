@@ -1,3 +1,4 @@
+use crate::git_tasks::run_git;
 use tauri::State;
 
 use crate::{
@@ -17,9 +18,7 @@ pub async fn get_status(
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-
-    let status = GitEngine::get_status(&meta.path)?;
-    Ok(status)
+    run_git(move || GitEngine::get_status(&meta.path)).await
 }
 
 #[tauri::command]
@@ -31,7 +30,7 @@ pub async fn stage_file(
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    GitEngine::stage_file(&meta.path, &file_path)
+    run_git(move || GitEngine::stage_file(&meta.path, &file_path)).await
 }
 
 #[tauri::command]
@@ -43,7 +42,7 @@ pub async fn stage_files(
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    GitEngine::stage_files(&meta.path, &file_paths)
+    run_git(move || GitEngine::stage_files(&meta.path, &file_paths)).await
 }
 
 #[tauri::command]
@@ -55,7 +54,7 @@ pub async fn unstage_file(
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    GitEngine::unstage_file(&meta.path, &file_path)
+    run_git(move || GitEngine::unstage_file(&meta.path, &file_path)).await
 }
 
 #[tauri::command]
@@ -67,7 +66,7 @@ pub async fn unstage_files(
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    GitEngine::unstage_files(&meta.path, &file_paths)
+    run_git(move || GitEngine::unstage_files(&meta.path, &file_paths)).await
 }
 
 #[tauri::command]
@@ -78,7 +77,7 @@ pub async fn stage_all(
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    GitEngine::stage_all(&meta.path)
+    run_git(move || GitEngine::stage_all(&meta.path)).await
 }
 
 #[tauri::command]
@@ -89,7 +88,7 @@ pub async fn unstage_all(
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    GitEngine::unstage_all(&meta.path)
+    run_git(move || GitEngine::unstage_all(&meta.path)).await
 }
 
 #[tauri::command]
@@ -100,7 +99,7 @@ pub async fn get_repo_state(
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    GitEngine::get_repo_state(&meta.path)
+    run_git(move || GitEngine::get_repo_state(&meta.path)).await
 }
 
 #[tauri::command]
@@ -112,7 +111,7 @@ pub async fn apply_patch(
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    GitEngine::apply_patch(&meta.path, &patch_text)
+    run_git(move || GitEngine::apply_patch(&meta.path, &patch_text)).await
 }
 
 #[tauri::command]
@@ -124,7 +123,7 @@ pub async fn apply_patch_to_index(
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    GitEngine::apply_patch_to_index(&meta.path, &patch_text)
+    run_git(move || GitEngine::apply_patch_to_index(&meta.path, &patch_text)).await
 }
 
 #[tauri::command]
@@ -136,5 +135,5 @@ pub async fn apply_patch_to_workdir_and_index(
     let meta = repo_manager
         .get_meta(&repo_id)
         .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
-    GitEngine::apply_patch_to_workdir_and_index(&meta.path, &patch_text)
+    run_git(move || GitEngine::apply_patch_to_workdir_and_index(&meta.path, &patch_text)).await
 }

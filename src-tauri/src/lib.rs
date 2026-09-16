@@ -1,6 +1,7 @@
 mod auto_fetch;
 mod commands;
 mod git;
+mod git_tasks;
 mod logger;
 #[cfg(target_os = "macos")]
 mod menu;
