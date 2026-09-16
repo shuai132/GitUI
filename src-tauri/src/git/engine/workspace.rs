@@ -6,6 +6,46 @@ use crate::git::{
     types::*,
 };
 
+fn fill_status_stats<'a>(entries: impl IntoIterator<Item = &'a mut FileEntry>, diff: &Diff<'_>) {
+    let mut path_stats: std::collections::HashMap<String, (usize, usize)> =
+        std::collections::HashMap::new();
+    let mut additions = 0usize;
+    let mut deletions = 0usize;
+    let mut cur_path: Option<String> = None;
+
+    let _ = diff.print(DiffFormat::Patch, |delta, _hunk, line| {
+        use git2::DiffLineType;
+        match line.origin_value() {
+            DiffLineType::FileHeader => {
+                if let Some(p) = cur_path.take() {
+                    path_stats.insert(p, (additions, deletions));
+                    additions = 0;
+                    deletions = 0;
+                }
+                cur_path = delta
+                    .new_file()
+                    .path()
+                    .or_else(|| delta.old_file().path())
+                    .map(|p| p.to_string_lossy().to_string());
+            }
+            DiffLineType::Addition => additions += 1,
+            DiffLineType::Deletion => deletions += 1,
+            _ => {}
+        }
+        true
+    });
+    if let Some(p) = cur_path.take() {
+        path_stats.insert(p, (additions, deletions));
+    }
+
+    for entry in entries {
+        if let Some((a, d)) = path_stats.get(&entry.path) {
+            entry.additions = *a;
+            entry.deletions = *d;
+        }
+    }
+}
+
 impl GitEngine {
     pub fn get_status(path: &str) -> GitResult<WorkspaceStatus> {
         let repo = Self::open(path)?;
@@ -156,47 +196,6 @@ impl GitEngine {
             Err(_) => (None, None, None, false),
         };
 
-        // Fill additions/deletions via batch diff stats
-        let fill_stats = |entries: &mut Vec<FileEntry>, diff: &Diff| {
-            let mut path_stats: std::collections::HashMap<String, (usize, usize)> =
-                std::collections::HashMap::new();
-            let mut additions = 0usize;
-            let mut deletions = 0usize;
-            let mut cur_path: Option<String> = None;
-
-            let _ = diff.print(DiffFormat::Patch, |delta, _hunk, line| {
-                use git2::DiffLineType;
-                match line.origin_value() {
-                    DiffLineType::FileHeader => {
-                        if let Some(p) = cur_path.take() {
-                            path_stats.insert(p, (additions, deletions));
-                            additions = 0;
-                            deletions = 0;
-                        }
-                        cur_path = delta
-                            .new_file()
-                            .path()
-                            .or_else(|| delta.old_file().path())
-                            .map(|p| p.to_string_lossy().to_string());
-                    }
-                    DiffLineType::Addition => additions += 1,
-                    DiffLineType::Deletion => deletions += 1,
-                    _ => {}
-                }
-                true
-            });
-            if let Some(p) = cur_path.take() {
-                path_stats.insert(p, (additions, deletions));
-            }
-
-            for entry in entries.iter_mut() {
-                if let Some((a, d)) = path_stats.get(&entry.path) {
-                    entry.additions = *a;
-                    entry.deletions = *d;
-                }
-            }
-        };
-
         if !staged.is_empty() {
             let mut opts = DiffOptions::new();
             opts.include_typechange(true);
@@ -209,29 +208,21 @@ impl GitEngine {
                 if let Ok(diff) =
                     repo.diff_tree_to_index(head_tree.as_ref(), Some(&index), Some(&mut opts))
                 {
-                    fill_stats(&mut staged, &diff);
+                    fill_status_stats(&mut staged, &diff);
                 }
             }
         }
 
-        if !unstaged.is_empty() {
+        if !unstaged.is_empty() || !untracked.is_empty() {
             let mut opts = DiffOptions::new();
-            opts.include_untracked(false).include_typechange(true);
-            if let Ok(index) = repo.index() {
-                if let Ok(diff) = repo.diff_index_to_workdir(Some(&index), Some(&mut opts)) {
-                    fill_stats(&mut unstaged, &diff);
-                }
-            }
-        }
-
-        if !untracked.is_empty() {
-            let mut opts = DiffOptions::new();
-            opts.include_untracked(true)
+            opts.include_untracked(!untracked.is_empty())
                 .show_untracked_content(true)
-                .recurse_untracked_dirs(true);
+                .recurse_untracked_dirs(true)
+                .include_typechange(true);
             if let Ok(index) = repo.index() {
                 if let Ok(diff) = repo.diff_index_to_workdir(Some(&index), Some(&mut opts)) {
-                    fill_stats(&mut untracked, &diff);
+                    // 已跟踪与未跟踪条目共享一次工作区 diff 和行统计。
+                    fill_status_stats(unstaged.iter_mut().chain(untracked.iter_mut()), &diff);
                 }
             }
         }
@@ -451,5 +442,101 @@ impl GitEngine {
             rebase_total,
             rebase_current_oid,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::git::test_utils::TestRepo;
+    use std::{fs, path::Path};
+
+    fn stats(entries: &[FileEntry], path: &str) -> (usize, usize) {
+        let entry = entries.iter().find(|entry| entry.path == path).unwrap();
+        (entry.additions, entry.deletions)
+    }
+
+    #[test]
+    fn status_stats_keep_index_worktree_and_untracked_counts_separate() {
+        let fixture = TestRepo::new();
+        let root = fixture.dir.path();
+        fs::write(root.join("deleted.txt"), "one\ntwo\n").unwrap();
+        fs::write(root.join("binary.dat"), b"old\0binary").unwrap();
+        GitEngine::stage_all(fixture.path_str()).unwrap();
+        let repo = GitEngine::open(fixture.path_str()).unwrap();
+        let tree = repo
+            .find_tree(repo.index().unwrap().write_tree().unwrap())
+            .unwrap();
+        let parent = repo.head().unwrap().peel_to_commit().unwrap();
+        let signature = repo.signature().unwrap();
+        repo.commit(
+            Some("HEAD"),
+            &signature,
+            &signature,
+            "baseline",
+            &tree,
+            &[&parent],
+        )
+        .unwrap();
+
+        fs::write(root.join("existing.txt"), "hello\nstaged\n").unwrap();
+        GitEngine::stage_file(fixture.path_str(), "existing.txt").unwrap();
+        fs::write(root.join("existing.txt"), "hello\nworktree\nextra\n").unwrap();
+        fs::remove_file(root.join("deleted.txt")).unwrap();
+        fs::write(root.join("binary.dat"), b"new\0binary").unwrap();
+        fs::create_dir(root.join("nested")).unwrap();
+        fs::write(root.join("nested/new.txt"), "one\ntwo\n").unwrap();
+        fs::write(root.join("empty.txt"), "").unwrap();
+        fs::write(root.join("new-binary.dat"), b"new\0binary").unwrap();
+        fs::write(repo.path().join("info/exclude"), "ignored.txt\n").unwrap();
+        fs::write(root.join("ignored.txt"), "ignored\n").unwrap();
+
+        let status = GitEngine::get_status(fixture.path_str()).unwrap();
+        assert_eq!(status.staged.len(), 1);
+        assert_eq!(stats(&status.staged, "existing.txt"), (1, 0));
+        assert_eq!(status.unstaged.len(), 3);
+        assert_eq!(stats(&status.unstaged, "existing.txt"), (2, 1));
+        assert_eq!(stats(&status.unstaged, "deleted.txt"), (0, 2));
+        assert_eq!(stats(&status.unstaged, "binary.dat"), (0, 0));
+        assert_eq!(status.untracked.len(), 3);
+        assert_eq!(stats(&status.untracked, "nested/new.txt"), (2, 0));
+        assert_eq!(stats(&status.untracked, "empty.txt"), (0, 0));
+        assert_eq!(stats(&status.untracked, "new-binary.dat"), (0, 0));
+    }
+
+    #[test]
+    fn status_stats_support_unborn_head_and_untracked_only_refreshes() {
+        let dir = tempfile::tempdir().unwrap();
+        let repo = Repository::init(dir.path()).unwrap();
+        let path = dir.path().to_str().unwrap();
+        fs::write(dir.path().join("staged.txt"), "staged\n").unwrap();
+        let mut index = repo.index().unwrap();
+        index.add_path(Path::new("staged.txt")).unwrap();
+        index.write().unwrap();
+        fs::write(dir.path().join("untracked.txt"), "new\nsecond\n").unwrap();
+        let status = GitEngine::get_status(path).unwrap();
+        assert!(status.head_commit.is_none());
+        assert!(status.unstaged.is_empty());
+        assert_eq!(stats(&status.staged, "staged.txt"), (1, 0));
+        assert_eq!(stats(&status.untracked, "untracked.txt"), (2, 0));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn adding_untracked_files_does_not_change_typechange_stats() {
+        let fixture = TestRepo::new();
+        let tracked = fixture.dir.path().join("existing.txt");
+        fs::remove_file(&tracked).unwrap();
+        std::os::unix::fs::symlink("target.txt", &tracked).unwrap();
+        let before = GitEngine::get_status(fixture.path_str()).unwrap();
+        fs::write(fixture.dir.path().join("new.txt"), "new\n").unwrap();
+        let after = GitEngine::get_status(fixture.path_str()).unwrap();
+        assert_eq!(before.unstaged[0].status, FileStatusKind::TypeChanged);
+        assert_eq!(after.unstaged[0].status, FileStatusKind::TypeChanged);
+        assert_eq!(
+            stats(&before.unstaged, "existing.txt"),
+            stats(&after.unstaged, "existing.txt")
+        );
+        assert_eq!(stats(&after.untracked, "new.txt"), (1, 0));
     }
 }
