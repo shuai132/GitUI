@@ -165,17 +165,7 @@ impl GitEngine {
                 }
             }
 
-            // reflog oid 若是另一 reflog oid 的严格祖先，就不是可直接移除的 tip。
-            for root in &reflog_oids {
-                if let Ok(mut ancestors) = repo.revwalk() {
-                    if ancestors.push(*root).is_err() {
-                        continue;
-                    }
-                    for oid in ancestors.skip(1).flatten() {
-                        strict_ancestors.insert(oid);
-                    }
-                }
-            }
+            strict_ancestors = Self::reflog_strict_ancestors(repo, &reflog_oids, &reachable);
         }
 
         Ok(LogWalkContext {
@@ -187,6 +177,36 @@ impl GitEngine {
             strict_ancestors,
             include_unreachable,
         })
+    }
+
+    fn reflog_strict_ancestors(
+        repo: &Repository,
+        roots: &HashSet<git2::Oid>,
+        reachable: &HashSet<git2::Oid>,
+    ) -> HashSet<git2::Oid> {
+        // 从每个入口的父节点开始，避免把入口自身算作自己的严格祖先。
+        let mut pending = Vec::new();
+        for root in roots {
+            if let Ok(commit) = repo.find_commit(*root) {
+                pending.extend(commit.parent_ids());
+            }
+        }
+
+        let mut visited = HashSet::new();
+        let mut ancestors = HashSet::new();
+        while let Some(oid) = pending.pop() {
+            // 可达集合对祖先封闭，其中不可能再出现失联入口。
+            if reachable.contains(&oid) || !visited.insert(oid) {
+                continue;
+            }
+            if roots.contains(&oid) {
+                ancestors.insert(oid);
+            }
+            if let Ok(commit) = repo.find_commit(oid) {
+                pending.extend(commit.parent_ids());
+            }
+        }
+        ancestors
     }
 
     fn log_commit_flags(context: &LogWalkContext<'_>, oid: git2::Oid) -> (bool, bool, bool) {
@@ -523,5 +543,102 @@ impl GitEngine {
         std::fs::write(&dest, blob.content())
             .map_err(|e| GitError::OperationFailed(format!("写入文件失败：{}", e)))?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::git::test_utils::TestRepo;
+
+    fn commit(repo: &Repository, message: &str, parents: &[git2::Oid]) -> git2::Oid {
+        let tree = repo.head().unwrap().peel_to_tree().unwrap();
+        let parents: Vec<_> = parents
+            .iter()
+            .map(|oid| repo.find_commit(*oid).unwrap())
+            .collect();
+        let parent_refs: Vec<_> = parents.iter().collect();
+        let signature = repo.signature().unwrap();
+        repo.commit(None, &signature, &signature, message, &tree, &parent_refs)
+            .unwrap()
+    }
+
+    fn add_reflog_roots(repo: &Repository, roots: &[git2::Oid]) {
+        let signature = repo.signature().unwrap();
+        let mut reflog = repo.reflog("HEAD").unwrap();
+        for oid in roots {
+            reflog
+                .append(*oid, &signature, Some("lost commit"))
+                .unwrap();
+        }
+        reflog.write().unwrap();
+    }
+
+    #[test]
+    fn reflog_tips_preserve_merge_and_independent_lost_histories() {
+        let fixture = TestRepo::new();
+        let repo = &fixture.repo;
+        let base = repo.head().unwrap().target().unwrap();
+        let a = commit(repo, "a", &[base]);
+        let b = commit(repo, "b", &[a]);
+        let c = commit(repo, "c", &[a]);
+        let merge = commit(repo, "merge", &[b, c]);
+        let independent = commit(repo, "independent", &[base]);
+        add_reflog_roots(repo, &[a, b, c, merge, independent]);
+
+        let page = GitEngine::get_log(
+            fixture.path_str(),
+            0,
+            20,
+            true,
+            false,
+            LogBranchScope::All,
+            true,
+        )
+        .unwrap();
+        for entry in page.commits {
+            let oid = git2::Oid::from_str(&entry.oid).unwrap();
+            assert_eq!(entry.is_unreachable, oid != base);
+            assert_eq!(entry.is_reflog_tip, oid == merge || oid == independent);
+            assert!(!entry.is_stash);
+        }
+        let search = GitEngine::search_commits(
+            fixture.path_str(),
+            "merge",
+            20,
+            true,
+            false,
+            LogBranchScope::All,
+            true,
+        )
+        .unwrap();
+        assert_eq!(search.commits.len(), 1);
+        assert!(search.commits[0].is_reflog_tip);
+    }
+
+    #[test]
+    fn reflog_ancestors_cross_unlisted_commits_and_stop_at_reachable_history() {
+        let fixture = TestRepo::new();
+        let repo = &fixture.repo;
+        let base = repo.head().unwrap().target().unwrap();
+        let a = commit(repo, "a", &[base]);
+        let intermediate = commit(repo, "not in reflog", &[a]);
+        let tip = commit(repo, "tip", &[intermediate]);
+        let roots = HashSet::from([a, tip]);
+
+        assert_eq!(
+            GitEngine::reflog_strict_ancestors(repo, &roots, &HashSet::from([base])),
+            HashSet::from([a])
+        );
+        assert!(GitEngine::reflog_strict_ancestors(
+            repo,
+            &HashSet::from([tip]),
+            &HashSet::from([base, a, intermediate])
+        )
+        .is_empty());
+        assert!(
+            GitEngine::reflog_strict_ancestors(repo, &HashSet::new(), &HashSet::from([base]))
+                .is_empty()
+        );
     }
 }
