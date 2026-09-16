@@ -6,6 +6,8 @@ import { highlightLine } from '@/lib/highlight'
 import type { DiffSide, SyntaxLangResolver } from '@/lib/highlight'
 import { diffLinePairHtml } from '@/lib/diffLineHtml'
 import { buildFullSideBySideRows, type FullFileContent } from '@/lib/fullFileDiff'
+import DiffHighlightBlock from './DiffHighlightBlock.vue'
+import { chunkDiffRows, DIFF_BLOCK_LINES, useDiffHighlightBlocks } from '@/composables/diff/useDiffHighlightBlocks'
 
 const { t } = useI18n()
 
@@ -47,8 +49,6 @@ interface AlignedLine {
   lineNo?: number
   content: string
   kind: 'del' | 'add' | 'ctx' | 'empty' | 'header'
-  /** 配对 del/add 行的 HTML（语法高亮 + <mark> 变化标注）；null = 用 content */
-  wordHtml?: string
   hunkIndex?: number
   isHunkStart?: boolean
 }
@@ -66,7 +66,7 @@ interface DiffScrollAnchor {
 const alignedRows = computed((): AlignedRow[] => {
   if (!props.diff) return []
   if (!props.groupByHunk && props.fullFileContent) {
-    return addSideBySideWordDiff(buildFullSideBySideRows(props.diff, props.fullFileContent))
+    return buildFullSideBySideRows(props.diff, props.fullFileContent)
   }
 
   const rows: AlignedRow[] = []
@@ -91,25 +91,12 @@ const alignedRows = computed((): AlignedRow[] => {
         const dlContent = (dl && dl.content) ? dl.content.replace(/\n$/, '') : ''
         const alContent = (al && al.content) ? al.content.replace(/\n$/, '') : ''
 
-        let leftWordHtml: string | undefined
-        let rightWordHtml: string | undefined
-        if (dl && al) {
-          const { leftHtml, rightHtml } = diffLinePairHtml(
-            dlContent,
-            alContent,
-            langForDiffLine('old', dl.old_lineno),
-            langForDiffLine('new', al.new_lineno),
-          )
-          leftWordHtml = leftHtml
-          rightWordHtml = rightHtml
-        }
-
         rows.push({
           left: dl
-            ? { lineNo: dl.old_lineno, content: dlContent, kind: 'del', wordHtml: leftWordHtml }
+            ? { lineNo: dl.old_lineno, content: dlContent, kind: 'del' }
             : { content: '', kind: 'empty' },
           right: al
-            ? { lineNo: al.new_lineno, content: alContent, kind: 'add', wordHtml: rightWordHtml }
+            ? { lineNo: al.new_lineno, content: alContent, kind: 'add' }
             : { content: '', kind: 'empty' },
         })
       }
@@ -138,34 +125,30 @@ const alignedRows = computed((): AlignedRow[] => {
   return rows
 })
 
-function addSideBySideWordDiff(sourceRows: AlignedRow[]): AlignedRow[] {
-  return sourceRows.map((row) => {
-    if (row.left.kind !== 'del' || row.right.kind !== 'add') return row
-
-    const { leftHtml, rightHtml } = diffLinePairHtml(
-      row.left.content,
-      row.right.content,
-      langForDiffLine('old', row.left.lineNo),
-      langForDiffLine('new', row.right.lineNo),
-    )
-    return {
-      left: {
-        ...row.left,
-        wordHtml: leftHtml,
-      },
-      right: {
-        ...row.right,
-        wordHtml: rightHtml,
-      },
+const rowBlocks = computed(() => chunkDiffRows(alignedRows.value))
+const rowHtml = computed(() => {
+  const source = alignedRows.value
+  const lang = props.syntaxLang
+  const resolveLang = props.syntaxLangForLine
+  const cache = new Map<number, { leftHtml: string; rightHtml: string }>()
+  function language(side: DiffSide, line: AlignedLine) {
+    return lang || resolveLang?.(side, line.lineNo) || null
+  }
+  return (index: number, side: 'left' | 'right'): string => {
+    let pair = cache.get(index)
+    if (!pair) {
+      const { left, right } = source[index]
+      pair = left.kind === 'del' && right.kind === 'add'
+        ? diffLinePairHtml(left.content, right.content, language('old', left), language('new', right))
+        : {
+          leftHtml: highlightLine(left.content, language('old', left)),
+          rightHtml: highlightLine(right.content, language('new', right)),
+        }
+      cache.set(index, pair)
     }
-  })
-}
-
-function langForDiffLine(side: DiffSide, lineNo: number | null | undefined): string | null {
-  if (props.syntaxLang) return props.syntaxLang
-  if (!props.syntaxLangForLine) return null
-  return props.syntaxLangForLine(side, lineNo)
-}
+    return side === 'left' ? pair.leftHtml : pair.rightHtml
+  }
+})
 
 // ── 滚动架构 ────────────────────────────────────────────────────────
 // 垂直滚动：bodyRef 是唯一的 overflow-y:auto 容器，左右天然同步。
@@ -174,6 +157,7 @@ function langForDiffLine(side: DiffSide, lineNo: number | null | undefined): str
 // .pane-scroll 是 scroll container 会拦截垂直 wheel，
 // 通过 @wheel 把 deltaY 转发到 bodyRef。
 const bodyRef = ref<HTMLElement | null>(null)
+useDiffHighlightBlocks(bodyRef)
 const leftScrollRef = ref<HTMLElement | null>(null)
 const rightScrollRef = ref<HTMLElement | null>(null)
 
@@ -264,10 +248,6 @@ watch(
   },
   { flush: 'post' },
 )
-
-function langForLine(side: DiffSide, line: AlignedLine): string | null {
-  return langForDiffLine(side, line.lineNo)
-}
 
 function isChangeRow(row: AlignedRow): boolean {
   return row.left.kind === 'del' || row.right.kind === 'add'
@@ -415,25 +395,30 @@ defineExpose({ goNextChange, goPrevChange, hasChangeTargets, getScrollAnchor, sc
          bodyRef 统一垂直滚动；
          每个 pane 分为 gutter（固定行号）+ scroll（水平滚动代码）-->
     <div v-else-if="wrapLines" ref="bodyRef" class="sbs-body sbs-wrapped">
-      <div v-for="(row, i) in alignedRows" :key="i" class="wrapped-row" :data-row="i">
-        <template v-for="side in (['left', 'right'] as const)" :key="side">
-          <div class="gutter-row" :class="['line-' + row[side].kind, changeCurrentClasses(i)]">
-            <span class="ln">{{ row[side].lineNo ?? '' }}</span>
-            <span class="sign">{{ row[side].kind === 'del' ? '-' : row[side].kind === 'add' ? '+' : '' }}</span>
-          </div>
-          <div class="sbs-line" :class="['line-' + row[side].kind, changeCurrentClasses(i)]">
-            <span v-if="row[side].wordHtml" class="code" v-html="row[side].wordHtml" />
-            <span v-else class="code" v-html="highlightLine(row[side].content, langForLine(side === 'left' ? 'old' : 'new', row[side]))" />
-            <span
-              v-if="row[side].hunkIndex != null && (row[side].kind === 'header' || row[side].isHunkStart) && (canRunHunkAction || canDiscardHunk)"
-              class="hunk-actions"
-            >
-              <button v-if="canRunHunkAction" class="hunk-action-btn" @click.stop="emit('hunk-action', row[side].hunkIndex!)">{{ hunkActionLabel }}</button>
-              <button v-if="canDiscardHunk" class="hunk-action-btn hunk-action-btn--danger" @click.stop="emit('hunk-discard', row[side].hunkIndex!)">{{ hunkDiscardLabel }}</button>
-            </span>
-          </div>
-        </template>
-      </div>
+      <DiffHighlightBlock
+        v-for="block in rowBlocks" :key="block.start" :source="alignedRows"
+        :initial="block.start < DIFF_BLOCK_LINES" v-slot="{ highlight }"
+      >
+        <div v-for="(row, i) in block.rows" :key="i" class="wrapped-row" :data-row="block.start + i">
+          <template v-for="side in (['left', 'right'] as const)" :key="side">
+            <div class="gutter-row" :class="['line-' + row[side].kind, changeCurrentClasses(block.start + i)]">
+              <span class="ln">{{ row[side].lineNo ?? '' }}</span>
+              <span class="sign">{{ row[side].kind === 'del' ? '-' : row[side].kind === 'add' ? '+' : '' }}</span>
+            </div>
+            <div class="sbs-line" :class="['line-' + row[side].kind, changeCurrentClasses(block.start + i)]">
+              <span v-if="highlight" class="code" v-html="rowHtml(block.start + i, side)" />
+              <span v-else class="code">{{ row[side].content }}</span>
+              <span
+                v-if="row[side].hunkIndex != null && (row[side].kind === 'header' || row[side].isHunkStart) && (canRunHunkAction || canDiscardHunk)"
+                class="hunk-actions"
+              >
+                <button v-if="canRunHunkAction" class="hunk-action-btn" @click.stop="emit('hunk-action', row[side].hunkIndex!)">{{ hunkActionLabel }}</button>
+                <button v-if="canDiscardHunk" class="hunk-action-btn hunk-action-btn--danger" @click.stop="emit('hunk-discard', row[side].hunkIndex!)">{{ hunkDiscardLabel }}</button>
+              </span>
+            </div>
+          </template>
+        </div>
+      </DiffHighlightBlock>
     </div>
     <template v-else>
       <div class="sbs-body" ref="bodyRef">
@@ -458,37 +443,37 @@ defineExpose({ goNextChange, goPrevChange, hasChangeTargets, getScrollAnchor, sc
               @wheel="onWheel"
             >
               <div class="sbs-lines">
-                   <div
-                   v-for="(row, i) in alignedRows"
-                   :key="'l' + i"
-                   class="sbs-line"
-                   :class="['line-' + row.left.kind, changeCurrentClasses(i)]"
-                   :data-row="i"
-                 >
-                   <span v-if="row.left.wordHtml" class="code" v-html="row.left.wordHtml" />
-                   <span v-else-if="langForLine('old', row.left)" class="code" v-html="highlightLine(row.left.content, langForLine('old', row.left))" />
-                   <span v-else class="code">{{ row.left.content }}</span>
-                   
-                     <span
-                       v-if="row.left.hunkIndex != null && (row.left.kind === 'header' || row.left.isHunkStart) && (canRunHunkAction || canDiscardHunk)"
-                       class="hunk-actions"
-                     >
-                       <button
-                         v-if="canRunHunkAction"
-                         class="hunk-action-btn"
-                         @click.stop="emit('hunk-action', row.left.hunkIndex)"
-                       >
-                         {{ hunkActionLabel }}
-                       </button>
-                       <button
-                         v-if="canDiscardHunk"
-                         class="hunk-action-btn hunk-action-btn--danger"
-                         @click.stop="emit('hunk-discard', row.left.hunkIndex)"
-                       >
-                         {{ hunkDiscardLabel }}
-                       </button>
-                     </span>
-                 </div>
+                <DiffHighlightBlock
+                  v-for="block in rowBlocks" :key="block.start" :source="alignedRows"
+                  :initial="block.start < DIFF_BLOCK_LINES" v-slot="{ highlight }"
+                >
+                  <div
+                    v-for="(row, i) in block.rows" :key="'l' + i"
+                    class="sbs-line"
+                    :class="['line-' + row.left.kind, changeCurrentClasses(block.start + i)]"
+                    :data-row="block.start + i"
+                  >
+                    <span v-if="highlight" class="code" v-html="rowHtml(block.start + i, 'left')" />
+                    <span v-else class="code">{{ row.left.content }}</span>
+                    <span
+                      v-if="row.left.hunkIndex != null && (row.left.kind === 'header' || row.left.isHunkStart) && (canRunHunkAction || canDiscardHunk)"
+                      class="hunk-actions"
+                    >
+                      <button
+                        v-if="canRunHunkAction" class="hunk-action-btn"
+                        @click.stop="emit('hunk-action', row.left.hunkIndex)"
+                      >
+                        {{ hunkActionLabel }}
+                      </button>
+                      <button
+                        v-if="canDiscardHunk" class="hunk-action-btn hunk-action-btn--danger"
+                        @click.stop="emit('hunk-discard', row.left.hunkIndex)"
+                      >
+                        {{ hunkDiscardLabel }}
+                      </button>
+                    </span>
+                  </div>
+                </DiffHighlightBlock>
               </div>
             </div>
           </div>
@@ -515,35 +500,36 @@ defineExpose({ goNextChange, goPrevChange, hasChangeTargets, getScrollAnchor, sc
               @wheel="onWheel"
             >
               <div class="sbs-lines">
-                   <div
-                   v-for="(row, i) in alignedRows"
-                   :key="'r' + i"
-                   class="sbs-line"
-                   :class="['line-' + row.right.kind, changeCurrentClasses(i)]"
-                 >
-                   <span v-if="row.right.wordHtml" class="code" v-html="row.right.wordHtml" />
-                   <span v-else-if="langForLine('new', row.right)" class="code" v-html="highlightLine(row.right.content, langForLine('new', row.right))" />
-                   <span v-else class="code">{{ row.right.content }}</span>
-                   <span
-                     v-if="row.right.hunkIndex != null && row.right.isHunkStart && row.left.kind !== 'del' && (canRunHunkAction || canDiscardHunk)"
-                     class="hunk-actions"
-                   >
-                     <button
-                       v-if="canRunHunkAction"
-                       class="hunk-action-btn"
-                       @click.stop="emit('hunk-action', row.right.hunkIndex)"
-                     >
-                       {{ hunkActionLabel }}
-                     </button>
-                     <button
-                       v-if="canDiscardHunk"
-                       class="hunk-action-btn hunk-action-btn--danger"
-                       @click.stop="emit('hunk-discard', row.right.hunkIndex)"
-                     >
-                       {{ hunkDiscardLabel }}
-                     </button>
-                   </span>
-                 </div>
+                <DiffHighlightBlock
+                  v-for="block in rowBlocks" :key="block.start" :source="alignedRows"
+                  :initial="block.start < DIFF_BLOCK_LINES" v-slot="{ highlight }"
+                >
+                  <div
+                    v-for="(row, i) in block.rows" :key="'r' + i"
+                    class="sbs-line"
+                    :class="['line-' + row.right.kind, changeCurrentClasses(block.start + i)]"
+                  >
+                    <span v-if="highlight" class="code" v-html="rowHtml(block.start + i, 'right')" />
+                    <span v-else class="code">{{ row.right.content }}</span>
+                    <span
+                      v-if="row.right.hunkIndex != null && row.right.isHunkStart && row.left.kind !== 'del' && (canRunHunkAction || canDiscardHunk)"
+                      class="hunk-actions"
+                    >
+                      <button
+                        v-if="canRunHunkAction" class="hunk-action-btn"
+                        @click.stop="emit('hunk-action', row.right.hunkIndex)"
+                      >
+                        {{ hunkActionLabel }}
+                      </button>
+                      <button
+                        v-if="canDiscardHunk" class="hunk-action-btn hunk-action-btn--danger"
+                        @click.stop="emit('hunk-discard', row.right.hunkIndex)"
+                      >
+                        {{ hunkDiscardLabel }}
+                      </button>
+                    </span>
+                  </div>
+                </DiffHighlightBlock>
               </div>
             </div>
           </div>

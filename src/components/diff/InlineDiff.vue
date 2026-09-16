@@ -6,6 +6,8 @@ import { highlightLine } from '@/lib/highlight'
 import type { DiffSide, SyntaxLangResolver } from '@/lib/highlight'
 import { diffLinePairHtml } from '@/lib/diffLineHtml'
 import { buildFullInlineRows, type FullFileContent } from '@/lib/fullFileDiff'
+import DiffHighlightBlock from './DiffHighlightBlock.vue'
+import { chunkDiffRows, DIFF_BLOCK_LINES, useDiffHighlightBlocks } from '@/composables/diff/useDiffHighlightBlocks'
 
 const { t } = useI18n()
 
@@ -50,8 +52,6 @@ interface InlineRow {
   content: string
   hunkIndex?: number
   isHunkStart?: boolean
-  /** 配对 del/add 行的 HTML（语法高亮 + <mark> 变化标注）*/
-  wordHtml?: string
 }
 
 interface DiffScrollAnchor {
@@ -66,7 +66,7 @@ const rows = computed<InlineRow[]>(() => {
       ? buildFullInlineRows(props.diff, props.fullFileContent)
       : buildHunkRows(props.diff)
 
-  return addInlineWordDiff(baseRows)
+  return baseRows
 })
 
 /** 扁平化所有 hunk → InlineRow[]，用于 by-hunk 和完整内容不可用时的回退。 */
@@ -92,55 +92,62 @@ function buildHunkRows(diff: FileDiff): InlineRow[] {
   return result
 }
 
-function addInlineWordDiff(sourceRows: InlineRow[]): InlineRow[] {
-  const result = sourceRows.map((row) => ({ ...row }))
-
-  for (let start = 0; start < result.length;) {
-    if (!isChangeRow(result[start])) {
-      start++
-      continue
+// 只建立行配对，不在加载时计算全部字符差异；跨分块的 del/add 仍使用同一对结果。
+const rowHtml = computed(() => {
+  const source = rows.value
+  const lang = props.syntaxLang
+  const resolveLang = props.syntaxLangForLine
+  const partners = new Map<number, number>()
+  const cache = new Map<number, string>()
+  for (let start = 0; start < source.length;) {
+    if (!isChangeRow(source[start])) { start++; continue }
+    const deleted: number[] = []
+    const added: number[] = []
+    let end = start
+    while (end < source.length && isChangeRow(source[end])) {
+      const indices = source[end].kind === 'del' ? deleted : added
+      indices.push(end++)
     }
-
-    let end = start + 1
-    while (end < result.length && isChangeRow(result[end])) end++
-
-    const deletedRows = result.slice(start, end).filter((row) => row.kind === 'del')
-    const addedRows = result.slice(start, end).filter((row) => row.kind === 'add')
-    const pairCount = Math.min(deletedRows.length, addedRows.length)
-
-    for (let i = 0; i < pairCount; i++) {
-      const deletedRow = deletedRows[i]
-      const addedRow = addedRows[i]
-      const { leftHtml, rightHtml } = diffLinePairHtml(
-        deletedRow.content,
-        addedRow.content,
-        langForRow(deletedRow),
-        langForRow(addedRow),
-      )
-      deletedRow.wordHtml = leftHtml
-      addedRow.wordHtml = rightHtml
+    for (let i = 0; i < Math.min(deleted.length, added.length); i++) {
+      partners.set(deleted[i], added[i])
+      partners.set(added[i], deleted[i])
     }
-
     start = end
   }
-
-  return result
-}
-
-/** 按 hunk 分组，用于 by-hunk 模式 */
-const hunkGroups = computed(() => {
-  const groups: InlineRow[][] = []
-  let cur: InlineRow[] = []
-  let curHi: number | undefined
-  for (const row of rows.value) {
-    if (row.hunkIndex !== curHi) {
-      if (cur.length > 0) groups.push(cur)
-      cur = []
-      curHi = row.hunkIndex
-    }
-    cur.push(row)
+  function language(row: InlineRow) {
+    const side: DiffSide = row.kind === 'del' ? 'old' : 'new'
+    return lang || resolveLang?.(side, side === 'old' ? row.oldLineNo : row.newLineNo) || null
   }
-  if (cur.length > 0) groups.push(cur)
+  return (index: number): string => {
+    const cached = cache.get(index)
+    if (cached !== undefined) return cached
+    const row = source[index]
+    const partner = partners.get(index)
+    if (partner !== undefined) {
+      const left = row.kind === 'del' ? index : partner
+      const right = row.kind === 'add' ? index : partner
+      const pair = diffLinePairHtml(source[left].content, source[right].content, language(source[left]), language(source[right]))
+      cache.set(left, pair.leftHtml)
+      cache.set(right, pair.rightHtml)
+    } else {
+      cache.set(index, highlightLine(row.content, language(row)))
+    }
+    return cache.get(index)!
+  }
+})
+
+const rowBlocks = computed(() => chunkDiffRows(rows.value))
+
+/** 分组直接携带全局行索引，避免模板对每一行反复 indexOf。 */
+const hunkGroups = computed(() => {
+  const groups: ReturnType<typeof chunkDiffRows<InlineRow>>[] = []
+  let start = 0
+  while (start < rows.value.length) {
+    let end = start + 1
+    while (end < rows.value.length && rows.value[end].hunkIndex === rows.value[start].hunkIndex) end++
+    groups.push(chunkDiffRows(rows.value.slice(start, end), start))
+    start = end
+  }
   return groups
 })
 
@@ -176,6 +183,7 @@ const currentChangeRange = computed<{ start: number; end: number } | null>(() =>
   return { start, end }
 })
 const scrollEl = ref<HTMLElement | null>(null)
+useDiffHighlightBlocks(scrollEl)
 
 watch(changeStarts, (starts) => {
   emit('change-count', starts.length)
@@ -191,14 +199,6 @@ watch(
   },
   { flush: 'post' },
 )
-
-function langForRow(row: InlineRow): string | null {
-  if (props.syntaxLang) return props.syntaxLang
-  if (!props.syntaxLangForLine) return null
-  const side: DiffSide = row.kind === 'del' ? 'old' : 'new'
-  const lineNo = row.kind === 'del' ? row.oldLineNo : row.newLineNo
-  return props.syntaxLangForLine(side, lineNo)
-}
 
 function isChangeRow(row: InlineRow): boolean {
   return row.kind === 'del' || row.kind === 'add'
@@ -342,27 +342,31 @@ defineExpose({ goNextChange, goPrevChange, hasChangeTargets, getScrollAnchor, sc
       class="inline-scroll"
     >
       <div class="inline-lines">
-        <div
-          v-for="(row, i) in rows"
-          :key="i"
-          class="inline-line"
-          :class="['line-' + row.kind, changeCurrentClasses(i)]"
-          :data-row="i"
+        <DiffHighlightBlock
+          v-for="block in rowBlocks" :key="block.start" :source="rows"
+          :initial="block.start < DIFF_BLOCK_LINES" v-slot="{ highlight }"
         >
-          <template v-if="row.kind === 'header'">
-            <span class="line-header-content">{{ row.content }}</span>
-          </template>
-          <template v-else>
-            <span class="ln">{{ row.oldLineNo ?? '' }}</span>
-            <span class="ln">{{ row.newLineNo ?? '' }}</span>
-            <span class="sign">{{
-              row.kind === 'del' ? '-' : row.kind === 'add' ? '+' : ' '
-            }}</span>
-            <span v-if="row.wordHtml" class="code" v-html="row.wordHtml" />
-            <span v-else-if="langForRow(row)" class="code" v-html="highlightLine(row.content, langForRow(row))" />
-            <span v-else class="code">{{ row.content }}</span>
-          </template>
-        </div>
+          <div
+            v-for="(row, i) in block.rows"
+            :key="i"
+            class="inline-line"
+            :class="['line-' + row.kind, changeCurrentClasses(block.start + i)]"
+            :data-row="block.start + i"
+          >
+            <template v-if="row.kind === 'header'">
+              <span class="line-header-content">{{ row.content }}</span>
+            </template>
+            <template v-else>
+              <span class="ln">{{ row.oldLineNo ?? '' }}</span>
+              <span class="ln">{{ row.newLineNo ?? '' }}</span>
+              <span class="sign">{{
+                row.kind === 'del' ? '-' : row.kind === 'add' ? '+' : ' '
+              }}</span>
+              <span v-if="highlight" class="code" v-html="rowHtml(block.start + i)" />
+              <span v-else class="code">{{ row.content }}</span>
+            </template>
+          </div>
+        </DiffHighlightBlock>
       </div>
     </div>
 
@@ -378,46 +382,50 @@ defineExpose({ goNextChange, goPrevChange, hasChangeTargets, getScrollAnchor, sc
           :key="gi"
           class="hunk-block"
         >
-          <template v-for="(row, i) in group" :key="i">
-            <div
-              v-if="row.kind === 'header'"
-              class="hunk-header"
-              :data-row="rows.indexOf(row)"
-            >
-              <span class="hunk-header-title">{{ row.content }}</span>
-              <span v-if="row.hunkIndex != null && (canRunHunkAction || canDiscardHunk)" class="hunk-actions">
-                <button
-                  v-if="canRunHunkAction"
-                  class="hunk-action-btn"
-                  @click.stop="emit('hunk-action', row.hunkIndex)"
-                >
-                  {{ hunkActionLabel }}
-                </button>
-                <button
-                  v-if="canDiscardHunk"
-                  class="hunk-action-btn hunk-action-btn--danger"
-                  @click.stop="emit('hunk-discard', row.hunkIndex)"
-                >
-                  {{ hunkDiscardLabel }}
-                </button>
-              </span>
-            </div>
-            <div
-              v-else
-              class="inline-line"
-              :class="['line-' + row.kind, changeCurrentClasses(rows.indexOf(row))]"
-              :data-row="rows.indexOf(row)"
-            >
-              <span class="ln">{{ row.oldLineNo ?? '' }}</span>
-              <span class="ln">{{ row.newLineNo ?? '' }}</span>
-              <span class="sign">{{
-                row.kind === 'del' ? '-' : row.kind === 'add' ? '+' : ' '
-              }}</span>
-              <span v-if="row.wordHtml" class="code" v-html="row.wordHtml" />
-              <span v-else-if="langForRow(row)" class="code" v-html="highlightLine(row.content, langForRow(row))" />
-              <span v-else class="code">{{ row.content }}</span>
-            </div>
-          </template>
+          <DiffHighlightBlock
+            v-for="block in group" :key="block.start" :source="rows"
+            :initial="block.start < DIFF_BLOCK_LINES" v-slot="{ highlight }"
+          >
+            <template v-for="(row, i) in block.rows" :key="i">
+              <div
+                v-if="row.kind === 'header'"
+                class="hunk-header"
+                :data-row="block.start + i"
+              >
+                <span class="hunk-header-title">{{ row.content }}</span>
+                <span v-if="row.hunkIndex != null && (canRunHunkAction || canDiscardHunk)" class="hunk-actions">
+                  <button
+                    v-if="canRunHunkAction"
+                    class="hunk-action-btn"
+                    @click.stop="emit('hunk-action', row.hunkIndex)"
+                  >
+                    {{ hunkActionLabel }}
+                  </button>
+                  <button
+                    v-if="canDiscardHunk"
+                    class="hunk-action-btn hunk-action-btn--danger"
+                    @click.stop="emit('hunk-discard', row.hunkIndex)"
+                  >
+                    {{ hunkDiscardLabel }}
+                  </button>
+                </span>
+              </div>
+              <div
+                v-else
+                class="inline-line"
+                :class="['line-' + row.kind, changeCurrentClasses(block.start + i)]"
+                :data-row="block.start + i"
+              >
+                <span class="ln">{{ row.oldLineNo ?? '' }}</span>
+                <span class="ln">{{ row.newLineNo ?? '' }}</span>
+                <span class="sign">{{
+                  row.kind === 'del' ? '-' : row.kind === 'add' ? '+' : ' '
+                }}</span>
+                <span v-if="highlight" class="code" v-html="rowHtml(block.start + i)" />
+                <span v-else class="code">{{ row.content }}</span>
+              </div>
+            </template>
+          </DiffHighlightBlock>
         </div>
       </div>
     </div>
@@ -468,11 +476,11 @@ defineExpose({ goNextChange, goPrevChange, hasChangeTargets, getScrollAnchor, sc
   margin-bottom: 0;
 }
 /* 用首尾子元素自身圆角替代 overflow:hidden，避免横向裁剪导致无法滚动 */
-.hunk-block > :first-child {
+.hunk-block > :first-child > :first-child {
   border-top-left-radius: 4px;
   border-top-right-radius: 4px;
 }
-.hunk-block > :last-child {
+.hunk-block > :last-child > :last-child {
   border-bottom-left-radius: 4px;
   border-bottom-right-radius: 4px;
 }
