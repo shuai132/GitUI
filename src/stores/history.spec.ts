@@ -516,6 +516,61 @@ describe('history store log filters', () => {
     expect(historyStore.remotes).toEqual([])
   })
 
+  it.each<Partial<BranchInfo>>([
+    { upstream: 'backup/main' },
+    { upstream: undefined },
+    { is_remote: true },
+  ])('refreshes branch metadata at the same commit: %j', async (change) => {
+    const original = { ...branch('main'), upstream: 'origin/main', ahead: 0, behind: 0 }
+    const updated = { ...original, ...change }
+    listBranchesMock.mockResolvedValueOnce([original]).mockResolvedValueOnce([updated])
+    listRemotesMock.mockResolvedValue([])
+    setActiveRepo(useRepoStore(), 'repo-1', '/repos/a')
+    const historyStore = useHistoryStore()
+
+    await historyStore.loadBranches()
+    await historyStore.loadBranches()
+
+    expect(historyStore.branches).toEqual([updated])
+  })
+
+  it.each<Partial<TagInfo>>([
+    { ref_oid: 'rebuilt-tag-object' },
+    { is_annotated: true },
+    { message: 'revised release notes' },
+    { tagger_name: 'another author' },
+    { time: 2 },
+  ])('refreshes tag metadata at the same commit: %j', async (change) => {
+    const original = tag('v1.0.0')
+    const updated = { ...original, ...change }
+    listTagsMock.mockResolvedValueOnce([original]).mockResolvedValueOnce([updated])
+    setActiveRepo(useRepoStore(), 'repo-1', '/repos/a')
+    const historyStore = useHistoryStore()
+
+    await historyStore.loadTags()
+    await historyStore.loadTags()
+
+    expect(historyStore.tags).toEqual([updated])
+  })
+
+  it('retains branch and tag arrays when complete metadata is unchanged', async () => {
+    listBranchesMock.mockImplementation(async () => [{ ...branch('main'), upstream: 'origin/main' }])
+    listRemotesMock.mockResolvedValue([])
+    listTagsMock.mockImplementation(async () => [{ ...tag('v1.0.0'), message: 'release' }])
+    setActiveRepo(useRepoStore(), 'repo-1', '/repos/a')
+    const historyStore = useHistoryStore()
+    await historyStore.loadBranches()
+    await historyStore.loadTags()
+    const previousBranches = historyStore.branches
+    const previousTags = historyStore.tags
+
+    await historyStore.loadBranches()
+    await historyStore.loadTags()
+
+    expect(historyStore.branches).toBe(previousBranches)
+    expect(historyStore.tags).toBe(previousTags)
+  })
+
   it('ignores tag responses after the active repo changes', async () => {
     const pending = deferred<TagInfo[]>()
     listTagsMock.mockReturnValueOnce(pending.promise)

@@ -327,14 +327,16 @@ export const useHistoryStore = defineStore('history', () => {
         git.listRemotes(repoId).catch(() => [] as RemoteInfo[]),
       ])
       if (requestSeq !== branchesRequestSeq || !isActiveRepo(repoId)) return
-      // 分支列表结构未变（数量、名称、指向的 oid、ahead/behind 都一样）时跳过
+      // 比较完整业务快照；同一提交上的 upstream 配置变化也必须通知 UI。
       const prev = branches.value
       const unchanged =
         next.length === prev.length &&
         next.every((b, i) =>
           b.name === prev[i].name &&
+          b.is_remote === prev[i].is_remote &&
           b.commit_oid === prev[i].commit_oid &&
           b.is_head === prev[i].is_head &&
+          b.upstream === prev[i].upstream &&
           b.ahead === prev[i].ahead &&
           b.behind === prev[i].behind,
         )
@@ -365,7 +367,13 @@ export const useHistoryStore = defineStore('history', () => {
       const unchanged =
         next.length === prev.length &&
         next.every((t, i) =>
-          t.name === prev[i].name && t.commit_oid === prev[i].commit_oid,
+          t.name === prev[i].name &&
+          t.ref_oid === prev[i].ref_oid &&
+          t.commit_oid === prev[i].commit_oid &&
+          t.is_annotated === prev[i].is_annotated &&
+          t.message === prev[i].message &&
+          t.tagger_name === prev[i].tagger_name &&
+          t.time === prev[i].time,
         )
       if (!unchanged) tags.value = next
     } catch (e: unknown) {
