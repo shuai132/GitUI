@@ -1275,7 +1275,7 @@ const messages = {
     },
     push: {
       nonFastForward: '不是 fast-forward：远端有新的 commit，需要先 pull / merge',
-      forceWithLeaseRejected: 'Force-with-lease 被拒：远端已有新的 commit（他人已推送），请先 fetch',
+      forceWithLeaseRejected: '远端引用与本地记录不一致，操作已取消；请先 Fetch 刷新后重试',
     },
     pull: {
       mergeRequired: 'Pull 需要合并：无法 fast-forward，已创建 merge commit',

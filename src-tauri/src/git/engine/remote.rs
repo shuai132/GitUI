@@ -292,9 +292,62 @@ impl GitEngine {
     ) -> GitResult<()> {
         log::debug!("[engine::delete_remote_branch] remote={remote_name} branch={branch_name}");
         let reference = format!("refs/heads/{branch_name}");
+        let expected = git2::Oid::from_str(expected_oid)?;
+        let tracking_ref = format!("refs/remotes/{remote_name}/{branch_name}");
+        if !git2::Reference::is_valid_name(&reference)
+            || !git2::Reference::is_valid_name(&tracking_ref)
+        {
+            return Err(GitError::OperationFailed("Invalid branch reference".into()));
+        }
         let lease = format!("--force-with-lease={reference}:{expected_oid}");
         let deletion = format!(":{reference}");
-        run_git(path, &["push", remote_name, &lease, &deletion])?;
+        if let Err(error) = run_git(path, &["push", remote_name, &lease, &deletion]) {
+            // A missing server branch also rejects an explicit lease. Only clean up
+            // after successful queries confirm absence; transport errors are not absence.
+            if !Self::remote_branch_is_missing(path, remote_name, &reference).unwrap_or(false) {
+                return Err(error);
+            }
+        }
+        Self::remove_confirmed_tracking_ref(path, &tracking_ref, expected)
+    }
+
+    fn remote_branch_is_missing(path: &str, remote_name: &str, reference: &str) -> GitResult<bool> {
+        let fetch_urls = run_git(path, &["remote", "get-url", "--all", "--", remote_name])?;
+        let push_urls = run_git(
+            path,
+            &["remote", "get-url", "--push", "--all", "--", remote_name],
+        )?;
+        let mut urls: Vec<_> = fetch_urls.lines().chain(push_urls.lines()).collect();
+        urls.sort_unstable();
+        urls.dedup();
+        if urls.is_empty() {
+            return Ok(false);
+        }
+        for url in urls {
+            let output = run_git(path, &["ls-remote", "--refs", "--", url, reference])?;
+            if !output.trim().is_empty() {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
+
+    fn remove_confirmed_tracking_ref(path: &str, name: &str, expected: git2::Oid) -> GitResult<()> {
+        let repo = Self::open(path)?;
+        let mut transaction = repo.transaction()?;
+        transaction.lock_ref(name)?;
+        let reference = match repo.find_reference(name) {
+            Ok(reference) => reference,
+            Err(error) if error.code() == git2::ErrorCode::NotFound => return Ok(()),
+            Err(error) => return Err(error.into()),
+        };
+        if reference.target() != Some(expected) {
+            return Err(GitError::OperationFailed(format!(
+                "Remote tracking target changed: {name}"
+            )));
+        }
+        transaction.remove(name)?;
+        transaction.commit()?;
         Ok(())
     }
 
@@ -838,6 +891,158 @@ mod tests {
         )
         .unwrap();
         oid
+    }
+
+    fn branch_delete_fixture() -> (
+        tempfile::TempDir,
+        Repository,
+        tempfile::TempDir,
+        Repository,
+        git2::Oid,
+    ) {
+        let local_dir = tempfile::tempdir().unwrap();
+        let repo = Repository::init(local_dir.path()).unwrap();
+        let oid = orphan_fixture(&repo);
+        let remote_dir = tempfile::tempdir().unwrap();
+        let remote = Repository::init_bare(remote_dir.path()).unwrap();
+        repo.remote("origin_p", remote_dir.path().to_str().unwrap())
+            .unwrap();
+        run_git(
+            local_dir.path().to_str().unwrap(),
+            &["push", "origin_p", "main"],
+        )
+        .unwrap();
+        (local_dir, repo, remote_dir, remote, oid)
+    }
+
+    #[test]
+    fn deleting_missing_remote_branch_cleans_only_confirmed_tracking_ref() {
+        let (dir, repo, _remote_dir, remote, oid) = branch_delete_fixture();
+        remote
+            .find_reference("refs/heads/main")
+            .unwrap()
+            .delete()
+            .unwrap();
+        repo.reference("refs/remotes/origin_p/other", oid, false, "test")
+            .unwrap();
+        GitEngine::delete_remote_branch(
+            dir.path().to_str().unwrap(),
+            "origin_p",
+            "main",
+            &oid.to_string(),
+        )
+        .unwrap();
+        assert!(repo.find_reference("refs/remotes/origin_p/main").is_err());
+        assert!(repo.find_reference("refs/remotes/origin_p/other").is_ok());
+        assert!(repo.find_reference("refs/heads/main").is_ok());
+    }
+
+    #[test]
+    fn deleting_missing_remote_branch_preserves_changed_local_tracking_ref() {
+        let (dir, repo, _remote_dir, remote, oid) = branch_delete_fixture();
+        remote
+            .find_reference("refs/heads/main")
+            .unwrap()
+            .delete()
+            .unwrap();
+        let changed = repo.blob(b"changed locally").unwrap();
+        repo.reference("refs/remotes/origin_p/main", changed, true, "test")
+            .unwrap();
+        assert!(GitEngine::delete_remote_branch(
+            dir.path().to_str().unwrap(),
+            "origin_p",
+            "main",
+            &oid.to_string()
+        )
+        .is_err());
+        assert_eq!(
+            repo.find_reference("refs/remotes/origin_p/main")
+                .unwrap()
+                .target(),
+            Some(changed)
+        );
+    }
+
+    #[test]
+    fn deleting_missing_remote_branch_is_idempotent_when_local_ref_already_gone() {
+        let (dir, repo, _remote_dir, remote, oid) = branch_delete_fixture();
+        remote
+            .find_reference("refs/heads/main")
+            .unwrap()
+            .delete()
+            .unwrap();
+        repo.find_reference("refs/remotes/origin_p/main")
+            .unwrap()
+            .delete()
+            .unwrap();
+        GitEngine::delete_remote_branch(
+            dir.path().to_str().unwrap(),
+            "origin_p",
+            "main",
+            &oid.to_string(),
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn failed_remote_query_does_not_clean_local_tracking_ref() {
+        let (dir, repo, remote_dir, remote, oid) = branch_delete_fixture();
+        drop(remote);
+        drop(remote_dir);
+        assert!(GitEngine::delete_remote_branch(
+            dir.path().to_str().unwrap(),
+            "origin_p",
+            "main",
+            &oid.to_string()
+        )
+        .is_err());
+        assert_eq!(
+            repo.find_reference("refs/remotes/origin_p/main")
+                .unwrap()
+                .target(),
+            Some(oid)
+        );
+    }
+
+    #[test]
+    fn separate_push_url_cannot_hide_an_existing_remote_branch() {
+        for existing_on_push in [false, true] {
+            let (dir, repo, _remote_dir, remote, oid) = branch_delete_fixture();
+            let push_dir = tempfile::tempdir().unwrap();
+            let push_repo = Repository::init_bare(push_dir.path()).unwrap();
+            if existing_on_push {
+                run_git(
+                    dir.path().to_str().unwrap(),
+                    &["push", push_dir.path().to_str().unwrap(), "main"],
+                )
+                .unwrap();
+                // A different valid object simulates a concurrent remote update.
+                let changed = push_repo.blob(b"changed remotely").unwrap();
+                push_repo
+                    .reference("refs/heads/main", changed, true, "test")
+                    .unwrap();
+                remote
+                    .find_reference("refs/heads/main")
+                    .unwrap()
+                    .delete()
+                    .unwrap();
+            }
+            repo.remote_set_pushurl("origin_p", Some(push_dir.path().to_str().unwrap()))
+                .unwrap();
+            assert!(GitEngine::delete_remote_branch(
+                dir.path().to_str().unwrap(),
+                "origin_p",
+                "main",
+                &oid.to_string()
+            )
+            .is_err());
+            assert_eq!(
+                repo.find_reference("refs/remotes/origin_p/main")
+                    .unwrap()
+                    .target(),
+                Some(oid)
+            );
+        }
     }
 
     #[test]

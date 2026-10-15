@@ -47,7 +47,7 @@ GitUI 采用 Tauri v2 的 IPC 机制实现前后端通信，包括双向的请�
 - `fetch_remote` / `pull_branch` / `push_branch` / `push_tag`：远程协作与同步。`pull_branch` 在 fetch 前要求仓库没有未完成 Git 操作，且 staged / unstaged / untracked 均为空；自动 stash 生命周期由前端在调用前后协调。`push_branch` 成功后会为尚无 upstream 的目标本地分支建立所选 remote 的同名 tracking；tracking 配置即使对应引用已 gone 也视为已有，不改写。`push_tag` 可接收预期本地 ref OID，并在强推时选择复核预期远端 ref OID；目标变化则不执行推送。
 - `list_remotes` / `add_remote` / `edit_remote` / `remove_remote`：远程节点管理。`edit_remote` 与 `remove_remote` 必须传入预期旧 fetch URL，写入 / 删除前目标不匹配或已不存在时不修改本地配置与 remote-tracking refs。
 - `list_orphan_remote_refs(repo_id, name)` / `remove_orphan_remote_refs(repo_id, name, expected_refs)`：查询及清理无对应远程配置的残留节点。快照为完整引用名与直接 OID / 符号引用原始目标组成的二元组数组；查询包含符号 HEAD，清理要求非空快照完全匹配且同名配置仍不存在。后端锁定目标引用后再次复核，仅删除 `refs/remotes/<name>/` 下的引用；前端参数使用 `repoId` / `expectedRefs`。
-- `delete_remote_branch`：删除远端分支；必须接收预期 commit OID，并以显式 force-with-lease 在同一次 push 中原子校验远端引用，目标变化时拒绝删除。
+- `delete_remote_branch`：删除远端分支；必须接收预期 commit OID，并以显式 force-with-lease 在同一次 push 中原子校验远端引用，目标变化时拒绝删除。删除失败后，只有成功核实 fetch 与全部 push 目标上该分支均不存在时才按完成处理，并清理对应本地跟踪引用；清理前锁定并核对预期 OID，本地引用已不存在也视作完成。查询失败或任一远端仍有分支时返回原错误，不清理本地引用。
 - `list_tags` / `delete_tag` / `list_remote_tags` / `fetch_tags_from_remote` / `delete_remote_tag`：标签管理。返回的 `git/types.rs::TagInfo` 以 `ref_oid` 表示 Tag 引用直接对象，以 `commit_oid` 表示 peel 后的历史 commit。`delete_tag` 与 `delete_remote_tag` 可接收预期 ref OID，删除前目标不匹配或已不存在时不修改引用。
 
 ### 子模块 (Submodule)

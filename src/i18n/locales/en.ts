@@ -1276,7 +1276,7 @@ const messages = {
     },
     push: {
       nonFastForward: 'Not a fast-forward: the remote has new commits, pull / merge first',
-      forceWithLeaseRejected: 'Force-with-lease rejected: the remote has new commits (someone else pushed), fetch first',
+      forceWithLeaseRejected: 'The remote ref differs from the local record. The operation was cancelled; fetch and try again.',
     },
     pull: {
       mergeRequired: 'Pull requires a merge: fast-forward not possible, a merge commit was created',
