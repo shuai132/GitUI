@@ -52,6 +52,8 @@
 首次 Publish 成功后，Push 引擎按本次实际 remote 建立同名 upstream；只有远端写入成功且本地分支原先没有 upstream 才修改 tracking 配置。该行为等价于标准 Git 的首次 `push --set-upstream` 语义，不受 GitUI 默认 remote UI 偏好影响。
 
 ### 检出逻辑
+提交右键的「切换并重置分支…」使用独立组合命令 `switch_and_reset_branch`，选择本地分支后先 safe checkout，再按所选模式重置到指定提交。该入口要求干净工作区，不进入携带 / Stash / 丢弃流程；执行前校验打开表单时的 HEAD 与目标分支 OID，并拒绝已在其他 Worktree 检出的分支。交互与刷新见 `docs/04-history.md`。
+
 分支检出不仅涉及引用的切换，还会同步协调工作区的文件更新。脏工作区统一提供三种改动去向：携带模式采用 safe checkout，防止因冲突导致代码丢失；Stash 模式复用包含 untracked 的现有 stash 流程，并在消息中记录来源 / 目标分支；丢弃模式先复用工作区的可恢复丢弃流程，把普通文件当前版本移入系统废纸篓，再执行 safe checkout。丢弃或 Stash 已完成但检出失败时，对话框保留中间状态，重试不会重复处理改动。切换成功后立即刷新工作区，不依赖 watcher 的防抖延迟；UI 不提供绕过这些保护的 force checkout 入口。
 
 ### 树形构造

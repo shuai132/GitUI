@@ -341,6 +341,18 @@ export function useGitCommands() {
     expectedHeadRef: expectedHeadRef ?? null,
   })
 
+  const switchAndResetBranch = (
+    repoId: string,
+    name: string,
+    oid: string,
+    mode: 'soft' | 'mixed' | 'hard',
+    expectedHead: string | null,
+    expectedHeadRef: string,
+    expectedBranchOid: string,
+  ) => call<void>('switch_and_reset_branch', {
+    repoId, name, oid, mode, expectedHead, expectedHeadRef, expectedBranchOid,
+  })
+
   const undoLastCommit = (repoId: string, expectedHead: string) =>
     call<string>('undo_last_commit', { repoId, expectedHead })
 
@@ -766,6 +778,7 @@ export function useGitCommands() {
     revertContinue,
     revertAbort,
     resetToCommit,
+    switchAndResetBranch,
     undoLastCommit,
     createTag,
     getLog,

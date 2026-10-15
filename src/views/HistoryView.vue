@@ -500,6 +500,7 @@ const {
   onCommitMenuAction,
 
   showCreateBranchDialog,
+  showSwitchResetBranchDialog,
   showCreateTagDialog,
   createTagAnnotated,
   showCheckoutRemoteDialog,
@@ -1019,6 +1020,7 @@ onUnmounted(() => {
 
   <HistoryDialogs
     v-model:show-create-branch-dialog="showCreateBranchDialog"
+    v-model:show-switch-reset-branch-dialog="showSwitchResetBranchDialog"
     v-model:show-create-tag-dialog="showCreateTagDialog"
     v-model:show-checkout-remote-dialog="showCheckoutRemoteDialog"
     v-model:show-merge-dialog="showMergeDialog"

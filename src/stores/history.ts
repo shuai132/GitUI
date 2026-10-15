@@ -599,6 +599,25 @@ export const useHistoryStore = defineStore('history', () => {
     await Promise.all([loadLog(), loadBranches()])
   }
 
+  async function switchAndResetBranch(
+    repoId: string,
+    name: string,
+    oid: string,
+    mode: 'soft' | 'mixed' | 'hard',
+    expectedHead: string | null,
+    expectedHeadRef: string,
+    expectedBranchOid: string,
+  ) {
+    try {
+      await git.switchAndResetBranch(
+        repoId, name, oid, mode, expectedHead, expectedHeadRef, expectedBranchOid,
+      )
+    } finally {
+      // Checkout may have completed even if the subsequent reset failed.
+      if (isActiveRepo(repoId)) await Promise.all([loadLog(), loadBranches()])
+    }
+  }
+
   async function dropUnreachableCommit(repoId: string, oid: string, expectedContextId: string) {
     const removed = await git.dropUnreachableCommit(repoId, oid, expectedContextId)
     if (!isActiveRepo(repoId)) return removed
@@ -847,6 +866,7 @@ export const useHistoryStore = defineStore('history', () => {
     cherryPickCommit,
     revertCommit,
     resetToCommit,
+    switchAndResetBranch,
     dropUnreachableCommit,
     previewDropUnreachableCommit,
     amendCommitMessage,

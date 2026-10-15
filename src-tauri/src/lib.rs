@@ -100,6 +100,7 @@ pub fn run() {
             revert_continue,
             revert_abort,
             reset_to_commit,
+            switch_and_reset_branch,
             undo_last_commit,
             create_tag,
             // Log

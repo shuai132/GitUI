@@ -27,6 +27,7 @@ const {
   amendCommitMessageMock,
   dropUnreachableCommitMock,
   previewDropUnreachableCommitMock,
+  switchAndResetBranchMock,
 } = vi.hoisted(() => ({
   getLogMock: vi.fn(),
   searchCommitsMock: vi.fn(),
@@ -40,6 +41,7 @@ const {
   amendCommitMessageMock: vi.fn(),
   dropUnreachableCommitMock: vi.fn(),
   previewDropUnreachableCommitMock: vi.fn(),
+  switchAndResetBranchMock: vi.fn(),
 }))
 
 vi.mock('@tauri-apps/plugin-store', () => ({
@@ -64,6 +66,7 @@ vi.mock('@/composables/useGitCommands', () => ({
     amendCommitMessage: amendCommitMessageMock,
     dropUnreachableCommit: dropUnreachableCommitMock,
     previewDropUnreachableCommit: previewDropUnreachableCommitMock,
+    switchAndResetBranch: switchAndResetBranchMock,
   }),
 }))
 
@@ -207,7 +210,44 @@ describe('history store log filters', () => {
     amendCommitMessageMock.mockReset()
     dropUnreachableCommitMock.mockReset()
     previewDropUnreachableCommitMock.mockReset()
+    switchAndResetBranchMock.mockReset()
     setActivePinia(createPinia())
+  })
+
+  it('refreshes log and branches even if switch-and-reset partially fails', async () => {
+    const repoStore = useRepoStore()
+    const historyStore = useHistoryStore()
+    setActiveRepo(repoStore, 'repo-1', '/repos/a')
+    getLogMock.mockResolvedValue(page())
+    listBranchesMock.mockResolvedValue([])
+    listTagsMock.mockResolvedValue([])
+    listRemotesMock.mockResolvedValue([])
+    switchAndResetBranchMock.mockRejectedValue(new Error('reset failed after checkout'))
+
+    await expect(historyStore.switchAndResetBranch(
+      'repo-1', 'feature', 'target', 'mixed', 'head', 'refs/heads/main', 'branch',
+    )).rejects.toThrow('reset failed after checkout')
+    expect(switchAndResetBranchMock).toHaveBeenCalledWith(
+      'repo-1', 'feature', 'target', 'mixed', 'head', 'refs/heads/main', 'branch',
+    )
+    expect(getLogMock).toHaveBeenCalled()
+    expect(listBranchesMock).toHaveBeenCalledWith('repo-1')
+  })
+
+  it('does not refresh another repository when switch-and-reset finishes late', async () => {
+    const repoStore = useRepoStore()
+    const historyStore = useHistoryStore()
+    setActiveRepo(repoStore, 'repo-1', '/repos/a')
+    const pending = deferred<void>()
+    switchAndResetBranchMock.mockReturnValue(pending.promise)
+    const operation = historyStore.switchAndResetBranch(
+      'repo-1', 'feature', 'target', 'hard', 'head', 'refs/heads/main', 'branch',
+    )
+    setActiveRepo(repoStore, 'repo-2', '/repos/b')
+    pending.resolve()
+    await operation
+    expect(getLogMock).not.toHaveBeenCalled()
+    expect(listBranchesMock).not.toHaveBeenCalled()
   })
 
   it('passes current UI filters to loadLog', async () => {

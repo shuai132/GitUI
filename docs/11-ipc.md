@@ -30,6 +30,7 @@ GitUI 采用 Tauri v2 的 IPC 机制实现前后端通信，包括双向的请�
 - `create_commit` / `amend_commit` / `amend_commit_message`：提交创建与修补。三个命令都必须携带预期 HEAD OID / ref；`create_commit` 的空 OID 明确表示预期 unborn。后端只在仓库状态 clean 且上下文完全匹配时写入。
 - `undo_last_commit(repo_id, expected_head)`：撤销当前分支刚创建的未发布单父提交；原子校验 HEAD 与 upstream 后执行 mixed reset，返回父提交 OID。
 - `checkout_commit` / `reset_to_commit`：版本回退与切换。历史确认流程可传 `expected_head` 与 `expected_head_ref`，后端在写操作前校验 HEAD 提交和分支引用仍与用户打开确认框时一致。
+- `switch_and_reset_branch(repo_id, name, oid, mode, expected_head, expected_head_ref, expected_branch_oid)`：先切换到已有本地分支，再以 Soft / Mixed / Hard 模式重置到指定提交。必须复核预期 HEAD（可为空以表示 unborn）、完整 HEAD ref 与目标分支 OID；要求没有工作区 / Index / untracked 改动或进行中的 Git 操作，并拒绝被其他 Worktree 检出的分支。所有可预判校验先于 safe checkout；Reset 失败时可能已完成分支切换，调用方无论成功失败都应刷新实际状态。
 - `cherry_pick_commit` / `revert_commit` / `create_tag`：高级版本操作。Cherry-pick / Revert 同样支持 HEAD 提交与引用快照，防止执行过期确认请求。
 
 ### 历史与对比 (Log / Diff)

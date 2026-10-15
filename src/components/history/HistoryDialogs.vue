@@ -2,6 +2,7 @@
 import type { BranchInfo, CommitInfo } from '@/types/git'
 import FileHistoryModal from '@/components/file-history/FileHistoryModal.vue'
 import CreateBranchDialog from '@/components/commit/CreateBranchDialog.vue'
+import SwitchResetBranchDialog from '@/components/commit/SwitchResetBranchDialog.vue'
 import CreateTagDialog from '@/components/commit/CreateTagDialog.vue'
 import CheckoutRemoteDialog from '@/components/branch/CheckoutRemoteDialog.vue'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
@@ -30,6 +31,7 @@ interface DropUnreachableDialogState {
 
 defineProps<{
   showCreateBranchDialog: boolean
+  showSwitchResetBranchDialog: boolean
   showCreateTagDialog: boolean
   createTagAnnotated: boolean
   dialogCommit: CommitInfo | null
@@ -61,6 +63,7 @@ defineProps<{
 
 const emit = defineEmits<{
   'update:showCreateBranchDialog': [value: boolean]
+  'update:showSwitchResetBranchDialog': [value: boolean]
   'update:showCreateTagDialog': [value: boolean]
   'update:showCheckoutRemoteDialog': [value: boolean]
   'update:showMergeDialog': [value: boolean]
@@ -89,6 +92,13 @@ const emit = defineEmits<{
     :visible="showCreateBranchDialog"
     :commit="dialogCommit"
     @close="emit('update:showCreateBranchDialog', false)"
+  />
+
+  <SwitchResetBranchDialog
+    v-if="showSwitchResetBranchDialog"
+    :visible="showSwitchResetBranchDialog"
+    :commit="dialogCommit"
+    @close="emit('update:showSwitchResetBranchDialog', false)"
   />
 
   <CreateTagDialog

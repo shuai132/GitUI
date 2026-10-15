@@ -2,11 +2,13 @@ import { shallowMount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import HistoryDialogs from './HistoryDialogs.vue'
+import SwitchResetBranchDialog from '@/components/commit/SwitchResetBranchDialog.vue'
 import type { HistoryActionConfirmation } from '@/composables/history/historyActionConfirmation'
 
 function baseProps() {
   return {
     showCreateBranchDialog: false,
+    showSwitchResetBranchDialog: false,
     showCreateTagDialog: false,
     createTagAnnotated: false,
     dialogCommit: null,
@@ -51,6 +53,17 @@ function baseProps() {
 }
 
 describe('HistoryDialogs action confirmation', () => {
+  it('opens the branch reset form on the selected commit and forwards close', () => {
+    const wrapper = shallowMount(HistoryDialogs, {
+      props: { ...baseProps(), showSwitchResetBranchDialog: true },
+    })
+    const dialog = wrapper.findComponent(SwitchResetBranchDialog)
+    expect(dialog.props('visible')).toBe(true)
+    expect(dialog.props('commit')).toBeNull()
+    dialog.vm.$emit('close')
+    expect(wrapper.emitted('update:showSwitchResetBranchDialog')).toEqual([[false]])
+  })
+
   it('renders the captured target and forwards confirm and cancel', () => {
     const pending: HistoryActionConfirmation = {
       kind: 'reset',

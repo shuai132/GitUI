@@ -170,6 +170,35 @@ pub async fn reset_to_commit(
 }
 
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
+pub async fn switch_and_reset_branch(
+    repo_id: String,
+    name: String,
+    oid: String,
+    mode: String,
+    expected_head: Option<String>,
+    expected_head_ref: String,
+    expected_branch_oid: String,
+    repo_manager: State<'_, RepoManager>,
+) -> Result<(), GitError> {
+    let meta = repo_manager
+        .get_meta(&repo_id)
+        .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
+    run_git(move || {
+        GitEngine::switch_and_reset_branch(
+            &meta.path,
+            &name,
+            &oid,
+            &mode,
+            expected_head.as_deref(),
+            &expected_head_ref,
+            &expected_branch_oid,
+        )
+    })
+    .await
+}
+
+#[tauri::command]
 pub async fn undo_last_commit(
     repo_id: String,
     expected_head: String,

@@ -99,6 +99,7 @@ export function useCommitContextMenu(
 
   // ── Dialog States ────────────────────────────────────────────────────
   const showCreateBranchDialog = ref(false)
+  const showSwitchResetBranchDialog = ref(false)
   const showCreateTagDialog = ref(false)
   const createTagAnnotated = ref(false)
   const showCheckoutRemoteDialog = ref(false)
@@ -377,6 +378,11 @@ export function useCommitContextMenu(
           { label: t('history.contextMenu.resetHard'), action: 'reset-hard' },
         ],
       },
+      {
+        label: t('history.contextMenu.switchResetBranch'),
+        action: 'switch-reset-branch',
+        disabled: ongoing,
+      },
       { label: t('history.contextMenu.revert'), action: 'revert' },
       { separator: true },
       {
@@ -502,6 +508,14 @@ export function useCommitContextMenu(
         case 'create-branch':
           dialogCommit.value = c
           showCreateBranchDialog.value = true
+          break
+        case 'switch-reset-branch':
+          if (!commitMenu.repoId || repoStore.activeRepoId !== commitMenu.repoId) {
+            showError(t('errors.history.contextChanged'))
+            break
+          }
+          dialogCommit.value = c
+          showSwitchResetBranchDialog.value = true
           break
         case 'cherry-pick':
           openCommitActionConfirmation('cherry-pick', c)
@@ -755,6 +769,7 @@ export function useCommitContextMenu(
     onCommitMenuAction,
 
     showCreateBranchDialog,
+    showSwitchResetBranchDialog,
     showCreateTagDialog,
     createTagAnnotated,
     showCheckoutRemoteDialog,

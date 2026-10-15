@@ -15,6 +15,7 @@ mod refs;
 mod remote;
 mod stash_reflog;
 mod submodule;
+mod switch_reset;
 mod workspace;
 mod worktree;
 

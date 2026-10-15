@@ -83,6 +83,8 @@ Reflog tip 判定从所有失联入口的父节点开始共用祖先遍历，访
 
 Checkout、Cherry-pick、Revert、Reset 和删除历史图 Stash 使用统一的应用内确认框，不依赖 WebView 原生对话框。确认内容展示提交摘要、短 SHA 以及分支 / Reset 模式或 Stash 消息；Hard Reset 和删除 Stash 使用危险按钮。挂起请求保存仓库、HEAD OID / 分支 ref 与目标提交快照，后端执行前再次校验；上下文变化时取消旧请求，避免较晚确认落到另一段历史。
 
+提交菜单另提供「切换并重置分支…」，由 `SwitchResetBranchDialog` 选择已有本地分支与 Soft / Mixed / Hard 模式，默认 Mixed，需显式选择分支后确认。表单展示目标提交摘要与短 SHA，候选分支携带当前短 SHA；冻结打开时的仓库、HEAD、提交及分支候选，后端通过 `switch_and_reset_branch` 再次校验 HEAD 和所选分支目标。组合操作要求工作区干净、仓库没有进行中的 Git 操作，且所选分支未在其他 Worktree 检出。先 safe checkout 到所选分支，再执行 Reset，因此 Soft / Mixed 保留的是所选分支的工作区内容。Hard 显示危险按钮与内容替换说明；失败保留表单并刷新实际日志、分支与工作区，覆盖已切换但 Reset 失败的中间状态。
+
 提交行 hover tooltip 与右键菜单互斥：打开右键菜单时会立即隐藏 tooltip，且菜单可见期间不会重新展示。菜单打开后左键点击外部区域只负责关闭菜单，不透传为底层行选中或按钮点击；右键点击其他目标仍可切换到对应目标的上下文菜单。
 
 ## 刷新策略
