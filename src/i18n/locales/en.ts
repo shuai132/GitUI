@@ -640,6 +640,8 @@ const messages = {
     },
     confirmDelete: {
       title: 'Delete remote',
+      orphanTitle: 'Clean up orphaned remote-tracking refs',
+      orphanMessage: 'Remote "{name}" no longer has configuration.\n\nRemove {count} remaining local tracking refs under this name (including symbolic refs).\n\nThis does not delete the server repository, server branches, or local branches.',
       message: 'Delete local Remote "{name}"?\n\nURL: {url}\nRemote-tracking branches removed: {count}\n\nThis does not delete the server repository or its branches. Re-adding the Remote and fetching can recreate the local tracking refs.',
       missingUrl: '(no URL)',
       contextChanged: 'The repository, Remote URL, or tracking refs changed after confirmation opened. Review the current target and try again.',

@@ -75,7 +75,7 @@ function onDeleteRemote(remoteName: string) {
     (candidate) => candidate.name === remoteName,
   )
   if (!remote) {
-    showError(t('remote.confirmDelete.contextChanged'))
+    void onDeleteOrphanRemote(repoId, remoteName)
     return
   }
   const expected = {
@@ -101,6 +101,36 @@ function onDeleteRemote(remoteName: string) {
     },
     { loadingLabel: t('common.deleting', '删除中...') },
   )
+}
+
+async function onDeleteOrphanRemote(repoId: string, remoteName: string) {
+  const signature = remoteTrackingSignature(remoteName)
+  const isCurrent = () =>
+    repoStore.activeRepoId === repoId &&
+    !historyStore.remotes.some((remote) => remote.name === remoteName) &&
+    remoteTrackingSignature(remoteName) === signature
+  try {
+    const refs = await git.listOrphanRemoteRefs(repoId, remoteName)
+    if (!isCurrent() || refs.length === 0) {
+      showError(t('remote.confirmDelete.contextChanged'))
+      return
+    }
+    openConfirm(
+      t('remote.confirmDelete.orphanTitle'),
+      t('remote.confirmDelete.orphanMessage', { name: remoteName, count: refs.length }),
+      async () => {
+        if (!isCurrent()) {
+          showError(t('remote.confirmDelete.contextChanged'))
+          return
+        }
+        await git.removeOrphanRemoteRefs(repoId, remoteName, refs)
+        await historyStore.loadBranches()
+      },
+      { loadingLabel: t('common.deleting', '删除中...') },
+    )
+  } catch (err: unknown) {
+    showActionError(err)
+  }
 }
 
 function remoteTrackingBranches(remoteName: string): BranchInfo[] {

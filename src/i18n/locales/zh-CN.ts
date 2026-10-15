@@ -639,6 +639,8 @@ const messages = {
     },
     confirmDelete: {
       title: '删除 Remote',
+      orphanTitle: '清理残留远程跟踪引用',
+      orphanMessage: 'Remote "{name}" 的配置已不存在。\n\n将清理该名称下残留的 {count} 个本地跟踪引用（含符号引用）。\n\n不会删除服务器仓库、远端分支或本地分支。',
       message: '删除本地 Remote "{name}"？\n\nURL：{url}\n将移除的 remote-tracking branches：{count}\n\n不会删除服务器仓库或远端分支；重新添加 Remote 并 Fetch 可重建本地 tracking refs。',
       missingUrl: '（无 URL）',
       contextChanged: '打开确认框后仓库、Remote URL 或 tracking refs 已变化，请检查当前目标并重试。',

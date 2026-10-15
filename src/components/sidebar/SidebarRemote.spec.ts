@@ -23,7 +23,11 @@ const mocks = vi.hoisted(() => ({
     loadBranches: vi.fn(),
   },
   ui: { requestFetch: vi.fn() },
-  git: { removeRemote: vi.fn() },
+  git: {
+    removeRemote: vi.fn(),
+    listOrphanRemoteRefs: vi.fn(),
+    removeOrphanRemoteRefs: vi.fn(),
+  },
   showError: vi.fn(),
 }))
 
@@ -57,6 +61,10 @@ describe('SidebarRemote guarded deletion', () => {
     mocks.history.deleteRemoteBranch.mockReset().mockResolvedValue(undefined)
     mocks.history.loadBranches.mockReset().mockResolvedValue(undefined)
     mocks.git.removeRemote.mockReset().mockResolvedValue(undefined)
+    mocks.git.listOrphanRemoteRefs.mockReset().mockResolvedValue([
+      ['refs/remotes/origin/feature', remoteBranch.commit_oid],
+    ])
+    mocks.git.removeOrphanRemoteRefs.mockReset().mockResolvedValue(undefined)
     mocks.showError.mockReset()
   })
 
@@ -93,6 +101,47 @@ describe('SidebarRemote guarded deletion', () => {
 
     expect(mocks.git.removeRemote).not.toHaveBeenCalled()
     expect(mocks.showError).toHaveBeenCalled()
+  })
+
+  it('confirms and cleans tracking refs when the remote configuration is missing', async () => {
+    mocks.history.remotes = []
+    const wrapper = await requestRemoteRemoval()
+    const dialog = wrapper.findComponent(ConfirmDialog)
+    expect(dialog.props('title')).toContain('orphanTitle')
+    expect(dialog.props('message')).toContain('origin 1')
+    dialog.vm.$emit('confirm')
+    await flushPromises()
+    expect(mocks.git.removeRemote).not.toHaveBeenCalled()
+    expect(mocks.git.removeOrphanRemoteRefs).toHaveBeenCalledWith('repo-a', 'origin', [
+      ['refs/remotes/origin/feature', remoteBranch.commit_oid],
+    ])
+    expect(mocks.history.loadBranches).toHaveBeenCalled()
+  })
+
+  it.each(['configuration', 'repository', 'refs'])('rejects orphan cleanup after %s changes', async (change) => {
+    mocks.history.remotes = []
+    const wrapper = await requestRemoteRemoval()
+    if (change === 'configuration') mocks.history.remotes = [{ name: 'origin', url: '/new' }]
+    if (change === 'repository') mocks.repo.activeRepoId = 'repo-b'
+    if (change === 'refs') mocks.history.branches = []
+    wrapper.findComponent(ConfirmDialog).vm.$emit('confirm')
+    await flushPromises()
+    expect(mocks.git.removeOrphanRemoteRefs).not.toHaveBeenCalled()
+    expect(mocks.showError).toHaveBeenCalled()
+  })
+
+  it('discards a pending orphan preview after switching repositories', async () => {
+    mocks.history.remotes = []
+    let resolve!: (refs: [string, string][]) => void
+    mocks.git.listOrphanRemoteRefs.mockReturnValue(new Promise<[string, string][]>((done) => {
+      resolve = done
+    }))
+    const wrapper = await requestRemoteRemoval()
+    mocks.repo.activeRepoId = 'repo-b'
+    resolve([['refs/remotes/origin/feature', remoteBranch.commit_oid!]])
+    await flushPromises()
+    expect(wrapper.findComponent(ConfirmDialog).props('visible')).toBe(false)
+    expect(mocks.git.removeOrphanRemoteRefs).not.toHaveBeenCalled()
   })
 
   it('cancels removal after the tracking refs change', async () => {

@@ -137,6 +137,8 @@ pub fn run() {
             add_remote,
             edit_remote,
             remove_remote,
+            list_orphan_remote_refs,
+            remove_orphan_remote_refs,
             delete_remote_tag,
             // Submodule
             list_submodules,

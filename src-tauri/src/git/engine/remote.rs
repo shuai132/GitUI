@@ -12,6 +12,80 @@ use crate::git::{
 use super::GitEngine;
 
 impl GitEngine {
+    /// 快照仅覆盖该无配置节点的本地引用，保留符号引用的原始目标。
+    fn orphan_remote_refs(repo: &Repository, name: &str) -> GitResult<Vec<(String, String)>> {
+        if name.is_empty()
+            || name.contains('/')
+            || !git2::Reference::is_valid_name(&format!("refs/remotes/{name}/branch"))
+        {
+            return Err(GitError::OperationFailed("Invalid remote name".into()));
+        }
+        if repo
+            .remotes()?
+            .iter()
+            .flatten()
+            .any(|remote| remote == name)
+        {
+            return Err(GitError::OperationFailed(format!(
+                "Remote target changed: {name} now has configuration"
+            )));
+        }
+        let prefix = format!("refs/remotes/{name}/");
+        let mut refs = Vec::new();
+        for reference in repo.references()? {
+            let reference = reference?;
+            let refname = std::str::from_utf8(reference.name_bytes())
+                .map_err(|_| GitError::OperationFailed("Invalid reference name encoding".into()))?;
+            if !refname.starts_with(&prefix) {
+                continue;
+            }
+            let target = if let Some(oid) = reference.target() {
+                oid.to_string()
+            } else {
+                reference
+                    .symbolic_target()
+                    .ok_or_else(|| GitError::OperationFailed("Invalid symbolic reference".into()))?
+                    .to_string()
+            };
+            refs.push((refname.to_string(), target));
+        }
+        refs.sort();
+        Ok(refs)
+    }
+
+    pub fn list_orphan_remote_refs(path: &str, name: &str) -> GitResult<Vec<(String, String)>> {
+        Self::orphan_remote_refs(&Self::open(path)?, name)
+    }
+
+    pub fn remove_orphan_remote_refs(
+        path: &str,
+        name: &str,
+        mut expected_refs: Vec<(String, String)>,
+    ) -> GitResult<()> {
+        let repo = Self::open(path)?;
+        expected_refs.sort();
+        let current = Self::orphan_remote_refs(&repo, name)?;
+        if current.is_empty() || current != expected_refs {
+            return Err(GitError::OperationFailed(format!(
+                "Remote tracking refs changed: {name}"
+            )));
+        }
+        let mut transaction = repo.transaction()?;
+        for (refname, _) in &current {
+            transaction.lock_ref(refname)?;
+        }
+        if Self::orphan_remote_refs(&repo, name)? != expected_refs {
+            return Err(GitError::OperationFailed(format!(
+                "Remote tracking refs changed: {name}"
+            )));
+        }
+        for (refname, _) in &current {
+            transaction.remove(refname)?;
+        }
+        transaction.commit()?;
+        Ok(())
+    }
+
     pub fn fetch(path: &str, remote_name: &str) -> GitResult<()> {
         let url = get_remote_url(path, remote_name)?;
         if is_ssh_url(&url) {
@@ -746,6 +820,132 @@ impl GitEngine {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn orphan_fixture(repo: &Repository) -> git2::Oid {
+        let tree_oid = repo.treebuilder(None).unwrap().write().unwrap();
+        let tree = repo.find_tree(tree_oid).unwrap();
+        let sig = git2::Signature::now("Test", "test@example.com").unwrap();
+        let oid = repo
+            .commit(Some("refs/heads/main"), &sig, &sig, "initial", &tree, &[])
+            .unwrap();
+        repo.reference("refs/remotes/origin_p/main", oid, false, "test")
+            .unwrap();
+        repo.reference_symbolic(
+            "refs/remotes/origin_p/HEAD",
+            "refs/remotes/origin_p/main",
+            false,
+            "test",
+        )
+        .unwrap();
+        oid
+    }
+
+    #[test]
+    fn removes_only_orphan_refs_including_symbolic_and_packed_refs() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().to_str().unwrap();
+        let repo = Repository::init(dir.path()).unwrap();
+        let oid = orphan_fixture(&repo);
+        repo.remote("origin", "https://example.com/repo.git")
+            .unwrap();
+        repo.reference("refs/remotes/origin/main", oid, false, "test")
+            .unwrap();
+        repo.reference("refs/remotes/origin_p_extra/main", oid, false, "test")
+            .unwrap();
+        std::fs::write(
+            repo.path().join("packed-refs"),
+            format!(
+                "# pack-refs with: peeled fully-peeled sorted\n{oid} refs/remotes/origin_p/main\n"
+            ),
+        )
+        .unwrap();
+        std::fs::remove_file(repo.path().join("refs/remotes/origin_p/main")).unwrap();
+        let refs = GitEngine::list_orphan_remote_refs(path, "origin_p").unwrap();
+        assert_eq!(refs.len(), 2);
+        GitEngine::remove_orphan_remote_refs(path, "origin_p", refs).unwrap();
+        assert!(repo.find_reference("refs/remotes/origin_p/main").is_err());
+        assert!(repo.find_reference("refs/remotes/origin_p/HEAD").is_err());
+        for name in [
+            "refs/heads/main",
+            "refs/remotes/origin/main",
+            "refs/remotes/origin_p_extra/main",
+        ] {
+            assert_eq!(repo.find_reference(name).unwrap().target(), Some(oid));
+        }
+        assert!(repo.find_remote("origin").is_ok());
+    }
+
+    #[test]
+    fn rejects_orphan_cleanup_if_configuration_appears() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().to_str().unwrap();
+        let repo = Repository::init(dir.path()).unwrap();
+        orphan_fixture(&repo);
+        let refs = GitEngine::list_orphan_remote_refs(path, "origin_p").unwrap();
+        repo.remote("origin_p", "https://example.com/new.git")
+            .unwrap();
+        assert!(GitEngine::remove_orphan_remote_refs(path, "origin_p", refs).is_err());
+        assert!(repo.find_reference("refs/remotes/origin_p/main").is_ok());
+        assert!(repo.find_remote("origin_p").is_ok());
+    }
+
+    #[test]
+    fn rejects_stale_orphan_snapshots_without_deleting_other_refs() {
+        for change in ["add", "remove", "target", "symbolic"] {
+            let dir = tempfile::tempdir().unwrap();
+            let path = dir.path().to_str().unwrap();
+            let repo = Repository::init(dir.path()).unwrap();
+            let oid = orphan_fixture(&repo);
+            let refs = GitEngine::list_orphan_remote_refs(path, "origin_p").unwrap();
+            match change {
+                "add" => {
+                    repo.reference("refs/remotes/origin_p/extra", oid, false, "test")
+                        .unwrap();
+                }
+                "remove" => {
+                    repo.find_reference("refs/remotes/origin_p/HEAD")
+                        .unwrap()
+                        .delete()
+                        .unwrap();
+                }
+                "target" => {
+                    repo.reference(
+                        "refs/remotes/origin_p/main",
+                        repo.blob(b"changed").unwrap(),
+                        true,
+                        "test",
+                    )
+                    .unwrap();
+                }
+                _ => {
+                    repo.reference_symbolic(
+                        "refs/remotes/origin_p/HEAD",
+                        "refs/heads/main",
+                        true,
+                        "test",
+                    )
+                    .unwrap();
+                }
+            }
+            let current = GitEngine::list_orphan_remote_refs(path, "origin_p").unwrap();
+            assert!(GitEngine::remove_orphan_remote_refs(path, "origin_p", refs).is_err());
+            assert_eq!(
+                GitEngine::list_orphan_remote_refs(path, "origin_p").unwrap(),
+                current
+            );
+        }
+    }
+
+    #[test]
+    fn rejects_invalid_or_empty_orphan_targets() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().to_str().unwrap();
+        Repository::init(dir.path()).unwrap();
+        for name in ["", "../heads", "origin/*", "origin/main"] {
+            assert!(GitEngine::list_orphan_remote_refs(path, name).is_err());
+        }
+        assert!(GitEngine::remove_orphan_remote_refs(path, "missing", vec![]).is_err());
+    }
 
     #[test]
     fn remove_remote_rejects_a_changed_url() {

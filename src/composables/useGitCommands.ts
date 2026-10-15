@@ -565,6 +565,15 @@ export function useGitCommands() {
   ) =>
     call<void>('remove_remote', { repoId, name, expectedUrl })
 
+  const listOrphanRemoteRefs = (repoId: string, name: string) =>
+    call<[string, string][]>('list_orphan_remote_refs', { repoId, name })
+
+  const removeOrphanRemoteRefs = (
+    repoId: string,
+    name: string,
+    expectedRefs: [string, string][],
+  ) => call<void>('remove_orphan_remote_refs', { repoId, name, expectedRefs })
+
   // ---- Submodule ----
   const listSubmodules = (repoId: string) =>
     call<SubmoduleInfo[]>('list_submodules', { repoId })
@@ -790,6 +799,8 @@ export function useGitCommands() {
     addRemote,
     editRemote,
     removeRemote,
+    listOrphanRemoteRefs,
+    removeOrphanRemoteRefs,
     listSubmodules,
     initSubmodule,
     updateSubmodule,

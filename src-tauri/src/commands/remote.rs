@@ -215,6 +215,31 @@ pub async fn remove_remote(
 }
 
 #[tauri::command]
+pub async fn list_orphan_remote_refs(
+    repo_id: String,
+    name: String,
+    repo_manager: State<'_, RepoManager>,
+) -> Result<Vec<(String, String)>, GitError> {
+    let meta = repo_manager
+        .get_meta(&repo_id)
+        .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
+    run_git(move || GitEngine::list_orphan_remote_refs(&meta.path, &name)).await
+}
+
+#[tauri::command]
+pub async fn remove_orphan_remote_refs(
+    repo_id: String,
+    name: String,
+    expected_refs: Vec<(String, String)>,
+    repo_manager: State<'_, RepoManager>,
+) -> Result<(), GitError> {
+    let meta = repo_manager
+        .get_meta(&repo_id)
+        .ok_or_else(|| GitError::RepoNotOpen(repo_id.clone()))?;
+    run_git(move || GitEngine::remove_orphan_remote_refs(&meta.path, &name, expected_refs)).await
+}
+
+#[tauri::command]
 pub async fn edit_remote(
     repo_id: String,
     old_name: String,
