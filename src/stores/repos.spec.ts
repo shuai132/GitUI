@@ -7,6 +7,7 @@ const commandMocks = vi.hoisted(() => ({
   closeRepo: vi.fn(),
   setActiveRepo: vi.fn(),
   openRepo: vi.fn(),
+  findSubmoduleRepoPaths: vi.fn(),
 }))
 
 const persistedStore = vi.hoisted(() => ({
@@ -48,6 +49,7 @@ describe('repos store active backend sync', () => {
     commandMocks.closeRepo.mockResolvedValue(undefined)
     commandMocks.setActiveRepo.mockResolvedValue(undefined)
     commandMocks.openRepo.mockReset()
+    commandMocks.findSubmoduleRepoPaths.mockReset().mockResolvedValue([])
   })
 
   it('sends the next active repo and same generation when closing the active repo', async () => {
@@ -196,6 +198,90 @@ describe('repos store active backend sync', () => {
 
     await store.setActive('repo-a')
     expect(persistedStore.values.get('paths')).toEqual(['/repos/alpha', unavailablePath])
+  })
+
+  it('removes failed submodules from startup recovery and persisted paths regardless of path order', async () => {
+    const submodulePath = '/repos/alpha/lib/asio_net'
+    const offlinePath = '/Volumes/offline/client'
+    persistedStore.values.set('paths', [submodulePath, '/repos/alpha', offlinePath])
+    persistedStore.values.set('activePath', submodulePath)
+    commandMocks.openRepo.mockImplementation(async (path: string) => {
+      if (path === '/repos/alpha') return repo('repo-a', 'alpha')
+      throw new Error('not found')
+    })
+    commandMocks.findSubmoduleRepoPaths.mockResolvedValue([submodulePath])
+    const store = useRepoStore()
+
+    await store.loadPersisted()
+
+    expect(commandMocks.findSubmoduleRepoPaths).toHaveBeenCalledWith([submodulePath, offlinePath])
+    expect(store.unavailableRepos.map(item => item.path)).toEqual([offlinePath])
+    expect(store.activeRepoId).toBe('repo-a')
+    expect(persistedStore.values.get('paths')).toEqual(['/repos/alpha', offlinePath])
+    expect(persistedStore.values.get('activePath')).toBe('/repos/alpha')
+    expect(commandMocks.setActiveRepo).toHaveBeenCalledWith('repo-a', 1)
+  })
+
+  it('does not require the parent repository to be in the saved list to skip a failed submodule', async () => {
+    const path = '/repos/alpha/lib/asio_net'
+    persistedStore.values.set('paths', [path])
+    persistedStore.values.set('activePath', path)
+    commandMocks.openRepo.mockRejectedValue(new Error('not found'))
+    commandMocks.findSubmoduleRepoPaths.mockResolvedValue([path])
+    const store = useRepoStore()
+
+    await store.loadPersisted()
+
+    expect(store.repos).toEqual([])
+    expect(store.unavailableRepos).toEqual([])
+    expect(store.activeRepoId).toBeNull()
+    expect(persistedStore.values.get('paths')).toEqual([])
+    expect(persistedStore.values.get('activePath')).toBeNull()
+    expect(commandMocks.setActiveRepo).toHaveBeenCalledWith(null, 1)
+  })
+
+  it('retains a successfully reopened submodule and skips unnecessary classification', async () => {
+    const module = { id: 'child', name: 'asio_net', path: '/repos/alpha/lib/asio_net' }
+    persistedStore.values.set('paths', [module.path])
+    commandMocks.openRepo.mockResolvedValue(module)
+    const store = useRepoStore()
+
+    await store.loadPersisted()
+
+    expect(store.repos).toEqual([module])
+    expect(store.activeRepoId).toBe('child')
+    expect(commandMocks.findSubmoduleRepoPaths).not.toHaveBeenCalled()
+    expect(persistedStore.values.get('paths')).toEqual([module.path])
+  })
+
+  it('keeps failed nested repositories when they are not confirmed submodules', async () => {
+    const nestedPath = '/repos/alpha/lib/independent'
+    persistedStore.values.set('paths', ['/repos/alpha', nestedPath])
+    commandMocks.openRepo.mockImplementation(async (path: string) => {
+      if (path === '/repos/alpha') return repo('repo-a', 'alpha')
+      throw new Error('not found')
+    })
+    const store = useRepoStore()
+
+    await store.loadPersisted()
+    await store.setActive('repo-a')
+
+    expect(store.unavailableRepos.map(item => item.path)).toEqual([nestedPath])
+    expect(persistedStore.values.get('paths')).toEqual(['/repos/alpha', nestedPath])
+  })
+
+  it('preserves failed records if submodule identification fails', async () => {
+    const path = '/repos/alpha/lib/child'
+    persistedStore.values.set('paths', [path])
+    commandMocks.openRepo.mockRejectedValue(new Error('not found'))
+    commandMocks.findSubmoduleRepoPaths.mockRejectedValue(new Error('metadata unavailable'))
+    const store = useRepoStore()
+
+    await store.loadPersisted()
+
+    expect(store.unavailableRepos.map(item => item.path)).toEqual([path])
+    expect(persistedStore.values.get('paths')).toEqual([path])
+    expect(store.error).toBeNull()
   })
 
   it('recovers an unavailable repository from a relocated path', async () => {

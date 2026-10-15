@@ -107,7 +107,8 @@ export const useRepoStore = defineStore('repos', () => {
       }
 
       unavailableRepos.value = []
-      const needsPersist =
+      let failedRepos: UnavailableRepo[] = []
+      let needsPersist =
         rawPaths.length !== paths.length ||
         rawPaths.some((path, index) => path !== normalizedPaths[index])
       for (const path of paths) {
@@ -121,9 +122,28 @@ export const useRepoStore = defineStore('repos', () => {
           repos.value.push(meta)
         } catch (e) {
           console.error(`Failed to restore repo "${path}":`, e)
-          unavailableRepos.value.push(unavailableRepo(path, e))
+          failedRepos.push(unavailableRepo(path, e))
         }
       }
+
+      // Branch changes can remove submodule workdirs. Confirm their identity
+      // from parent metadata before dropping failed paths; nested repos alone
+      // are not evidence of a submodule.
+      if (failedRepos.length > 0) {
+        try {
+          const submodulePaths = new Set(await git.findSubmoduleRepoPaths(
+            failedRepos.map((repo) => repo.path),
+          ))
+          const remaining = failedRepos.filter((repo) => !submodulePaths.has(repo.path))
+          if (remaining.length !== failedRepos.length) {
+            failedRepos = remaining
+            needsPersist = true
+          }
+        } catch (caught: unknown) {
+          console.error('[repos] failed to identify unavailable submodules:', caught)
+        }
+      }
+      unavailableRepos.value = failedRepos
 
       // 恢复激活仓库
       if (activePath) {
@@ -137,7 +157,7 @@ export const useRepoStore = defineStore('repos', () => {
         activeRepoId.value = repos.value[0].id
       }
 
-      // 只清理重复 / 非规范路径；恢复失败项继续写入名册，等待用户重试或移除。
+      // 清理重复 / 非规范路径及已确认的失败子模块；普通失败仓库保留恢复入口。
       if (needsPersist) {
         await persist()
       }

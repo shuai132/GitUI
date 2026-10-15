@@ -13,6 +13,7 @@ GitUI 采用 Tauri v2 的 IPC 机制实现前后端通信，包括双向的请�
 
 ### 仓库管理 (Repo)
 - `open_repo` / `list_repos`：仓库名册的基础维护。
+- `find_submodule_repo_paths(paths)`：批量识别启动时打开失败的路径中哪些属于子模块，返回输入路径的子集。沿祖先 Git 仓库读取当前子模块声明与实际 gitdir / commondir 下保留的 modules 配置，兼容目录和当前声明均已消失的子模块；同批共享元数据去重读取，不遍历工作区或 Git 对象库。只返回能够确认的路径，不能确认的路径交由前端保留重试项；不要求父仓库已注册到 `RepoManager`。
 - `set_active_repo(repo_id, generation)`：同步当前激活仓库到后端，使 watcher、auto-fetch 与托盘 registry 只跟随该仓库；后端只接受不小于当前值的 `generation`，忽略旧请求。
 - `close_repo(repo_id, next_active_repo_id, generation)`：关闭仓库并移除名册。关闭当前 active repo 时，后端在同一命令内切换 watcher / auto-fetch / 托盘 registry 到 `next_active_repo_id`，或在其为 `null` 时清空 active repo。
 - `clone_repo` / `init_repo`：创建新仓库，支持进度事件回调。

@@ -57,6 +57,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             // Repo
             open_repo,
+            find_submodule_repo_paths,
             close_repo,
             set_active_repo,
             list_repos,

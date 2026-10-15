@@ -67,6 +67,9 @@ export function useGitCommands() {
   const openRepo = (path: string) =>
     call<RepoMeta>('open_repo', { path })
 
+  const findSubmoduleRepoPaths = (paths: string[]) =>
+    call<string[]>('find_submodule_repo_paths', { paths }, { silent: true })
+
   const closeRepo = (
     repoId: string,
     nextActiveRepoId: string | null,
@@ -738,6 +741,7 @@ export function useGitCommands() {
 
   return {
     openRepo,
+    findSubmoduleRepoPaths,
     closeRepo,
     setActiveRepo,
     listRepos,

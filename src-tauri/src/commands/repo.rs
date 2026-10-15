@@ -256,6 +256,11 @@ pub async fn list_repos(repo_manager: State<'_, RepoManager>) -> Result<Vec<Repo
 }
 
 #[tauri::command]
+pub async fn find_submodule_repo_paths(paths: Vec<String>) -> Result<Vec<String>, GitError> {
+    run_git(move || Ok(GitEngine::find_submodule_repo_paths(&paths))).await
+}
+
+#[tauri::command]
 pub async fn validate_repo_path(path: String) -> Result<bool, GitError> {
     run_git(move || Ok(Path::new(&path).join(".git").exists() || GitEngine::open(&path).is_ok()))
         .await
