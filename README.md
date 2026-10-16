@@ -1,99 +1,143 @@
-# GitUI
-
 [![Build](https://github.com/shuai132/GitUI/actions/workflows/build.yml/badge.svg)](https://github.com/shuai132/GitUI/actions/workflows/build.yml)
 
-跨平台 Git 桌面客户端，基于 **Tauri v2（Rust）+ Vue 3** 构建。目标是轻量级、高性能、跨平台。
+<p align="center">
+  <img src="./src-tauri/icons/128x128@2x.png" width="96" alt="GitUI 图标" />
+</p>
 
-## 特色
+<h1 align="center">GitUI</h1>
 
-- **轻量快速**：内存和 CPU 占用极低，安装包小，速度极快
-- **编码自适应**：完美处理 UTF-8 / GBK 混合仓库
-- **拖拽 Merge / Rebase**：提交图支持支持拖拽操作
-- **误删提交找回**：提交图支持显示丢失引用的提交
-- **Stash 可视化**：提交图支持显示 stash 与历史提交的关系
-- **内置终端**：应用内直接运行 git 或任意 shell 命令
-- **本地插件**：支持本地可信插件扩展 Actions 菜单和提交右键菜单
-- **跨平台**：支持macOS、Windows、Linux等主流系统
+<p align="center">
+  轻量的跨平台 Git 桌面客户端。<br />
+  多仓库管理、可视化历史与精细变更审阅，一个界面完成。
+</p>
+
+<p align="center">
+  <a href="https://github.com/shuai132/GitUI/releases">下载</a> ·
+  <a href="#功能">功能</a> ·
+  <a href="#本地开发">本地开发</a> ·
+  <a href="./docs/README.md">设计文档</a> ·
+  <a href="https://github.com/shuai132/GitUI/issues">反馈问题</a>
+</p>
+
+在多个仓库间快速切换，沿提交图梳理历史，逐块审阅和暂存改动。从日常提交到交互式 Rebase，让每一步操作都有清晰的上下文。
+
+<p align="center">
+  <a href="./docs/assets/gitui-main-window-light.png#gh-light-mode-only">
+    <img src="./docs/assets/gitui-main-window-light.png#gh-light-mode-only" width="960" alt="GitUI 浅色主题主界面：仓库与分支侧栏、提交历史图及代码差异审阅" />
+  </a>
+  <a href="./docs/assets/gitui-main-window-dark.png#gh-dark-mode-only">
+    <img src="./docs/assets/gitui-main-window-dark.png#gh-dark-mode-only" width="960" alt="GitUI 深色主题主界面：仓库与分支侧栏、提交历史图及代码差异审阅" />
+  </a>
+</p>
 
 ## 功能
 
-### 已实现
+### 多个仓库，一个工作界面
 
-- [x] 多仓库管理：侧边栏切换、同名仓库自动路径消歧、缺失仓库保留 / 重试 / 重新定位、仓库搜索与全键盘快速切换、各列表放大镜搜索、Submodule 仓库子树展示、linked Worktree 创建并加入所有仓库、路径持久化、多窗口单一托盘入口、仓库右键菜单（复制名称 / 复制绝对路径 / 新建 Worktree / 新窗口 / Finder / 终端）
-- [x] 添加仓库：打开本地 / 拖入一个或多个仓库目录 / 克隆远程（含常用父目录记忆、浅克隆、递归子模块、实时进度）/ 新建本地仓库
-- [x] 工作副本：暂存 / 取消暂存（支持文件级、目录级和 hunk 级及全键盘审阅流程）、提交、amend、discard（文件级 / 批量 / 全部丢弃可从系统废纸篓恢复，另支持 hunk 级）、提交信息草稿按仓库自动保存与恢复并提供首行长度提示；文件双击在编辑器打开，右键菜单支持复制路径、在 Finder/编辑器/终端中打开、打开 / 初始化 / 更新 Submodule、添加到 .gitignore、按仓库移动到变更列表最前 / 最后；支持文件树状显示
-- [x] 提交历史：分页加载、提交图可视化、打开仓库自动定位当前 HEAD、按仓库保存当前分支 first-parent Solo、远程分支过滤、可排序历史列、可隐藏变更规模列（文件数、增删行、大文件 / 二进制提示）、丢失引用 / 贮藏可视化、按消息 / 作者 / SHA 搜索完整历史、提交行 tag 胶囊；历史文件重命名按相似度识别并展示旧 / 新路径；变动文件右键菜单（复制路径、在 Finder/编辑器中打开、打开 / 初始化 / 更新 Submodule、签出该文件历史版本、按仓库移动到变更列表最前 / 最后），历史 gitlink 会标记为 Submodule
-- [x] 提交操作：提交后可一键撤销尚未推送的最近提交；支持 checkout、远程分支 chip 快速检出、cherry-pick、revert、reset（soft / mixed / hard）、选择本地分支并切换重置到指定提交、创建 tag、修改提交信息（HEAD 走 amend，历史提交走 rebase reword，支持编辑作者/提交时间并双向一键对齐）
-- [x] Merge / Rebase：完整 merge（ff / no-ff / squash）、交互式 rebase（reword / squash / fixup / drop / reorder）；右键菜单或拖拽 commit 触发；冲突时用内置三路合并编辑器解决；可选"自动 stash & 恢复"
-- [x] 分支管理：本地 / 远程树形、创建 / 切换 / 删除；脏工作区切换时可明确选择携带改动或 Stash 后切换；支持检出远程分支并建立追踪
-- [x] Tag 管理：侧边栏 TAGS 列表、创建、删除（含仅远程）、推拉同步
-- [x] 远程操作：fetch、push（新分支 Publish 后自动建立 upstream，原始 force 显示目标并二次确认）、pull（fast-forward / ff-only / rebase 三模式，脏工作区可自动 stash 并安全恢复）、默认远端偏好、tag 推送
-- [x] SSH 凭据链：ssh-agent → `~/.ssh/id_ed25519` → `~/.ssh/id_rsa`，HTTPS 走系统 credential helper
-- [x] Submodule：init / update / edit URL / deinit，已克隆的可作为新仓库打开，并在所有仓库与工作区变更中作为特殊项导航
-- [x] Markdown 阅读：源码差异 / 修改后完整预览 / 渲染对照，源码自动换行，Mermaid 图表与源码切换、缩放和主题适配，GFM 表格 / 任务列表、标题目录、代码复制、同步滚动与显示偏好持久化
-- [x] Diff 查看器：inline / side-by-side 两种布局，均支持完整文件视图与按 hunk 分组、忽略空白变更、多语言语法高亮、行内字符级变化高亮、图片 / SVG 预览、PDF / DOCX / PPTX 文档预览与抽取文本高亮 diff
-- [x] 字符编码自适应：commit message 按 git `encoding` header 解码、文件内容按 `.gitattributes` 的 `working-tree-encoding` 或 chardetng 自动检测，混合 UTF-8 / GBK 仓库正常显示
-- [x] Stash：push / pop / apply / delete（含 untracked 文件），用提交信息作 stash message；脏工作区快捷 Pop 会显示目标与改动数后确认
-- [x] Reflog 查看、git gc 触发入口；右键丢失引用提交可从 HEAD reflog 中剥链移除
-- [x] 工作目录文件监控，状态自动刷新；支持手动重新加载当前仓库状态
-- [x] 内置终端：应用内（xterm.js + PTY）/ 调用外部终端
-- [x] 本地插件系统：安装 / 启用 / 禁用 / 卸载本地可信插件，支持插件命令注入 Actions 菜单和提交右键菜单，并通过后端进程执行
-- [x] 调试日志面板：命令历史 + Rust 后端日志
-- [x] 设置面板：界面语言（跟随系统 / 中文 / English）、主题（跟随系统 / 浅色 / 深色）、UI / 代码字体字号、强调色覆盖、行分隔线强度/样式、提交图分叉样式、远程分支显示、历史列表列显示、Diff 默认布局与 hunk 分组、外部终端、视图开关；支持正式版自动更新，以及手动检查或可选的启动自动检查 `main` 最新开发版（默认关闭，无需 Release）
-- [x] 统一应用内下拉选择：适配深浅主题与强调色，支持键盘操作、长列表搜索、字体自由输入
-- [x] 灵活布局：历史面板可拖拽停靠到任意方向、提交图宽度有界且支持拖动分隔线调整并记忆、侧边栏可拖到最左隐藏、提交表单高度可拖
-- [x] 文件历史 / Blame：右键提交详情或工作区文件 → 查看该文件的提交历史及每行 blame 注解
+仓库、子模块与 Worktree 集中管理，支持搜索、键盘切换和独立窗口。提交草稿按仓库自动保存，切换项目后继续手头的工作。
 
-### 未实现（计划中）
+### 从提交图追到每一行改动
 
-- （当前无）
+分支、标签与 Stash 在图中呈现，配合完整历史搜索、文件历史和 Blame，追溯改动的来龙去脉。直接从提交图发起 Merge / Rebase，用交互式计划整理提交，用三路合并视图处理冲突。
+
+### 按变更块暂存，让提交更清晰
+
+行内与左右 Diff、字符级高亮和完整文件上下文，帮助你看准变化，再按文件、目录或 Hunk 组织提交。Markdown 与 Mermaid 渲染、图片和文档预览，让代码之外的改动也便于审阅。
+
+### 混合编码仓库，也能顺畅阅读
+
+支持 UTF-8 / GBK 编码识别，兼顾历史仓库与中文内容。中英文界面、深浅主题和可调整布局适配个人习惯，内置终端与本地插件方便接续自己的工具链。
 
 ## 安装
 
-macOS 上因应用未签名，首次打开可能被系统拦截，需执行：
+从 [GitHub Releases](https://github.com/shuai132/GitUI/releases) 下载对应平台的安装包。
+
+| 平台 | 当前 CI 构建架构 |
+| --- | --- |
+| macOS | Apple Silicon（arm64） |
+| Windows | x86_64 |
+| Linux | x86_64 |
+
+### macOS 首次打开
+
+当前 macOS 安装包未进行 Apple 签名与公证，首次打开可能被系统拦截。确认安装包来源可信，并将应用移入「应用程序」目录后，可移除该应用的隔离属性：
 
 ```bash
-sudo xattr -dr com.apple.quarantine /Applications/GitUI.app
+xattr -dr com.apple.quarantine /Applications/GitUI.app
 ```
 
-### 开发版 / 测试包
+若提示权限不足，再以 `sudo` 执行同一命令。
 
-- 应用内可在「设置 → 更新」点击「检查开发版」，或开启默认关闭的“启动时自动检查开发版”，直接安装 `main` 分支最新成功构建；自动检查只提示，不会静默安装，开发版仍会验证更新签名。
-- 需要手动测试安装包时，可在 [Build Actions](https://github.com/shuai132/GitUI/actions/workflows/build.yml) 的最新成功运行中下载三平台 artifact，测试包保留七天。
+### 开发版
 
-## 开发
+想体验尚未发布的改进，可在「设置 → 更新」中选择「检查开发版」，安装 `main` 分支最新成功构建。也可开启启动时自动检查，默认关闭；自动检查只提示可用更新，安装仍需手动确认，并验证更新签名。
+
+手动测试包可从 [Build Actions](https://github.com/shuai132/GitUI/actions/workflows/build.yml) 的成功运行中下载，构建产物保留 7 天。开发版可能包含尚未充分验证的变化。
+
+## 功能详情
+
+<details open>
+<summary>完整功能表（已实现，可折叠）</summary>
+
+| 工作流 | 能力 |
+| --- | --- |
+| 仓库管理 | 打开、新建、拖入与克隆仓库；浅克隆与递归子模块；仓库搜索、键盘切换、多窗口；创建 linked Worktree；缺失仓库重新定位 |
+| 工作区与提交 | 文件树；文件 / 目录 / Hunk 级暂存与取消暂存；提交、Amend、按仓库保存草稿；撤销尚未推送的最近提交；文件双击在编辑器打开 |
+| 历史浏览 | 分页提交图；按消息 / 作者 / SHA 搜索完整历史；分支过滤与 first-parent Solo；变更规模统计；重命名识别；文件历史与 Blame |
+| 历史整理 | Checkout、Cherry-pick、Revert、Reset；修改提交信息与时间；签出文件历史版本；创建与管理标签 |
+| 分支与标签 | 本地 / 远程分支树；创建、切换与删除分支；检出远程分支并建立追踪；带改动切换或 Stash 后切换；标签创建、删除与远程同步 |
+| 分支整合 | Merge（快进 / 非快进 / Squash）；交互式 Rebase（Reword / Squash / Fixup / Drop / 重排）；提交拖拽入口；按行选择的三路冲突解决；可选自动 Stash 与恢复 |
+| 远程协作 | Fetch、Push、发布新分支并建立 upstream；Pull（fast-forward / ff-only / rebase）；默认远端偏好；标签同步；SSH agent、常用 SSH 密钥与系统 HTTPS credential helper |
+| 差异审阅 | 行内 / 左右对比；完整文件 / Hunk 分组；语法与字符级高亮；忽略空白；变更跳转；提交 Hunk 反向应用 |
+| 内容预览 | 图片与 SVG；Markdown 源码 / 修改后预览 / 渲染对照，支持 Mermaid；PDF 预览与文本差异；DOCX / PPTX 抽取文本预览与差异 |
+| Stash 与恢复 | Stash 创建 / 应用 / 弹出 / 删除，支持未跟踪文件；Stash 图中展示；Reflog 与丢失引用提交查看；文件级、批量及全部丢弃通过系统废纸篓保留恢复机会 |
+| 子模块 | 初始化、更新、修改 URL、反初始化；侧边栏子树与工作区导航；作为独立仓库打开 |
+| 工具与扩展 | 内置多标签终端、外部终端与编辑器；本地可信插件扩展 Actions 和提交右键菜单；调试日志；手动触发 Git GC |
+| 界面与偏好 | 中文 / English；跟随系统或手动选择深浅主题；字体、字号与强调色；可调整面板布局；状态自动刷新；正式版与可选开发版更新 |
+
+</details>
+
+### 当前边界
+
+以下能力仍有使用边界，后续改进与问题跟踪见 [Issues](https://github.com/shuai132/GitUI/issues)。
+
+- **文档预览**：DOCX / PPTX 以抽取文本展示，不还原 Office 原始排版；Markdown 预览暂不解析仓库相对图片与文件链接。
+- **提交恢复**：丢失引用提交的可见性取决于对象是否仍保留在仓库中；已被 Git GC 清理的对象无法通过提交图恢复。
+- **插件**：当前面向本地可信插件，插件命令会在本机执行。开发方式与示例见 [插件文档](./plugin/README.md)。
+
+## 本地开发
+
+准备 Node.js LTS、Rust stable，以及 Tauri v2 对应平台的系统构建依赖。Linux 的依赖安装项可参考 [构建工作流](./.github/workflows/build.yml)。
 
 ```bash
-# 安装依赖
-npm install
-
-# 开发（同时启动 Vite dev server 和 Tauri 进程）
+git clone https://github.com/shuai132/GitUI.git
+cd GitUI
+npm ci
 npm run tauri dev
+```
 
-# 仅做 TypeScript 类型检查
+常用检查与构建命令：
+
+```bash
+# 前端类型检查与单元测试
 npx vue-tsc --noEmit
+npm run test
 
-# 仅检查 Rust 代码（速度快）
-cd src-tauri && cargo check
+# Rust 编译检查与单元测试（在项目根目录执行）
+cargo check --manifest-path src-tauri/Cargo.toml
+cargo test --manifest-path src-tauri/Cargo.toml
 
-# 打包发布
+# 构建前端 / 打包桌面应用
+npm run build
 npm run tauri build
 ```
 
-## 架构
+应用基于 Tauri v2，使用系统 WebView，通过 Rust 与 libgit2 在进程内完成主要 Git 操作。历史分页、虚拟滚动与按需加载用于控制大仓库下的渲染与读取开销。
 
-```
-前端（Vue 3 / WebView）
-    ↕ IPC: invoke() + Tauri Events
-Rust 后端（Tauri v2）
-    ↕
-git2-rs（libgit2，in-process）
-```
+主要技术栈：Tauri v2 · Rust / git2-rs（libgit2）· Vue 3 / TypeScript / Vite · Pinia · Tailwind CSS v4 · TanStack Vue Virtual · xterm.js。
 
-## 技术栈
+## 参与项目
 
-Tauri v2 · git2-rs（libgit2）· Vue 3 + Vite + TypeScript · Pinia · Vue Router · Tailwind CSS v4 · highlight.js · TanStack Vue Virtual
+欢迎提交问题、交互建议和 Pull Request。报告问题时，请附上系统与应用版本、复现步骤及相关日志；涉及仓库内容时，请先移除敏感信息。
 
-## 设计文档
-
-想看实现细节或参与开发，见 [`docs/`](./docs/README.md) 下按功能域组织的设计文档。
+参与开发前，建议先阅读 [设计文档索引](./docs/README.md) 和对应功能域的说明。设计文档记录模块职责、数据流与关键取舍，具体实现以代码为准。功能与行为变更请同步更新相关文档，并完成前后端类型、编译和单元测试检查。
