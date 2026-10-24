@@ -1,0 +1,240 @@
+name: Build and release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Source tag (e.g. v1.2.3); leave empty for the latest default branch'
+        required: false
+        default: ''
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-${{ inputs.version || 'development' }}
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-22.04
+    outputs:
+      sha: ${{ steps.metadata.outputs.sha }}
+      short: ${{ steps.metadata.outputs.short }}
+      base_version: ${{ steps.metadata.outputs.base_version }}
+      version: ${{ steps.metadata.outputs.version }}
+      config: ${{ steps.metadata.outputs.config }}
+    steps:
+      - name: Validate source tag
+        shell: bash
+        env:
+          SOURCE_TAG: ${{ inputs.version }}
+          SOURCE_READ_TOKEN: ${{ secrets.SOURCE_READ_TOKEN }}
+        run: |
+          if [[ -z "$SOURCE_READ_TOKEN" ]]; then
+            echo '::error::Configure SOURCE_READ_TOKEN with read access to GitUI-src.'
+            exit 1
+          fi
+          if [[ -n "$SOURCE_TAG" ]] && [[ ! "$SOURCE_TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$ ]]; then
+            echo '::error::Version must be a source tag such as v1.2.3 or v1.2.3-beta.1.'
+            exit 1
+          fi
+
+      - name: Checkout requested source
+        uses: actions/checkout@v4
+        with:
+          repository: shuai132/GitUI-src
+          ref: ${{ inputs.version != '' && format('refs/tags/{0}', inputs.version) || '' }}
+          token: ${{ secrets.SOURCE_READ_TOKEN }}
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 'lts/*'
+
+      - name: Resolve source build metadata
+        id: metadata
+        shell: bash
+        env:
+          SOURCE_TAG: ${{ inputs.version }}
+        run: |
+          node --input-type=module <<'NODE'
+          import { appendFileSync, readFileSync } from 'node:fs'
+          import { execFileSync } from 'node:child_process'
+          const baseVersion = JSON.parse(readFileSync('package.json', 'utf8')).version
+          const tag = process.env.SOURCE_TAG
+          if (tag && tag !== `v${baseVersion}`) {
+            throw new Error('Source tag must match the version in package.json')
+          }
+          const sha = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
+          const short = sha.slice(0, 7)
+          let version = baseVersion
+          let config = {}
+          if (!tag) {
+            const { createDevelopmentTauriConfig } = await import('./.github/scripts/development-update.mjs')
+            config = createDevelopmentTauriConfig(baseVersion, process.env.GITHUB_RUN_NUMBER)
+            version = config.version
+          }
+          for (const [key, value] of Object.entries({ sha, short, base_version: baseVersion, version, config: JSON.stringify(config) })) {
+            appendFileSync(process.env.GITHUB_OUTPUT, `${key}=${value}\n`)
+          }
+          appendFileSync(process.env.GITHUB_STEP_SUMMARY,
+            `Source: shuai132/GitUI-src\n\nCommit: ${sha}\n\nVersion: ${version}\n`)
+          NODE
+
+  build:
+    needs: prepare
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-latest
+            target: aarch64-apple-darwin
+            label: macOS-arm64
+          - platform: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            label: Linux-x86_64
+          - platform: windows-latest
+            target: x86_64-pc-windows-msvc
+            label: Windows-x86_64
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - name: Checkout pinned source
+        uses: actions/checkout@v4
+        with:
+          repository: shuai132/GitUI-src
+          ref: ${{ needs.prepare.outputs.sha }}
+          token: ${{ secrets.SOURCE_READ_TOKEN }}
+          persist-credentials: false
+
+      - name: Install Linux dependencies
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev libssl-dev libssh2-1-dev libgtk-3-dev \
+            libayatana-appindicator3-dev librsvg2-dev patchelf libfuse2 \
+            build-essential curl wget file cmake pkg-config libxdo-dev
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 'lts/*'
+          cache: npm
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Check frontend types and tests
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          npx vue-tsc --noEmit
+          npm run test
+
+      - name: Check backend and tests
+        if: matrix.platform == 'ubuntu-22.04'
+        working-directory: src-tauri
+        run: |
+          cargo check
+          cargo test
+
+      - name: Build Tauri app
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GIT_HASH: ${{ inputs.version == '' && needs.prepare.outputs.short || '' }}
+          GITUI_BUILD_COMMIT: ${{ needs.prepare.outputs.sha }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          owner: ${{ github.repository_owner }}
+          repo: ${{ github.event.repository.name }}
+          releaseCommitish: ${{ github.sha }}
+          tagName: ${{ inputs.version }}
+          releaseName: ${{ inputs.version }}
+          releaseBody: 'See the assets below to download and install GitUI for your platform.'
+          releaseDraft: true
+          prerelease: ${{ contains(inputs.version, '-') }}
+          args: >-
+            --target ${{ matrix.target }}
+            --config '${{ needs.prepare.outputs.config }}'
+
+      - name: Upload development packages
+        if: inputs.version == ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.label }}-${{ needs.prepare.outputs.version }}-${{ needs.prepare.outputs.short }}
+          path: src-tauri/target/${{ matrix.target }}/release/bundle/**/*
+          if-no-files-found: error
+          retention-days: 7
+
+  publish-development-update:
+    name: Publish development update
+    needs: [prepare, build]
+    if: inputs.version == ''
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout pinned source
+        uses: actions/checkout@v4
+        with:
+          repository: shuai132/GitUI-src
+          ref: ${{ needs.prepare.outputs.sha }}
+          token: ${{ secrets.SOURCE_READ_TOKEN }}
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 'lts/*'
+
+      - name: Configure GitHub Pages
+        id: pages
+        uses: actions/configure-pages@v5
+
+      - name: Download signed updater artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: development-artifacts
+
+      - name: Create development update manifest
+        shell: bash
+        env:
+          SOURCE_SHA: ${{ needs.prepare.outputs.sha }}
+          BASE_VERSION: ${{ needs.prepare.outputs.base_version }}
+          PAGES_BASE_URL: ${{ steps.pages.outputs.base_url }}
+        run: |
+          node .github/scripts/development-update.mjs manifest \
+            --artifacts-dir development-artifacts \
+            --output-dir development-update \
+            --base-version "$BASE_VERSION" \
+            --run-number "$GITHUB_RUN_NUMBER" \
+            --sha "$SOURCE_SHA" \
+            --base-url "$PAGES_BASE_URL"
+
+      - name: Upload development update site
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: development-update
+
+      - name: Deploy rolling development snapshot
+        id: deployment
+        uses: actions/deploy-pages@v4
