@@ -154,6 +154,8 @@ jobs:
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0
         env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ENVIRONMENT: ${{ inputs.version == '' && 'development' || 'production' }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GIT_HASH: ${{ inputs.version == '' && needs.prepare.outputs.short || '' }}
           GITUI_BUILD_COMMIT: ${{ needs.prepare.outputs.sha }}
@@ -171,6 +173,15 @@ jobs:
           args: >-
             --target ${{ matrix.target }}
             --config '${{ needs.prepare.outputs.config }}'
+
+      - name: Upload Sentry native symbols
+        shell: bash
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+        run: |
+          if [[ -f .github/scripts/upload-sentry-symbols.mjs ]]; then
+            node .github/scripts/upload-sentry-symbols.mjs ${{ matrix.target }}
+          fi
 
       - name: Upload development packages
         if: inputs.version == ''
