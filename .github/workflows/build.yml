@@ -155,6 +155,7 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          GITUI_RELEASE_TARGET: ${{ matrix.target }}
           SENTRY_ENVIRONMENT: ${{ inputs.version == '' && 'development' || 'production' }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GIT_HASH: ${{ inputs.version == '' && needs.prepare.outputs.short || '' }}
@@ -178,13 +179,23 @@ jobs:
         if: runner.os == 'macOS'
         run: node .github/scripts/check-macos-bundle.mjs src-tauri/target/${{ matrix.target }}/release/bundle/macos/GitUI.app
 
-      - name: Upload Sentry native symbols
+      - name: Upload Sentry native symbols (legacy source)
         shell: bash
         env:
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ vars.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT }}
         run: |
-          if [[ -f .github/scripts/upload-sentry-symbols.mjs ]]; then
+          if [[ ! -f .github/scripts/prepare-release-symbols.mjs && -f .github/scripts/upload-sentry-symbols.mjs ]]; then
             node .github/scripts/upload-sentry-symbols.mjs ${{ matrix.target }}
+          fi
+
+      - name: Restore original native binary
+        if: always()
+        shell: bash
+        run: |
+          if [[ -f .github/scripts/prepare-release-symbols.mjs ]]; then
+            node .github/scripts/prepare-release-symbols.mjs --restore ${{ matrix.target }}
           fi
 
       - name: Upload development packages
