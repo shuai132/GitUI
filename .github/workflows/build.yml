@@ -229,6 +229,7 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          GITUI_AGENT_BASE_URL: ${{ inputs.version != '' && format('https://github.com/shuai132/GitUI/releases/download/{0}', inputs.version) || format('https://shuai132.github.io/GitUI/agents/{0}', needs.prepare.outputs.sha) }}
           GITUI_RELEASE_TARGET: ${{ matrix.target }}
           SENTRY_ENVIRONMENT: ${{ inputs.version == '' && 'development' || 'production' }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -281,6 +282,37 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+  publish-ssh-agents:
+    name: Attach SSH agents to release
+    needs: [prepare, build]
+    if: inputs.version != ''
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: shuai132/GitUI-src
+          ref: ${{ needs.prepare.outputs.sha }}
+          token: ${{ secrets.SOURCE_READ_TOKEN }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 'lts/*'
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: ssh-agent-*
+          path: ssh-agent-downloads
+      - name: Prepare standalone release assets
+        env:
+          GITUI_AGENT_BASE_URL: https://github.com/shuai132/GitUI/releases/download/${{ inputs.version }}
+        run: node scripts/prepare-ssh-agents.mjs agent-assets --downloads ssh-agent-downloads
+      - name: Attach agents alongside installers
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ inputs.version }}
+        run: gh release upload "$RELEASE_TAG" agent-assets/* --repo shuai132/GitUI --clobber
+
   publish-development-update:
     name: Publish development update
     needs: [prepare, build]
@@ -329,6 +361,11 @@ jobs:
             --run-number "$GITHUB_RUN_NUMBER" \
             --sha "$SOURCE_SHA" \
             --base-url "$PAGES_BASE_URL"
+
+      - name: Publish matching development SSH agents
+        env:
+          GITUI_AGENT_BASE_URL: https://shuai132.github.io/GitUI/agents/${{ needs.prepare.outputs.sha }}
+        run: node scripts/prepare-ssh-agents.mjs development-update/agents/${{ needs.prepare.outputs.sha }} --downloads development-artifacts
 
       - name: Upload development update site
         uses: actions/upload-pages-artifact@v3
