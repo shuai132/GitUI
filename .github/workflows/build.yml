@@ -83,8 +83,63 @@ jobs:
             `Source: shuai132/GitUI-src\n\nCommit: ${sha}\n\nVersion: ${version}\n`)
           NODE
 
-  build:
+  ssh-agents:
     needs: prepare
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: ubuntu-22.04
+            target: x86_64-unknown-linux-musl
+          - platform: ubuntu-22.04-arm
+            target: aarch64-unknown-linux-musl
+          - platform: macos-latest
+            target: aarch64-apple-darwin
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - name: Checkout pinned source
+        uses: actions/checkout@v4
+        with:
+          repository: shuai132/GitUI-src
+          ref: ${{ needs.prepare.outputs.sha }}
+          token: ${{ secrets.SOURCE_READ_TOKEN }}
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 'lts/*'
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          key: ssh-agent
+      - uses: goto-bus-stop/setup-zig@v2
+        if: startsWith(matrix.platform, 'ubuntu')
+        with:
+          version: '0.16.0'
+      - name: Install Linux agent linker
+        if: startsWith(matrix.platform, 'ubuntu')
+        run: cargo install cargo-zigbuild --version 0.23.0 --locked
+      - name: Test SSH agent packaging validation
+        run: node --test scripts/ssh-agents.node-test.mjs
+      - name: Build headless SSH agent
+        shell: bash
+        run: |
+          if [[ "${{ matrix.target }}" == *-linux-musl ]]; then
+            node scripts/build-ssh-agent.mjs --target "${{ matrix.target }}" --zig
+          else
+            node scripts/build-ssh-agent.mjs --target "${{ matrix.target }}"
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ssh-agent-${{ matrix.target }}
+          path: src-tauri/ssh-agents/${{ matrix.target }}/
+          if-no-files-found: error
+
+
+  build:
+    needs: [prepare, ssh-agents]
     permissions:
       contents: write
     strategy:
@@ -109,6 +164,20 @@ jobs:
           ref: ${{ needs.prepare.outputs.sha }}
           token: ${{ secrets.SOURCE_READ_TOKEN }}
           persist-credentials: false
+
+      - name: Download SSH agent resources
+        uses: actions/download-artifact@v4
+        with:
+          pattern: ssh-agent-*
+          path: ssh-agent-downloads
+      - name: Arrange SSH agent resources
+        shell: bash
+        run: |
+          for folder in ssh-agent-downloads/ssh-agent-*; do
+            target="${folder##*/ssh-agent-}"
+            mkdir -p "src-tauri/ssh-agents/$target"
+            cp "$folder/"* "src-tauri/ssh-agents/$target/"
+          done
 
       - name: Install Linux dependencies
         if: matrix.platform == 'ubuntu-22.04'
