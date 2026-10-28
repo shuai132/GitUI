@@ -93,6 +93,8 @@ jobs:
             target: x86_64-unknown-linux-musl
           - platform: ubuntu-22.04-arm
             target: aarch64-unknown-linux-musl
+          - platform: windows-latest
+            target: x86_64-pc-windows-msvc
           - platform: macos-latest
             target: aarch64-apple-darwin
     runs-on: ${{ matrix.platform }}
@@ -123,6 +125,9 @@ jobs:
         run: cargo install cargo-zigbuild --version 0.23.0 --locked
       - name: Test SSH agent packaging validation
         run: node --test scripts/ssh-agents.node-test.mjs
+      - name: Test native agent protocol
+        if: runner.os == 'Windows'
+        run: cargo test --locked --manifest-path src-tauri/Cargo.toml -p gitui-agent
       - name: Build headless SSH agent
         shell: bash
         run: |
