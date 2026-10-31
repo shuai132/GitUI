@@ -229,6 +229,7 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           NODE_OPTIONS: --max-old-space-size=4096
+          GITUI_AGENT_DEV_COMMIT: ${{ inputs.version == '' && needs.prepare.outputs.sha || '' }}
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
           GITUI_AGENT_BASE_URL: ${{ inputs.version != '' && format('https://github.com/shuai132/GitUI/releases/download/{0}', inputs.version) || format('https://shuai132.github.io/GitUI/agents/{0}', needs.prepare.outputs.sha) }}
           GITUI_RELEASE_TARGET: ${{ matrix.target }}
@@ -365,6 +366,7 @@ jobs:
 
       - name: Publish matching development SSH agents
         env:
+          GITUI_AGENT_DEV_COMMIT: ${{ needs.prepare.outputs.sha }}
           GITUI_AGENT_BASE_URL: https://shuai132.github.io/GitUI/agents/${{ needs.prepare.outputs.sha }}
         run: node scripts/prepare-ssh-agents.mjs development-update/agents/${{ needs.prepare.outputs.sha }} --downloads development-artifacts
 
