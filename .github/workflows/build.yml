@@ -228,6 +228,7 @@ jobs:
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0
         env:
+          NODE_OPTIONS: --max-old-space-size=4096
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
           GITUI_AGENT_BASE_URL: ${{ inputs.version != '' && format('https://github.com/shuai132/GitUI/releases/download/{0}', inputs.version) || format('https://shuai132.github.io/GitUI/agents/{0}', needs.prepare.outputs.sha) }}
           GITUI_RELEASE_TARGET: ${{ matrix.target }}
