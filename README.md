@@ -61,6 +61,16 @@ GitUI 将仓库管理、提交历史与差异审阅整合在同一个工作界�
 | Windows | x86_64 |
 | Linux | x86_64 |
 
+### 下载文件说明
+
+- `.dmg`：macOS 安装包。
+- `-setup.exe` / `.msi`：Windows 安装包。
+- `.deb`：Debian / Ubuntu 安装包。
+- `.rpm`：Fedora 等 RPM 发行版安装包。
+- `.AppImage`：Linux 免安装包，赋予执行权限后运行。
+- `gitui-agent_*`：SSH 远程辅助程序，GitUI 自动下载部署，无需手动下载。
+- `.app.tar.gz` / `.sig` / `latest.json`：自动更新文件，无需手动下载。
+
 ### macOS 首次打开
 
 当前 macOS 安装包未进行 Apple 签名与公证，首次打开可能被系统拦截。确认安装包来源可信，并将应用移入「应用程序」目录后，可移除该应用的隔离属性：
