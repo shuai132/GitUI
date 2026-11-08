@@ -42,16 +42,16 @@ jobs:
           fi
 
       - name: Checkout requested source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: shuai132/GitUI-src
           ref: ${{ inputs.version != '' && format('refs/tags/{0}', inputs.version) || '' }}
           token: ${{ secrets.SOURCE_READ_TOKEN }}
           persist-credentials: false
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
-          node-version: 'lts/*'
+          node-version: '24'
 
       - name: Resolve source build metadata
         id: metadata
@@ -100,7 +100,7 @@ jobs:
     runs-on: ${{ matrix.platform }}
     steps:
       - name: Checkout pinned source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: shuai132/GitUI-src
           ref: ${{ needs.prepare.outputs.sha }}
@@ -109,17 +109,32 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
-          node-version: 'lts/*'
+          node-version: '24'
       - uses: swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
           key: ssh-agent
-      - uses: goto-bus-stop/setup-zig@v2
+      - name: Install Zig
         if: startsWith(matrix.platform, 'ubuntu')
-        with:
-          version: '0.16.0'
+        shell: bash
+        run: |
+          arch=$(uname -m)
+          case "$arch" in
+            x86_64) sha=70e49664a74374b48b51e6f3fdfbf437f6395d42509050588bd49abe52ba3d00 ;;
+            aarch64) sha=ea4b09bfb22ec6f6c6ceac57ab63efb6b46e17ab08d21f69f3a48b38e1534f17 ;;
+            *) echo "::error::Unsupported Zig runner architecture: $arch"; exit 1 ;;
+          esac
+          version=0.16.0
+          archive="$RUNNER_TEMP/zig-$arch-linux-$version.tar.xz"
+          curl --fail --silent --show-error --location --retry 3 \
+            "https://ziglang.org/download/$version/${archive##*/}" --output "$archive"
+          echo "$sha  $archive" | sha256sum --check
+          zig_dir="$RUNNER_TEMP/zig"
+          mkdir -p "$zig_dir"
+          tar -xJf "$archive" -C "$zig_dir" --strip-components=1
+          echo "$zig_dir" >> "$GITHUB_PATH"
       - name: Install Linux agent linker
         if: startsWith(matrix.platform, 'ubuntu')
         run: cargo install cargo-zigbuild --version 0.23.0 --locked
@@ -136,7 +151,7 @@ jobs:
           else
             node scripts/build-ssh-agent.mjs --target "${{ matrix.target }}"
           fi
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: ssh-agent-${{ matrix.target }}
           path: src-tauri/ssh-agents/${{ matrix.target }}/
@@ -163,7 +178,7 @@ jobs:
     runs-on: ${{ matrix.platform }}
     steps:
       - name: Checkout pinned source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: shuai132/GitUI-src
           ref: ${{ needs.prepare.outputs.sha }}
@@ -171,7 +186,7 @@ jobs:
           persist-credentials: false
 
       - name: Download SSH agent resources
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: ssh-agent-*
           path: ssh-agent-downloads
@@ -194,9 +209,9 @@ jobs:
             build-essential curl wget file cmake pkg-config libxdo-dev
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
-          node-version: 'lts/*'
+          node-version: '24'
           cache: npm
 
       - name: Setup Rust
@@ -277,7 +292,7 @@ jobs:
 
       - name: Upload development packages
         if: inputs.version == ''
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.label }}-${{ needs.prepare.outputs.version }}-${{ needs.prepare.outputs.short }}
           path: src-tauri/target/${{ matrix.target }}/release/bundle/**/*
@@ -292,16 +307,16 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           repository: shuai132/GitUI-src
           ref: ${{ needs.prepare.outputs.sha }}
           token: ${{ secrets.SOURCE_READ_TOKEN }}
           persist-credentials: false
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
-          node-version: 'lts/*'
-      - uses: actions/download-artifact@v4
+          node-version: '24'
+      - uses: actions/download-artifact@v8
         with:
           pattern: ssh-agent-*
           path: ssh-agent-downloads
@@ -329,23 +344,23 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - name: Checkout pinned source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: shuai132/GitUI-src
           ref: ${{ needs.prepare.outputs.sha }}
           token: ${{ secrets.SOURCE_READ_TOKEN }}
           persist-credentials: false
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
-          node-version: 'lts/*'
+          node-version: '24'
 
       - name: Configure GitHub Pages
         id: pages
-        uses: actions/configure-pages@v5
+        uses: actions/configure-pages@v6
 
       - name: Download signed updater artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: development-artifacts
 
@@ -371,10 +386,10 @@ jobs:
         run: node scripts/prepare-ssh-agents.mjs development-update/agents/${{ needs.prepare.outputs.sha }} --downloads development-artifacts
 
       - name: Upload development update site
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v5
         with:
           path: development-update
 
       - name: Deploy rolling development snapshot
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
